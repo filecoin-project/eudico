@@ -6,6 +6,7 @@ import (
 
 	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 	"github.com/ipfs/go-cid"
+	logging "github.com/ipfs/go-log/v2"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"go.opencensus.io/trace"
 	"golang.org/x/xerrors"
@@ -14,10 +15,12 @@ import (
 	"github.com/filecoin-project/go-state-types/crypto"
 )
 
+var log = logging.Logger("consensus")
+
 var ErrTemporal = errors.New("temporal error")
 
 func VerifyBlsAggregate(ctx context.Context, sig *crypto.Signature, msgs []cid.Cid, pubks [][]byte) error {
-	_, span := trace.StartSpan(ctx, "syncer.VerifyBlsAggregate")
+	_, span := trace.StartSpan(ctx, "syncer.verifyBlsAggregate")
 	defer span.End()
 	span.AddAttributes(
 		trace.Int64Attribute("msgCount", int64(len(msgs))),
