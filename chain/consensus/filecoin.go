@@ -47,14 +47,27 @@ type FilecoinEC struct {
 	sm *stmgr.StateManager
 
 	verifier ffiwrapper.Verifier
+
+	genesis *types.TipSet
 }
 
-func NewFilecoinExpectedConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, verifier ffiwrapper.Verifier) Consensus {
+// Blocks that are more than MaxHeightDrift epochs above
+// the theoretical max height based on systime are quickly rejected
+const MaxHeightDrift = 5
+
+func NewFilecoinExpectedConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, verifier ffiwrapper.Verifier, genesis *types.TipSet) Consensus {
+	if build.InsecurePoStValidation {
+		log.Warn("*********************************************************************************************")
+		log.Warn(" [INSECURE-POST-VALIDATION] Insecure test validation is enabled. If you see this outside of a test, it is a severe bug! ")
+		log.Warn("*********************************************************************************************")
+	}
+
 	return &FilecoinEC{
 		store:    sm.ChainStore(),
 		beacon:   beacon,
 		sm:       sm,
 		verifier: verifier,
+		genesis:  genesis,
 	}
 }
 
@@ -556,6 +569,15 @@ func (filec *FilecoinEC) checkBlockMessages(ctx context.Context, b *types.FullBl
 
 	// Finally, flush.
 	return vm.Copy(ctx, tmpbs, filec.store.ChainBlockstore(), mrcid)
+}
+
+func (filec *FilecoinEC) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
+	if filec.genesis == nil {
+		return false
+	}
+
+	now := uint64(build.Clock.Now().Unix())
+	return epoch > (abi.ChainEpoch((now-filec.genesis.MinTimestamp())/build.BlockDelaySecs) + MaxHeightDrift)
 }
 
 func (filec *FilecoinEC) minerIsValid(ctx context.Context, maddr address.Address, baseTs *types.TipSet) error {

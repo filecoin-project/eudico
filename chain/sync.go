@@ -27,7 +27,6 @@ import (
 	"go.opencensus.io/trace"
 	"golang.org/x/xerrors"
 
-	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
 
@@ -46,10 +45,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/vm"
 	"github.com/filecoin-project/lotus/metrics"
 )
-
-// Blocks that are more than MaxHeightDrift epochs above
-// the theoretical max height based on systime are quickly rejected
-const MaxHeightDrift = 5
 
 var (
 	// LocalIncoming is the _local_ pubsub (unrelated to libp2p pubsub) topic
@@ -117,8 +112,6 @@ type Syncer struct {
 
 	receiptTracker *blockReceiptTracker
 
-	verifier ffiwrapper.Verifier
-
 	tickerCtxCancel context.CancelFunc
 
 	ds dtypes.MetadataDS
@@ -143,22 +136,15 @@ func NewSyncer(ds dtypes.MetadataDS, sm *stmgr.StateManager, exchange exchange.C
 		beacon:         beacon,
 		bad:            NewBadBlockCache(),
 		Genesis:        gent,
-		consensus:      consensus.NewFilecoinExpectedConsensus(sm, beacon, verifier),
+		consensus:      consensus.NewFilecoinExpectedConsensus(sm, beacon, verifier, gent),
 		Exchange:       exchange,
 		store:          sm.ChainStore(),
 		sm:             sm,
 		self:           self,
 		receiptTracker: newBlockReceiptTracker(),
 		connmgr:        connmgr,
-		verifier:       verifier,
 
 		incoming: pubsub.New(50),
-	}
-
-	if build.InsecurePoStValidation {
-		log.Warn("*********************************************************************************************")
-		log.Warn(" [INSECURE-POST-VALIDATION] Insecure test validation is enabled. If you see this outside of a test, it is a severe bug! ")
-		log.Warn("*********************************************************************************************")
 	}
 
 	s.syncmgr = syncMgrCtor(s.Sync)
@@ -203,7 +189,7 @@ func (syncer *Syncer) Stop() {
 func (syncer *Syncer) InformNewHead(from peer.ID, fts *store.FullTipSet) bool {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Errorf("panic in InformNewHead: ", err)
+			log.Errorf("panic in InformNewHead: %s", err)
 		}
 	}()
 
@@ -213,7 +199,7 @@ func (syncer *Syncer) InformNewHead(from peer.ID, fts *store.FullTipSet) bool {
 		return false
 	}
 
-	if syncer.IsEpochBeyondCurrMax(fts.TipSet().Height()) {
+	if syncer.consensus.IsEpochBeyondCurrMax(fts.TipSet().Height()) {
 		log.Errorf("Received block with impossibly large height %d", fts.TipSet().Height())
 		return false
 	}
@@ -819,7 +805,7 @@ loop:
 			return nil, xerrors.Errorf("retrieved segments of the chain are not connected at heights %d/%d",
 				blockSet[len(blockSet)-1].Height(), blks[0].Height())
 			// A successful `GetBlocks()` call is guaranteed to fetch at least
-			// one tipset so the acess `blks[0]` is safe.
+			// one tipset so the access `blks[0]` is safe.
 		}
 
 		for _, b := range blks {
@@ -1242,13 +1228,4 @@ func (syncer *Syncer) getLatestBeaconEntry(_ context.Context, ts *types.TipSet) 
 	}
 
 	return nil, xerrors.Errorf("found NO beacon entries in the 20 latest tipsets")
-}
-
-func (syncer *Syncer) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
-	if syncer.Genesis == nil {
-		return false
-	}
-
-	now := uint64(build.Clock.Now().Unix())
-	return epoch > (abi.ChainEpoch((now-syncer.Genesis.MinTimestamp())/build.BlockDelaySecs) + MaxHeightDrift)
 }
