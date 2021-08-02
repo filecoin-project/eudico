@@ -92,6 +92,13 @@ lotus: $(BUILD_DEPS)
 .PHONY: lotus
 BINS+=lotus
 
+eudico: $(BUILD_DEPS)
+	rm -f eudico
+	$(GOCC) build $(GOFLAGS) -o eudico ./cmd/lotus
+
+.PHONY: eudico
+BINS+=eudico
+
 lotus-miner: $(BUILD_DEPS)
 	rm -f lotus-miner
 	$(GOCC) build $(GOFLAGS) -o lotus-miner ./cmd/lotus-miner

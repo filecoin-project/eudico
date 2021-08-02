@@ -48,7 +48,7 @@ import (
 )
 
 const (
-	makeGenFlag     = "lotus-make-genesis"
+	makeGenFlag     = "eudico-make-genesis"
 	preTemplateFlag = "genesis-template"
 )
 
@@ -72,10 +72,10 @@ var daemonStopCmd = &cli.Command{
 	},
 }
 
-// DaemonCmd is the `go-lotus daemon` command
+// DaemonCmd is the `eudico daemon` command
 var DaemonCmd = &cli.Command{
 	Name:  "daemon",
-	Usage: "Start a lotus daemon process",
+	Usage: "Start a eudico daemon process",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
 			Name:  "api",
@@ -115,11 +115,6 @@ var DaemonCmd = &cli.Command{
 			Name:  "halt-after-import",
 			Usage: "halt the process after importing chain from file",
 		},
-		&cli.BoolFlag{
-			Name:   "lite",
-			Usage:  "start lotus in lite mode",
-			Hidden: true,
-		},
 		&cli.StringFlag{
 			Name:  "pprof",
 			Usage: "specify name of file for writing cpu profile to",
@@ -151,8 +146,6 @@ var DaemonCmd = &cli.Command{
 		},
 	},
 	Action: func(cctx *cli.Context) error {
-		isLite := cctx.Bool("lite")
-
 		err := runmetrics.Enable(runmetrics.RunMetricOptions{
 			EnableCPU:    true,
 			EnableMemory: true,
@@ -276,19 +269,6 @@ var DaemonCmd = &cli.Command{
 
 		shutdownChan := make(chan struct{})
 
-		// If the daemon is started in "lite mode", provide a  Gateway
-		// for RPC calls
-		liteModeDeps := node.Options()
-		if isLite {
-			gapi, closer, err := lcli.GetGatewayAPI(cctx)
-			if err != nil {
-				return err
-			}
-
-			defer closer()
-			liteModeDeps = node.Override(new(api.Gateway), gapi)
-		}
-
 		// some libraries like ipfs/go-ds-measure and ipfs/go-ipfs-blockstore
 		// use ipfs/go-metrics-interface. This injects a Prometheus exporter
 		// for those. Metrics are exported to the default registry.
@@ -298,7 +278,7 @@ var DaemonCmd = &cli.Command{
 
 		var api api.FullNode
 		stop, err := node.New(ctx,
-			node.FullAPI(&api, node.Lite(isLite)),
+			node.FullAPI(&api),
 
 			node.Base(),
 			node.Repo(r),
@@ -307,7 +287,6 @@ var DaemonCmd = &cli.Command{
 			node.Override(new(dtypes.ShutdownChan), shutdownChan),
 
 			genesis,
-			liteModeDeps,
 
 			node.ApplyIf(func(s *node.Settings) bool { return cctx.IsSet("api") },
 				node.Override(node.SetApiEndpointKey, func(lr repo.LockedRepo) error {
@@ -355,7 +334,7 @@ var DaemonCmd = &cli.Command{
 		}
 
 		// Serve the RPC.
-		rpcStopper, err := node.ServeRPC(h, "lotus-daemon", endpoint)
+		rpcStopper, err := node.ServeRPC(h, "eudico-daemon", endpoint)
 		if err != nil {
 			return fmt.Errorf("failed to start json-rpc endpoint: %s", err)
 		}
