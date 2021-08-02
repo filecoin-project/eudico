@@ -1,4 +1,4 @@
-package consensus
+package delegcns
 
 import (
 	"bytes"
@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
+	logging "github.com/ipfs/go-log/v2"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"golang.org/x/xerrors"
 
@@ -26,6 +27,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/power"
 	"github.com/filecoin-project/lotus/chain/beacon"
+	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/gen"
 	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/stmgr"
@@ -36,7 +38,9 @@ import (
 	"github.com/filecoin-project/lotus/lib/sigs"
 )
 
-type FilecoinEC struct {
+var log = logging.Logger("fil-consensus")
+
+type Delegated struct {
 	// The interface for accessing and putting tipsets into local storage
 	store *store.ChainStore
 
@@ -55,14 +59,8 @@ type FilecoinEC struct {
 // the theoretical max height based on systime are quickly rejected
 const MaxHeightDrift = 5
 
-func NewFilecoinExpectedConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, verifier ffiwrapper.Verifier, genesis *types.TipSet) Consensus {
-	if build.InsecurePoStValidation {
-		log.Warn("*********************************************************************************************")
-		log.Warn(" [INSECURE-POST-VALIDATION] Insecure test validation is enabled. If you see this outside of a test, it is a severe bug! ")
-		log.Warn("*********************************************************************************************")
-	}
-
-	return &FilecoinEC{
+func NewDelegatedConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, verifier ffiwrapper.Verifier, genesis *types.TipSet) Consensus {
+	return &Delegated{
 		store:    sm.ChainStore(),
 		beacon:   beacon,
 		sm:       sm,
@@ -71,7 +69,7 @@ func NewFilecoinExpectedConsensus(sm *stmgr.StateManager, beacon beacon.Schedule
 	}
 }
 
-func (filec *FilecoinEC) ValidateBlock(ctx context.Context, b *types.FullBlock) (err error) {
+func (filec *Delegated) ValidateBlock(ctx context.Context, b *types.FullBlock) (err error) {
 	if err := blockSanityChecks(b.Header); err != nil {
 		return xerrors.Errorf("incoming header failed basic sanity checks: %w", err)
 	}
@@ -356,7 +354,7 @@ func blockSanityChecks(h *types.BlockHeader) error {
 	return nil
 }
 
-func (filec *FilecoinEC) VerifyWinningPoStProof(ctx context.Context, nv network.Version, h *types.BlockHeader, prevBeacon types.BeaconEntry, lbst cid.Cid, waddr address.Address) error {
+func (filec *Delegated) VerifyWinningPoStProof(ctx context.Context, nv network.Version, h *types.BlockHeader, prevBeacon types.BeaconEntry, lbst cid.Cid, waddr address.Address) error {
 	if build.InsecurePoStValidation {
 		if len(h.WinPoStProof) == 0 {
 			return xerrors.Errorf("[INSECURE-POST-VALIDATION] No winning post proof given")
@@ -412,7 +410,7 @@ func (filec *FilecoinEC) VerifyWinningPoStProof(ctx context.Context, nv network.
 }
 
 // TODO: We should extract this somewhere else and make the message pool and miner use the same logic
-func (filec *FilecoinEC) checkBlockMessages(ctx context.Context, b *types.FullBlock, baseTs *types.TipSet) error {
+func (filec *Delegated) checkBlockMessages(ctx context.Context, b *types.FullBlock, baseTs *types.TipSet) error {
 	{
 		var sigCids []cid.Cid // this is what we get for people not wanting the marshalcbor method on the cid type
 		var pubks [][]byte
@@ -428,7 +426,7 @@ func (filec *FilecoinEC) checkBlockMessages(ctx context.Context, b *types.FullBl
 			pubks = append(pubks, pubk)
 		}
 
-		if err := verifyBlsAggregate(ctx, b.Header.BLSAggregate, sigCids, pubks); err != nil {
+		if err := consensus.VerifyBlsAggregate(ctx, b.Header.BLSAggregate, sigCids, pubks); err != nil {
 			return xerrors.Errorf("bls aggregate signature was invalid: %w", err)
 		}
 	}
@@ -446,7 +444,7 @@ func (filec *FilecoinEC) checkBlockMessages(ctx context.Context, b *types.FullBl
 	}
 
 	nv := filec.sm.GetNtwkVersion(ctx, b.Header.Height)
-	pl := vm.PricelistByEpoch(baseTs.Height())
+	pl := vm.PricelistByVersion(nv)
 	var sumGasLimit int64
 	checkMsg := func(msg types.ChainMsg) error {
 		m := msg.VMMessage()
@@ -571,7 +569,7 @@ func (filec *FilecoinEC) checkBlockMessages(ctx context.Context, b *types.FullBl
 	return vm.Copy(ctx, tmpbs, filec.store.ChainBlockstore(), mrcid)
 }
 
-func (filec *FilecoinEC) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
+func (filec *Delegated) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
 	if filec.genesis == nil {
 		return false
 	}
@@ -580,7 +578,7 @@ func (filec *FilecoinEC) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
 	return epoch > (abi.ChainEpoch((now-filec.genesis.MinTimestamp())/build.BlockDelaySecs) + MaxHeightDrift)
 }
 
-func (filec *FilecoinEC) minerIsValid(ctx context.Context, maddr address.Address, baseTs *types.TipSet) error {
+func (filec *Delegated) minerIsValid(ctx context.Context, maddr address.Address, baseTs *types.TipSet) error {
 	act, err := filec.sm.LoadActor(ctx, power.Address, baseTs)
 	if err != nil {
 		return xerrors.Errorf("failed to load power actor: %w", err)
@@ -607,4 +605,5 @@ func VerifyElectionPoStVRF(ctx context.Context, worker address.Address, rand []b
 	return gen.VerifyVRF(ctx, worker, rand, evrf)
 }
 
-var _ Consensus = &FilecoinEC{}
+var _ consensus.Consensus = &Delegated{}
+
