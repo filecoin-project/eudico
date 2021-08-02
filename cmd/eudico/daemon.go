@@ -16,7 +16,6 @@ import (
 	"strings"
 
 	"github.com/filecoin-project/go-jsonrpc"
-	paramfetch "github.com/filecoin-project/go-paramfetch"
 	metricsprom "github.com/ipfs/go-metrics-prometheus"
 	"github.com/mitchellh/go-homedir"
 	"github.com/multiformats/go-multiaddr"
@@ -218,12 +217,6 @@ func daemonCmd(overrides node.Option) *cli.Command {
 			err = r.Init(repo.FullNode)
 			if err != nil && err != repo.ErrRepoExists {
 				return xerrors.Errorf("repo init error: %w", err)
-			}
-
-			if !isLite {
-				if err := paramfetch.GetParams(lcli.ReqContext(cctx), build.ParametersJSON(), build.SrsJSON(), 0); err != nil {
-					return xerrors.Errorf("fetching proof parameters: %w", err)
-				}
 			}
 
 			var genBytes []byte
