@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	"sort"
 	"sync"
 	"time"
@@ -136,7 +137,7 @@ func NewSyncer(ds dtypes.MetadataDS, sm *stmgr.StateManager, exchange exchange.C
 		beacon:         beacon,
 		bad:            NewBadBlockCache(),
 		Genesis:        gent,
-		consensus:      consensus.NewFilecoinExpectedConsensus(sm, beacon, verifier, gent),
+		consensus:      filcns.NewFilecoinExpectedConsensus(sm, beacon, verifier, gent),
 		Exchange:       exchange,
 		store:          sm.ChainStore(),
 		sm:             sm,

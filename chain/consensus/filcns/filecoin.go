@@ -8,11 +8,11 @@ import (
 	"os"
 	"strings"
 
-	logging "github.com/ipfs/go-log/v2"
 	"github.com/Gurpartap/async"
 	"github.com/hashicorp/go-multierror"
 	"github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
+	logging "github.com/ipfs/go-log/v2"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"golang.org/x/xerrors"
 
@@ -59,7 +59,7 @@ type FilecoinEC struct {
 // the theoretical max height based on systime are quickly rejected
 const MaxHeightDrift = 5
 
-func NewFilecoinExpectedConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, verifier ffiwrapper.Verifier, genesis *types.TipSet) Consensus {
+func NewFilecoinExpectedConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, verifier ffiwrapper.Verifier, genesis *types.TipSet) consensus.Consensus {
 	if build.InsecurePoStValidation {
 		log.Warn("*********************************************************************************************")
 		log.Warn(" [INSECURE-POST-VALIDATION] Insecure test validation is enabled. If you see this outside of a test, it is a severe bug! ")
@@ -111,7 +111,7 @@ func (filec *FilecoinEC) ValidateBlock(ctx context.Context, b *types.FullBlock) 
 
 	now := uint64(build.Clock.Now().Unix())
 	if h.Timestamp > now+build.AllowableClockDriftSecs {
-		return xerrors.Errorf("block was from the future (now=%d, blk=%d): %w", now, h.Timestamp, ErrTemporal)
+		return xerrors.Errorf("block was from the future (now=%d, blk=%d): %w", now, h.Timestamp, consensus.ErrTemporal)
 	}
 	if h.Timestamp > now {
 		log.Warn("Got block from the future, but within threshold", h.Timestamp, build.Clock.Now().Unix())
