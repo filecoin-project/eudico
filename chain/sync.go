@@ -28,7 +28,6 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-state-types/crypto"
-	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
 
 	// named msgarray here to make it clear that these are the types used by
 	// messages, regardless of specs-actors version.
