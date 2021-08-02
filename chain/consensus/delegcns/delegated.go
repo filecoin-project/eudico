@@ -82,7 +82,6 @@ func (deleg *Delegated) ValidateBlock(ctx context.Context, b *types.FullBlock) (
 		return xerrors.Errorf("load parent tipset failed (%s): %w", h.Parents, err)
 	}
 
-
 	// fast checks first
 	if h.Height <= baseTs.Height() {
 		return xerrors.Errorf("block height not greater than parent height: %d != %d", h.Height, baseTs.Height())
@@ -417,4 +416,3 @@ func (deleg *Delegated) minerIsValid(ctx context.Context, maddr address.Address,
 }
 
 var _ consensus.Consensus = &Delegated{}
-

@@ -131,8 +131,8 @@ type SyncerParams struct {
 	SyncMgrCtor  chain.SyncManagerCtor
 	Host         host.Host
 	Beacon       beacon.Schedule
-	Gent chain.Genesis
-	Consensus consensus.Consensus
+	Gent         chain.Genesis
+	Consensus    consensus.Consensus
 }
 
 func NewSyncer(params SyncerParams) (*chain.Syncer, error) {
