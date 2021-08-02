@@ -30,7 +30,7 @@ func main() {
 	lotuslog.SetupLogLevels()
 
 	local := []*cli.Command{
-		DaemonCmd,
+		delegatedCmd,
 	}
 	if AdvanceBlockCmd != nil {
 		local = append(local, AdvanceBlockCmd)
