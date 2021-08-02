@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	"sort"
 	"sync"
 	"time"
@@ -29,8 +28,6 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-state-types/crypto"
-	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
-
 	// named msgarray here to make it clear that these are the types used by
 	// messages, regardless of specs-actors version.
 	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
@@ -120,24 +117,34 @@ type Syncer struct {
 
 type SyncManagerCtor func(syncFn SyncFunc) SyncManager
 
-// NewSyncer creates a new Syncer object.
-func NewSyncer(ds dtypes.MetadataDS, sm *stmgr.StateManager, exchange exchange.Client, syncMgrCtor SyncManagerCtor, connmgr connmgr.ConnManager, self peer.ID, beacon beacon.Schedule, verifier ffiwrapper.Verifier) (*Syncer, error) {
+type Genesis *types.TipSet
+
+func LoadGenesis(sm *stmgr.StateManager) (Genesis, error) {
 	gen, err := sm.ChainStore().GetGenesis()
 	if err != nil {
 		return nil, xerrors.Errorf("getting genesis block: %w", err)
 	}
 
-	gent, err := types.NewTipSet([]*types.BlockHeader{gen})
-	if err != nil {
-		return nil, err
-	}
+	return types.NewTipSet([]*types.BlockHeader{gen})
+}
+
+// NewSyncer creates a new Syncer object.
+func NewSyncer(ds dtypes.MetadataDS,
+	sm *stmgr.StateManager,
+	exchange exchange.Client,
+	syncMgrCtor SyncManagerCtor,
+	connmgr connmgr.ConnManager,
+	self peer.ID,
+	beacon beacon.Schedule,
+	gent Genesis,
+	consensus consensus.Consensus) (*Syncer, error) {
 
 	s := &Syncer{
 		ds:             ds,
 		beacon:         beacon,
 		bad:            NewBadBlockCache(),
 		Genesis:        gent,
-		consensus:      filcns.NewFilecoinExpectedConsensus(sm, beacon, verifier, gent),
+		consensus:      consensus,
 		Exchange:       exchange,
 		store:          sm.ChainStore(),
 		sm:             sm,
