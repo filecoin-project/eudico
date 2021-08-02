@@ -17,8 +17,8 @@ var log = logging.Logger("consensus")
 
 var ErrTemporal = errors.New("temporal error")
 
-func verifyBlsAggregate(ctx context.Context, sig *crypto.Signature, msgs []cid.Cid, pubks [][]byte) error {
-	_, span := trace.StartSpan(ctx, "syncer.verifyBlsAggregate")
+func VerifyBlsAggregate(ctx context.Context, sig *crypto.Signature, msgs []cid.Cid, pubks [][]byte) error {
+	_, span := trace.StartSpan(ctx, "syncer.VerifyBlsAggregate")
 	defer span.End()
 	span.AddAttributes(
 		trace.Int64Attribute("msgCount", int64(len(msgs))),

@@ -1,12 +1,14 @@
-package consensus
+package filcns
 
 import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/filecoin-project/lotus/chain/consensus"
 	"os"
 	"strings"
 
+	logging "github.com/ipfs/go-log/v2"
 	"github.com/Gurpartap/async"
 	"github.com/hashicorp/go-multierror"
 	"github.com/ipfs/go-cid"
@@ -35,6 +37,8 @@ import (
 	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
 	"github.com/filecoin-project/lotus/lib/sigs"
 )
+
+var log = logging.Logger("fil-consensus")
 
 type FilecoinEC struct {
 	// The interface for accessing and putting tipsets into local storage
@@ -428,7 +432,7 @@ func (filec *FilecoinEC) checkBlockMessages(ctx context.Context, b *types.FullBl
 			pubks = append(pubks, pubk)
 		}
 
-		if err := verifyBlsAggregate(ctx, b.Header.BLSAggregate, sigCids, pubks); err != nil {
+		if err := consensus.VerifyBlsAggregate(ctx, b.Header.BLSAggregate, sigCids, pubks); err != nil {
 			return xerrors.Errorf("bls aggregate signature was invalid: %w", err)
 		}
 	}
@@ -607,4 +611,4 @@ func VerifyElectionPoStVRF(ctx context.Context, worker address.Address, rand []b
 	return gen.VerifyVRF(ctx, worker, rand, evrf)
 }
 
-var _ Consensus = &FilecoinEC{}
+var _ consensus.Consensus = &FilecoinEC{}
