@@ -20,7 +20,7 @@ import (
 
 // TODO EUDICO Dedup with cmd/lotus
 
-var log = logging.Logger("main")
+var log = logging.Logger("eudico")
 
 var AdvanceBlockCmd *cli.Command
 
