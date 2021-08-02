@@ -94,7 +94,7 @@ BINS+=lotus
 
 eudico: $(BUILD_DEPS)
 	rm -f eudico
-	$(GOCC) build $(GOFLAGS) -o eudico ./cmd/lotus
+	$(GOCC) build $(GOFLAGS) -o eudico ./cmd/eudico
 
 .PHONY: eudico
 BINS+=eudico
