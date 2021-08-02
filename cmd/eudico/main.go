@@ -36,7 +36,7 @@ func main() {
 		local = append(local, AdvanceBlockCmd)
 	}
 
-	jaeger := tracing.SetupJaegerTracing("lotus")
+	jaeger := tracing.SetupJaegerTracing("eudico")
 	defer func() {
 		if jaeger != nil {
 			jaeger.Flush()
@@ -48,7 +48,7 @@ func main() {
 		originBefore := cmd.Before
 		cmd.Before = func(cctx *cli.Context) error {
 			trace.UnregisterExporter(jaeger)
-			jaeger = tracing.SetupJaegerTracing("lotus/" + cmd.Name)
+			jaeger = tracing.SetupJaegerTracing("eudico/" + cmd.Name)
 
 			if originBefore != nil {
 				return originBefore(cctx)
@@ -69,9 +69,9 @@ func main() {
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "repo",
-				EnvVars: []string{"LOTUS_PATH"},
+				EnvVars: []string{"EUDICO_PATH"},
 				Hidden:  true,
-				Value:   "~/.lotus", // TODO: Consider XDG_DATA_HOME
+				Value:   "~/.eudico", // TODO: Consider XDG_DATA_HOME
 			},
 			&cli.BoolFlag{
 				Name:  "interactive",

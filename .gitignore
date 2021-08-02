@@ -1,6 +1,7 @@
 /AppDir
 /appimage-builder-cache
 *.AppImage
+/eudico
 /lotus
 /lotus-miner
 /lotus-worker
