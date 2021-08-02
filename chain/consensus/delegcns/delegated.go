@@ -232,6 +232,10 @@ func blockSanityChecks(h *types.BlockHeader) error {
 		return xerrors.Errorf("block had non-secp miner address")
 	}
 
+	if len(h.Parents) != 1 {
+		return xerrors.Errorf("must have 1 parent")
+	}
+
 	return nil
 }
 
