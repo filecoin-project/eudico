@@ -172,7 +172,7 @@ var delegatedMinerCmd = &cli.Command{
 
 		log.Info("starting mining on @", head.Height())
 
-		timer := time.NewTimer(3 * time.Second)
+		timer := time.NewTimer(time.Duration(build.BlockDelaySecs) * time.Second)
 		for {
 			select {
 			case <-timer.C:
@@ -182,6 +182,8 @@ var delegatedMinerCmd = &cli.Command{
 					continue
 				}
 
+				log.Info("try mining at @", head.Height())
+
 				bh, err := api.MinerCreateBlock(context.TODO(), &lapi.BlockTemplate{
 					Miner:            miner,
 					Parents:          base.Key(),
@@ -190,7 +192,7 @@ var delegatedMinerCmd = &cli.Command{
 					BeaconValues:     nil,
 					Messages:         []*types.SignedMessage{}, // todo call select msgs
 					Epoch:            base.Height() + 1,
-					Timestamp:        base.MinTimestamp() + 3,
+					Timestamp:        base.MinTimestamp() + build.BlockDelaySecs,
 					WinningPoStProof: nil,
 				})
 				if err != nil {
@@ -206,6 +208,8 @@ var delegatedMinerCmd = &cli.Command{
 				if err != nil {
 					log.Errorw("submitting block failed", "error", err)
 				}
+
+				log.Info("mined a block! ", bh.Cid())
 			case <-ctx.Done():
 				return nil
 			}

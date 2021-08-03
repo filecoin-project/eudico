@@ -410,7 +410,12 @@ func (deleg *Delegated) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
 }
 
 func (deleg *Delegated) minerIsValid(ctx context.Context, maddr address.Address, baseTs *types.TipSet) error {
-	if maddr != producer {
+	ida, err := deleg.sm.LookupID(ctx, maddr, baseTs)
+	if err != nil {
+		return xerrors.Errorf("failed to load power actor: %w", err)
+	}
+
+	if ida != producer {
 		return xerrors.Errorf("bad miner")
 	}
 
