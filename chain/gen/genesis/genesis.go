@@ -562,7 +562,7 @@ func MakeGenesisBlock(ctx context.Context, j journal.Journal, bs bstore.Blocksto
 	}
 
 	// temp chainstore
-	cs := store.NewChainStore(bs, bs, datastore.NewMapDatastore(), j)
+	cs := store.NewChainStore(bs, bs, datastore.NewMapDatastore(), nil, j)
 
 	// Verify PreSealed Data
 	stateroot, err = VerifyPreSealedData(ctx, cs, sys, stateroot, template, keyIDs, template.NetworkVersion)

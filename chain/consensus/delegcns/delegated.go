@@ -3,6 +3,7 @@ package delegcns
 import (
 	"context"
 	"fmt"
+	"github.com/filecoin-project/go-state-types/big"
 	"strings"
 
 	"github.com/Gurpartap/async"
@@ -130,7 +131,7 @@ func (deleg *Delegated) ValidateBlock(ctx context.Context, b *types.FullBlock) (
 		}
 		return nil
 	})
-	pweight, err := deleg.store.Weight(ctx, baseTs) // todo
+	pweight, err := Weight(nil, nil, baseTs)
 	if err != nil {
 		return xerrors.Errorf("getting parent weight: %w", err)
 	}
@@ -414,6 +415,10 @@ func (deleg *Delegated) minerIsValid(ctx context.Context, maddr address.Address,
 	}
 
 	return nil
+}
+
+func Weight(ctx context.Context, stateBs bstore.Blockstore, ts *types.TipSet) (types.BigInt, error) {
+	return big.NewInt(int64(ts.Height())), nil
 }
 
 var _ consensus.Consensus = &Delegated{}

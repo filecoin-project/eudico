@@ -72,8 +72,15 @@ func MessagePool(lc fx.Lifecycle, mpp messagepool.Provider, ds dtypes.MetadataDS
 	return mp, nil
 }
 
-func ChainStore(lc fx.Lifecycle, cbs dtypes.ChainBlockstore, sbs dtypes.StateBlockstore, ds dtypes.MetadataDS, basebs dtypes.BaseBlockstore, j journal.Journal) *store.ChainStore {
-	chain := store.NewChainStore(cbs, sbs, ds, j)
+func ChainStore(lc fx.Lifecycle,
+	cbs dtypes.ChainBlockstore,
+	sbs dtypes.StateBlockstore,
+	ds dtypes.MetadataDS,
+	basebs dtypes.BaseBlockstore,
+	weight store.WeightFunc,
+	j journal.Journal) *store.ChainStore {
+
+	chain := store.NewChainStore(cbs, sbs, ds, weight, j)
 
 	if err := chain.Load(); err != nil {
 		log.Warnf("loading chain state from disk: %s", err)
