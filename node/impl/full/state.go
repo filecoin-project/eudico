@@ -29,7 +29,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin/verifreg"
 	"github.com/filecoin-project/lotus/chain/actors/policy"
 	"github.com/filecoin-project/lotus/chain/beacon"
-	"github.com/filecoin-project/lotus/chain/gen"
+	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
@@ -88,6 +88,7 @@ type StateAPI struct {
 	StateManager  *stmgr.StateManager
 	Chain         *store.ChainStore
 	Beacon        beacon.Schedule
+	Consensus     consensus.Consensus
 }
 
 func (a *StateAPI) StateNetworkName(ctx context.Context) (dtypes.NetworkName, error) {
@@ -524,7 +525,7 @@ func (a *StateAPI) MinerGetBaseInfo(ctx context.Context, maddr address.Address, 
 }
 
 func (a *StateAPI) MinerCreateBlock(ctx context.Context, bt *api.BlockTemplate) (*types.BlockMsg, error) {
-	fblk, err := gen.MinerCreateBlock(ctx, a.StateManager, a.Wallet, bt)
+	fblk, err := a.Consensus.CreateBlock(ctx, a.Wallet, bt)
 	if err != nil {
 		return nil, err
 	}

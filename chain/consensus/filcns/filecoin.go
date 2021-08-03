@@ -13,6 +13,7 @@ import (
 	cbor "github.com/ipfs/go-ipld-cbor"
 	logging "github.com/ipfs/go-log/v2"
 	cbg "github.com/whyrusleeping/cbor-gen"
+	"go.opencensus.io/trace"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
@@ -29,7 +30,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin/power"
 	"github.com/filecoin-project/lotus/chain/beacon"
 	"github.com/filecoin-project/lotus/chain/consensus"
-	"github.com/filecoin-project/lotus/chain/gen"
 	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
@@ -609,7 +609,23 @@ func (filec *FilecoinEC) minerIsValid(ctx context.Context, maddr address.Address
 }
 
 func VerifyElectionPoStVRF(ctx context.Context, worker address.Address, rand []byte, evrf []byte) error {
-	return gen.VerifyVRF(ctx, worker, rand, evrf)
+	return VerifyVRF(ctx, worker, rand, evrf)
+}
+
+func VerifyVRF(ctx context.Context, worker address.Address, vrfBase, vrfproof []byte) error {
+	_, span := trace.StartSpan(ctx, "VerifyVRF")
+	defer span.End()
+
+	sig := &crypto.Signature{
+		Type: crypto.SigTypeBLS,
+		Data: vrfproof,
+	}
+
+	if err := sigs.Verify(sig, worker, vrfBase); err != nil {
+		return xerrors.Errorf("vrf was invalid: %w", err)
+	}
+
+	return nil
 }
 
 var _ consensus.Consensus = &FilecoinEC{}

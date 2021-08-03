@@ -23,7 +23,6 @@ import (
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipfs/go-merkledag"
 	"github.com/ipld/go-car"
-	"go.opencensus.io/trace"
 	"golang.org/x/xerrors"
 
 	proof5 "github.com/filecoin-project/specs-actors/v5/actors/runtime/proof"
@@ -33,6 +32,7 @@ import (
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors/policy"
 	"github.com/filecoin-project/lotus/chain/beacon"
+	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
@@ -43,7 +43,6 @@ import (
 	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
 	"github.com/filecoin-project/lotus/genesis"
 	"github.com/filecoin-project/lotus/journal"
-	"github.com/filecoin-project/lotus/lib/sigs"
 	"github.com/filecoin-project/lotus/node/repo"
 )
 
@@ -487,7 +486,7 @@ func (cg *ChainGen) makeBlock(parents *types.TipSet, m address.Address, vrfticke
 		ts = parents.MinTimestamp() + uint64(height-parents.Height())*build.BlockDelaySecs
 	}
 
-	fblk, err := MinerCreateBlock(context.TODO(), cg.sm, cg.w, &api.BlockTemplate{
+	fblk, err := filcns.NewFilecoinExpectedConsensus(cg.sm, nil, nil, nil).CreateBlock(context.TODO(), cg.w, &api.BlockTemplate{
 		Miner:            m,
 		Parents:          parents.Key(),
 		Ticket:           vrfticket,
@@ -666,22 +665,6 @@ func IsRoundWinner(ctx context.Context, ts *types.TipSet, round abi.ChainEpoch,
 }
 
 type SignFunc func(context.Context, address.Address, []byte) (*crypto.Signature, error)
-
-func VerifyVRF(ctx context.Context, worker address.Address, vrfBase, vrfproof []byte) error {
-	_, span := trace.StartSpan(ctx, "VerifyVRF")
-	defer span.End()
-
-	sig := &crypto.Signature{
-		Type: crypto.SigTypeBLS,
-		Data: vrfproof,
-	}
-
-	if err := sigs.Verify(sig, worker, vrfBase); err != nil {
-		return xerrors.Errorf("vrf was invalid: %w", err)
-	}
-
-	return nil
-}
 
 func ComputeVRF(ctx context.Context, sign SignFunc, worker address.Address, sigInput []byte) ([]byte, error) {
 	sig, err := sign(ctx, worker, sigInput)

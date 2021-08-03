@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 
+	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 	"github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log/v2"
+	cbg "github.com/whyrusleeping/cbor-gen"
 	"go.opencensus.io/trace"
 	"golang.org/x/xerrors"
 
@@ -44,3 +46,42 @@ func VerifyBlsAggregate(ctx context.Context, sig *crypto.Signature, msgs []cid.C
 	}
 	return nil
 }
+
+func AggregateSignatures(sigs []crypto.Signature) (*crypto.Signature, error) {
+	sigsS := make([]ffi.Signature, len(sigs))
+	for i := 0; i < len(sigs); i++ {
+		copy(sigsS[i][:], sigs[i].Data[:ffi.SignatureBytes])
+	}
+
+	aggSig := ffi.Aggregate(sigsS)
+	if aggSig == nil {
+		if len(sigs) > 0 {
+			return nil, xerrors.Errorf("bls.Aggregate returned nil with %d signatures", len(sigs))
+		}
+
+		zeroSig := ffi.CreateZeroSignature()
+
+		// Note: for blst this condition should not happen - nil should not
+		// be returned
+		return &crypto.Signature{
+			Type: crypto.SigTypeBLS,
+			Data: zeroSig[:],
+		}, nil
+	}
+	return &crypto.Signature{
+		Type: crypto.SigTypeBLS,
+		Data: aggSig[:],
+	}, nil
+}
+
+func ToMessagesArray(store blockadt.Store, cids []cid.Cid) (cid.Cid, error) {
+	arr := blockadt.MakeEmptyArray(store)
+	for i, c := range cids {
+		oc := cbg.CborCid(c)
+		if err := arr.Set(uint64(i), &oc); err != nil {
+			return cid.Undef, err
+		}
+	}
+	return arr.Root()
+}
+
