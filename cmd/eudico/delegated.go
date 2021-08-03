@@ -22,6 +22,7 @@ import (
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
 
+	lapi "github.com/filecoin-project/lotus/api"
 	bstore "github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
@@ -34,6 +35,8 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/vm"
 	"github.com/filecoin-project/lotus/chain/wallet"
+	lcli "github.com/filecoin-project/lotus/cli"
+	cliutil "github.com/filecoin-project/lotus/cli/util"
 	"github.com/filecoin-project/lotus/cmd/lotus-sim/simulation/mock"
 	"github.com/filecoin-project/lotus/genesis"
 	"github.com/filecoin-project/lotus/journal"
@@ -146,7 +149,67 @@ var delegatedMinerCmd = &cli.Command{
 	Name:  "miner",
 	Usage: "run delegated conesensus miner",
 	Action: func(cctx *cli.Context) error {
-		return nil
+		api, closer, err := lcli.GetFullNodeAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+		ctx := cliutil.ReqContext(cctx)
+
+		head, err := api.ChainHead(ctx)
+		if err != nil {
+			return xerrors.Errorf("getting head: %w", err)
+		}
+
+		minerid, err := address.NewFromString("t0100")
+		if err != nil {
+			return err
+		}
+		miner, err := api.StateAccountKey(ctx, minerid, types.EmptyTSK)
+		if err != nil {
+			return err
+		}
+
+		log.Info("starting mining on @", head.Height())
+
+		timer := time.NewTimer(3 * time.Second)
+		for {
+			select {
+			case <-timer.C:
+				base, err := api.ChainHead(ctx)
+				if err != nil {
+					log.Errorw("creating block failed", "error", err)
+					continue
+				}
+
+				bh, err := api.MinerCreateBlock(context.TODO(), &lapi.BlockTemplate{
+					Miner:            miner,
+					Parents:          base.Key(),
+					Ticket:           nil,
+					Eproof:           nil,
+					BeaconValues:     nil,
+					Messages:         []*types.SignedMessage{}, // todo call select msgs
+					Epoch:            base.Height() + 1,
+					Timestamp:        base.MinTimestamp() + 3,
+					WinningPoStProof: nil,
+				})
+				if err != nil {
+					log.Errorw("creating block failed", "error", err)
+					continue
+				}
+
+				err = api.SyncSubmitBlock(ctx, &types.BlockMsg{
+					Header:        bh.Header,
+					BlsMessages:   bh.BlsMessages,
+					SecpkMessages: bh.SecpkMessages,
+				})
+				if err != nil {
+					log.Errorw("submitting block failed", "error", err)
+				}
+			case <-ctx.Done():
+				return nil
+			}
+		}
 	},
 }
 
