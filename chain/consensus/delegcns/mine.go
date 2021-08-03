@@ -1,38 +1,27 @@
-package filcns
+package delegcns
 
 import (
 	"context"
-	"github.com/filecoin-project/lotus/chain/consensus"
 
 	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-state-types/crypto"
+
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/consensus"
-	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
-func (filec *FilecoinEC) CreateBlock(ctx context.Context, w api.Wallet, bt *api.BlockTemplate) (*types.FullBlock, error) {
-	pts, err := filec.sm.ChainStore().LoadTipSet(bt.Parents)
+func (deleg *Delegated) CreateBlock(ctx context.Context, w api.Wallet, bt *api.BlockTemplate) (*types.FullBlock, error) {
+	pts, err := deleg.sm.ChainStore().LoadTipSet(bt.Parents)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to load parent tipset: %w", err)
 	}
 
-	st, recpts, err := filec.sm.TipSetState(ctx, pts)
+	st, recpts, err := deleg.sm.TipSetState(ctx, pts)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to load tipset state: %w", err)
-	}
-
-	_, lbst, err := stmgr.GetLookbackTipSetForRound(ctx, filec.sm, pts, bt.Epoch)
-	if err != nil {
-		return nil, xerrors.Errorf("getting lookback miner actor state: %w", err)
-	}
-
-	worker, err := stmgr.GetMinerWorkerRaw(ctx, filec.sm, lbst, bt.Miner)
-	if err != nil {
-		return nil, xerrors.Errorf("failed to get miner worker: %w", err)
 	}
 
 	next := &types.BlockHeader{
@@ -59,14 +48,14 @@ func (filec *FilecoinEC) CreateBlock(ctx context.Context, w api.Wallet, bt *api.
 			blsSigs = append(blsSigs, msg.Signature)
 			blsMessages = append(blsMessages, &msg.Message)
 
-			c, err := filec.sm.ChainStore().PutMessage(&msg.Message)
+			c, err := deleg.sm.ChainStore().PutMessage(&msg.Message)
 			if err != nil {
 				return nil, err
 			}
 
 			blsMsgCids = append(blsMsgCids, c)
 		} else {
-			c, err := filec.sm.ChainStore().PutMessage(msg)
+			c, err := deleg.sm.ChainStore().PutMessage(msg)
 			if err != nil {
 				return nil, err
 			}
@@ -77,7 +66,7 @@ func (filec *FilecoinEC) CreateBlock(ctx context.Context, w api.Wallet, bt *api.
 		}
 	}
 
-	store := filec.sm.ChainStore().ActorStore(ctx)
+	store := deleg.sm.ChainStore().ActorStore(ctx)
 	blsmsgroot, err := consensus.ToMessagesArray(store, blsMsgCids)
 	if err != nil {
 		return nil, xerrors.Errorf("building bls amt: %w", err)
@@ -102,13 +91,13 @@ func (filec *FilecoinEC) CreateBlock(ctx context.Context, w api.Wallet, bt *api.
 	}
 
 	next.BLSAggregate = aggSig
-	pweight, err := filec.sm.ChainStore().Weight(ctx, pts)
+	pweight, err := deleg.sm.ChainStore().Weight(ctx, pts)
 	if err != nil {
 		return nil, err
 	}
 	next.ParentWeight = pweight
 
-	baseFee, err := filec.sm.ChainStore().ComputeBaseFee(ctx, pts)
+	baseFee, err := deleg.sm.ChainStore().ComputeBaseFee(ctx, pts)
 	if err != nil {
 		return nil, xerrors.Errorf("computing base fee: %w", err)
 	}
@@ -119,7 +108,7 @@ func (filec *FilecoinEC) CreateBlock(ctx context.Context, w api.Wallet, bt *api.
 		return nil, xerrors.Errorf("failed to get signing bytes for block: %w", err)
 	}
 
-	sig, err := w.WalletSign(ctx, worker, nosigbytes, api.MsgMeta{
+	sig, err := w.WalletSign(ctx, bt.Miner, nosigbytes, api.MsgMeta{
 		Type: api.MTBlock,
 	})
 	if err != nil {
