@@ -93,7 +93,7 @@ func daemonCmd(overrides node.Option) *cli.Command {
 			&cli.StringFlag{
 				Name:   "import-key",
 				Usage:  "on first run, import a default key from a given file",
-				Hidden: true,
+				Hidden: false,
 			},
 			&cli.StringFlag{
 				Name:  "genesis",
@@ -101,7 +101,7 @@ func daemonCmd(overrides node.Option) *cli.Command {
 			},
 			&cli.BoolFlag{
 				Name:  "bootstrap",
-				Value: true,
+				Value: false,
 			},
 			&cli.StringFlag{
 				Name:  "import-chain",

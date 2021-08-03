@@ -18,6 +18,7 @@ import (
 	"github.com/filecoin-project/go-state-types/network"
 	bstore "github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/beacon"
 	"github.com/filecoin-project/lotus/chain/consensus"
@@ -60,7 +61,7 @@ var producer = func() address.Address {
 // the theoretical max height based on systime are quickly rejected
 const MaxHeightDrift = 5
 
-func NewDelegatedConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, verifier ffiwrapper.Verifier, genesis *types.TipSet) consensus.Consensus {
+func NewDelegatedConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, verifier ffiwrapper.Verifier, genesis chain.Genesis) consensus.Consensus {
 	return &Delegated{
 		store:    sm.ChainStore(),
 		beacon:   beacon,
