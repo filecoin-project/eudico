@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"time"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -98,7 +99,7 @@ var delegatedGenesisCmd = &cli.Command{
 			}},
 			Miners:      nil,
 			NetworkName: "eudico-" + uuid.New().String(),
-			Timestamp:   0,
+			Timestamp:   uint64(time.Now().Unix()),
 
 			VerifregRootKey: genesis.Actor{
 				Type:    genesis.TAccount,
