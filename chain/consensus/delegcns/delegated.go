@@ -418,7 +418,11 @@ func (deleg *Delegated) minerIsValid(ctx context.Context, maddr address.Address,
 }
 
 func Weight(ctx context.Context, stateBs bstore.Blockstore, ts *types.TipSet) (types.BigInt, error) {
-	return big.NewInt(int64(ts.Height())), nil
+	if ts == nil {
+		return types.NewInt(0), nil
+	}
+
+	return big.NewInt(int64(ts.Height() + 1)), nil
 }
 
 var _ consensus.Consensus = &Delegated{}
