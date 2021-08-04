@@ -48,7 +48,7 @@ var ChainNode = Options(
 
 	// Consensus settings
 	Override(new(dtypes.DrandSchedule), modules.BuiltinDrandConfig),
-	Override(new(stmgr.UpgradeSchedule), stmgr.DefaultUpgradeSchedule()),
+	Override(new(stmgr.UpgradeSchedule), filcns.DefaultUpgradeSchedule()),
 	Override(new(dtypes.NetworkName), modules.NetworkName),
 	Override(new(modules.Genesis), modules.ErrorGenesis),
 	Override(new(dtypes.AfterGenesisSet), modules.SetGenesis),
@@ -69,6 +69,7 @@ var ChainNode = Options(
 	// Consensus: Chain storage/access
 	Override(new(chain.Genesis), chain.LoadGenesis),
 	Override(new(store.WeightFunc), filcns.Weight),
+	Override(new(stmgr.Executor), filcns.TipSetExecutor()),
 	Override(new(consensus.Consensus), filcns.NewFilecoinExpectedConsensus),
 	Override(new(*store.ChainStore), modules.ChainStore),
 	Override(new(*stmgr.StateManager), modules.StateManager),

@@ -105,7 +105,7 @@ func (nd *Node) LoadSim(ctx context.Context, name string) (*Simulation, error) {
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create upgrade schedule for simulation %s: %w", name, err)
 	}
-	sim.StateManager, err = stmgr.NewStateManagerWithUpgradeSchedule(nd.Chainstore, vm.Syscalls(mock.Verifier), us)
+	sim.StateManager, err = stmgr.NewStateManager(nd.Chainstore, vm.Syscalls(mock.Verifier), us)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create state manager for simulation %s: %w", name, err)
 	}

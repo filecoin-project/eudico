@@ -58,8 +58,8 @@ func ChainBlockService(bs dtypes.ExposedBlockstore, rem dtypes.ChainBitswap) dty
 	return blockservice.New(bs, rem)
 }
 
-func MessagePool(lc fx.Lifecycle, mpp messagepool.Provider, ds dtypes.MetadataDS, nn dtypes.NetworkName, j journal.Journal, protector dtypes.GCReferenceProtector) (*messagepool.MessagePool, error) {
-	mp, err := messagepool.New(mpp, ds, nn, j)
+func MessagePool(lc fx.Lifecycle, us stmgr.UpgradeSchedule, mpp messagepool.Provider, ds dtypes.MetadataDS, nn dtypes.NetworkName, j journal.Journal, protector dtypes.GCReferenceProtector) (*messagepool.MessagePool, error) {
+	mp, err := messagepool.New(mpp, ds, us, nn, j)
 	if err != nil {
 		return nil, xerrors.Errorf("constructing mpool: %w", err)
 	}
@@ -110,6 +110,7 @@ func ChainStore(lc fx.Lifecycle,
 func NetworkName(mctx helpers.MetricsCtx,
 	lc fx.Lifecycle,
 	cs *store.ChainStore,
+	tsexec stmgr.Executor,
 	syscalls vm.SyscallBuilder,
 	us stmgr.UpgradeSchedule,
 	_ dtypes.AfterGenesisSet) (dtypes.NetworkName, error) {
@@ -119,7 +120,7 @@ func NetworkName(mctx helpers.MetricsCtx,
 
 	ctx := helpers.LifecycleCtx(mctx, lc)
 
-	sm, err := stmgr.NewStateManagerWithUpgradeSchedule(cs, syscalls, us)
+	sm, err := stmgr.NewStateManager(cs, tsexec, syscalls, us)
 	if err != nil {
 		return "", err
 	}

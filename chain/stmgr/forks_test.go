@@ -120,7 +120,7 @@ func TestForkHeightTriggers(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sm, err := NewStateManagerWithUpgradeSchedule(
+	sm, err := NewStateManager(
 		cg.ChainStore(), cg.StateManager().VMSys(), UpgradeSchedule{{
 			Network: network.Version1,
 			Height:  testForkHeight,
@@ -249,7 +249,7 @@ func TestForkRefuseCall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sm, err := NewStateManagerWithUpgradeSchedule(
+	sm, err := NewStateManager(
 		cg.ChainStore(), cg.StateManager().VMSys(), UpgradeSchedule{{
 			Network:   network.Version1,
 			Expensive: true,
@@ -364,7 +364,7 @@ func TestForkPreMigration(t *testing.T) {
 
 	counter := make(chan struct{}, 10)
 
-	sm, err := NewStateManagerWithUpgradeSchedule(
+	sm, err := NewStateManager(
 		cg.ChainStore(), cg.StateManager().VMSys(), UpgradeSchedule{{
 			Network: network.Version1,
 			Height:  testForkHeight,
