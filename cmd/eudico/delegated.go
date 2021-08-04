@@ -31,6 +31,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
 	"github.com/filecoin-project/lotus/chain/gen"
 	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
+	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/vm"
@@ -53,6 +54,7 @@ var delegatedCmd = &cli.Command{
 		daemonCmd(node.Options(
 			node.Override(new(consensus.Consensus), delegcns.NewDelegatedConsensus),
 			node.Override(new(store.WeightFunc), delegcns.Weight),
+			node.Override(new(stmgr.Executor), delegcns.TipSetExecutor()),
 		)),
 	},
 }

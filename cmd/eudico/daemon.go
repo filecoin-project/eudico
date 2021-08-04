@@ -375,63 +375,63 @@ func importKey(ctx context.Context, api api.FullNode, f string) error {
 }
 
 func ImportChain(ctx context.Context, r repo.Repo, fname string, snapshot bool) (err error) {
-/*	var rd io.Reader
-	var l int64
-	if strings.HasPrefix(fname, "http://") || strings.HasPrefix(fname, "https://") {
-		resp, err := http.Get(fname) //nolint:gosec
+	/*	var rd io.Reader
+		var l int64
+		if strings.HasPrefix(fname, "http://") || strings.HasPrefix(fname, "https://") {
+			resp, err := http.Get(fname) //nolint:gosec
+			if err != nil {
+				return err
+			}
+			defer resp.Body.Close() //nolint:errcheck
+
+			if resp.StatusCode != http.StatusOK {
+				return xerrors.Errorf("fetching chain CAR failed with non-200 response: %d", resp.StatusCode)
+			}
+
+			rd = resp.Body
+			l = resp.ContentLength
+		} else {
+			fname, err = homedir.Expand(fname)
+			if err != nil {
+				return err
+			}
+
+			fi, err := os.Open(fname)
+			if err != nil {
+				return err
+			}
+			defer fi.Close() //nolint:errcheck
+
+			st, err := os.Stat(fname)
+			if err != nil {
+				return err
+			}
+
+			rd = fi
+			l = st.Size()
+		}
+
+		lr, err := r.Lock(repo.FullNode)
 		if err != nil {
 			return err
 		}
-		defer resp.Body.Close() //nolint:errcheck
+		defer lr.Close() //nolint:errcheck
 
-		if resp.StatusCode != http.StatusOK {
-			return xerrors.Errorf("fetching chain CAR failed with non-200 response: %d", resp.StatusCode)
+		bs, err := lr.Blockstore(ctx, repo.UniversalBlockstore)
+		if err != nil {
+			return xerrors.Errorf("failed to open blockstore: %w", err)
 		}
 
-		rd = resp.Body
-		l = resp.ContentLength
-	} else {
-		fname, err = homedir.Expand(fname)
+		mds, err := lr.Datastore(context.TODO(), "/metadata")
 		if err != nil {
 			return err
 		}
 
-		fi, err := os.Open(fname)
+		j, err := journal.OpenFSJournal(lr, journal.EnvDisabledEvents())
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to open journal: %w", err)
 		}
-		defer fi.Close() //nolint:errcheck
-
-		st, err := os.Stat(fname)
-		if err != nil {
-			return err
-		}
-
-		rd = fi
-		l = st.Size()
-	}
-
-	lr, err := r.Lock(repo.FullNode)
-	if err != nil {
-		return err
-	}
-	defer lr.Close() //nolint:errcheck
-
-	bs, err := lr.Blockstore(ctx, repo.UniversalBlockstore)
-	if err != nil {
-		return xerrors.Errorf("failed to open blockstore: %w", err)
-	}
-
-	mds, err := lr.Datastore(context.TODO(), "/metadata")
-	if err != nil {
-		return err
-	}
-
-	j, err := journal.OpenFSJournal(lr, journal.EnvDisabledEvents())
-	if err != nil {
-		return xerrors.Errorf("failed to open journal: %w", err)
-	}
-*/
+	*/
 	panic("weight todo")
 	/*cst := store.NewChainStore(bs, bs, mds, nil, j)
 	defer cst.Close() //nolint:errcheck
@@ -482,6 +482,6 @@ func ImportChain(ctx context.Context, r repo.Repo, fname string, snapshot bool) 
 	if err := cst.ForceHeadSilent(ctx, ts); err != nil {
 		return err
 	}
-*/
+	*/
 	return nil
 }
