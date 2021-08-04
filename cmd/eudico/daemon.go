@@ -3,19 +3,28 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"runtime/pprof"
 	"strings"
 
 	"github.com/filecoin-project/go-jsonrpc"
+	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/chain/types"
+	lcli "github.com/filecoin-project/lotus/cli"
+	"github.com/filecoin-project/lotus/lib/peermgr"
+	"github.com/filecoin-project/lotus/lib/ulimit"
+	"github.com/filecoin-project/lotus/metrics"
+	"github.com/filecoin-project/lotus/node"
+	"github.com/filecoin-project/lotus/node/modules"
+	"github.com/filecoin-project/lotus/node/modules/dtypes"
+	"github.com/filecoin-project/lotus/node/modules/testing"
+	"github.com/filecoin-project/lotus/node/repo"
 	metricsprom "github.com/ipfs/go-metrics-prometheus"
 	"github.com/mitchellh/go-homedir"
 	"github.com/multiformats/go-multiaddr"
@@ -25,25 +34,6 @@ import (
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
 	"golang.org/x/xerrors"
-	"gopkg.in/cheggaaa/pb.v1"
-
-	"github.com/filecoin-project/lotus/api"
-	"github.com/filecoin-project/lotus/build"
-	"github.com/filecoin-project/lotus/chain/stmgr"
-	"github.com/filecoin-project/lotus/chain/store"
-	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/filecoin-project/lotus/chain/vm"
-	lcli "github.com/filecoin-project/lotus/cli"
-	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
-	"github.com/filecoin-project/lotus/journal"
-	"github.com/filecoin-project/lotus/lib/peermgr"
-	"github.com/filecoin-project/lotus/lib/ulimit"
-	"github.com/filecoin-project/lotus/metrics"
-	"github.com/filecoin-project/lotus/node"
-	"github.com/filecoin-project/lotus/node/modules"
-	"github.com/filecoin-project/lotus/node/modules/dtypes"
-	"github.com/filecoin-project/lotus/node/modules/testing"
-	"github.com/filecoin-project/lotus/node/repo"
 )
 
 const (
@@ -385,7 +375,7 @@ func importKey(ctx context.Context, api api.FullNode, f string) error {
 }
 
 func ImportChain(ctx context.Context, r repo.Repo, fname string, snapshot bool) (err error) {
-	var rd io.Reader
+/*	var rd io.Reader
 	var l int64
 	if strings.HasPrefix(fname, "http://") || strings.HasPrefix(fname, "https://") {
 		resp, err := http.Get(fname) //nolint:gosec
@@ -441,9 +431,9 @@ func ImportChain(ctx context.Context, r repo.Repo, fname string, snapshot bool) 
 	if err != nil {
 		return xerrors.Errorf("failed to open journal: %w", err)
 	}
-
+*/
 	panic("weight todo")
-	cst := store.NewChainStore(bs, bs, mds, nil, j)
+	/*cst := store.NewChainStore(bs, bs, mds, nil, j)
 	defer cst.Close() //nolint:errcheck
 
 	log.Infof("importing chain from %s...", fname)
@@ -479,7 +469,7 @@ func ImportChain(ctx context.Context, r repo.Repo, fname string, snapshot bool) 
 		return err
 	}
 
-	stm := stmgr.NewStateManager(cst, vm.Syscalls(ffiwrapper.ProofVerifier))
+	stm, _ := stmgr.NewStateManager(cst, vm.Syscalls(ffiwrapper.ProofVerifier))
 
 	if !snapshot {
 		log.Infof("validating imported chain...")
@@ -492,6 +482,6 @@ func ImportChain(ctx context.Context, r repo.Repo, fname string, snapshot bool) 
 	if err := cst.ForceHeadSilent(ctx, ts); err != nil {
 		return err
 	}
-
+*/
 	return nil
 }
