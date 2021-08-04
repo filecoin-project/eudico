@@ -172,7 +172,7 @@ var delegatedMinerCmd = &cli.Command{
 
 		log.Info("starting mining on @", head.Height())
 
-		timer := time.NewTimer(time.Duration(build.BlockDelaySecs) * time.Second)
+		timer := time.NewTicker(time.Duration(build.BlockDelaySecs) * time.Second)
 		for {
 			select {
 			case <-timer.C:
