@@ -92,6 +92,7 @@ lotus: $(BUILD_DEPS)
 .PHONY: lotus
 BINS+=lotus
 
+eudico: GOFLAGS+=-tags=debug
 eudico: $(BUILD_DEPS)
 	rm -f eudico
 	$(GOCC) build $(GOFLAGS) -o eudico ./cmd/eudico
