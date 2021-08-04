@@ -84,4 +84,3 @@ func ToMessagesArray(store blockadt.Store, cids []cid.Cid) (cid.Cid, error) {
 	}
 	return arr.Root()
 }
-

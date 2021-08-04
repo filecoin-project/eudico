@@ -58,7 +58,7 @@ func (sm *StateManager) TipSetState(ctx context.Context, ts *types.TipSet) (st c
 		return ts.Blocks()[0].ParentStateRoot, ts.Blocks()[0].ParentMessageReceipts, nil
 	}
 
-	st, rec, err =  sm.tsExec.ExecuteTipSet(ctx, sm, ts, sm.tsExecMonitor)
+	st, rec, err = sm.tsExec.ExecuteTipSet(ctx, sm, ts, sm.tsExecMonitor)
 	if err != nil {
 		return cid.Undef, cid.Undef, err
 	}
@@ -67,7 +67,7 @@ func (sm *StateManager) TipSetState(ctx context.Context, ts *types.TipSet) (st c
 }
 
 func (sm *StateManager) ExecutionTraceWithMonitor(ctx context.Context, ts *types.TipSet, em ExecMonitor) (cid.Cid, error) {
-	st, _, err :=  sm.tsExec.ExecuteTipSet(ctx, sm, ts, em)
+	st, _, err := sm.tsExec.ExecuteTipSet(ctx, sm, ts, em)
 	return st, err
 }
 

@@ -140,7 +140,7 @@ func NewStateManager(cs *store.ChainStore, exec Executor, sys vm.SyscallBuilder,
 		newVM:             vm.NewVM,
 		Syscalls:          sys,
 		cs:                cs,
-		tsExec: exec,
+		tsExec:            exec,
 		stCache:           make(map[string][]cid.Cid),
 		tCache: treeCache{
 			root: cid.Undef,
