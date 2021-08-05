@@ -184,7 +184,7 @@ var delegatedMinerCmd = &cli.Command{
 					continue
 				}
 
-				log.Info("try mining at @", head.Height())
+				log.Info("try mining at @", base.Height())
 
 				bh, err := api.MinerCreateBlock(context.TODO(), &lapi.BlockTemplate{
 					Miner:            miner,

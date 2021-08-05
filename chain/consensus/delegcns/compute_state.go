@@ -15,10 +15,8 @@ import (
 	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 
 	"github.com/filecoin-project/lotus/build"
-	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/cron"
-	"github.com/filecoin-project/lotus/chain/actors/builtin/reward"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -152,26 +150,15 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 			processedMsgs[m.Cid()] = struct{}{}
 		}
 
-		params, err := actors.SerializeParams(&reward.AwardBlockRewardParams{
-			Miner:     b.Miner,
-			Penalty:   penalty,
-			GasReward: gasReward,
-			WinCount:  b.WinCount,
-		})
-		if err != nil {
-			return cid.Undef, cid.Undef, xerrors.Errorf("failed to serialize award params: %w", err)
-		}
-
 		rwMsg := &types.Message{
-			From:       builtin.SystemActorAddr,
-			To:         reward.Address,
+			From:       builtin.RewardActorAddr,
+			To:         b.Miner,
 			Nonce:      uint64(epoch),
-			Value:      types.NewInt(0),
+			Value:      types.FromFil(1), // always reward 1 fil
 			GasFeeCap:  types.NewInt(0),
 			GasPremium: types.NewInt(0),
 			GasLimit:   1 << 30,
-			Method:     reward.Methods.AwardBlockReward,
-			Params:     params,
+			Method:     0,
 		}
 		ret, actErr := vmi.ApplyImplicitMessage(ctx, rwMsg)
 		if actErr != nil {

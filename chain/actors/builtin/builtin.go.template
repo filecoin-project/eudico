@@ -23,6 +23,7 @@ import (
 var SystemActorAddr = builtin{{.latestVersion}}.SystemActorAddr
 var BurntFundsActorAddr = builtin{{.latestVersion}}.BurntFundsActorAddr
 var CronActorAddr = builtin{{.latestVersion}}.CronActorAddr
+var RewardActorAddr = builtin{{.latestVersion}}.RewardActorAddr
 var SaftAddress = makeAddress("t0122")
 var ReserveAddress = makeAddress("t090")
 var RootVerifierAddress = makeAddress("t080")
