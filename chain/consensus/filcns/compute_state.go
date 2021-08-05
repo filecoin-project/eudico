@@ -253,6 +253,10 @@ func (t *tipSetExecutor) ExecuteTipSet(ctx context.Context, sm *stmgr.StateManag
 	if err != nil {
 		return cid.Undef, cid.Undef, xerrors.Errorf("getting block messages for tipset: %w", err)
 	}
+	// todo: this is really ugly
+	for i, b := range ts.Blocks() {
+		blkmsgs[i].WinCount = b.ElectionProof.WinCount
+	}
 
 	baseFee := blks[0].ParentBaseFee
 
