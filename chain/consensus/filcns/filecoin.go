@@ -3,9 +3,11 @@ package filcns
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/Gurpartap/async"
 	"github.com/hashicorp/go-multierror"
@@ -626,6 +628,84 @@ func VerifyVRF(ctx context.Context, worker address.Address, vrfBase, vrfproof []
 	}
 
 	return nil
+}
+
+var ErrSoftFailure = errors.New("soft validation failure")
+var ErrInsufficientPower = errors.New("incoming block's miner does not have minimum power")
+
+func (filec *FilecoinEC) ValidateBlockHeader(ctx context.Context, b *types.BlockHeader) (rejectReason string, err error) {
+
+	// we want to ensure that it is a block from a known miner; we reject blocks from unknown miners
+	// to prevent spam attacks.
+	// the logic works as follows: we lookup the miner in the chain for its key.
+	// if we can find it then it's a known miner and we can validate the signature.
+	// if we can't find it, we check whether we are (near) synced in the chain.
+	// if we are not synced we cannot validate the block and we must ignore it.
+	// if we are synced and the miner is unknown, then the block is rejcected.
+	key, err := filec.checkPowerAndGetWorkerKey(ctx, b)
+	if err != nil {
+		if err != ErrSoftFailure && filec.isChainNearSynced() {
+			log.Warnf("received block from unknown miner or miner that doesn't meet min power over pubsub; rejecting message")
+			return "unknown_miner", err
+		}
+
+		log.Warnf("cannot validate block message; unknown miner or miner that doesn't meet min power in unsynced chain")
+		return "", err // ignore
+	}
+
+	if b.ElectionProof.WinCount < 1 {
+		log.Errorf("block is not claiming to be winning")
+		return "not_winning", xerrors.Errorf("block not winning")
+	}
+
+	err = sigs.CheckBlockSignature(ctx, b, key)
+	if err != nil {
+		log.Errorf("block signature verification failed: %s", err)
+		return "signature_verification_failed", err
+	}
+
+	return "", nil
+}
+
+func (filec *FilecoinEC) checkPowerAndGetWorkerKey(ctx context.Context, bh *types.BlockHeader) (address.Address, error) {
+	// we check that the miner met the minimum power at the lookback tipset
+
+	baseTs := filec.store.GetHeaviestTipSet()
+	lbts, lbst, err := stmgr.GetLookbackTipSetForRound(ctx, filec.sm, baseTs, bh.Height)
+	if err != nil {
+		log.Warnf("failed to load lookback tipset for incoming block: %s", err)
+		return address.Undef, ErrSoftFailure
+	}
+
+	key, err := stmgr.GetMinerWorkerRaw(ctx, filec.sm, lbst, bh.Miner)
+	if err != nil {
+		log.Warnf("failed to resolve worker key for miner %s: %s", bh.Miner, err)
+		return address.Undef, ErrSoftFailure
+	}
+
+	// NOTE: we check to see if the miner was eligible in the lookback
+	// tipset - 1 for historical reasons. DO NOT use the lookback state
+	// returned by GetLookbackTipSetForRound.
+
+	eligible, err := stmgr.MinerEligibleToMine(ctx, filec.sm, bh.Miner, baseTs, lbts)
+	if err != nil {
+		log.Warnf("failed to determine if incoming block's miner has minimum power: %s", err)
+		return address.Undef, ErrSoftFailure
+	}
+
+	if !eligible {
+		log.Warnf("incoming block's miner is ineligible")
+		return address.Undef, ErrInsufficientPower
+	}
+
+	return key, nil
+}
+
+func (filec *FilecoinEC) isChainNearSynced() bool {
+	ts := filec.store.GetHeaviestTipSet()
+	timestamp := ts.MinTimestamp()
+	timestampTime := time.Unix(int64(timestamp), 0)
+	return build.Clock.Since(timestampTime) < 6*time.Hour
 }
 
 var _ consensus.Consensus = &FilecoinEC{}

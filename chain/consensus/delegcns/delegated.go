@@ -3,8 +3,10 @@ package delegcns
 import (
 	"context"
 	"fmt"
-	"github.com/filecoin-project/go-state-types/big"
 	"strings"
+	"time"
+
+	"github.com/filecoin-project/go-state-types/big"
 
 	"github.com/Gurpartap/async"
 	"github.com/hashicorp/go-multierror"
@@ -428,6 +430,32 @@ func Weight(ctx context.Context, stateBs bstore.Blockstore, ts *types.TipSet) (t
 	}
 
 	return big.NewInt(int64(ts.Height() + 1)), nil
+}
+
+func (deleg *Delegated) ValidateBlockHeader(ctx context.Context, b *types.BlockHeader) (rejectReason string, err error) {
+	baseTs, err := deleg.store.LoadTipSet(types.NewTipSetKey(b.Parents...))
+	if err != nil {
+		return "", xerrors.Errorf("load parent tipset failed (%s): %w", b.Parents, err)
+	}
+
+	if err := deleg.minerIsValid(ctx, b.Miner, baseTs); err != nil {
+		return err.Error(), err
+	}
+
+	err = sigs.CheckBlockSignature(ctx, b, b.Miner)
+	if err != nil {
+		log.Errorf("block signature verification failed: %s", err)
+		return "signature_verification_failed", err
+	}
+
+	return "", nil
+}
+
+func (deleg *Delegated) isChainNearSynced() bool {
+	ts := deleg.store.GetHeaviestTipSet()
+	timestamp := ts.MinTimestamp()
+	timestampTime := time.Unix(int64(timestamp), 0)
+	return build.Clock.Since(timestampTime) < 6*time.Hour
 }
 
 var _ consensus.Consensus = &Delegated{}
