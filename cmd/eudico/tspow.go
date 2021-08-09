@@ -182,6 +182,7 @@ var tpowMinerCmd = &cli.Command{
 				log.Errorw("creating block failed", "error", err)
 				continue
 			}
+			base, _ = types.NewTipSet([]*types.BlockHeader{tspow.BestWorkBlock(base)})
 
 			expDiff := tspow.GenesisWorkTarget
 			if base.Height()+1 >= tspow.MaxDiffLookback {
