@@ -175,6 +175,12 @@ var tpowMinerCmd = &cli.Command{
 		log.Info("starting mining on @", head.Height())
 
 		for {
+			select {
+			case <-ctx.Done():
+				return nil
+			default:
+			}
+
 			base, err := api.ChainHead(ctx)
 			if err != nil {
 				log.Errorw("creating block failed", "error", err)
@@ -187,6 +193,7 @@ var tpowMinerCmd = &cli.Command{
 				Miner:            miner,
 				Parents:          base.Key(),
 				BeaconValues:     nil,
+				Ticket:           base.Blocks()[0].Ticket,
 				Messages:         []*types.SignedMessage{}, // todo call select msgs
 				Epoch:            base.Height() + 1,
 				Timestamp:        base.MinTimestamp() + build.BlockDelaySecs,
@@ -207,14 +214,9 @@ var tpowMinerCmd = &cli.Command{
 			}
 
 			log.Info("mined a block! ", bh.Cid())
-			select {
-			case <-ctx.Done():
-				return nil
-			}
 		}
 	},
 }
-
 
 func MakePoWGenesisBlock(ctx context.Context, j journal.Journal, bs bstore.Blockstore, sys vm.SyscallBuilder, template genesis.Template) (*genesis2.GenesisBootstrap, error) {
 	if j == nil {
@@ -308,4 +310,3 @@ func MakePoWGenesisBlock(ctx context.Context, j journal.Journal, bs bstore.Block
 		Genesis: b,
 	}, nil
 }
-
