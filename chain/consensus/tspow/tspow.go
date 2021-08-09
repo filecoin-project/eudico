@@ -89,11 +89,6 @@ func (tsp *TSPoW) ValidateBlock(ctx context.Context, b *types.FullBlock) (err er
 		return xerrors.Errorf("block height not greater than parent height: %d != %d", h.Height, baseTs.Height())
 	}
 
-	nulls := h.Height - (baseTs.Height() + 1)
-	if tgtTs := baseTs.MinTimestamp() + build.BlockDelaySecs*uint64(nulls+1); h.Timestamp != tgtTs {
-		return xerrors.Errorf("block has wrong timestamp: %d != %d", h.Timestamp, tgtTs)
-	}
-
 	now := uint64(build.Clock.Now().Unix())
 	if h.Timestamp > now+build.AllowableClockDriftSecs {
 		return xerrors.Errorf("block was from the future (now=%d, blk=%d): %w", now, h.Timestamp, consensus.ErrTemporal)
