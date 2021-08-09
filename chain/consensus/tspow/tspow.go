@@ -97,6 +97,14 @@ func (tsp *TSPoW) ValidateBlock(ctx context.Context, b *types.FullBlock) (err er
 		log.Warn("Got block from the future, but within threshold", h.Timestamp, build.Clock.Now().Unix())
 	}
 
+	// check work above threshold
+	w := work(b.Header)
+	thr := big.Zero()
+	thr.SetBytes(b.Header.Ticket.VRFProof)
+	if thr.GreaterThan(w) {
+		return xerrors.Errorf("block below work threshold")
+	}
+
 	msgsCheck := async.Err(func() error {
 		if b.Cid() == build.WhitelistedBlock {
 			return nil
@@ -208,12 +216,12 @@ func (tsp *TSPoW) ValidateBlock(ctx context.Context, b *types.FullBlock) (err er
 }
 
 func blockSanityChecks(h *types.BlockHeader) error {
-/*	if h.ElectionProof != nil {
+	/*	if h.ElectionProof != nil {
 		return xerrors.Errorf("block must have nil election proof")
 	}*/
 
-	if h.Ticket != nil {
-		return xerrors.Errorf("block must have nil ticket")
+	if h.Ticket == nil {
+		return xerrors.Errorf("block must not have nil ticket")
 	}
 
 	if h.BlockSig == nil {
@@ -228,8 +236,8 @@ func blockSanityChecks(h *types.BlockHeader) error {
 		return xerrors.Errorf("block had non-secp miner address")
 	}
 
-	if len(h.Parents) == 0 {
-		return xerrors.Errorf("must have >0 parents")
+	if len(h.Parents) != 1 {
+		return xerrors.Errorf("must have 1 parents")
 	}
 
 	return nil
