@@ -13,6 +13,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/system"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
+	"github.com/filecoin-project/lotus/chain/gen/slashfilter"
 	adt0 "github.com/filecoin-project/specs-actors/actors/util/adt"
 	"github.com/google/uuid"
 	"github.com/ipfs/go-blockservice"
@@ -54,6 +55,7 @@ var tpowCmd = &cli.Command{
 		daemonCmd(node.Options(
 			node.Override(new(consensus.Consensus), tspow.NewTSPoWConsensus),
 			node.Override(new(store.WeightFunc), tspow.Weight),
+			node.Unset(new(*slashfilter.SlashFilter)),
 			node.Override(new(stmgr.Executor), delegcns.TipSetExecutor()), // todo
 		)),
 	},
