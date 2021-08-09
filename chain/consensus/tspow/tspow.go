@@ -39,7 +39,7 @@ import (
 var log = logging.Logger("fil-consensus")
 
 var GenesisWorkTarget = func() big.Int {
-	w, _ := big.FromString("45197836753522894074333630")
+	w, _ := big.FromString("4519783675352289407433363")
 	return w
 }()
 
@@ -85,8 +85,8 @@ func (tsp *TSPoW) ValidateBlock(ctx context.Context, b *types.FullBlock) (err er
 	}
 
 	// fast checks first
-	if h.Height <= baseTs.Height() {
-		return xerrors.Errorf("block height not greater than parent height: %d != %d", h.Height, baseTs.Height())
+	if h.Height != baseTs.Height()+1 {
+		return xerrors.Errorf("block height not parent height+1: %d != %d", h.Height, baseTs.Height()+1)
 	}
 
 	now := uint64(build.Clock.Now().Unix())
@@ -103,6 +103,28 @@ func (tsp *TSPoW) ValidateBlock(ctx context.Context, b *types.FullBlock) (err er
 	thr.SetBytes(b.Header.Ticket.VRFProof)
 	if thr.GreaterThan(w) {
 		return xerrors.Errorf("block below work threshold")
+	}
+
+	// check work threshold
+	if b.Header.Height < 10 {
+		if !thr.Equals(GenesisWorkTarget) {
+			return xerrors.Errorf("wrong work target")
+		}
+	} else {
+		//
+		const lb = 10
+
+		lbr := b.Header.Height - lb
+		lbts, err := tsp.store.GetTipsetByHeight(ctx, lbr+1, baseTs, false)
+		if err != nil {
+			return xerrors.Errorf("failed to get lookback tipset+1: %w", err)
+		}
+
+		expLbTime := lb * build.BlockDelaySecs
+		actTime := baseTs.Blocks()[0].Timestamp - lbts.Blocks()[0].Timestamp
+		fmt.Println("adjust %", 100*expLbTime/actTime)
+
+
 	}
 
 	msgsCheck := async.Err(func() error {
