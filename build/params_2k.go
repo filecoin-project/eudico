@@ -96,7 +96,7 @@ func init() {
 	miner6.FaultMaxAge = miner6.WPoStProvingPeriod * 42
 }
 
-const BlockDelaySecs = uint64(4)
+const BlockDelaySecs = uint64(1)
 
 const PropagationDelaySecs = uint64(1)
 

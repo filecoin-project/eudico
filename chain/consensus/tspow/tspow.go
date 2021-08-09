@@ -3,6 +3,7 @@ package tspow
 import (
 	"context"
 	"fmt"
+	big2 "math/big"
 	"strings"
 	"time"
 
@@ -42,6 +43,39 @@ var GenesisWorkTarget = func() big.Int {
 	w, _ := big.FromString("4519783675352289407433363")
 	return w
 }()
+
+const MaxDiffLookback = 70
+
+func DiffLookback(baseH abi.ChainEpoch) abi.ChainEpoch {
+	lb := ((baseH + 11) * 217) % (MaxDiffLookback - 40)
+	return lb + 40
+}
+
+func Difficulty(baseTs, lbts *types.TipSet) big.Int {
+	expLbTime := 100000 * uint64(DiffLookback(baseTs.Height())) * build.BlockDelaySecs
+	actTime := (baseTs.Blocks()[0].Timestamp - lbts.Blocks()[0].Timestamp) * 100000
+
+	actTime = expLbTime - uint64(int64(expLbTime-actTime)/100)
+
+	// clamp max adjustment
+	if actTime < expLbTime*99/100 {
+		actTime = expLbTime * 99 / 100
+	}
+	if actTime > expLbTime*101/100 {
+		actTime = expLbTime * 101 / 100
+	}
+
+	prevdiff := big.Zero()
+	prevdiff.SetBytes(baseTs.Blocks()[0].Ticket.VRFProof)
+	diff := big.Div(types.BigMul(prevdiff, big.NewInt(int64(expLbTime))), big.NewInt(int64(actTime)))
+
+	pgen, _ := big2.NewFloat(0).SetInt(GenesisWorkTarget.Int).Float64()
+	fdiff, _ := big2.NewFloat(0).SetInt(diff.Int).Float64()
+	pgen = fdiff * 100 / pgen
+	fmt.Printf("adjust %.4f%%, p%s lb%d (%.4f%% gen)\n", 100*float64(expLbTime)/float64(actTime), prevdiff, DiffLookback(baseTs.Height()), pgen)
+
+	return diff
+}
 
 type TSPoW struct {
 	// The interface for accessing and putting tipsets into local storage
@@ -106,25 +140,22 @@ func (tsp *TSPoW) ValidateBlock(ctx context.Context, b *types.FullBlock) (err er
 	}
 
 	// check work threshold
-	if b.Header.Height < 10 {
+	if b.Header.Height < MaxDiffLookback {
 		if !thr.Equals(GenesisWorkTarget) {
 			return xerrors.Errorf("wrong work target")
 		}
 	} else {
 		//
-		const lb = 10
-
-		lbr := b.Header.Height - lb
-		lbts, err := tsp.store.GetTipsetByHeight(ctx, lbr+1, baseTs, false)
+		lbr := b.Header.Height - DiffLookback(baseTs.Height())
+		lbts, err := tsp.store.GetTipsetByHeight(ctx, lbr, baseTs, false)
 		if err != nil {
 			return xerrors.Errorf("failed to get lookback tipset+1: %w", err)
 		}
 
-		expLbTime := lb * build.BlockDelaySecs
-		actTime := baseTs.Blocks()[0].Timestamp - lbts.Blocks()[0].Timestamp
-		fmt.Println("adjust %", 100*expLbTime/actTime)
-
-
+		expDiff := Difficulty(baseTs, lbts)
+		if !thr.Equals(expDiff) {
+			return xerrors.Errorf("expected adjusted difficulty %s, was %s (act-exp: %s)", expDiff, thr, big.Sub(thr, expDiff))
+		}
 	}
 
 	msgsCheck := async.Err(func() error {

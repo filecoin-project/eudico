@@ -187,22 +187,41 @@ var tpowMinerCmd = &cli.Command{
 				continue
 			}
 
-			log.Info("try mining at @", base.Height(), base.String())
+			expDiff := tspow.GenesisWorkTarget
+			if base.Height()+1 >= tspow.MaxDiffLookback {
+				lbr := base.Height() + 1 - tspow.DiffLookback(base.Height())
+				lbts, err := api.ChainGetTipSetByHeight(ctx, lbr, base.Key())
+				if err != nil {
+					return xerrors.Errorf("failed to get lookback tipset+1: %w", err)
+				}
+
+				expDiff = tspow.Difficulty(base, lbts)
+			}
+
+			diffb, err := expDiff.Bytes()
+			if err != nil {
+				return err
+			}
 
 			bh, err := api.MinerCreateBlock(context.TODO(), &lapi.BlockTemplate{
 				Miner:            miner,
 				Parents:          base.Key(),
 				BeaconValues:     nil,
-				Ticket:           base.Blocks()[0].Ticket,
+				Ticket:           &types.Ticket{VRFProof: diffb},
 				Messages:         []*types.SignedMessage{}, // todo call select msgs
 				Epoch:            base.Height() + 1,
-				Timestamp: uint64(time.Now().Unix()),
+				Timestamp:        uint64(time.Now().Unix()),
 				WinningPoStProof: nil,
 			})
 			if err != nil {
 				log.Errorw("creating block failed", "error", err)
 				continue
 			}
+			if bh == nil {
+				continue
+			}
+
+			log.Info("try mining at @", base.Height(), base.String())
 
 			err = api.SyncSubmitBlock(ctx, &types.BlockMsg{
 				Header:        bh.Header,
