@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	big2 "math/big"
+	"sort"
 	"strings"
 	"time"
 
@@ -535,6 +536,14 @@ func (tsp *TSPoW) isChainNearSynced() bool {
 	timestamp := ts.MinTimestamp()
 	timestampTime := time.Unix(int64(timestamp), 0)
 	return build.Clock.Since(timestampTime) < 6*time.Hour
+}
+
+func BestWorkBlock(ts *types.TipSet) *types.BlockHeader {
+	blks := ts.Blocks()
+	sort.Slice(blks, func(i, j int) bool {
+		return work(blks[i]).GreaterThan(work(blks[j]))
+	})
+	return blks[0]
 }
 
 var _ consensus.Consensus = &TSPoW{}
