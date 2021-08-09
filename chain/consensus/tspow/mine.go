@@ -108,7 +108,7 @@ func (tsp *TSPoW) CreateBlock(ctx context.Context, w api.Wallet, bt *api.BlockTe
 	tgt.SetBytes(next.Ticket.VRFProof)
 
 	bestH := *next
-	for i := 0; i < 100000; i++ {
+	for i := 0; i < 10000; i++ {
 		next.ElectionProof = &types.ElectionProof{
 			VRFProof: []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		}
