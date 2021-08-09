@@ -117,7 +117,7 @@ var delegatedGenesisCmd = &cli.Command{
 			},
 		}
 
-		b, err := MakeGenesisBlock(context.TODO(), j, bs, syscalls, template)
+		b, err := MakeDelegatedGenesisBlock(context.TODO(), j, bs, syscalls, template)
 		if err != nil {
 			return xerrors.Errorf("make genesis block: %w", err)
 		}
@@ -219,7 +219,7 @@ var delegatedMinerCmd = &cli.Command{
 	},
 }
 
-func MakeGenesisBlock(ctx context.Context, j journal.Journal, bs bstore.Blockstore, sys vm.SyscallBuilder, template genesis.Template) (*genesis2.GenesisBootstrap, error) {
+func MakeDelegatedGenesisBlock(ctx context.Context, j journal.Journal, bs bstore.Blockstore, sys vm.SyscallBuilder, template genesis.Template) (*genesis2.GenesisBootstrap, error) {
 	if j == nil {
 		j = journal.NilJournal()
 	}
