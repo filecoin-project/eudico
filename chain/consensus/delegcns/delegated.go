@@ -433,10 +433,7 @@ func Weight(ctx context.Context, stateBs bstore.Blockstore, ts *types.TipSet) (t
 }
 
 func (deleg *Delegated) ValidateBlockHeader(ctx context.Context, b *types.BlockHeader) (rejectReason string, err error) {
-	baseTs, err := deleg.store.LoadTipSet(types.NewTipSetKey(b.Parents...))
-	if err != nil {
-		return "", xerrors.Errorf("load parent tipset failed (%s): %w", b.Parents, err)
-	}
+	baseTs := deleg.store.GetHeaviestTipSet()
 
 	if err := deleg.minerIsValid(ctx, b.Miner, baseTs); err != nil {
 		return err.Error(), err
