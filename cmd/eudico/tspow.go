@@ -163,11 +163,7 @@ var tpowMinerCmd = &cli.Command{
 			return xerrors.Errorf("getting head: %w", err)
 		}
 
-		minerid, err := address.NewFromString("t0100")
-		if err != nil {
-			return err
-		}
-		miner, err := api.StateAccountKey(ctx, minerid, types.EmptyTSK)
+		miner, err := address.NewFromString(cctx.Args().First())
 		if err != nil {
 			return err
 		}
@@ -205,7 +201,7 @@ var tpowMinerCmd = &cli.Command{
 
 			bh, err := api.MinerCreateBlock(context.TODO(), &lapi.BlockTemplate{
 				Miner:            miner,
-				Parents:          base.Key(),
+				Parents:          types.NewTipSetKey(tspow.BestWorkBlock(base).Cid()),
 				BeaconValues:     nil,
 				Ticket:           &types.Ticket{VRFProof: diffb},
 				Messages:         []*types.SignedMessage{}, // todo call select msgs
