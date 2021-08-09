@@ -31,6 +31,7 @@ func main() {
 
 	local := []*cli.Command{
 		delegatedCmd,
+		tpowCmd,
 	}
 	if AdvanceBlockCmd != nil {
 		local = append(local, AdvanceBlockCmd)
