@@ -171,7 +171,7 @@ func (tsp *TSPoW) ValidateBlock(ctx context.Context, b *types.FullBlock) (err er
 	})
 
 	minerCheck := async.Err(func() error {
-		if err := tsp.minerIsValid(ctx, h.Miner, baseTs); err != nil {
+		if err := tsp.minerIsValid(h.Miner); err != nil {
 			return xerrors.Errorf("minerIsValid failed: %w", err)
 		}
 		return nil
@@ -466,7 +466,7 @@ func (tsp *TSPoW) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
 	return epoch > (abi.ChainEpoch((now-tsp.genesis.MinTimestamp())/build.BlockDelaySecs) + MaxHeightDrift)
 }
 
-func (tsp *TSPoW) minerIsValid(ctx context.Context, maddr address.Address, baseTs *types.TipSet) error {
+func (tsp *TSPoW) minerIsValid(maddr address.Address) error {
 	switch maddr.Protocol() {
 	case address.BLS:
 		fallthrough
@@ -513,12 +513,7 @@ func Weight(ctx context.Context, stateBs bstore.Blockstore, ts *types.TipSet) (t
 }
 
 func (tsp *TSPoW) ValidateBlockHeader(ctx context.Context, b *types.BlockHeader) (rejectReason string, err error) {
-	baseTs, err := tsp.store.LoadTipSet(types.NewTipSetKey(b.Parents...))
-	if err != nil {
-		return "", xerrors.Errorf("load parent tipset failed (%s): %w", b.Parents, err)
-	}
-
-	if err := tsp.minerIsValid(ctx, b.Miner, baseTs); err != nil {
+	if err := tsp.minerIsValid(b.Miner); err != nil {
 		return err.Error(), err
 	}
 

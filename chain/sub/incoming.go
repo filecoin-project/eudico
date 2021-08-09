@@ -291,6 +291,7 @@ func (bv *BlockValidator) Validate(ctx context.Context, pid peer.ID, msg *pubsub
 	reject, err := bv.consensus.ValidateBlockHeader(ctx, blk.Header)
 	if err != nil {
 		if reject == "" {
+			log.Warn("ignoring block msg: ", err)
 			return pubsub.ValidationIgnore
 		}
 		recordFailureFlagPeer(reject)
