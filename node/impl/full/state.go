@@ -529,6 +529,9 @@ func (a *StateAPI) MinerCreateBlock(ctx context.Context, bt *api.BlockTemplate) 
 	if err != nil {
 		return nil, err
 	}
+	if fblk == nil {
+		return nil, nil
+	}
 
 	var out types.BlockMsg
 	out.Header = fblk.Header

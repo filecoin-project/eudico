@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/rand"
 
+	"github.com/filecoin-project/go-state-types/big"
 	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
 
@@ -103,6 +104,9 @@ func (tsp *TSPoW) CreateBlock(ctx context.Context, w api.Wallet, bt *api.BlockTe
 	}
 	next.ParentBaseFee = baseFee
 
+	tgt := big.Zero()
+	tgt.SetBytes(next.Ticket.VRFProof)
+
 	bestH := *next
 	for i := 0; i < 100000; i++ {
 		next.ElectionProof = &types.ElectionProof{
@@ -111,9 +115,16 @@ func (tsp *TSPoW) CreateBlock(ctx context.Context, w api.Wallet, bt *api.BlockTe
 		rand.Read(next.ElectionProof.VRFProof)
 		if work(&bestH).LessThan(work(next)) {
 			bestH = *next
+			if work(next).GreaterThanEqual(tgt) {
+				break
+			}
 		}
 	}
 	next = &bestH
+
+	if work(next).LessThan(tgt) {
+		return nil, nil
+	}
 
 	nosigbytes, err := next.SigningBytes()
 	if err != nil {
