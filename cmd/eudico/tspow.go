@@ -196,7 +196,7 @@ var tpowMinerCmd = &cli.Command{
 				Ticket:           base.Blocks()[0].Ticket,
 				Messages:         []*types.SignedMessage{}, // todo call select msgs
 				Epoch:            base.Height() + 1,
-				Timestamp:        base.MinTimestamp() + build.BlockDelaySecs,
+				Timestamp: uint64(time.Now().Unix()),
 				WinningPoStProof: nil,
 			})
 			if err != nil {
