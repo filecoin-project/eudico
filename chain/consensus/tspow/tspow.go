@@ -41,7 +41,7 @@ var log = logging.Logger("fil-consensus")
 var GenesisWorkTarget = func() big.Int {
 	w, _ := big.FromString("45197836753522894074333630")
 	return w
-}
+}()
 
 type TSPoW struct {
 	// The interface for accessing and putting tipsets into local storage
