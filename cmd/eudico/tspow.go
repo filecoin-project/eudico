@@ -144,7 +144,7 @@ var tpowGenesisCmd = &cli.Command{
 
 var tpowMinerCmd = &cli.Command{
 	Name:  "miner",
-	Usage: "run delegated conesensus miner",
+	Usage: "run tspow conesensus miner",
 	Action: func(cctx *cli.Context) error {
 		api, closer, err := lcli.GetFullNodeAPI(cctx)
 		if err != nil {
@@ -169,44 +169,42 @@ var tpowMinerCmd = &cli.Command{
 
 		log.Info("starting mining on @", head.Height())
 
-		timer := time.NewTicker(time.Duration(build.BlockDelaySecs) * time.Second)
 		for {
+			base, err := api.ChainHead(ctx)
+			if err != nil {
+				log.Errorw("creating block failed", "error", err)
+				continue
+			}
+
+			log.Info("try mining at @", base.Height(), base.String())
+
+			bh, err := api.MinerCreateBlock(context.TODO(), &lapi.BlockTemplate{
+				Miner:            miner,
+				Parents:          base.Key(),
+				Ticket:           nil,
+				Eproof:           nil,
+				BeaconValues:     nil,
+				Messages:         []*types.SignedMessage{}, // todo call select msgs
+				Epoch:            base.Height() + 1,
+				Timestamp:        base.MinTimestamp() + build.BlockDelaySecs,
+				WinningPoStProof: nil,
+			})
+			if err != nil {
+				log.Errorw("creating block failed", "error", err)
+				continue
+			}
+
+			err = api.SyncSubmitBlock(ctx, &types.BlockMsg{
+				Header:        bh.Header,
+				BlsMessages:   bh.BlsMessages,
+				SecpkMessages: bh.SecpkMessages,
+			})
+			if err != nil {
+				log.Errorw("submitting block failed", "error", err)
+			}
+
+			log.Info("mined a block! ", bh.Cid())
 			select {
-			case <-timer.C:
-				base, err := api.ChainHead(ctx)
-				if err != nil {
-					log.Errorw("creating block failed", "error", err)
-					continue
-				}
-
-				log.Info("try mining at @", base.Height())
-
-				bh, err := api.MinerCreateBlock(context.TODO(), &lapi.BlockTemplate{
-					Miner:            miner,
-					Parents:          base.Key(),
-					Ticket:           nil,
-					Eproof:           nil,
-					BeaconValues:     nil,
-					Messages:         []*types.SignedMessage{}, // todo call select msgs
-					Epoch:            base.Height() + 1,
-					Timestamp:        base.MinTimestamp() + build.BlockDelaySecs,
-					WinningPoStProof: nil,
-				})
-				if err != nil {
-					log.Errorw("creating block failed", "error", err)
-					continue
-				}
-
-				err = api.SyncSubmitBlock(ctx, &types.BlockMsg{
-					Header:        bh.Header,
-					BlsMessages:   bh.BlsMessages,
-					SecpkMessages: bh.SecpkMessages,
-				})
-				if err != nil {
-					log.Errorw("submitting block failed", "error", err)
-				}
-
-				log.Info("mined a block! ", bh.Cid())
 			case <-ctx.Done():
 				return nil
 			}
