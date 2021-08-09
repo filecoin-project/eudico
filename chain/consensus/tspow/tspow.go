@@ -38,6 +38,11 @@ import (
 
 var log = logging.Logger("fil-consensus")
 
+var GenesisWorkTarget = func() big.Int {
+	w, _ := big.FromString("45197836753522894074333630")
+	return w
+}
+
 type TSPoW struct {
 	// The interface for accessing and putting tipsets into local storage
 	store *store.ChainStore
@@ -208,9 +213,9 @@ func (tsp *TSPoW) ValidateBlock(ctx context.Context, b *types.FullBlock) (err er
 }
 
 func blockSanityChecks(h *types.BlockHeader) error {
-	if h.ElectionProof != nil {
+/*	if h.ElectionProof != nil {
 		return xerrors.Errorf("block must have nil election proof")
-	}
+	}*/
 
 	if h.Ticket != nil {
 		return xerrors.Errorf("block must have nil ticket")
@@ -228,7 +233,7 @@ func blockSanityChecks(h *types.BlockHeader) error {
 		return xerrors.Errorf("block had non-secp miner address")
 	}
 
-	if len(h.Parents) > 0 {
+	if len(h.Parents) == 0 {
 		return xerrors.Errorf("must have >0 parents")
 	}
 

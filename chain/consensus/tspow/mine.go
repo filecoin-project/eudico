@@ -104,7 +104,7 @@ func (tsp *TSPoW) CreateBlock(ctx context.Context, w api.Wallet, bt *api.BlockTe
 	next.ParentBaseFee = baseFee
 
 	bestH := *next
-	for i := 0; i < 600; i++ {
+	for i := 0; i < 100000; i++ {
 		next.ElectionProof = &types.ElectionProof{
 			VRFProof: []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		}
