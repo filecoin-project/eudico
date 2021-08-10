@@ -187,13 +187,18 @@ var delegatedMinerCmd = &cli.Command{
 
 				log.Info("try mining at @", base.Height())
 
+				msgs, err := api.MpoolSelect(ctx, base.Key(), 1)
+				if err != nil {
+					log.Errorw("selecting messages failed", "error", err)
+				}
+
 				bh, err := api.MinerCreateBlock(context.TODO(), &lapi.BlockTemplate{
 					Miner:            miner,
 					Parents:          base.Key(),
 					Ticket:           nil,
 					Eproof:           nil,
 					BeaconValues:     nil,
-					Messages:         []*types.SignedMessage{}, // todo call select msgs
+					Messages:         msgs,
 					Epoch:            base.Height() + 1,
 					Timestamp:        base.MinTimestamp() + build.BlockDelaySecs,
 					WinningPoStProof: nil,
@@ -212,7 +217,7 @@ var delegatedMinerCmd = &cli.Command{
 					log.Errorw("submitting block failed", "error", err)
 				}
 
-				log.Info("mined a block! ", bh.Cid())
+				log.Info("mined a block! ", bh.Cid(), " msgs ", len(msgs))
 			case <-ctx.Done():
 				return nil
 			}

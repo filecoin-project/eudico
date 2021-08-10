@@ -203,12 +203,17 @@ var tpowMinerCmd = &cli.Command{
 				return err
 			}
 
+			msgs, err := api.MpoolSelect(ctx, base.Key(), 1)
+			if err != nil {
+				log.Errorw("selecting messages failed", "error", err)
+			}
+
 			bh, err := api.MinerCreateBlock(context.TODO(), &lapi.BlockTemplate{
 				Miner:            miner,
 				Parents:          types.NewTipSetKey(tspow.BestWorkBlock(base).Cid()),
 				BeaconValues:     nil,
 				Ticket:           &types.Ticket{VRFProof: diffb},
-				Messages:         []*types.SignedMessage{}, // todo call select msgs
+				Messages:         msgs,
 				Epoch:            base.Height() + 1,
 				Timestamp:        uint64(time.Now().Unix()),
 				WinningPoStProof: nil,
