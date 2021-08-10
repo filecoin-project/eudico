@@ -6,9 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/filecoin-project/go-state-types/big"
-
 	"github.com/Gurpartap/async"
+	"github.com/filecoin-project/go-state-types/big"
 	"github.com/hashicorp/go-multierror"
 	"github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
