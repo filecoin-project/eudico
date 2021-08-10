@@ -54,6 +54,7 @@ func NewActorRegistry() *vm.ActorRegistry {
 
 	// TODO: drop unneeded
 	inv.Register(vm.ActorsVersionPredicate(actors.Version5), exported5.BuiltinActors()...)
+	inv.Register(nil, SplitActor{})
 
 	return inv
 }
