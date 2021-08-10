@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync/atomic"
 
+	"github.com/filecoin-project/go-state-types/network"
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
@@ -15,10 +16,6 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 
-	exported0 "github.com/filecoin-project/specs-actors/actors/builtin/exported"
-	exported2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/exported"
-	exported3 "github.com/filecoin-project/specs-actors/v3/actors/builtin/exported"
-	exported4 "github.com/filecoin-project/specs-actors/v4/actors/builtin/exported"
 	exported5 "github.com/filecoin-project/specs-actors/v5/actors/builtin/exported"
 
 	"github.com/filecoin-project/lotus/build"
@@ -31,15 +28,31 @@ import (
 	"github.com/filecoin-project/lotus/metrics"
 )
 
+func DefaultUpgradeSchedule() stmgr.UpgradeSchedule {
+	var us stmgr.UpgradeSchedule
+
+	updates := []stmgr.Upgrade{{
+		Height:    -1,
+		Network:   network.Version13,
+		Migration: nil,
+		Expensive: true,
+	},
+	}
+
+	for _, u := range updates {
+		if u.Height < 0 {
+			// upgrade disabled
+			continue
+		}
+		us = append(us, u)
+	}
+	return us
+}
+
 func NewActorRegistry() *vm.ActorRegistry {
 	inv := vm.NewActorRegistry2()
 
 	// TODO: drop unneeded
-
-	inv.Register(vm.ActorsVersionPredicate(actors.Version0), exported0.BuiltinActors()...)
-	inv.Register(vm.ActorsVersionPredicate(actors.Version2), exported2.BuiltinActors()...)
-	inv.Register(vm.ActorsVersionPredicate(actors.Version3), exported3.BuiltinActors()...)
-	inv.Register(vm.ActorsVersionPredicate(actors.Version4), exported4.BuiltinActors()...)
 	inv.Register(vm.ActorsVersionPredicate(actors.Version5), exported5.BuiltinActors()...)
 
 	return inv
