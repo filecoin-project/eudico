@@ -55,6 +55,7 @@ var delegatedCmd = &cli.Command{
 			node.Override(new(consensus.Consensus), delegcns.NewDelegatedConsensus),
 			node.Override(new(store.WeightFunc), delegcns.Weight),
 			node.Override(new(stmgr.Executor), delegcns.TipSetExecutor()),
+			node.Override(new(stmgr.UpgradeSchedule), delegcns.DefaultUpgradeSchedule()),
 		)),
 	},
 }
