@@ -74,13 +74,13 @@ func (a SplitActor) State() cbor.Er {
 var _ runtime.VMActor = SplitActor{}
 
 func (a SplitActor) Constructor(rt runtime.Runtime, params *SplitState) *abi.EmptyValue {
-	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
+	rt.ValidateImmediateCallerAcceptAny()
 	rt.StateCreate(ConstructState(params.Beneficiaries))
 	return nil
 }
 
 func (a SplitActor) Split(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
-	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
+	rt.ValidateImmediateCallerAcceptAny()
 
 	var st SplitState
 	rt.StateReadonly(&st)
