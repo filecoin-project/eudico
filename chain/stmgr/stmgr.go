@@ -52,6 +52,7 @@ type migration struct {
 }
 
 type Executor interface {
+	NewActorRegistry() *vm.ActorRegistry
 	ExecuteTipSet(ctx context.Context, sm *StateManager, ts *types.TipSet, em ExecMonitor) (stateroot cid.Cid, rectsroot cid.Cid, err error)
 }
 

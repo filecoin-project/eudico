@@ -14,11 +14,6 @@ import (
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"golang.org/x/xerrors"
 
-	exported0 "github.com/filecoin-project/specs-actors/actors/builtin/exported"
-	exported2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/exported"
-	exported3 "github.com/filecoin-project/specs-actors/v3/actors/builtin/exported"
-	exported4 "github.com/filecoin-project/specs-actors/v4/actors/builtin/exported"
-	exported5 "github.com/filecoin-project/specs-actors/v5/actors/builtin/exported"
 	vmr "github.com/filecoin-project/specs-actors/v5/actors/runtime"
 
 	"github.com/filecoin-project/go-state-types/abi"
@@ -60,19 +55,8 @@ type actorInfo struct {
 	predicate ActorPredicate
 }
 
-func NewActorRegistry() *ActorRegistry {
-	inv := &ActorRegistry{actors: make(map[cid.Cid]*actorInfo)}
-
-	// TODO: define all these properties on the actors themselves, in specs-actors.
-
-	// add builtInCode using: register(cid, singleton)
-	inv.Register(ActorsVersionPredicate(actors.Version0), exported0.BuiltinActors()...)
-	inv.Register(ActorsVersionPredicate(actors.Version2), exported2.BuiltinActors()...)
-	inv.Register(ActorsVersionPredicate(actors.Version3), exported3.BuiltinActors()...)
-	inv.Register(ActorsVersionPredicate(actors.Version4), exported4.BuiltinActors()...)
-	inv.Register(ActorsVersionPredicate(actors.Version5), exported5.BuiltinActors()...)
-
-	return inv
+func NewActorRegistry2() *ActorRegistry {
+	return &ActorRegistry{actors: make(map[cid.Cid]*actorInfo)}
 }
 
 func (ar *ActorRegistry) Invoke(codeCid cid.Cid, rt vmr.Runtime, method abi.MethodNum, params []byte) ([]byte, aerrors.ActorError) {
@@ -226,12 +210,10 @@ func DecodeParams(b []byte, out interface{}) error {
 	return um.UnmarshalCBOR(bytes.NewReader(b))
 }
 
-func DumpActorState(act *types.Actor, b []byte) (interface{}, error) {
+func DumpActorState(i *ActorRegistry, act *types.Actor, b []byte) (interface{}, error) {
 	if builtin.IsAccountActor(act.Code) { // Account code special case
 		return nil, nil
 	}
-
-	i := NewActorRegistry()
 
 	actInfo, ok := i.actors[act.Code]
 	if !ok {

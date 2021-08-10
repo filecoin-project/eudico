@@ -89,6 +89,7 @@ type StateAPI struct {
 	Chain         *store.ChainStore
 	Beacon        beacon.Schedule
 	Consensus     consensus.Consensus
+	TsExec        stmgr.Executor
 }
 
 func (a *StateAPI) StateNetworkName(ctx context.Context) (dtypes.NetworkName, error) {
@@ -470,7 +471,7 @@ func (a *StateAPI) StateReadState(ctx context.Context, actor address.Address, ts
 		return nil, xerrors.Errorf("getting actor head: %w", err)
 	}
 
-	oif, err := vm.DumpActorState(act, blk.RawData())
+	oif, err := vm.DumpActorState(a.TsExec.NewActorRegistry(), act, blk.RawData())
 	if err != nil {
 		return nil, xerrors.Errorf("dumping actor state (a:%s): %w", actor, err)
 	}

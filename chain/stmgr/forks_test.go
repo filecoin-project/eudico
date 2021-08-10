@@ -28,6 +28,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/aerrors"
 	_init "github.com/filecoin-project/lotus/chain/actors/builtin/init"
 	"github.com/filecoin-project/lotus/chain/actors/policy"
+	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	"github.com/filecoin-project/lotus/chain/gen"
 	. "github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -162,7 +163,7 @@ func TestForkHeightTriggers(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	inv := vm.NewActorRegistry()
+	inv := filcns.NewActorRegistry()
 	inv.Register(nil, testActor{})
 
 	sm.SetVMConstructor(func(ctx context.Context, vmopt *vm.VMOpts) (*vm.VM, error) {
@@ -262,7 +263,7 @@ func TestForkRefuseCall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	inv := vm.NewActorRegistry()
+	inv := filcns.NewActorRegistry()
 	inv.Register(nil, testActor{})
 
 	sm.SetVMConstructor(func(ctx context.Context, vmopt *vm.VMOpts) (*vm.VM, error) {
@@ -462,7 +463,7 @@ func TestForkPreMigration(t *testing.T) {
 		require.NoError(t, sm.Stop(context.Background()))
 	}()
 
-	inv := vm.NewActorRegistry()
+	inv := filcns.NewActorRegistry()
 	inv.Register(nil, testActor{})
 
 	sm.SetVMConstructor(func(ctx context.Context, vmopt *vm.VMOpts) (*vm.VM, error) {

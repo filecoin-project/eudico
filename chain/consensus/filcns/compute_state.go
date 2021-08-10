@@ -14,6 +14,12 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 
+	exported0 "github.com/filecoin-project/specs-actors/actors/builtin/exported"
+	exported2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/exported"
+	exported3 "github.com/filecoin-project/specs-actors/v3/actors/builtin/exported"
+	exported4 "github.com/filecoin-project/specs-actors/v4/actors/builtin/exported"
+	exported5 "github.com/filecoin-project/specs-actors/v5/actors/builtin/exported"
+
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
@@ -26,10 +32,28 @@ import (
 	"github.com/filecoin-project/lotus/metrics"
 )
 
+func NewActorRegistry() *vm.ActorRegistry {
+	inv := vm.NewActorRegistry2()
+
+	// TODO: define all these properties on the actors themselves, in specs-actors.
+
+	inv.Register(vm.ActorsVersionPredicate(actors.Version0), exported0.BuiltinActors()...)
+	inv.Register(vm.ActorsVersionPredicate(actors.Version2), exported2.BuiltinActors()...)
+	inv.Register(vm.ActorsVersionPredicate(actors.Version3), exported3.BuiltinActors()...)
+	inv.Register(vm.ActorsVersionPredicate(actors.Version4), exported4.BuiltinActors()...)
+	inv.Register(vm.ActorsVersionPredicate(actors.Version5), exported5.BuiltinActors()...)
+
+	return inv
+}
+
 type tipSetExecutor struct{}
 
 func TipSetExecutor() stmgr.Executor {
 	return &tipSetExecutor{}
+}
+
+func (t *tipSetExecutor) NewActorRegistry() *vm.ActorRegistry {
+	return NewActorRegistry()
 }
 
 func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager, parentEpoch abi.ChainEpoch, pstate cid.Cid, bms []store.BlockMessages, epoch abi.ChainEpoch, r vm.Rand, em stmgr.ExecMonitor, baseFee abi.TokenAmount, ts *types.TipSet) (cid.Cid, cid.Cid, error) {
@@ -47,6 +71,7 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 			Epoch:          epoch,
 			Rand:           r,
 			Bstore:         sm.ChainStore().StateBlockstore(),
+			Actors:         NewActorRegistry(),
 			Syscalls:       sm.Syscalls,
 			CircSupplyCalc: sm.GetVMCirculatingSupply,
 			NtwkVersion:    sm.GetNtwkVersion,

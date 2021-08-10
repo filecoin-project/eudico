@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
 	verifreg0 "github.com/filecoin-project/specs-actors/actors/builtin/verifreg"
 	adt0 "github.com/filecoin-project/specs-actors/actors/util/adt"
@@ -483,6 +484,7 @@ func VerifyPreSealedData(ctx context.Context, cs *store.ChainStore, sys vm.Sysca
 		Epoch:          0,
 		Rand:           &fakeRand{},
 		Bstore:         cs.StateBlockstore(),
+		Actors:         filcns.NewActorRegistry(),
 		Syscalls:       mkFakedSigSyscalls(sys),
 		CircSupplyCalc: nil,
 		NtwkVersion: func(_ context.Context, _ abi.ChainEpoch) network.Version {
