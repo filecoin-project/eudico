@@ -489,7 +489,7 @@ func (a *StateAPI) StateDecodeParams(ctx context.Context, toAddr address.Address
 		return nil, xerrors.Errorf("getting actor: %w", err)
 	}
 
-	paramType, err := stmgr.GetParamType(act.Code, method)
+	paramType, err := stmgr.GetParamType(a.TsExec.NewActorRegistry(), act.Code, method)
 	if err != nil {
 		return nil, xerrors.Errorf("getting params type: %w", err)
 	}
@@ -502,7 +502,7 @@ func (a *StateAPI) StateDecodeParams(ctx context.Context, toAddr address.Address
 }
 
 func (a *StateAPI) StateEncodeParams(ctx context.Context, toActCode cid.Cid, method abi.MethodNum, params json.RawMessage) ([]byte, error) {
-	paramType, err := stmgr.GetParamType(toActCode, method)
+	paramType, err := stmgr.GetParamType(a.TsExec.NewActorRegistry(), toActCode, method)
 	if err != nil {
 		return nil, xerrors.Errorf("getting params type: %w", err)
 	}

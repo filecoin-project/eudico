@@ -32,6 +32,11 @@ import (
 	"github.com/filecoin-project/lotus/metrics"
 )
 
+func init() {
+	// todo this is a hack, should fix the cli deps, and drop the map in stmgr
+	stmgr.MethodsMap = NewActorRegistry().Methods
+}
+
 func NewActorRegistry() *vm.ActorRegistry {
 	inv := vm.NewActorRegistry2()
 
