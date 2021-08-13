@@ -332,7 +332,7 @@ func (tsp *TSPoW) checkBlockMessages(ctx context.Context, b *types.FullBlock, ba
 	}
 
 	nv := tsp.sm.GetNtwkVersion(ctx, b.Header.Height)
-	pl := vm.PricelistByVersion(nv)
+	pl := vm.PricelistByEpoch(baseTs.Height())
 	var sumGasLimit int64
 	checkMsg := func(msg types.ChainMsg) error {
 		m := msg.VMMessage()
