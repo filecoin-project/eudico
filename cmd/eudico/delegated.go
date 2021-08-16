@@ -10,6 +10,7 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/network"
 	adt0 "github.com/filecoin-project/specs-actors/actors/util/adt"
 	"github.com/google/uuid"
@@ -25,12 +26,17 @@ import (
 	lapi "github.com/filecoin-project/lotus/api"
 	bstore "github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
+	"github.com/filecoin-project/lotus/chain/actors/builtin"
+	init_ "github.com/filecoin-project/lotus/chain/actors/builtin/init"
+	"github.com/filecoin-project/lotus/chain/actors/builtin/reward"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/system"
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
 	"github.com/filecoin-project/lotus/chain/gen"
 	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
+	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -229,7 +235,7 @@ func MakeDelegatedGenesisBlock(ctx context.Context, j journal.Journal, bs bstore
 	if j == nil {
 		j = journal.NilJournal()
 	}
-	st, _, err := genesis2.MakeInitialStateTree(ctx, bs, template)
+	st, _, err := MakeInitialStateTree(ctx, bs, template)
 	if err != nil {
 		return nil, xerrors.Errorf("make initial state tree failed: %w", err)
 	}
@@ -313,4 +319,144 @@ func MakeDelegatedGenesisBlock(ctx context.Context, j journal.Journal, bs bstore
 	return &genesis2.GenesisBootstrap{
 		Genesis: b,
 	}, nil
+}
+
+func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template genesis.Template) (*state.StateTree, map[address.Address]address.Address, error) {
+	// Create empty state tree
+
+	cst := cbor.NewCborStore(bs)
+	_, err := cst.Put(context.TODO(), []struct{}{})
+	if err != nil {
+		return nil, nil, xerrors.Errorf("putting empty object: %w", err)
+	}
+
+	sv, err := state.VersionForNetwork(template.NetworkVersion)
+	if err != nil {
+		return nil, nil, xerrors.Errorf("getting state tree version: %w", err)
+	}
+
+	state, err := state.NewStateTree(cst, sv)
+	if err != nil {
+		return nil, nil, xerrors.Errorf("making new state tree: %w", err)
+	}
+
+	av, err := actors.VersionForNetwork(template.NetworkVersion)
+	if err != nil {
+		return nil, nil, xerrors.Errorf("getting network version: %w", err)
+	}
+
+	// Create system actor
+
+	sysact, err := genesis2.SetupSystemActor(ctx, bs, av)
+	if err != nil {
+		return nil, nil, xerrors.Errorf("setup system actor: %w", err)
+	}
+	if err := state.SetActor(system.Address, sysact); err != nil {
+		return nil, nil, xerrors.Errorf("set system actor: %w", err)
+	}
+
+	// Create init actor
+
+	idStart, initact, keyIDs, err := genesis2.SetupInitActor(ctx, bs, template.NetworkName, template.Accounts, template.VerifregRootKey, template.RemainderAccount, av)
+	if err != nil {
+		return nil, nil, xerrors.Errorf("setup init actor: %w", err)
+	}
+	if err := state.SetActor(init_.Address, initact); err != nil {
+		return nil, nil, xerrors.Errorf("set init actor: %w", err)
+	}
+
+	// Setup reward
+	// RewardActor's state is overwritten by SetupStorageMiners, but needs to exist for miner creation messages
+	rewact, err := genesis2.SetupRewardActor(ctx, bs, big.Zero(), av)
+	if err != nil {
+		return nil, nil, xerrors.Errorf("setup reward actor: %w", err)
+	}
+
+	err = state.SetActor(reward.Address, rewact)
+	if err != nil {
+		return nil, nil, xerrors.Errorf("set reward actor: %w", err)
+	}
+
+	bact, err := genesis2.MakeAccountActor(ctx, cst, av, builtin.BurntFundsActorAddr, big.Zero())
+	if err != nil {
+		return nil, nil, xerrors.Errorf("setup burnt funds actor state: %w", err)
+	}
+	if err := state.SetActor(builtin.BurntFundsActorAddr, bact); err != nil {
+		return nil, nil, xerrors.Errorf("set burnt funds actor: %w", err)
+	}
+
+	// Create accounts
+	for _, info := range template.Accounts {
+
+		switch info.Type {
+		case genesis.TAccount:
+			if err := genesis2.CreateAccountActor(ctx, cst, state, info, keyIDs, av); err != nil {
+				return nil, nil, xerrors.Errorf("failed to create account actor: %w", err)
+			}
+
+		case genesis.TMultisig:
+
+			ida, err := address.NewIDAddress(uint64(idStart))
+			if err != nil {
+				return nil, nil, err
+			}
+			idStart++
+
+			if err := genesis2.CreateMultisigAccount(ctx, cst, state, ida, info, keyIDs, av); err != nil {
+				return nil, nil, err
+			}
+		default:
+			return nil, nil, xerrors.New("unsupported account type")
+		}
+
+	}
+
+	totalFilAllocated := big.Zero()
+
+	err = state.ForEach(func(addr address.Address, act *types.Actor) error {
+		if act.Balance.Nil() {
+			panic(fmt.Sprintf("actor %s (%s) has nil balance", addr, builtin.ActorNameByCode(act.Code)))
+		}
+		totalFilAllocated = big.Add(totalFilAllocated, act.Balance)
+		return nil
+	})
+	if err != nil {
+		return nil, nil, xerrors.Errorf("summing account balances in state tree: %w", err)
+	}
+
+	totalFil := big.Mul(big.NewInt(int64(build.FilBase)), big.NewInt(int64(build.FilecoinPrecision)))
+	remainingFil := big.Sub(totalFil, totalFilAllocated)
+	if remainingFil.Sign() < 0 {
+		return nil, nil, xerrors.Errorf("somehow overallocated filecoin (allocated = %s)", types.FIL(totalFilAllocated))
+	}
+
+	template.RemainderAccount.Balance = remainingFil
+
+	switch template.RemainderAccount.Type {
+	case genesis.TAccount:
+		var ainfo genesis.AccountMeta
+		if err := json.Unmarshal(template.RemainderAccount.Meta, &ainfo); err != nil {
+			return nil, nil, xerrors.Errorf("unmarshaling account meta: %w", err)
+		}
+
+		_, ok := keyIDs[ainfo.Owner]
+		if ok {
+			return nil, nil, fmt.Errorf("remainder account has already been declared, cannot be assigned 90: %s", ainfo.Owner)
+		}
+
+		keyIDs[ainfo.Owner] = builtin.ReserveAddress
+		err = genesis2.CreateAccountActor(ctx, cst, state, template.RemainderAccount, keyIDs, av)
+		if err != nil {
+			return nil, nil, xerrors.Errorf("creating remainder acct: %w", err)
+		}
+
+	case genesis.TMultisig:
+		if err = genesis2.CreateMultisigAccount(ctx, cst, state, builtin.ReserveAddress, template.RemainderAccount, keyIDs, av); err != nil {
+			return nil, nil, xerrors.Errorf("failed to set up remainder: %w", err)
+		}
+	default:
+		return nil, nil, xerrors.Errorf("unknown account type for remainder: %w", err)
+	}
+
+	return state, keyIDs, nil
 }
