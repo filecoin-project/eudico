@@ -18,9 +18,7 @@ import (
 
 	exported5 "github.com/filecoin-project/specs-actors/v5/actors/builtin/exported"
 
-	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
-	"github.com/filecoin-project/lotus/chain/actors/builtin/cron"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -102,47 +100,7 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 		return cid.Undef, cid.Undef, xerrors.Errorf("making vm: %w", err)
 	}
 
-	runCron := func(epoch abi.ChainEpoch) error {
-		cronMsg := &types.Message{
-			To:         cron.Address,
-			From:       builtin.SystemActorAddr,
-			Nonce:      uint64(epoch),
-			Value:      types.NewInt(0),
-			GasFeeCap:  types.NewInt(0),
-			GasPremium: types.NewInt(0),
-			GasLimit:   build.BlockGasLimit * 10000, // Make super sure this is never too little
-			Method:     cron.Methods.EpochTick,
-			Params:     nil,
-		}
-		ret, err := vmi.ApplyImplicitMessage(ctx, cronMsg)
-		if err != nil {
-			return err
-		}
-		if em != nil {
-			if err := em.MessageApplied(ctx, ts, cronMsg.Cid(), cronMsg, ret, true); err != nil {
-				return xerrors.Errorf("callback failed on cron message: %w", err)
-			}
-		}
-		if ret.ExitCode != 0 {
-			return xerrors.Errorf("CheckProofSubmissions exit was non-zero: %d", ret.ExitCode)
-		}
-
-		return nil
-	}
-
 	for i := parentEpoch; i < epoch; i++ {
-		if i > parentEpoch {
-			// run cron for null rounds if any
-			if err := runCron(i); err != nil {
-				return cid.Undef, cid.Undef, err
-			}
-
-			pstate, err = vmi.Flush(ctx)
-			if err != nil {
-				return cid.Undef, cid.Undef, xerrors.Errorf("flushing vm: %w", err)
-			}
-		}
-
 		// handle state forks
 		// XXX: The state tree
 		newState, err := sm.HandleStateForks(ctx, pstate, i, em, ts)
@@ -219,10 +177,6 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 
 	partDone()
 	partDone = metrics.Timer(ctx, metrics.VMApplyCron)
-
-	if err := runCron(epoch); err != nil {
-		return cid.Cid{}, cid.Cid{}, err
-	}
 
 	partDone()
 	partDone = metrics.Timer(ctx, metrics.VMApplyFlush)
