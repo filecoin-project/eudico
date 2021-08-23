@@ -102,9 +102,13 @@ func (d *Driver) ExecuteTipset(bs blockstore.Blockstore, ds ds.Batching, params 
 		tipset   = params.Tipset
 		syscalls = vm.Syscalls(ffiwrapper.ProofVerifier)
 
-		cs = store.NewChainStore(bs, bs, ds, nil)
-		sm = stmgr.NewStateManager(cs, syscalls)
+		cs = store.NewChainStore(bs, bs, ds, filcns.Weight, nil)
+		tse = filcns.TipSetExecutor()
+		sm, err = stmgr.NewStateManager(cs, tse, syscalls, filcns.DefaultUpgradeSchedule())
 	)
+	if err != nil {
+		return nil, err
+	}
 
 	if params.Rand == nil {
 		params.Rand = NewFixedRand()
@@ -147,7 +151,8 @@ func (d *Driver) ExecuteTipset(bs blockstore.Blockstore, ds ds.Batching, params 
 		results:  []*vm.ApplyRet{},
 	}
 
-	postcid, receiptsroot, err := sm.ApplyBlocks(context.Background(),
+	postcid, receiptsroot, err := tse.ApplyBlocks(context.Background(),
+		sm,
 		params.ParentEpoch,
 		params.Preroot,
 		blocks,
@@ -197,7 +202,10 @@ func (d *Driver) ExecuteMessage(bs blockstore.Blockstore, params ExecuteMessageP
 
 	// dummy state manager; only to reference the GetNetworkVersion method,
 	// which does not depend on state.
-	sm := stmgr.NewStateManager(nil, nil)
+	sm, err := stmgr.NewStateManager(nil, filcns.TipSetExecutor(), nil, filcns.DefaultUpgradeSchedule())
+	if err != nil {
+		return nil, cid.Cid{}, err
+	}
 
 	vmOpts := &vm.VMOpts{
 		StateBase: params.Preroot,

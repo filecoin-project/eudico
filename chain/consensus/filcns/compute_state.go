@@ -53,7 +53,7 @@ func NewActorRegistry() *vm.ActorRegistry {
 
 type tipSetExecutor struct{}
 
-func TipSetExecutor() stmgr.Executor {
+func TipSetExecutor() *tipSetExecutor {
 	return &tipSetExecutor{}
 }
 

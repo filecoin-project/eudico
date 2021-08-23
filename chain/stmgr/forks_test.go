@@ -122,7 +122,7 @@ func TestForkHeightTriggers(t *testing.T) {
 	}
 
 	sm, err := NewStateManager(
-		cg.ChainStore(), cg.StateManager().VMSys(), UpgradeSchedule{{
+		cg.ChainStore(), filcns.TipSetExecutor(), cg.StateManager().VMSys(), UpgradeSchedule{{
 			Network: network.Version1,
 			Height:  testForkHeight,
 			Migration: func(ctx context.Context, sm *StateManager, cache MigrationCache, cb ExecMonitor,
@@ -251,7 +251,7 @@ func TestForkRefuseCall(t *testing.T) {
 	}
 
 	sm, err := NewStateManager(
-		cg.ChainStore(), cg.StateManager().VMSys(), UpgradeSchedule{{
+		cg.ChainStore(), filcns.TipSetExecutor(), cg.StateManager().VMSys(), UpgradeSchedule{{
 			Network:   network.Version1,
 			Expensive: true,
 			Height:    testForkHeight,
@@ -366,7 +366,7 @@ func TestForkPreMigration(t *testing.T) {
 	counter := make(chan struct{}, 10)
 
 	sm, err := NewStateManager(
-		cg.ChainStore(), cg.StateManager().VMSys(), UpgradeSchedule{{
+		cg.ChainStore(), filcns.TipSetExecutor(), cg.StateManager().VMSys(), UpgradeSchedule{{
 			Network: network.Version1,
 			Height:  testForkHeight,
 			Migration: func(ctx context.Context, sm *StateManager, cache MigrationCache, cb ExecMonitor,
