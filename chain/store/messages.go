@@ -105,6 +105,8 @@ type BlockMessages struct {
 }
 
 func (cs *ChainStore) BlockMsgsForTipset(ts *types.TipSet) ([]BlockMessages, error) {
+	// returned BlockMessages match block order in tipset
+
 	applied := make(map[address.Address]uint64)
 
 	cst := cbor.NewCborStore(cs.stateBlockstore)
@@ -150,7 +152,6 @@ func (cs *ChainStore) BlockMsgsForTipset(ts *types.TipSet) ([]BlockMessages, err
 			Miner:         b.Miner,
 			BlsMessages:   make([]types.ChainMsg, 0, len(bms)),
 			SecpkMessages: make([]types.ChainMsg, 0, len(sms)),
-			WinCount:      b.ElectionProof.WinCount,
 		}
 
 		for _, bmsg := range bms {

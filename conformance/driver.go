@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/filecoin-project/lotus/blockstore"
+	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
@@ -216,7 +217,7 @@ func (d *Driver) ExecuteMessage(bs blockstore.Blockstore, params ExecuteMessageP
 		return nil, cid.Undef, err
 	}
 
-	invoker := vm.NewActorRegistry()
+	invoker := filcns.NewActorRegistry()
 
 	// register the chaos actor if required by the vector.
 	if chaosOn, ok := d.selector["chaos_actor"]; ok && chaosOn == "true" {

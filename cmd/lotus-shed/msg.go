@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	"github.com/fatih/color"
-
 	"github.com/ipfs/go-cid"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
@@ -23,7 +22,7 @@ import (
 )
 
 var msgCmd = &cli.Command{
-	Name:      "msg",
+	Name: "msg",
 	Usage:     "Translate message between various formats",
 	ArgsUsage: "Message in any form",
 	Action: func(cctx *cli.Context) error {
