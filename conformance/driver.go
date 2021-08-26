@@ -102,8 +102,8 @@ func (d *Driver) ExecuteTipset(bs blockstore.Blockstore, ds ds.Batching, params 
 		tipset   = params.Tipset
 		syscalls = vm.Syscalls(ffiwrapper.ProofVerifier)
 
-		cs = store.NewChainStore(bs, bs, ds, filcns.Weight, nil)
-		tse = filcns.TipSetExecutor()
+		cs      = store.NewChainStore(bs, bs, ds, filcns.Weight, nil)
+		tse     = filcns.TipSetExecutor()
 		sm, err = stmgr.NewStateManager(cs, tse, syscalls, filcns.DefaultUpgradeSchedule())
 	)
 	if err != nil {
@@ -120,11 +120,10 @@ func (d *Driver) ExecuteTipset(bs blockstore.Blockstore, ds ds.Batching, params 
 
 	defer cs.Close() //nolint:errcheck
 
-	blocks := make([]store.BlockMessages, 0, len(tipset.Blocks))
+	blocks := make([]filcns.FilecoinBlockMessages, 0, len(tipset.Blocks))
 	for _, b := range tipset.Blocks {
 		sb := store.BlockMessages{
-			Miner:    b.MinerAddr,
-			WinCount: b.WinCount,
+			Miner: b.MinerAddr,
 		}
 		for _, m := range b.Messages {
 			msg, err := types.DecodeMessage(m)
@@ -143,7 +142,10 @@ func (d *Driver) ExecuteTipset(bs blockstore.Blockstore, ds ds.Batching, params 
 				sb.BlsMessages = append(sb.BlsMessages, msg)
 			}
 		}
-		blocks = append(blocks, sb)
+		blocks = append(blocks, filcns.FilecoinBlockMessages{
+			BlockMessages: sb,
+			WinCount:      b.WinCount,
+		})
 	}
 
 	recordOutputs := &outputRecorder{

@@ -178,7 +178,7 @@ func (db *DrandBeacon) VerifyEntry(curr types.BeaconEntry, prev types.BeaconEntr
 		return nil
 	}
 
-	if curr.Round != prev.Round + 1 {
+	if curr.Round != prev.Round+1 {
 		return xerrors.Errorf("invalid beacon entry: cur (%d) != prev (%d) + 1", curr.Round, prev.Round)
 	}
 

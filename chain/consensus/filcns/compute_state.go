@@ -61,7 +61,13 @@ func (t *tipSetExecutor) NewActorRegistry() *vm.ActorRegistry {
 	return NewActorRegistry()
 }
 
-func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager, parentEpoch abi.ChainEpoch, pstate cid.Cid, bms []store.BlockMessages, epoch abi.ChainEpoch, r vm.Rand, em stmgr.ExecMonitor, baseFee abi.TokenAmount, ts *types.TipSet) (cid.Cid, cid.Cid, error) {
+type FilecoinBlockMessages struct {
+	store.BlockMessages
+
+	WinCount int64
+}
+
+func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager, parentEpoch abi.ChainEpoch, pstate cid.Cid, bms []FilecoinBlockMessages, epoch abi.ChainEpoch, r vm.Rand, em stmgr.ExecMonitor, baseFee abi.TokenAmount, ts *types.TipSet) (cid.Cid, cid.Cid, error) {
 	done := metrics.Timer(ctx, metrics.VMApplyBlocksTotal)
 	defer done()
 
@@ -283,14 +289,14 @@ func (t *tipSetExecutor) ExecuteTipSet(ctx context.Context, sm *stmgr.StateManag
 	if err != nil {
 		return cid.Undef, cid.Undef, xerrors.Errorf("getting block messages for tipset: %w", err)
 	}
-	// todo: this is really ugly
-	for i, b := range ts.Blocks() {
-		blkmsgs[i].WinCount = b.ElectionProof.WinCount
+	fbmsgs := make([]FilecoinBlockMessages, len(blkmsgs))
+	for i := range fbmsgs {
+		fbmsgs[i].BlockMessages = blkmsgs[i]
+		fbmsgs[i].WinCount = ts.Blocks()[i].ElectionProof.WinCount
 	}
-
 	baseFee := blks[0].ParentBaseFee
 
-	return t.ApplyBlocks(ctx, sm, parentEpoch, pstate, blkmsgs, blks[0].Height, r, em, baseFee, ts)
+	return t.ApplyBlocks(ctx, sm, parentEpoch, pstate, fbmsgs, blks[0].Height, r, em, baseFee, ts)
 }
 
 var _ stmgr.Executor = &tipSetExecutor{}
