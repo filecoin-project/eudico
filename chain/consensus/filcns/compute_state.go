@@ -38,7 +38,7 @@ func init() {
 }
 
 func NewActorRegistry() *vm.ActorRegistry {
-	inv := vm.NewActorRegistry2()
+	inv := vm.NewActorRegistry()
 
 	// TODO: define all these properties on the actors themselves, in specs-actors.
 

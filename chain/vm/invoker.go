@@ -66,7 +66,7 @@ type actorInfo struct {
 	predicate ActorPredicate
 }
 
-func NewActorRegistry2() *ActorRegistry {
+func NewActorRegistry() *ActorRegistry {
 	return &ActorRegistry{
 		actors:  make(map[cid.Cid]*actorInfo),
 		Methods: map[cid.Cid]map[abi.MethodNum]MethodMeta{},
