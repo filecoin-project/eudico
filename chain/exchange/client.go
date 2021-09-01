@@ -157,6 +157,13 @@ func (c *client) processResponse(req *Request, res *Response, tipsets []*types.T
 		return nil, xerrors.Errorf("status error: %s", err)
 	}
 
+	defer func() {
+		if rerr := recover(); rerr != nil {
+			log.Errorf("process response error: %w", rerr)
+			return
+		}
+	}()
+
 	options := parseOptions(req.Options)
 	if options.noOptionsSet() {
 		// Safety check: this shouldn't have been sent, and even if it did
