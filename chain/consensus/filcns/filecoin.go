@@ -785,7 +785,7 @@ func (filec *FilecoinEC) validateBlockHeader(ctx context.Context, b *types.Block
 			return "unknown_miner", err
 		}
 
-		log.Warnf("cannot validate block message; unknown miner or miner that doesn't meet min power in unsynced chain")
+		log.Warnf("cannot validate block message; unknown miner or miner that doesn't meet min power in unsynced chain: %s", b.Cid())
 		return "", err // ignore
 	}
 

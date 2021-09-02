@@ -243,6 +243,19 @@ func TestForkHeightTriggers(t *testing.T) {
 func TestForkRefuseCall(t *testing.T) {
 	logging.SetAllLoggers(logging.LevelInfo)
 
+	for after := 0; after < 3; after++ {
+		for before := 0; before < 3; before++ {
+			// Makes the lints happy...
+			after := after
+			before := before
+			t.Run(fmt.Sprintf("after:%d,before:%d", after, before), func(t *testing.T) {
+				testForkRefuseCall(t, before, after)
+			})
+		}
+	}
+
+}
+func testForkRefuseCall(t *testing.T, nullsBefore, nullsAfter int) {
 	ctx := context.TODO()
 
 	cg, err := gen.NewGenerator()
@@ -250,6 +263,7 @@ func TestForkRefuseCall(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	var migrationCount int
 	sm, err := NewStateManager(
 		cg.ChainStore(), filcns.TipSetExecutor(), cg.StateManager().VMSys(), UpgradeSchedule{{
 			Network:   network.Version1,
@@ -257,6 +271,7 @@ func TestForkRefuseCall(t *testing.T) {
 			Height:    testForkHeight,
 			Migration: func(ctx context.Context, sm *StateManager, cache MigrationCache, cb ExecMonitor,
 				root cid.Cid, height abi.ChainEpoch, ts *types.TipSet) (cid.Cid, error) {
+				migrationCount++
 				return root, nil
 			}}})
 	if err != nil {
@@ -293,14 +308,20 @@ func TestForkRefuseCall(t *testing.T) {
 		GasFeeCap:  types.NewInt(0),
 	}
 
-	for i := 0; i < 50; i++ {
-		ts, err := cg.NextTipSet()
+	nullStart := abi.ChainEpoch(testForkHeight - nullsBefore)
+	nullLength := abi.ChainEpoch(nullsBefore + nullsAfter)
+
+	for i := 0; i < testForkHeight*2; i++ {
+		pts := cg.CurTipset.TipSet()
+		skip := abi.ChainEpoch(0)
+		if pts.Height() == nullStart {
+			skip = nullLength
+		}
+		ts, err := cg.NextTipSetFromMiners(pts, cg.Miners, skip)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		pts, err := cg.ChainStore().LoadTipSet(ts.TipSet.TipSet().Parents())
-		require.NoError(t, err)
 		parentHeight := pts.Height()
 		currentHeight := ts.TipSet.TipSet().Height()
 
@@ -322,7 +343,20 @@ func TestForkRefuseCall(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, ret.MsgRct.ExitCode.IsSuccess())
 		}
+
+		// Calls without a tipset should walk back to the last non-fork tipset.
+		// We _verify_ that the migration wasn't run multiple times at the end of the
+		// test.
+		ret, err = sm.CallWithGas(ctx, m, nil, nil)
+		require.NoError(t, err)
+		require.True(t, ret.MsgRct.ExitCode.IsSuccess())
+
+		ret, err = sm.Call(ctx, m, nil)
+		require.NoError(t, err)
+		require.True(t, ret.MsgRct.ExitCode.IsSuccess())
 	}
+	// Make sure we didn't execute the migration multiple times.
+	require.Equal(t, migrationCount, 1)
 }
 
 func TestForkPreMigration(t *testing.T) {
