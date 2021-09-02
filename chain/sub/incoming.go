@@ -254,7 +254,7 @@ func (bv *BlockValidator) flagPeer(p peer.ID) {
 func (bv *BlockValidator) Validate(ctx context.Context, pid peer.ID, msg *pubsub.Message) (res pubsub.ValidationResult) {
 	defer func() {
 		if rerr := recover(); rerr != nil {
-			err := xerrors.Errorf("validate block: %w", rerr)
+			err := xerrors.Errorf("validate block: %s", rerr)
 			recordFailure(ctx, metrics.BlockValidationFailure, err.Error())
 			bv.flagPeer(pid)
 			res = pubsub.ValidationReject
@@ -266,7 +266,7 @@ func (bv *BlockValidator) Validate(ctx context.Context, pid peer.ID, msg *pubsub
 	res, what = bv.consensus.ValidateBlockPubsub(ctx, pid == bv.self, msg)
 	if res == pubsub.ValidationAccept {
 		// it's a good block! make sure we've only seen it once
-		if count := bv.recvBlocks.add(msg.ValidatorData.(*types.BlockHeader).Cid()); count > 0 {
+		if count := bv.recvBlocks.add(msg.ValidatorData.(*types.BlockMsg).Cid()); count > 0 {
 			if pid == bv.self {
 				log.Warnf("local block has been seen %d times; ignoring", count)
 			}
