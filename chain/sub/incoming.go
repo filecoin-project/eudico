@@ -6,7 +6,6 @@ import (
 	"time"
 
 	address "github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/consensus"
@@ -15,17 +14,14 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/metrics"
 	"github.com/filecoin-project/lotus/node/impl/client"
-	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 	lru "github.com/hashicorp/golang-lru"
 	blocks "github.com/ipfs/go-block-format"
 	bserv "github.com/ipfs/go-blockservice"
 	"github.com/ipfs/go-cid"
-	cbor "github.com/ipfs/go-ipld-cbor"
 	logging "github.com/ipfs/go-log/v2"
 	connmgr "github.com/libp2p/go-libp2p-core/connmgr"
 	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	cbg "github.com/whyrusleeping/cbor-gen"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/tag"
 	"golang.org/x/xerrors"
@@ -255,151 +251,35 @@ func (bv *BlockValidator) flagPeer(p peer.ID) {
 	bv.peers.Add(p, v.(int)+1)
 }
 
-func (bv *BlockValidator) Validate(ctx context.Context, pid peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
-	if pid == bv.self {
-		return bv.validateLocalBlock(ctx, msg)
-	}
-
-	// track validation time
-	begin := build.Clock.Now()
+func (bv *BlockValidator) Validate(ctx context.Context, pid peer.ID, msg *pubsub.Message) (res pubsub.ValidationResult) {
 	defer func() {
-		log.Debugf("block validation time: %s", build.Clock.Since(begin))
+		if rerr := recover(); rerr != nil {
+			err := xerrors.Errorf("validate block: %s", rerr)
+			recordFailure(ctx, metrics.BlockValidationFailure, err.Error())
+			bv.flagPeer(pid)
+			res = pubsub.ValidationReject
+			return
+		}
 	}()
 
-	stats.Record(ctx, metrics.BlockReceived.M(1))
+	var what string
+	res, what = bv.consensus.ValidateBlockPubsub(ctx, pid == bv.self, msg)
+	if res == pubsub.ValidationAccept {
+		// it's a good block! make sure we've only seen it once
+		if count := bv.recvBlocks.add(msg.ValidatorData.(*types.BlockMsg).Cid()); count > 0 {
+			if pid == bv.self {
+				log.Warnf("local block has been seen %d times; ignoring", count)
+			}
 
-	recordFailureFlagPeer := func(what string) {
-		recordFailure(ctx, metrics.BlockValidationFailure, what)
-		bv.flagPeer(pid)
-	}
-
-	blk, what, err := bv.decodeAndCheckBlock(msg)
-	if err != nil {
-		log.Error("got invalid block over pubsub: ", err)
-		recordFailureFlagPeer(what)
-		return pubsub.ValidationReject
-	}
-
-	// validate the block meta: the Message CID in the header must match the included messages
-	err = bv.validateMsgMeta(ctx, blk)
-	if err != nil {
-		log.Warnf("error validating message metadata: %s", err)
-		recordFailureFlagPeer("invalid_block_meta")
-		return pubsub.ValidationReject
-	}
-
-	reject, err := bv.consensus.ValidateBlockHeader(ctx, blk.Header)
-	if err != nil {
-		if reject == "" {
-			log.Warn("ignoring block msg: ", err)
+			// TODO: once these changes propagate to the network, we can consider
+			// dropping peers who send us the same block multiple times
 			return pubsub.ValidationIgnore
 		}
-		recordFailureFlagPeer(reject)
-		return pubsub.ValidationReject
-	}
-
-	// it's a good block! make sure we've only seen it once
-	if bv.recvBlocks.add(blk.Header.Cid()) > 0 {
-		// TODO: once these changes propagate to the network, we can consider
-		// dropping peers who send us the same block multiple times
-		return pubsub.ValidationIgnore
-	}
-
-	// all good, accept the block
-	msg.ValidatorData = blk
-	stats.Record(ctx, metrics.BlockValidationSuccess.M(1))
-	return pubsub.ValidationAccept
-}
-
-func (bv *BlockValidator) validateLocalBlock(ctx context.Context, msg *pubsub.Message) pubsub.ValidationResult {
-	stats.Record(ctx, metrics.BlockPublished.M(1))
-
-	if size := msg.Size(); size > 1<<20-1<<15 {
-		log.Errorf("ignoring oversize block (%dB)", size)
-		recordFailure(ctx, metrics.BlockValidationFailure, "oversize_block")
-		return pubsub.ValidationIgnore
-	}
-
-	blk, what, err := bv.decodeAndCheckBlock(msg)
-	if err != nil {
-		log.Errorf("got invalid local block: %s", err)
+	} else {
 		recordFailure(ctx, metrics.BlockValidationFailure, what)
-		return pubsub.ValidationIgnore
 	}
 
-	if count := bv.recvBlocks.add(blk.Header.Cid()); count > 0 {
-		log.Warnf("local block has been seen %d times; ignoring", count)
-		return pubsub.ValidationIgnore
-	}
-
-	msg.ValidatorData = blk
-	stats.Record(ctx, metrics.BlockValidationSuccess.M(1))
-	return pubsub.ValidationAccept
-}
-
-func (bv *BlockValidator) decodeAndCheckBlock(msg *pubsub.Message) (*types.BlockMsg, string, error) {
-	blk, err := types.DecodeBlockMsg(msg.GetData())
-	if err != nil {
-		return nil, "invalid", xerrors.Errorf("error decoding block: %w", err)
-	}
-
-	if count := len(blk.BlsMessages) + len(blk.SecpkMessages); count > build.BlockMessageLimit {
-		return nil, "too_many_messages", fmt.Errorf("block contains too many messages (%d)", count)
-	}
-
-	// make sure we have a signature
-	if blk.Header.BlockSig == nil {
-		return nil, "missing_signature", fmt.Errorf("block without a signature")
-	}
-
-	return blk, "", nil
-}
-
-func (bv *BlockValidator) validateMsgMeta(ctx context.Context, msg *types.BlockMsg) error {
-	// TODO there has to be a simpler way to do this without the blockstore dance
-	// block headers use adt0
-	store := blockadt.WrapStore(ctx, cbor.NewCborStore(blockstore.NewMemory()))
-	bmArr := blockadt.MakeEmptyArray(store)
-	smArr := blockadt.MakeEmptyArray(store)
-
-	for i, m := range msg.BlsMessages {
-		c := cbg.CborCid(m)
-		if err := bmArr.Set(uint64(i), &c); err != nil {
-			return err
-		}
-	}
-
-	for i, m := range msg.SecpkMessages {
-		c := cbg.CborCid(m)
-		if err := smArr.Set(uint64(i), &c); err != nil {
-			return err
-		}
-	}
-
-	bmroot, err := bmArr.Root()
-	if err != nil {
-		return err
-	}
-
-	smroot, err := smArr.Root()
-	if err != nil {
-		return err
-	}
-
-	mrcid, err := store.Put(store.Context(), &types.MsgMeta{
-		BlsMessages:   bmroot,
-		SecpkMessages: smroot,
-	})
-
-	if err != nil {
-		return err
-	}
-
-	if msg.Header.Messages != mrcid {
-		return fmt.Errorf("messages didn't match root cid in header")
-	}
-
-	return nil
+	return res
 }
 
 type blockReceiptCache struct {

@@ -3,10 +3,12 @@ package stmgr
 import (
 	"context"
 	"fmt"
-	"github.com/filecoin-project/lotus/api"
-	"github.com/filecoin-project/lotus/chain/types"
+
 	"github.com/ipfs/go-cid"
 	"go.opencensus.io/trace"
+
+	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/chain/types"
 )
 
 func (sm *StateManager) TipSetState(ctx context.Context, ts *types.TipSet) (st cid.Cid, rec cid.Cid, err error) {

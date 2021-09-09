@@ -384,33 +384,21 @@ func zipTipSetAndMessages(bs cbor.IpldStore, ts *types.TipSet, allbmsgs []*types
 		return nil, fmt.Errorf("msgincl length didnt match tipset size")
 	}
 
+	if err := checkMsgMeta(ts, allbmsgs, allsmsgs, bmi, smi); err != nil {
+		return nil, err
+	}
+
 	fts := &store.FullTipSet{}
 	for bi, b := range ts.Blocks() {
-		if msgc := len(bmi[bi]) + len(smi[bi]); msgc > build.BlockMessageLimit {
-			return nil, fmt.Errorf("block %q has too many messages (%d)", b.Cid(), msgc)
-		}
 
 		var smsgs []*types.SignedMessage
-		var smsgCids []cid.Cid
 		for _, m := range smi[bi] {
 			smsgs = append(smsgs, allsmsgs[m])
-			smsgCids = append(smsgCids, allsmsgs[m].Cid())
 		}
 
 		var bmsgs []*types.Message
-		var bmsgCids []cid.Cid
 		for _, m := range bmi[bi] {
 			bmsgs = append(bmsgs, allbmsgs[m])
-			bmsgCids = append(bmsgCids, allbmsgs[m].Cid())
-		}
-
-		mrcid, err := computeMsgMeta(bs, bmsgCids, smsgCids)
-		if err != nil {
-			return nil, err
-		}
-
-		if b.Messages != mrcid {
-			return nil, fmt.Errorf("messages didnt match message root in header for ts %s", ts.Key())
 		}
 
 		fb := &types.FullBlock{
@@ -1037,6 +1025,35 @@ func (syncer *Syncer) iterFullTipsets(ctx context.Context, headers []*types.TipS
 	return nil
 }
 
+func checkMsgMeta(ts *types.TipSet, allbmsgs []*types.Message, allsmsgs []*types.SignedMessage, bmi, smi [][]uint64) error {
+	for bi, b := range ts.Blocks() {
+		if msgc := len(bmi[bi]) + len(smi[bi]); msgc > build.BlockMessageLimit {
+			return fmt.Errorf("block %q has too many messages (%d)", b.Cid(), msgc)
+		}
+
+		var smsgCids []cid.Cid
+		for _, m := range smi[bi] {
+			smsgCids = append(smsgCids, allsmsgs[m].Cid())
+		}
+
+		var bmsgCids []cid.Cid
+		for _, m := range bmi[bi] {
+			bmsgCids = append(bmsgCids, allbmsgs[m].Cid())
+		}
+
+		mrcid, err := computeMsgMeta(cbor.NewCborStore(bstore.NewMemory()), bmsgCids, smsgCids)
+		if err != nil {
+			return err
+		}
+
+		if b.Messages != mrcid {
+			return fmt.Errorf("messages didnt match message root in header for ts %s", ts.Key())
+		}
+	}
+
+	return nil
+}
+
 func (syncer *Syncer) fetchMessages(ctx context.Context, headers []*types.TipSet, startOffset int) ([]*exchange.CompactedMessages, error) {
 	batchSize := len(headers)
 	batch := make([]*exchange.CompactedMessages, batchSize)
@@ -1075,7 +1092,19 @@ func (syncer *Syncer) fetchMessages(ctx context.Context, headers []*types.TipSet
 					if err != nil {
 						requestErr = multierror.Append(requestErr, err)
 					} else {
-						requestResult = result
+						isGood := true
+						for index, ts := range headers[nextI:lastI] {
+							cm := result[index]
+							if err := checkMsgMeta(ts, cm.Bls, cm.Secpk, cm.BlsIncludes, cm.SecpkIncludes); err != nil {
+								log.Errorf("fetched messages not as expected: %s", err)
+								isGood = false
+								break
+							}
+						}
+
+						if isGood {
+							requestResult = result
+						}
 					}
 				}
 
