@@ -48,7 +48,7 @@ func DefaultUpgradeSchedule() stmgr.UpgradeSchedule {
 }
 
 func NewActorRegistry() *vm.ActorRegistry {
-	inv := vm.NewActorRegistry2()
+	inv := vm.NewActorRegistry()
 
 	// TODO: drop unneeded
 	inv.Register(vm.ActorsVersionPredicate(actors.Version5), exported5.BuiltinActors()...)

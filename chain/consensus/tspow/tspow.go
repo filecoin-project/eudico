@@ -10,12 +10,14 @@ import (
 
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/multiformats/go-multihash"
+	"go.opencensus.io/stats"
 
 	"github.com/Gurpartap/async"
 	"github.com/hashicorp/go-multierror"
 	"github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
 	logging "github.com/ipfs/go-log/v2"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"golang.org/x/xerrors"
 
@@ -35,6 +37,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/vm"
 	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
 	"github.com/filecoin-project/lotus/lib/sigs"
+	"github.com/filecoin-project/lotus/metrics"
 	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 )
 
@@ -512,7 +515,140 @@ func Weight(ctx context.Context, stateBs bstore.Blockstore, ts *types.TipSet) (t
 	return w, nil
 }
 
-func (tsp *TSPoW) ValidateBlockHeader(ctx context.Context, b *types.BlockHeader) (rejectReason string, err error) {
+func (tsp *TSPoW) ValidateBlockPubsub(ctx context.Context, self bool, msg *pubsub.Message) (pubsub.ValidationResult, string) {
+	if self {
+		return tsp.validateLocalBlock(ctx, msg)
+	}
+
+	// track validation time
+	begin := build.Clock.Now()
+	defer func() {
+		log.Debugf("block validation time: %s", build.Clock.Since(begin))
+	}()
+
+	stats.Record(ctx, metrics.BlockReceived.M(1))
+
+	recordFailureFlagPeer := func(what string) {
+		// bv.Validate will flag the peer in that case
+		panic(what)
+	}
+
+	blk, what, err := tsp.decodeAndCheckBlock(msg)
+	if err != nil {
+		log.Error("got invalid block over pubsub: ", err)
+		recordFailureFlagPeer(what)
+		return pubsub.ValidationReject, what
+	}
+
+	// validate the block meta: the Message CID in the header must match the included messages
+	err = tsp.validateMsgMeta(ctx, blk)
+	if err != nil {
+		log.Warnf("error validating message metadata: %s", err)
+		recordFailureFlagPeer("invalid_block_meta")
+		return pubsub.ValidationReject, "invalid_block_meta"
+	}
+
+	reject, err := tsp.validateBlockHeader(ctx, blk.Header)
+	if err != nil {
+		if reject == "" {
+			log.Warn("ignoring block msg: ", err)
+			return pubsub.ValidationIgnore, reject
+		}
+		recordFailureFlagPeer(reject)
+		return pubsub.ValidationReject, reject
+	}
+
+	// all good, accept the block
+	msg.ValidatorData = blk
+	stats.Record(ctx, metrics.BlockValidationSuccess.M(1))
+	return pubsub.ValidationAccept, ""
+}
+
+func (tsp *TSPoW) validateLocalBlock(ctx context.Context, msg *pubsub.Message) (pubsub.ValidationResult, string) {
+	stats.Record(ctx, metrics.BlockPublished.M(1))
+
+	if size := msg.Size(); size > 1<<20-1<<15 {
+		log.Errorf("ignoring oversize block (%dB)", size)
+		return pubsub.ValidationIgnore, "oversize_block"
+	}
+
+	blk, what, err := tsp.decodeAndCheckBlock(msg)
+	if err != nil {
+		log.Errorf("got invalid local block: %s", err)
+		return pubsub.ValidationIgnore, what
+	}
+
+	msg.ValidatorData = blk
+	stats.Record(ctx, metrics.BlockValidationSuccess.M(1))
+	return pubsub.ValidationAccept, ""
+}
+
+func (tsp *TSPoW) decodeAndCheckBlock(msg *pubsub.Message) (*types.BlockMsg, string, error) {
+	blk, err := types.DecodeBlockMsg(msg.GetData())
+	if err != nil {
+		return nil, "invalid", xerrors.Errorf("error decoding block: %w", err)
+	}
+
+	if count := len(blk.BlsMessages) + len(blk.SecpkMessages); count > build.BlockMessageLimit {
+		return nil, "too_many_messages", fmt.Errorf("block contains too many messages (%d)", count)
+	}
+
+	// make sure we have a signature
+	if blk.Header.BlockSig == nil {
+		return nil, "missing_signature", fmt.Errorf("block without a signature")
+	}
+
+	return blk, "", nil
+}
+
+func (tsp *TSPoW) validateMsgMeta(ctx context.Context, msg *types.BlockMsg) error {
+	// TODO there has to be a simpler way to do this without the blockstore dance
+	// block headers use adt0
+	store := blockadt.WrapStore(ctx, cbor.NewCborStore(bstore.NewMemory()))
+	bmArr := blockadt.MakeEmptyArray(store)
+	smArr := blockadt.MakeEmptyArray(store)
+
+	for i, m := range msg.BlsMessages {
+		c := cbg.CborCid(m)
+		if err := bmArr.Set(uint64(i), &c); err != nil {
+			return err
+		}
+	}
+
+	for i, m := range msg.SecpkMessages {
+		c := cbg.CborCid(m)
+		if err := smArr.Set(uint64(i), &c); err != nil {
+			return err
+		}
+	}
+
+	bmroot, err := bmArr.Root()
+	if err != nil {
+		return err
+	}
+
+	smroot, err := smArr.Root()
+	if err != nil {
+		return err
+	}
+
+	mrcid, err := store.Put(store.Context(), &types.MsgMeta{
+		BlsMessages:   bmroot,
+		SecpkMessages: smroot,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	if msg.Header.Messages != mrcid {
+		return fmt.Errorf("messages didn't match root cid in header")
+	}
+
+	return nil
+}
+
+func (tsp *TSPoW) validateBlockHeader(ctx context.Context, b *types.BlockHeader) (rejectReason string, err error) {
 	if err := tsp.minerIsValid(b.Miner); err != nil {
 		return err.Error(), err
 	}
