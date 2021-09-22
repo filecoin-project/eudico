@@ -9,6 +9,7 @@ import (
 func main() {
 	if err := gen.WriteTupleEncodersToFile("./cbor_gen.go", "delegcns",
 		delegcns.SplitState{},
+		delegcns.ShardState{},
 	); err != nil {
 		panic(err)
 	}

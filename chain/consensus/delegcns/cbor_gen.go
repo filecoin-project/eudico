@@ -5,6 +5,7 @@ package delegcns
 import (
 	"fmt"
 	"io"
+	"math"
 	"sort"
 
 	address "github.com/filecoin-project/go-address"
@@ -15,6 +16,7 @@ import (
 
 var _ = xerrors.Errorf
 var _ = cid.Undef
+var _ = math.E
 var _ = sort.Sort
 
 var lengthBufSplitState = []byte{129}
@@ -91,6 +93,111 @@ func (t *SplitState) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		t.Beneficiaries[i] = v
+	}
+
+	return nil
+}
+
+var lengthBufShardState = []byte{129}
+
+func (t *ShardState) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufShardState); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.Shards ([][]uint8) (slice)
+	if len(t.Shards) > cbg.MaxLength {
+		return xerrors.Errorf("Slice value in field t.Shards was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajArray, uint64(len(t.Shards))); err != nil {
+		return err
+	}
+	for _, v := range t.Shards {
+		if len(v) > cbg.ByteArrayMaxLen {
+			return xerrors.Errorf("Byte array in field v was too long")
+		}
+
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajByteString, uint64(len(v))); err != nil {
+			return err
+		}
+
+		if _, err := w.Write(v[:]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (t *ShardState) UnmarshalCBOR(r io.Reader) error {
+	*t = ShardState{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 1 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.Shards ([][]uint8) (slice)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+
+	if extra > cbg.MaxLength {
+		return fmt.Errorf("t.Shards: array too large (%d)", extra)
+	}
+
+	if maj != cbg.MajArray {
+		return fmt.Errorf("expected cbor array")
+	}
+
+	if extra > 0 {
+		t.Shards = make([][]uint8, extra)
+	}
+
+	for i := 0; i < int(extra); i++ {
+		{
+			var maj byte
+			var extra uint64
+			var err error
+
+			maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+			if err != nil {
+				return err
+			}
+
+			if extra > cbg.ByteArrayMaxLen {
+				return fmt.Errorf("t.Shards[i]: byte array too large (%d)", extra)
+			}
+			if maj != cbg.MajByteString {
+				return fmt.Errorf("expected byte array")
+			}
+
+			if extra > 0 {
+				t.Shards[i] = make([]uint8, extra)
+			}
+
+			if _, err := io.ReadFull(br, t.Shards[i][:]); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil

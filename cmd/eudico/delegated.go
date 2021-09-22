@@ -12,6 +12,7 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/network"
+	"github.com/filecoin-project/lotus/chain/sharding"
 	adt0 "github.com/filecoin-project/specs-actors/actors/util/adt"
 	"github.com/google/uuid"
 	"github.com/ipfs/go-blockservice"
@@ -50,6 +51,8 @@ import (
 	"github.com/filecoin-project/lotus/node"
 )
 
+var StartShardingSubKey = node.AddInvoke()
+
 var delegatedCmd = &cli.Command{
 	Name:  "delegated",
 	Usage: "Delegated consensus testbed",
@@ -62,6 +65,11 @@ var delegatedCmd = &cli.Command{
 			node.Override(new(store.WeightFunc), delegcns.Weight),
 			node.Override(new(stmgr.Executor), delegcns.TipSetExecutor()),
 			node.Override(new(stmgr.UpgradeSchedule), delegcns.DefaultUpgradeSchedule()),
+
+			node.Override(new(*sharding.ShardingSub), sharding.NewShardSub),
+			node.Override(StartShardingSubKey, func(s *sharding.ShardingSub) {
+				s.Start()
+			}),
 		)),
 	},
 }
@@ -321,6 +329,24 @@ func MakeDelegatedGenesisBlock(ctx context.Context, j journal.Journal, bs bstore
 	}, nil
 }
 
+func SetupShardActor(ctx context.Context, bs bstore.Blockstore) (*types.Actor, error) {
+	cst := cbor.NewCborStore(bs)
+	st := delegcns.ConstructShardState()
+
+	statecid, err := cst.Put(ctx, st)
+	if err != nil {
+		return nil, err
+	}
+
+	act := &types.Actor{
+		Code:    delegcns.ShardActorCodeID,
+		Balance: big.Zero(),
+		Head:    statecid,
+	}
+
+	return act, nil
+}
+
 func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template genesis.Template) (*state.StateTree, map[address.Address]address.Address, error) {
 	// Create empty state tree
 
@@ -363,6 +389,18 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 	}
 	if err := state.SetActor(init_.Address, initact); err != nil {
 		return nil, nil, xerrors.Errorf("set init actor: %w", err)
+	}
+
+	// Setup shard actor
+
+	shardact, err := SetupShardActor(ctx, bs)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = state.SetActor(delegcns.ShardActorAddr, shardact)
+	if err != nil {
+		return nil, nil, xerrors.Errorf("set reward actor: %w", err)
 	}
 
 	// Setup reward

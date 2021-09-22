@@ -92,10 +92,10 @@ var tpowGenesisCmd = &cli.Command{
 
 		template := genesis.Template{
 			NetworkVersion: network.Version13,
-			Accounts: []genesis.Actor{},
-			Miners:      nil,
-			NetworkName: "eudico-" + uuid.New().String(),
-			Timestamp:   uint64(time.Now().Unix()),
+			Accounts:       []genesis.Actor{},
+			Miners:         nil,
+			NetworkName:    "eudico-" + uuid.New().String(),
+			Timestamp:      uint64(time.Now().Unix()),
 
 			VerifregRootKey: genesis.Actor{
 				Type:    genesis.TAccount,

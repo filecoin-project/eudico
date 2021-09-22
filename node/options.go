@@ -49,7 +49,7 @@ func If(b bool, opts ...Option) Option {
 // Override option changes constructor for a given type
 func Override(typ, constructor interface{}) Option {
 	return func(s *Settings) error {
-		if i, ok := typ.(invoke); ok {
+		if i, ok := typ.(Invoke); ok {
 			s.invokes[i] = fx.Invoke(constructor)
 			return nil
 		}
@@ -68,7 +68,7 @@ func Override(typ, constructor interface{}) Option {
 
 func Unset(typ interface{}) Option {
 	return func(s *Settings) error {
-		if i, ok := typ.(invoke); ok {
+		if i, ok := typ.(Invoke); ok {
 			s.invokes[i] = nil
 			return nil
 		}
