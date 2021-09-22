@@ -65,18 +65,10 @@ var tpowCmd = &cli.Command{
 var tpowGenesisCmd = &cli.Command{
 	Name:      "genesis",
 	Usage:     "Generate genesis for delegated consensus",
-	ArgsUsage: "[miner secpk addr] [outfile]",
+	ArgsUsage: "[outfile]",
 	Action: func(cctx *cli.Context) error {
-		if cctx.Args().Len() != 2 {
+		if cctx.Args().Len() != 1 {
 			return xerrors.Errorf("expected 2 arguments")
-		}
-
-		miner, err := address.NewFromString(cctx.Args().First())
-		if err != nil {
-			return xerrors.Errorf("parsing miner address: %w", err)
-		}
-		if miner.Protocol() != address.SECP256K1 {
-			return xerrors.Errorf("must be secp address")
 		}
 
 		j := journal.NilJournal()
@@ -100,11 +92,7 @@ var tpowGenesisCmd = &cli.Command{
 
 		template := genesis.Template{
 			NetworkVersion: network.Version13,
-			Accounts: []genesis.Actor{{
-				Type:    genesis.TAccount,
-				Balance: types.FromFil(2),
-				Meta:    json.RawMessage(`{"Owner":"` + miner.String() + `"}`), // correct??
-			}},
+			Accounts: []genesis.Actor{},
 			Miners:      nil,
 			NetworkName: "eudico-" + uuid.New().String(),
 			Timestamp:   uint64(time.Now().Unix()),
@@ -127,7 +115,7 @@ var tpowGenesisCmd = &cli.Command{
 
 		fmt.Printf("GENESIS MINER ADDRESS: t0%d\n", genesis2.MinerStart)
 
-		f, err := os.OpenFile(cctx.Args().Get(1), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		f, err := os.OpenFile(cctx.Args().First(), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 		if err != nil {
 			return err
 		}
