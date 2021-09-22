@@ -71,14 +71,14 @@ var (
 	DAGStoreKey          = special{13} // constructor returns multiple values
 )
 
-type invoke int
+type Invoke int
 
 // Invokes are called in the order they are defined.
 //nolint:golint
 const (
 	// InitJournal at position 0 initializes the journal global var as soon as
 	// the system starts, so that it's available for all other components.
-	InitJournalKey = invoke(iota)
+	InitJournalKey = Invoke(iota)
 
 	// System processes.
 	InitMemoryWatchdog
@@ -122,6 +122,15 @@ const (
 
 	_nInvokes // keep this last
 )
+
+var nInvokes = _nInvokes
+
+// only call from init blocks
+func AddInvoke() Invoke {
+	i := nInvokes
+	nInvokes++
+	return i
+}
 
 type Settings struct {
 	// modules is a map of constructors for DI
@@ -315,7 +324,7 @@ type StopFunc func(context.Context) error
 func New(ctx context.Context, opts ...Option) (StopFunc, error) {
 	settings := Settings{
 		modules: map[interface{}]fx.Option{},
-		invokes: make([]fx.Option, _nInvokes),
+		invokes: make([]fx.Option, nInvokes),
 	}
 
 	// apply module options in the right order
@@ -374,7 +383,7 @@ func WithRepoType(repoType repo.RepoType) func(s *Settings) error {
 	}
 }
 
-func WithInvokesKey(i invoke, resApi interface{}) func(s *Settings) error {
+func WithInvokesKey(i Invoke, resApi interface{}) func(s *Settings) error {
 	return func(s *Settings) error {
 		s.invokes[i] = fx.Populate(resApi)
 		return nil

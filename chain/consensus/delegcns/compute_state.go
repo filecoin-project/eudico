@@ -56,6 +56,7 @@ func NewActorRegistry() *vm.ActorRegistry {
 	inv.Register(nil, InitActor{}) // use our custom init actor
 
 	inv.Register(nil, SplitActor{})
+	inv.Register(nil, ShardActor{})
 
 	return inv
 }

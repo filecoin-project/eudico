@@ -16,6 +16,7 @@ import (
 
 var (
 	SplitActorCodeID cid.Cid
+	ShardActorCodeID cid.Cid
 )
 
 var builtinActors map[cid.Cid]*actorInfo
@@ -30,6 +31,7 @@ func init() {
 
 	for id, info := range map[*cid.Cid]*actorInfo{ //nolint:nomaprange
 		&SplitActorCodeID: {name: "deleg/0/split"},
+		&ShardActorCodeID: {name: "deleg/0/shards"},
 	} {
 		c, err := builder.Sum([]byte(info.name))
 		if err != nil {
@@ -93,5 +95,59 @@ func (a SplitActor) Split(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue
 		builtin5.RequireSuccess(rt, code, "send failed")
 	}
 
+	return nil
+}
+
+var ShardActorAddr = func() addr.Address {
+	a, err := addr.NewIDAddress(64)
+	if err != nil {
+		panic(err)
+	}
+	return a
+}()
+
+type ShardState struct {
+	Shards [][]byte
+}
+
+func ConstructShardState() *ShardState {
+	return &ShardState{}
+}
+
+type ShardActor struct{}
+
+func (a ShardActor) Exports() []interface{} {
+	return []interface{}{
+		builtin.MethodConstructor: a.Constructor,
+		2:                         a.Add,
+	}
+}
+
+func (a ShardActor) Code() cid.Cid {
+	return ShardActorCodeID
+}
+
+func (a ShardActor) IsSingleton() bool {
+	return false
+}
+
+func (a ShardActor) State() cbor.Er {
+	return new(ShardState)
+}
+
+var _ runtime.VMActor = SplitActor{}
+
+func (a ShardActor) Constructor(rt runtime.Runtime, params *abi.EmptyValue) *abi.EmptyValue {
+	rt.ValidateImmediateCallerAcceptAny()
+	rt.StateCreate(ConstructShardState())
+	return nil
+}
+
+func (a ShardActor) Add(rt runtime.Runtime, params *ShardState) *abi.EmptyValue {
+	rt.ValidateImmediateCallerAcceptAny()
+	var st ShardState
+	rt.StateTransaction(&st, func() {
+		st.Shards = append(st.Shards, params.Shards...)
+	})
 	return nil
 }
