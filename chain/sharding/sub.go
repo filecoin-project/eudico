@@ -13,14 +13,17 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/node/impl"
 	cbor "github.com/ipfs/go-ipld-cbor"
+	"github.com/libp2p/go-libp2p-core/host"
 )
 
 type ShardingSub struct {
 	events *events.Events
 	api    api.FullNode
+
+	host *host.Host
 }
 
-func NewShardSub(api impl.FullNodeAPI) (*ShardingSub, error) {
+func NewShardSub(api impl.FullNodeAPI, host *host.Host) (*ShardingSub, error) {
 	e, err := events.NewEvents(context.TODO(), &api)
 	if err != nil {
 		return nil, err
@@ -29,6 +32,7 @@ func NewShardSub(api impl.FullNodeAPI) (*ShardingSub, error) {
 	return &ShardingSub{
 		events: e,
 		api:    &api,
+		host: host,
 	}, nil
 }
 
