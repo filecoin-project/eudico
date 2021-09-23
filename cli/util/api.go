@@ -184,7 +184,12 @@ func GetRawAPI(ctx *cli.Context, t repo.RepoType, version string) (string, http.
 		return "", nil, xerrors.Errorf("could not get API info for %s: %w", t, err)
 	}
 
-	addr, err := ainfo.DialArgs(version)
+	shard := ""
+	if ctx.IsSet("shard") {
+		shard = "/" + ctx.String("shard")
+	}
+
+	addr, err := ainfo.DialArgsShard(shard, version)
 	if err != nil {
 		return "", nil, xerrors.Errorf("could not get DialArgs: %w", err)
 	}
@@ -236,7 +241,12 @@ func GetFullNodeAPI(ctx *cli.Context) (v0api.FullNode, jsonrpc.ClientCloser, err
 		_, _ = fmt.Fprintln(ctx.App.Writer, "using full node API v0 endpoint:", addr)
 	}
 
-	return client.NewFullNodeRPCV0(ctx.Context, addr, headers)
+	a, closer, err := client.NewFullNodeRPCV0(ctx.Context, addr, headers)
+	if err != nil {
+		return nil, nil, xerrors.Errorf("getting rpc api(%s): %w", addr, err)
+	}
+
+	return a, closer, nil
 }
 
 func GetFullNodeAPIV1(ctx *cli.Context) (v1api.FullNode, jsonrpc.ClientCloser, error) {
@@ -255,7 +265,7 @@ func GetFullNodeAPIV1(ctx *cli.Context) (v1api.FullNode, jsonrpc.ClientCloser, e
 
 	v1API, closer, err := client.NewFullNodeRPCV1(ctx.Context, addr, headers)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, xerrors.Errorf("getting rpc api(%s): %w", addr, err)
 	}
 
 	v, err := v1API.Version(ctx.Context)

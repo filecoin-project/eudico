@@ -20,10 +20,10 @@ type ShardingSub struct {
 	events *events.Events
 	api    api.FullNode
 
-	host *host.Host
+	host host.Host
 }
 
-func NewShardSub(api impl.FullNodeAPI, host *host.Host) (*ShardingSub, error) {
+func NewShardSub(api impl.FullNodeAPI, host host.Host) (*ShardingSub, error) {
 	e, err := events.NewEvents(context.TODO(), &api)
 	if err != nil {
 		return nil, err
