@@ -84,7 +84,7 @@ func main() {
 				Usage: "if true, will ignore pre-send checks",
 			},
 			&cli.StringFlag{
-				Name:  "shard",
+				Name: "shard",
 			},
 			cliutil.FlagVeryVerbose,
 		},

@@ -32,7 +32,7 @@ func NewShardSub(api impl.FullNodeAPI, host host.Host) (*ShardingSub, error) {
 	return &ShardingSub{
 		events: e,
 		api:    &api,
-		host: host,
+		host:   host,
 	}, nil
 }
 

@@ -3,6 +3,7 @@ package cliutil
 import (
 	"net/http"
 	"net/url"
+	"path"
 	"regexp"
 	"strings"
 
@@ -44,7 +45,12 @@ func (a APIInfo) DialArgsShard(shard, version string) (string, error) {
 			return "", err
 		}
 
-		return "ws://" + addr + shard + "/rpc/" + version, nil
+		p := path.Join("/rpc/", version)
+		if shard != "" {
+			p = path.Join("/shard/", shard, "/rpc/", version)
+		}
+
+		return "ws://" + addr + p, nil
 	}
 
 	_, err = url.Parse(a.Addr)

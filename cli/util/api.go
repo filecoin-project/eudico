@@ -184,10 +184,7 @@ func GetRawAPI(ctx *cli.Context, t repo.RepoType, version string) (string, http.
 		return "", nil, xerrors.Errorf("could not get API info for %s: %w", t, err)
 	}
 
-	shard := ""
-	if ctx.IsSet("shard") {
-		shard = "/" + ctx.String("shard")
-	}
+	shard := ctx.String("shard")
 
 	addr, err := ainfo.DialArgsShard(shard, version)
 	if err != nil {

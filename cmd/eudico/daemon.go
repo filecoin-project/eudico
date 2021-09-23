@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"runtime/pprof"
 	"strings"
 
@@ -262,24 +263,25 @@ func daemonCmd(overrides node.Option) *cli.Command {
 				log.Warnf("unable to inject prometheus ipfs/go-metrics exporter; some metrics will be unavailable; err: %s", err)
 			}
 
+			// Populate JSON-RPC options.
+			serverOptions := make([]jsonrpc.ServerOption, 0)
+			if maxRequestSize := cctx.Int("api-max-req-size"); maxRequestSize != 0 {
+				serverOptions = append(serverOptions, jsonrpc.WithMaxRequestSize(int64(maxRequestSize)))
+			}
+
+			globalMux := mux.NewRouter()
 			shardMux := mux.NewRouter()
-			serveNamedApi := func(path string, api api.FullNode) error {
-				// Populate JSON-RPC options.
-				serverOptions := make([]jsonrpc.ServerOption, 0)
-				if maxRequestSize := cctx.Int("api-max-req-size"); maxRequestSize != 0 {
-					serverOptions = append(serverOptions, jsonrpc.WithMaxRequestSize(int64(maxRequestSize)))
-				}
+			globalMux.NewRoute().PathPrefix("/shard/").Handler(shardMux)
+
+			serveNamedApi := func(p string, api api.FullNode) error {
+				pp := path.Join("/shard/", p+"/")
 
 				// Instantiate the full node handler.
-				h, err := node.FullNodeHandler(path, api, true, serverOptions...)
+				h, err := node.FullNodeHandler(pp, api, true, serverOptions...)
 				if err != nil {
 					return fmt.Errorf("failed to instantiate rpc handler: %s", err)
 				}
 
-				pp := "/" + path + "/"
-				if pp == "//" {
-					pp = "/"
-				}
 				fmt.Println("serve ", pp)
 				shardMux.NewRoute().PathPrefix(pp).Handler(h)
 				return nil
@@ -331,12 +333,15 @@ func daemonCmd(overrides node.Option) *cli.Command {
 			//
 			// Instantiate JSON-RPC endpoint.
 			// ----
-			if err := serveNamedApi("", napi); err != nil {
-				return err
+			h, err := node.FullNodeHandler("", napi, true, serverOptions...)
+			if err != nil {
+				return fmt.Errorf("failed to instantiate rpc handler: %s", err)
 			}
 
+			globalMux.NewRoute().PathPrefix("/").Handler(h)
+
 			// Serve the RPC.
-			rpcStopper, err := node.ServeRPC(shardMux, "eudico-daemon", endpoint)
+			rpcStopper, err := node.ServeRPC(globalMux, "eudico-daemon", endpoint)
 			if err != nil {
 				return fmt.Errorf("failed to start json-rpc endpoint: %s", err)
 			}
