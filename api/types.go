@@ -195,3 +195,5 @@ type RetrievalInfo struct {
 	TransferChannelID *datatransfer.ChannelID
 	DataTransfer      *DataTransferChannel
 }
+
+type FullNodeServer func(path string, api FullNode) error
