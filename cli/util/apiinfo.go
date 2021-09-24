@@ -3,6 +3,7 @@ package cliutil
 import (
 	"net/http"
 	"net/url"
+	"path"
 	"regexp"
 	"strings"
 
@@ -36,7 +37,7 @@ func ParseApiInfo(s string) APIInfo {
 	}
 }
 
-func (a APIInfo) DialArgs(version string) (string, error) {
+func (a APIInfo) DialArgsShard(shard, version string) (string, error) {
 	ma, err := multiaddr.NewMultiaddr(a.Addr)
 	if err == nil {
 		_, addr, err := manet.DialArgs(ma)
@@ -44,7 +45,12 @@ func (a APIInfo) DialArgs(version string) (string, error) {
 			return "", err
 		}
 
-		return "ws://" + addr + "/rpc/" + version, nil
+		p := path.Join("/rpc/", version)
+		if shard != "" {
+			p = path.Join("/shard/", shard, "/rpc/", version)
+		}
+
+		return "ws://" + addr + p, nil
 	}
 
 	_, err = url.Parse(a.Addr)
@@ -52,6 +58,10 @@ func (a APIInfo) DialArgs(version string) (string, error) {
 		return "", err
 	}
 	return a.Addr + "/rpc/" + version, nil
+}
+
+func (a APIInfo) DialArgs(version string) (string, error) {
+	return a.DialArgsShard("", version)
 }
 
 func (a APIInfo) Host() (string, error) {

@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	_ "net/http/pprof"
+	"path"
 	"runtime"
 	"strconv"
 
@@ -63,7 +64,7 @@ func ServeRPC(h http.Handler, id string, addr multiaddr.Multiaddr) (StopFunc, er
 }
 
 // FullNodeHandler returns a full node handler, to be mounted as-is on the server.
-func FullNodeHandler(a v1api.FullNode, permissioned bool, opts ...jsonrpc.ServerOption) (http.Handler, error) {
+func FullNodeHandler(prefix string, a v1api.FullNode, permissioned bool, opts ...jsonrpc.ServerOption) (http.Handler, error) {
 	m := mux.NewRouter()
 
 	serveRpc := func(path string, hnd interface{}) {
@@ -83,8 +84,8 @@ func FullNodeHandler(a v1api.FullNode, permissioned bool, opts ...jsonrpc.Server
 		fnapi = api.PermissionedFullAPI(fnapi)
 	}
 
-	serveRpc("/rpc/v1", fnapi)
-	serveRpc("/rpc/v0", &v0api.WrapperV1Full{FullNode: fnapi})
+	serveRpc(path.Join("/", prefix, "/rpc/v1"), fnapi)
+	serveRpc(path.Join("/", prefix, "/rpc/v0"), &v0api.WrapperV1Full{FullNode: fnapi})
 
 	// Import handler
 	handleImportFunc := handleImport(a.(*impl.FullNodeAPI))
@@ -93,9 +94,9 @@ func FullNodeHandler(a v1api.FullNode, permissioned bool, opts ...jsonrpc.Server
 			Verify: a.AuthVerify,
 			Next:   handleImportFunc,
 		}
-		m.Handle("/rest/v0/import", importAH)
+		m.Handle(prefix+"/rest/v0/import", importAH)
 	} else {
-		m.HandleFunc("/rest/v0/import", handleImportFunc)
+		m.HandleFunc(prefix+"/rest/v0/import", handleImportFunc)
 	}
 
 	// debugging

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"runtime/pprof"
 	"strings"
 
@@ -26,6 +27,7 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/modules/testing"
 	"github.com/filecoin-project/lotus/node/repo"
+	"github.com/gorilla/mux"
 	metricsprom "github.com/ipfs/go-metrics-prometheus"
 	"github.com/mitchellh/go-homedir"
 	"github.com/multiformats/go-multiaddr"
@@ -261,15 +263,40 @@ func daemonCmd(overrides node.Option) *cli.Command {
 				log.Warnf("unable to inject prometheus ipfs/go-metrics exporter; some metrics will be unavailable; err: %s", err)
 			}
 
-			var api api.FullNode
+			// Populate JSON-RPC options.
+			serverOptions := make([]jsonrpc.ServerOption, 0)
+			if maxRequestSize := cctx.Int("api-max-req-size"); maxRequestSize != 0 {
+				serverOptions = append(serverOptions, jsonrpc.WithMaxRequestSize(int64(maxRequestSize)))
+			}
+
+			globalMux := mux.NewRouter()
+			shardMux := mux.NewRouter()
+			globalMux.NewRoute().PathPrefix("/shard/").Handler(shardMux)
+
+			serveNamedApi := func(p string, api api.FullNode) error {
+				pp := path.Join("/shard/", p+"/")
+
+				// Instantiate the full node handler.
+				h, err := node.FullNodeHandler(pp, api, true, serverOptions...)
+				if err != nil {
+					return fmt.Errorf("failed to instantiate rpc handler: %s", err)
+				}
+
+				fmt.Println("serve ", pp)
+				shardMux.NewRoute().PathPrefix(pp).Handler(h)
+				return nil
+			}
+
+			var napi api.FullNode
 			stop, err := node.New(ctx,
-				node.FullAPI(&api),
+				node.FullAPI(&napi),
 
 				node.Base(),
 				node.Repo(r),
 
 				node.Override(new(dtypes.Bootstrapper), isBootstrapper),
 				node.Override(new(dtypes.ShutdownChan), shutdownChan),
+				node.Override(new(api.FullNodeServer), serveNamedApi),
 
 				genesis,
 				overrides,
@@ -293,7 +320,7 @@ func daemonCmd(overrides node.Option) *cli.Command {
 			}
 
 			if cctx.String("import-key") != "" {
-				if err := importKey(ctx, api, cctx.String("import-key")); err != nil {
+				if err := importKey(ctx, napi, cctx.String("import-key")); err != nil {
 					log.Errorf("importing key failed: %+v", err)
 				}
 			}
@@ -306,21 +333,15 @@ func daemonCmd(overrides node.Option) *cli.Command {
 			//
 			// Instantiate JSON-RPC endpoint.
 			// ----
-
-			// Populate JSON-RPC options.
-			serverOptions := make([]jsonrpc.ServerOption, 0)
-			if maxRequestSize := cctx.Int("api-max-req-size"); maxRequestSize != 0 {
-				serverOptions = append(serverOptions, jsonrpc.WithMaxRequestSize(int64(maxRequestSize)))
-			}
-
-			// Instantiate the full node handler.
-			h, err := node.FullNodeHandler(api, true, serverOptions...)
+			h, err := node.FullNodeHandler("", napi, true, serverOptions...)
 			if err != nil {
 				return fmt.Errorf("failed to instantiate rpc handler: %s", err)
 			}
 
+			globalMux.NewRoute().PathPrefix("/").Handler(h)
+
 			// Serve the RPC.
-			rpcStopper, err := node.ServeRPC(h, "eudico-daemon", endpoint)
+			rpcStopper, err := node.ServeRPC(globalMux, "eudico-daemon", endpoint)
 			if err != nil {
 				return fmt.Errorf("failed to start json-rpc endpoint: %s", err)
 			}

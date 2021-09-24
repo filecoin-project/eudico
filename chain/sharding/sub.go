@@ -63,6 +63,7 @@ type ShardingSub struct {
 	lk     sync.Mutex
 	shards map[string]*Shard
 
+<<<<<<< HEAD
 	j journal.Journal
 }
 
@@ -79,6 +80,12 @@ func NewShardSub(
 	verifier ffiwrapper.Verifier,
 	j journal.Journal) (*ShardingSub, error) {
 
+=======
+	host host.Host
+}
+
+func NewShardSub(api impl.FullNodeAPI, host host.Host) (*ShardingSub, error) {
+>>>>>>> 1ef906acc027f69bd748008fa46f0b487e12c86a
 	e, err := events.NewEvents(context.TODO(), &api)
 	if err != nil {
 		return nil, err
@@ -86,6 +93,7 @@ func NewShardSub(
 
 	// TODO: Verify that
 	return &ShardingSub{
+<<<<<<< HEAD
 		events:   e,
 		api:      &api,
 		pubsub:   pubsub,
@@ -97,6 +105,11 @@ func NewShardSub(
 		connmgr:  host.ConnManager(),
 		verifier: verifier,
 		shards:   make(map[string]*Shard),
+=======
+		events: e,
+		api:    &api,
+		host:   host,
+>>>>>>> 1ef906acc027f69bd748008fa46f0b487e12c86a
 	}, nil
 }
 
