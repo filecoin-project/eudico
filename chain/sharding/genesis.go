@@ -33,7 +33,8 @@ import (
 	"golang.org/x/xerrors"
 )
 
-// TODO: Call this from the delegated command.
+// TODO: Extract all of these function to consensus specific code that can be called
+// from here for shards and from the consensus-specific cmds to start mining in root chain.
 func MakeDelegatedGenesisBlock(ctx context.Context, j journal.Journal, bs bstore.Blockstore, sys vm.SyscallBuilder, template genesis.Template) (*genesis2.GenesisBootstrap, error) {
 	if j == nil {
 		j = journal.NilJournal()
@@ -306,13 +307,21 @@ func delegatedGenTemplate(shardID string) (*genesis.Template, error) {
 	if err != nil {
 		return nil, err
 	}
+	miner := "t1r6o5d5s5zjzqhqs4nh3ac7k5e7dhg5oqa7v64oy"
 	return &genesis.Template{
 		NetworkVersion: network.Version13,
+		// TODO: In delegated consensus we need to assign this account to a
+		// valid miner. For testing purposes we'll add no account here (although
+		// we may need to add something for mining.
+		// Accounts: []genesis.Actor{},
+
 		Accounts: []genesis.Actor{{
 			Type:    genesis.TAccount,
 			Balance: types.FromFil(2),
-			// TODO: Change the actor so it stores the miner that called it for delegate consensus.
-			//Meta: json.RawMessage(`{"Owner":"` + miner.String() + `"}`), // correct??
+			// TODO: Here we are hard-cording an actor for the genesis for testing purposes.
+			// This needs to change to gather the info from shard actor call.
+			// Meta: json.RawMessage(`{"Owner":"` + miner.String() + `"}`),
+			Meta: json.RawMessage(`{"Owner":"` + miner + `"}`),
 		}},
 		Miners: nil,
 		// TODO: This needs to be the ID of the shard with shardID

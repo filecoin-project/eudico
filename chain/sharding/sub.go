@@ -2,7 +2,6 @@ package sharding
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 	"sync"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/beacon"
+	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
 	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/exchange"
@@ -23,6 +23,7 @@ import (
 	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
 	"github.com/filecoin-project/lotus/journal"
 	"github.com/filecoin-project/lotus/node/impl"
+	"github.com/filecoin-project/lotus/node/impl/full"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/ipfs/go-blockservice"
 	ds "github.com/ipfs/go-datastore"
@@ -38,17 +39,46 @@ import (
 
 var log = logging.Logger("sharding")
 
+// Shard object abstracting all sharding processes and objects.
 type Shard struct {
-	ID  string
+	// ShardID
+	ID string
+	// Topic name
+	topic string
+	// Pubsub subcription for shard.
 	sub *pubsub.Subscription
-	ds  dtypes.MetadataDS
-	sm  *stmgr.StateManager
+	// Metadata datastore.
+	ds dtypes.MetadataDS
+	// State manager
+	sm *stmgr.StateManager
+	// chain
+	ch *store.ChainStore
+	// Consensus of the shard
+	cons consensus.Consensus
+	// Mempool for the shard.
+	mpool *messagepool.MessagePool
+	// Syncer for the shard chain
+	syncer *chain.Syncer
+
+	// Events for shard chain
+	events   *events.Events
+	eventAPI events.EventAPI
+
+	// State API of the root API
+	// NOTE: This is only used to have access to the
+	// WalletAPI within the shard, this should change in the future.
+	stateAPI *full.StateAPI
+	// Pubsub router from the root chain.
+	pubsub *pubsub.PubSub
 }
 
+// ShardingSub is the sharding manager in the root chain
 type ShardingSub struct {
+	// Listener for events of the root chain.
 	events *events.Events
-	api    api.FullNode
-	self   peer.ID
+	// This is the API for the fullNode in the root chain.
+	api  api.FullNode
+	self peer.ID
 
 	pubsub *pubsub.PubSub
 	// Root ds
@@ -62,6 +92,10 @@ type ShardingSub struct {
 
 	lk     sync.Mutex
 	shards map[string]*Shard
+
+	// TODO: the state here is only needed because we have the MinerCreateBlock
+	// API attached to the state API. It probably should live somewhere better
+	stateAPI full.StateAPI
 
 	j journal.Journal
 }
@@ -77,14 +111,15 @@ func NewShardSub(
 	syscalls vm.SyscallBuilder,
 	us stmgr.UpgradeSchedule,
 	verifier ffiwrapper.Verifier,
-	j journal.Journal) (*ShardingSub, error) {
+	j journal.Journal,
+	stateAPI full.StateAPI) (*ShardingSub, error) {
 
+	// Starting shardSub to listen to events in the root chain.
 	e, err := events.NewEvents(context.TODO(), &api)
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO: Verify that
 	return &ShardingSub{
 		events:   e,
 		api:      &api,
@@ -96,20 +131,28 @@ func NewShardSub(
 		j:        j,
 		connmgr:  host.ConnManager(),
 		verifier: verifier,
+		stateAPI: stateAPI,
 		shards:   make(map[string]*Shard),
 	}, nil
 }
 
+// TODO: when creating a new shard we should probably add the parent
+// chain as an argument so there is knowledge about which one is the
+// parent chain.
 func (s *ShardingSub) newShard(id string) error {
-	shid := "/shards/" + id
-	// Create shard struct
-	sh := &Shard{ID: id}
+	log.Infow("Creating new shard", "shardID", id)
+	sh := &Shard{
+		ID:       id,
+		stateAPI: &s.stateAPI,
+		topic:    "/shards/" + id,
+		pubsub:   s.pubsub,
+	}
 	s.lk.Lock()
 	s.shards[id] = sh
 	s.lk.Unlock()
 
 	// join the pubsub topic for the shard
-	topic, err := s.pubsub.Join(shid)
+	topic, err := s.pubsub.Join(sh.topic)
 	if err != nil {
 		return err
 	}
@@ -121,109 +164,135 @@ func (s *ShardingSub) newShard(id string) error {
 	}
 
 	// Wrap the ds with prefix
-	sh.ds = nsds.Wrap(s.ds, ds.NewKey(shid))
-	// TODO: We should not use the metadata datstore here. We need
+	sh.ds = nsds.Wrap(s.ds, ds.NewKey(sh.topic))
+	// TODO: We should not use the metadata datastore here. We need
 	// to create the corresponding blockstores. Deferring once we
 	// figure out if it works.
 	bs := blockstore.FromDatastore(s.ds)
 
-	// TODO: Using delegated consensus executor and weight but we
-	// should use the one for the consensus we are actually launching.
+	// TODO: We are currently limited to the use of delegated
+	// consensus for every shard. In the next iteration the type
+	// of consensus to use will be notified by the shard actor.
 	exec := delegcns.TipSetExecutor()
 
-	// TODO: We should use the right consensus weight and not delegcns weight
-	ch := store.NewChainStore(bs, bs, s.ds, delegcns.Weight, s.j)
-	sh.sm, err = stmgr.NewStateManager(ch, exec, s.syscalls, s.us)
+	// TODO: Use the weight for the right consensus algorithm.
+	sh.ch = store.NewChainStore(bs, bs, s.ds, delegcns.Weight, s.j)
+	sh.sm, err = stmgr.NewStateManager(sh.ch, exec, s.syscalls, s.us)
 	if err != nil {
+		log.Errorw("Error creating state manager for shard", "shardID", id)
 		return err
 	}
-	template, err := delegatedGenTemplate(shid)
+	// TODO: Have functions to generate the right genesis for the consensus used.
+	// All os this will be extracted to a consensus specific function that
+	// according to the consensus selected for the shard it does the right thing.
+	template, err := delegatedGenTemplate(sh.topic)
 	if err != nil {
+		log.Errorw("Error creating genesis template for shard", "shardID", id)
 		return err
 	}
 	genBoot, err := MakeDelegatedGenesisBlock(context.TODO(), s.j, bs, s.syscalls, *template)
 	if err != nil {
+		log.Errorw("Error creating genesis block for shard", "shardID", id)
 		return err
 	}
 	// Set consensus in new chainStore
-	err = ch.SetGenesis(genBoot.Genesis)
+	err = sh.ch.SetGenesis(genBoot.Genesis)
 	if err != nil {
+		log.Errorw("Error setting genesis for shard", "shardID", id)
 		return err
 	}
 	//LoadGenesis to pass it
 	gen, err := chain.LoadGenesis(sh.sm)
 	if err != nil {
+		log.Errorw("Error loading genesis for shard", "shardID", id)
 		return err
 	}
 
-	// TODO: This is the genesis bootstrap but I need to pass the actual genesis.
-	cons := delegcns.NewDelegatedConsensus(sh.sm, s.beacon, s.verifier, gen)
+	sh.cons = delegcns.NewDelegatedConsensus(sh.sm, s.beacon, s.verifier, gen)
 
-	// NOTE: Check if the self works here.
-	syncer, err := chain.NewSyncer(s.ds, sh.sm, s.exchange, chain.NewSyncManager, s.connmgr, s.self, s.beacon, gen, cons)
+	log.Infow("Genesis and consensus for shard created", "shardID", id)
+
+	sh.syncer, err = chain.NewSyncer(s.ds, sh.sm, s.exchange, chain.NewSyncManager, s.connmgr, s.self, s.beacon, gen, sh.cons)
+	if err != nil {
+		log.Errorw("Error creating syncer for shard", "shardID", id)
+		return err
+	}
 	// Start syncer for the shard
-	syncer.Start()
+	sh.syncer.Start()
 	bserv := blockservice.New(bs, offline.Exchange(bs))
-	// WIP: Generate APIs for shard and get the provider.
+
 	prov := messagepool.NewProvider(sh.sm, s.pubsub)
 
-	mpool, err := messagepool.New(prov, s.ds, s.us, dtypes.NetworkName(template.NetworkName), s.j)
-	go sub.HandleIncomingBlocks(context.TODO(), sh.sub, syncer, bserv, s.connmgr)
-	go sub.HandleIncomingMessages(context.TODO(), mpool, sh.sub)
+	sh.mpool, err = messagepool.New(prov, s.ds, s.us, dtypes.NetworkName(template.NetworkName), s.j)
+	if err != nil {
+		log.Errorw("Error creating message pool for shard", "shardID", id)
+		return err
+	}
+	go sub.HandleIncomingBlocks(context.TODO(), sh.sub, sh.syncer, bserv, s.connmgr)
+	go sub.HandleIncomingMessages(context.TODO(), sh.mpool, sh.sub)
+	log.Infow("Listening for new blocks and messages in shard", "shardID", id)
 
-	// TODO: Mining process here so we keep mining to the shard.
-	/*
-					stmgr, err := stmgr.NewStateManager(cs *store.ChainStore, exec stmgr.Executor, sys vm.SyscallBuilder, us UpgradeSchedule)
+	// TODO: As-is a node will keep mining in a shard until the node process
+	// is completely stopped. In the next iteration we need to figure out
+	// how to manage contexts for when a shard is killed or a node moves into
+	// another shard.
+	// Mining in the root chain is an independent process.
+	log.Infow("Started mining in shard", "shardID", id)
+	go sh.mineDelegated(context.TODO(), s.api)
 
-			   		// Create chainstore
-			   		// --- > Get the datastore and wrap it in a namespace.
-			   		// New state manager for the shard.
-			   		// New exchange client
+	// Listening to events on the shard actor from the shard chain.
+	// We can create new shards from an existing one, and we need to
+	// monitor that (thus the "hierarchical" in the consensus).
+	err = sh.InitEvents(context.TODO())
+	if err != nil {
+		return err
+	}
+	go s.listenShardEvents(context.TODO(), sh)
+	log.Infow("Listening to shard events in shard", "shardID", id)
+	log.Infow("Successfully spawned shard", "shardID", id)
 
-			   		syncer, err := sync.NewSyncer(ds dtypes.MetadataDS,
-			   	sm *stmgr.StateManager,
-			   	exchange exchange.Client,
-			   	syncMgrCtor SyncManagerCtor,
-			   	self peer.ID,
-			   	beacon beacon.Schedule,
-			   	gent Genesis,
-			   	consensus consensus.Consensus) (*Syncer, error) {
-			   		syncer.Start()
-			   		// Handleincmingblocks in imcoming.go
-			   		sub.HandleIncomingBlocks(ctx, sub, s, bs, cmgr)
-			   		// New services to mine in the shard
-			   		// Sync api to send the blocks
-			   		// In the shard actor we need to store the power table requirede to
-			   		// create deterministically the genesis block for every shards when someone
-			   		// new joins.
-			   		// New API to interact with shards.
-
-
-		// Pending:
-			- The API for the shard
-			- How to keep mining in the shard (we will still be mining in the top)
-	*/
 	return nil
 }
 
-func (s *ShardingSub) Start() {
-	ctx := context.TODO()
+func (s *ShardingSub) listenShardEvents(ctx context.Context, sh *Shard) {
+	api := s.api.(events.EventAPI)
+	evs := s.events
+
+	// If shard is nil, we are listening from the root chain.
+	if sh != nil {
+		api = sh.eventAPI
+		evs = sh.events
+	}
 
 	checkFunc := func(ctx context.Context, ts *types.TipSet) (done bool, more bool, err error) {
 		return false, true, nil
 	}
 
 	changeHandler := func(oldTs, newTs *types.TipSet, states events.StateChange, curH abi.ChainEpoch) (more bool, err error) {
-		fmt.Println(fmt.Sprintf("STATE CHANGE %#v", states))
+		if sh != nil {
+			log.Infow("State change detected for shard actor in shard", "shardID", sh.ID)
+		} else {
+			log.Infow("State change detected for shard actor in shard", "shardID", "root")
+		}
+
 		// Add the new shard to the struct.
-		id, ok := states.(string)
+		shardMap, ok := states.(map[string]struct{})
 		if !ok {
+			log.Error("Error casting shardMap")
 			return true, err
+		}
+		id := ""
+		for k := range shardMap {
+			// I just want the first one from the map. Once
+			// we have the logic for the actor this must change.
+			id = string(k)
+			break
 		}
 
 		// Create shard and subscribe to pubsub topic
 		err = s.newShard(id)
 		if err != nil {
+			log.Errorw("Error creating new shard", "shardID", id, "err", err)
 			return true, err
 		}
 
@@ -235,11 +304,11 @@ func (s *ShardingSub) Start() {
 	}
 
 	match := func(oldTs, newTs *types.TipSet) (bool, events.StateChange, error) {
-		oldAct, err := s.api.StateGetActor(ctx, delegcns.ShardActorAddr, oldTs.Key())
+		oldAct, err := api.StateGetActor(ctx, delegcns.ShardActorAddr, oldTs.Key())
 		if err != nil {
 			return false, nil, err
 		}
-		newAct, err := s.api.StateGetActor(ctx, delegcns.ShardActorAddr, newTs.Key())
+		newAct, err := api.StateGetActor(ctx, delegcns.ShardActorAddr, newTs.Key())
 		if err != nil {
 			return false, nil, err
 		}
@@ -259,6 +328,10 @@ func (s *ShardingSub) Start() {
 			return false, nil, nil
 		}
 
+		// TODO: Add logic to decide if to run a new shard or not
+		// according to state in actor.
+		// TODO: Shard id is received as bytes, we should use CIDs for
+		// shard IDs.
 		diff := map[string]struct{}{}
 		for _, shard := range newSt.Shards {
 			diff[string(shard)] = struct{}{}
@@ -269,8 +342,12 @@ func (s *ShardingSub) Start() {
 		return true, diff, nil
 	}
 
-	err := s.events.StateChanged(checkFunc, changeHandler, revertHandler, 5, 76587687658765876, match)
+	err := evs.StateChanged(checkFunc, changeHandler, revertHandler, 5, 76587687658765876, match)
 	if err != nil {
 		return
 	}
+}
+func (s *ShardingSub) Start() {
+	// TODO: Figure out contexts all around the place.
+	s.listenShardEvents(context.TODO(), nil)
 }

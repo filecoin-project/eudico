@@ -330,16 +330,20 @@ func GossipSub(in GossipIn) (service *pubsub.PubSub, err error) {
 
 	options = append(options, pubsub.WithPeerGater(pgParams))
 
-	allowTopics := []string{
-		build.BlocksTopic(in.Nn),
-		build.MessagesTopic(in.Nn),
-	}
-	allowTopics = append(allowTopics, drandTopics...)
-	options = append(options,
-		pubsub.WithSubscriptionFilter(
-			pubsub.WrapLimitSubscriptionFilter(
-				pubsub.NewAllowlistSubscriptionFilter(allowTopics...),
-				100)))
+	/* TODO: Find a way to allow pubsub topics for shards.
+	This may need something to start allowing topics with a specific
+	prefix.
+		allowTopics := []string{
+			build.BlocksTopic(in.Nn),
+			build.MessagesTopic(in.Nn),
+		}
+		allowTopics = append(allowTopics, drandTopics...)
+		options = append(options,
+			pubsub.WithSubscriptionFilter(
+				pubsub.WrapLimitSubscriptionFilter(
+					pubsub.NewAllowlistSubscriptionFilter(allowTopics...),
+					100)))
+	*/
 
 	// tracer
 	if in.Cfg.RemoteTracer != "" {
