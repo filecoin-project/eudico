@@ -6,4 +6,4 @@ rm -rvf ~/.eudico
 
 tmux \
     new-session  './eudico delegated daemon --genesis=gen.gen' \; \
-    split-window './eudico wait-api; ./eudico wallet import --format=json-lotus 'f1*'; ./eudico delegated miner; sleep 2'
+    split-window './eudico wait-api; ./eudico wallet import --as-default --format=json-lotus 'f1*'; ./eudico delegated miner; sleep 2'
