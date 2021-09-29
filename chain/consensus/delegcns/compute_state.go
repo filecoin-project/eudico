@@ -4,26 +4,22 @@ import (
 	"context"
 	"sync/atomic"
 
-	"github.com/filecoin-project/go-state-types/network"
-	"github.com/filecoin-project/lotus/chain/actors"
-	"github.com/ipfs/go-cid"
-	cbg "github.com/whyrusleeping/cbor-gen"
-	"go.opencensus.io/stats"
-	"go.opencensus.io/trace"
-	"golang.org/x/xerrors"
-
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
-	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
-
-	exported5 "github.com/filecoin-project/specs-actors/v5/actors/builtin/exported"
-
+	"github.com/filecoin-project/go-state-types/network"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
+	shardactor "github.com/filecoin-project/lotus/chain/sharding/actors"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/vm"
 	"github.com/filecoin-project/lotus/metrics"
+	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
+	"github.com/ipfs/go-cid"
+	cbg "github.com/whyrusleeping/cbor-gen"
+	"go.opencensus.io/stats"
+	"go.opencensus.io/trace"
+	"golang.org/x/xerrors"
 )
 
 func DefaultUpgradeSchedule() stmgr.UpgradeSchedule {
@@ -47,23 +43,10 @@ func DefaultUpgradeSchedule() stmgr.UpgradeSchedule {
 	return us
 }
 
-func NewActorRegistry() *vm.ActorRegistry {
-	inv := vm.NewActorRegistry()
-
-	// TODO: drop unneeded
-	inv.Register(vm.ActorsVersionPredicate(actors.Version5), exported5.BuiltinActors()...)
-	inv.Register(nil, InitActor{}) // use our custom init actor
-
-	inv.Register(nil, SplitActor{})
-	inv.Register(nil, ShardActor{})
-
-	return inv
-}
-
 type tipSetExecutor struct{}
 
 func (t *tipSetExecutor) NewActorRegistry() *vm.ActorRegistry {
-	return NewActorRegistry()
+	return shardactor.NewActorRegistry()
 }
 
 func TipSetExecutor() stmgr.Executor {
@@ -85,7 +68,7 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 			Epoch:          epoch,
 			Rand:           r,
 			Bstore:         sm.ChainStore().StateBlockstore(),
-			Actors:         NewActorRegistry(),
+			Actors:         shardactor.NewActorRegistry(),
 			Syscalls:       sm.Syscalls,
 			CircSupplyCalc: sm.GetVMCirculatingSupply,
 			NtwkVersion:    sm.GetNtwkVersion,
