@@ -281,8 +281,7 @@ func daemonCmd(overrides node.Option) *cli.Command {
 				if err != nil {
 					return fmt.Errorf("failed to instantiate rpc handler: %s", err)
 				}
-
-				fmt.Println("serve ", pp)
+				fmt.Println("[*] serve new shard API", pp)
 				shardMux.NewRoute().PathPrefix(pp).Handler(h)
 				return nil
 			}
