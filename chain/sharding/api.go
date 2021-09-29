@@ -73,6 +73,7 @@ func (sh *Shard) populateAPIs(
 		WalletAPI:     walletAPI,
 		GasAPI:        gasAPI,
 		MessageSigner: messagesigner.NewMessageSigner(parentAPI.StateAPI.Wallet, sh.mpool, sh.ds),
+		PushLocks:     &dtypes.MpoolLocker{},
 	}
 
 	syncAPI := full.SyncAPI{

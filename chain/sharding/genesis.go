@@ -19,8 +19,8 @@ import (
 	init_ "github.com/filecoin-project/lotus/chain/actors/builtin/init"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/reward"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/system"
-	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
 	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
+	shardactor "github.com/filecoin-project/lotus/chain/sharding/actors"
 	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/vm"
@@ -174,7 +174,7 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 		return nil, nil, err
 	}
 
-	err = state.SetActor(delegcns.ShardActorAddr, shardact)
+	err = state.SetActor(shardactor.ShardActorAddr, shardact)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("set reward actor: %w", err)
 	}
@@ -277,7 +277,7 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 
 func SetupShardActor(ctx context.Context, bs bstore.Blockstore) (*types.Actor, error) {
 	cst := cbor.NewCborStore(bs)
-	st := delegcns.ConstructShardState()
+	st := shardactor.ConstructShardState()
 
 	statecid, err := cst.Put(ctx, st)
 	if err != nil {
@@ -285,7 +285,7 @@ func SetupShardActor(ctx context.Context, bs bstore.Blockstore) (*types.Actor, e
 	}
 
 	act := &types.Actor{
-		Code:    delegcns.ShardActorCodeID,
+		Code:    shardactor.ShardActorCodeID,
 		Balance: big.Zero(),
 		Head:    statecid,
 	}
