@@ -23,6 +23,8 @@ import (
 	"github.com/filecoin-project/lotus/journal"
 	"github.com/filecoin-project/lotus/node/impl"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
+	builtin "github.com/filecoin-project/specs-actors/v5/actors/builtin"
+	adt "github.com/filecoin-project/specs-actors/v5/actors/util/adt"
 	"github.com/ipfs/go-blockservice"
 	ds "github.com/ipfs/go-datastore"
 	nsds "github.com/ipfs/go-datastore/namespace"
@@ -295,22 +297,32 @@ func (s *ShardingSub) listenShardEvents(ctx context.Context, sh *Shard) {
 			return false, nil, err
 		}
 
+		// If no changes in the state return false.
 		if reflect.DeepEqual(newSt, oldSt) {
 			return false, nil, nil
 		}
 
-		// TODO: Add logic to decide if to run a new shard or not
-		// according to state in actor.
-		// TODO: Shard id is received as bytes, we should use CIDs for
-		// shard IDs.
-		diff := map[string]struct{}{}
-		for _, shard := range newSt.Shards {
-			diff[string(shard)] = struct{}{}
+		// If there is change check if new shard added
+		if oldSt.TotalShards != newSt.TotalShards {
+			newM, err := shards(adt.WrapStore(ctx, cst), newSt)
+			if err != nil {
+				return false, nil, err
+			}
+			oldM, err := shards(adt.WrapStore(ctx, cst), oldSt)
+			if err != nil {
+				return false, nil, err
+			}
+			diff, err := diffShards(oldM, newM)
+			if err != nil {
+				return false, nil, err
+			}
+			return true, diff, nil
 		}
-		for _, shard := range oldSt.Shards {
-			delete(diff, string(shard))
-		}
-		return true, diff, nil
+
+		// TODO: Take the logic out to functions so that we monitor
+		// changes within a shard to handle join/leaves/etc.
+		return false, nil, nil
+
 	}
 
 	err := evs.StateChanged(checkFunc, changeHandler, revertHandler, 5, 76587687658765876, match)
@@ -318,6 +330,32 @@ func (s *ShardingSub) listenShardEvents(ctx context.Context, sh *Shard) {
 		return
 	}
 }
+
+func diffShards(oldM *adt.Map, newM *adt.Map) (map[string]struct{}, error) {
+	diff := map[string]struct{}{}
+	var sh shardactor.Shard
+	// TODO: Can we get the ID from the key instead of having
+	// to load and get from the shard object.
+	err := newM.ForEach(&sh, func(k string) error {
+		diff[sh.ID.String()] = struct{}{}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	err = oldM.ForEach(&sh, func(k string) error {
+		delete(diff, sh.ID.String())
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return diff, err
+}
+func shards(s adt.Store, st shardactor.ShardState) (*adt.Map, error) {
+	return adt.AsMap(s, st.Shards, builtin.DefaultHamtBitwidth)
+}
+
 func (s *ShardingSub) Start() {
 	// TODO: Figure out contexts all around the place.
 	s.listenShardEvents(context.TODO(), nil)

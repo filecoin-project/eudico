@@ -277,7 +277,10 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 
 func SetupShardActor(ctx context.Context, bs bstore.Blockstore) (*types.Actor, error) {
 	cst := cbor.NewCborStore(bs)
-	st := shardactor.ConstructShardState()
+	st, err := shardactor.ConstructShardState(adt.WrapStore(ctx, cst))
+	if err != nil {
+		return nil, err
+	}
 
 	statecid, err := cst.Put(ctx, st)
 	if err != nil {
@@ -307,6 +310,8 @@ func delegatedGenTemplate(shardID string) (*genesis.Template, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// TODO: Assign the miner set in the shard for delegated consensus.
 	miner := "t1r6o5d5s5zjzqhqs4nh3ac7k5e7dhg5oqa7v64oy"
 	return &genesis.Template{
 		NetworkVersion: network.Version13,
