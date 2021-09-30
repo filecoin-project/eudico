@@ -98,7 +98,7 @@ func (t *SplitState) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufShardState = []byte{129}
+var lengthBufShardState = []byte{132}
 
 func (t *ShardState) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -111,27 +111,29 @@ func (t *ShardState) MarshalCBOR(w io.Writer) error {
 
 	scratch := make([]byte, 9)
 
-	// t.Shards ([][]uint8) (slice)
-	if len(t.Shards) > cbg.MaxLength {
-		return xerrors.Errorf("Slice value in field t.Shards was too long")
+	// t.Network (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.Network); err != nil {
+		return xerrors.Errorf("failed to write cid field t.Network: %w", err)
 	}
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajArray, uint64(len(t.Shards))); err != nil {
+	// t.TotalShards (uint64) (uint64)
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.TotalShards)); err != nil {
 		return err
 	}
-	for _, v := range t.Shards {
-		if len(v) > cbg.ByteArrayMaxLen {
-			return xerrors.Errorf("Byte array in field v was too long")
-		}
 
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajByteString, uint64(len(v))); err != nil {
-			return err
-		}
-
-		if _, err := w.Write(v[:]); err != nil {
-			return err
-		}
+	// t.MinStake (big.Int) (struct)
+	if err := t.MinStake.MarshalCBOR(w); err != nil {
+		return err
 	}
+
+	// t.Shards (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.Shards); err != nil {
+		return xerrors.Errorf("failed to write cid field t.Shards: %w", err)
+	}
+
 	return nil
 }
 
@@ -149,11 +151,216 @@ func (t *ShardState) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 1 {
+	if extra != 4 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.Shards ([][]uint8) (slice)
+	// t.Network (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.Network: %w", err)
+		}
+
+		t.Network = c
+
+	}
+	// t.TotalShards (uint64) (uint64)
+
+	{
+
+		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+		if maj != cbg.MajUnsignedInt {
+			return fmt.Errorf("wrong type for uint64 field")
+		}
+		t.TotalShards = uint64(extra)
+
+	}
+	// t.MinStake (big.Int) (struct)
+
+	{
+
+		if err := t.MinStake.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.MinStake: %w", err)
+		}
+
+	}
+	// t.Shards (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.Shards: %w", err)
+		}
+
+		t.Shards = c
+
+	}
+	return nil
+}
+
+var lengthBufShard = []byte{136}
+
+func (t *Shard) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufShard); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.ID (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.ID); err != nil {
+		return xerrors.Errorf("failed to write cid field t.ID: %w", err)
+	}
+
+	// t.Name ([]uint8) (slice)
+	if len(t.Name) > cbg.ByteArrayMaxLen {
+		return xerrors.Errorf("Byte array in field t.Name was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajByteString, uint64(len(t.Name))); err != nil {
+		return err
+	}
+
+	if _, err := w.Write(t.Name[:]); err != nil {
+		return err
+	}
+
+	// t.Parent (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.Parent); err != nil {
+		return xerrors.Errorf("failed to write cid field t.Parent: %w", err)
+	}
+
+	// t.Consensus (actor.ConsensusType) (uint64)
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.Consensus)); err != nil {
+		return err
+	}
+
+	// t.Miners ([]address.Address) (slice)
+	if len(t.Miners) > cbg.MaxLength {
+		return xerrors.Errorf("Slice value in field t.Miners was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajArray, uint64(len(t.Miners))); err != nil {
+		return err
+	}
+	for _, v := range t.Miners {
+		if err := v.MarshalCBOR(w); err != nil {
+			return err
+		}
+	}
+
+	// t.TotalStake (big.Int) (struct)
+	if err := t.TotalStake.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.Stake (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.Stake); err != nil {
+		return xerrors.Errorf("failed to write cid field t.Stake: %w", err)
+	}
+
+	// t.Status (actor.Status) (uint64)
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.Status)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (t *Shard) UnmarshalCBOR(r io.Reader) error {
+	*t = Shard{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 8 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.ID (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.ID: %w", err)
+		}
+
+		t.ID = c
+
+	}
+	// t.Name ([]uint8) (slice)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+
+	if extra > cbg.ByteArrayMaxLen {
+		return fmt.Errorf("t.Name: byte array too large (%d)", extra)
+	}
+	if maj != cbg.MajByteString {
+		return fmt.Errorf("expected byte array")
+	}
+
+	if extra > 0 {
+		t.Name = make([]uint8, extra)
+	}
+
+	if _, err := io.ReadFull(br, t.Name[:]); err != nil {
+		return err
+	}
+	// t.Parent (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.Parent: %w", err)
+		}
+
+		t.Parent = c
+
+	}
+	// t.Consensus (actor.ConsensusType) (uint64)
+
+	{
+
+		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+		if maj != cbg.MajUnsignedInt {
+			return fmt.Errorf("wrong type for uint64 field")
+		}
+		t.Consensus = ConsensusType(extra)
+
+	}
+	// t.Miners ([]address.Address) (slice)
 
 	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
 	if err != nil {
@@ -161,7 +368,7 @@ func (t *ShardState) UnmarshalCBOR(r io.Reader) error {
 	}
 
 	if extra > cbg.MaxLength {
-		return fmt.Errorf("t.Shards: array too large (%d)", extra)
+		return fmt.Errorf("t.Miners: array too large (%d)", extra)
 	}
 
 	if maj != cbg.MajArray {
@@ -169,36 +376,247 @@ func (t *ShardState) UnmarshalCBOR(r io.Reader) error {
 	}
 
 	if extra > 0 {
-		t.Shards = make([][]uint8, extra)
+		t.Miners = make([]address.Address, extra)
 	}
 
 	for i := 0; i < int(extra); i++ {
-		{
-			var maj byte
-			var extra uint64
-			var err error
 
-			maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
-			if err != nil {
-				return err
-			}
-
-			if extra > cbg.ByteArrayMaxLen {
-				return fmt.Errorf("t.Shards[i]: byte array too large (%d)", extra)
-			}
-			if maj != cbg.MajByteString {
-				return fmt.Errorf("expected byte array")
-			}
-
-			if extra > 0 {
-				t.Shards[i] = make([]uint8, extra)
-			}
-
-			if _, err := io.ReadFull(br, t.Shards[i][:]); err != nil {
-				return err
-			}
+		var v address.Address
+		if err := v.UnmarshalCBOR(br); err != nil {
+			return err
 		}
+
+		t.Miners[i] = v
 	}
 
+	// t.TotalStake (big.Int) (struct)
+
+	{
+
+		if err := t.TotalStake.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.TotalStake: %w", err)
+		}
+
+	}
+	// t.Stake (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.Stake: %w", err)
+		}
+
+		t.Stake = c
+
+	}
+	// t.Status (actor.Status) (uint64)
+
+	{
+
+		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+		if maj != cbg.MajUnsignedInt {
+			return fmt.Errorf("wrong type for uint64 field")
+		}
+		t.Status = Status(extra)
+
+	}
+	return nil
+}
+
+var lengthBufMinerState = []byte{129}
+
+func (t *MinerState) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufMinerState); err != nil {
+		return err
+	}
+
+	// t.InitialStake (big.Int) (struct)
+	if err := t.InitialStake.MarshalCBOR(w); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *MinerState) UnmarshalCBOR(r io.Reader) error {
+	*t = MinerState{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 1 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.InitialStake (big.Int) (struct)
+
+	{
+
+		if err := t.InitialStake.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.InitialStake: %w", err)
+		}
+
+	}
+	return nil
+}
+
+var lengthBufAddParams = []byte{130}
+
+func (t *AddParams) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufAddParams); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.Name ([]uint8) (slice)
+	if len(t.Name) > cbg.ByteArrayMaxLen {
+		return xerrors.Errorf("Byte array in field t.Name was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajByteString, uint64(len(t.Name))); err != nil {
+		return err
+	}
+
+	if _, err := w.Write(t.Name[:]); err != nil {
+		return err
+	}
+
+	// t.Consensus (actor.ConsensusType) (uint64)
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.Consensus)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (t *AddParams) UnmarshalCBOR(r io.Reader) error {
+	*t = AddParams{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 2 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.Name ([]uint8) (slice)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+
+	if extra > cbg.ByteArrayMaxLen {
+		return fmt.Errorf("t.Name: byte array too large (%d)", extra)
+	}
+	if maj != cbg.MajByteString {
+		return fmt.Errorf("expected byte array")
+	}
+
+	if extra > 0 {
+		t.Name = make([]uint8, extra)
+	}
+
+	if _, err := io.ReadFull(br, t.Name[:]); err != nil {
+		return err
+	}
+	// t.Consensus (actor.ConsensusType) (uint64)
+
+	{
+
+		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+		if maj != cbg.MajUnsignedInt {
+			return fmt.Errorf("wrong type for uint64 field")
+		}
+		t.Consensus = ConsensusType(extra)
+
+	}
+	return nil
+}
+
+var lengthBufAddShardReturn = []byte{129}
+
+func (t *AddShardReturn) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufAddShardReturn); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.ID (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.ID); err != nil {
+		return xerrors.Errorf("failed to write cid field t.ID: %w", err)
+	}
+
+	return nil
+}
+
+func (t *AddShardReturn) UnmarshalCBOR(r io.Reader) error {
+	*t = AddShardReturn{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 1 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.ID (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.ID: %w", err)
+		}
+
+		t.ID = c
+
+	}
 	return nil
 }
