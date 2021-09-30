@@ -1,15 +1,19 @@
 package main
 
 import (
-	"github.com/filecoin-project/lotus/chain/sharding/actor"
+	actor "github.com/filecoin-project/lotus/chain/sharding/actors"
 
 	gen "github.com/whyrusleeping/cbor-gen"
 )
 
 func main() {
-	if err := gen.WriteTupleEncodersToFile("./cbor_gen.go", "actors",
+	if err := gen.WriteTupleEncodersToFile("./cbor_gen.go", "actor",
 		actor.SplitState{},
 		actor.ShardState{},
+		actor.Shard{},
+		actor.MinerState{},
+		actor.AddParams{},
+		actor.AddShardReturn{},
 	); err != nil {
 		panic(err)
 	}
