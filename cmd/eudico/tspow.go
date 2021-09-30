@@ -56,7 +56,9 @@ var tpowCmd = &cli.Command{
 			node.Override(new(consensus.Consensus), tspow.NewTSPoWConsensus),
 			node.Override(new(store.WeightFunc), tspow.Weight),
 			node.Unset(new(*slashfilter.SlashFilter)),
-			node.Override(new(stmgr.Executor), delegcns.TipSetExecutor()), // todo
+			// TODO: This doesn't seem to be right, we should implement the right
+			// executor and upgradeSchedule for this consensus.
+			node.Override(new(stmgr.Executor), delegcns.TipSetExecutor()), //todo
 			node.Override(new(stmgr.UpgradeSchedule), delegcns.DefaultUpgradeSchedule()),
 		)),
 	},

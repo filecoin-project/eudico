@@ -37,6 +37,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
 	"github.com/filecoin-project/lotus/chain/gen"
 	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
+	shardactor "github.com/filecoin-project/lotus/chain/sharding/actors"
 	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
@@ -331,7 +332,10 @@ func MakeDelegatedGenesisBlock(ctx context.Context, j journal.Journal, bs bstore
 
 func SetupShardActor(ctx context.Context, bs bstore.Blockstore) (*types.Actor, error) {
 	cst := cbor.NewCborStore(bs)
-	st := delegcns.ConstructShardState()
+	st, err := shardactor.ConstructShardState(adt.WrapStore(ctx, cst))
+	if err != nil {
+		return nil, err
+	}
 
 	statecid, err := cst.Put(ctx, st)
 	if err != nil {
@@ -339,7 +343,7 @@ func SetupShardActor(ctx context.Context, bs bstore.Blockstore) (*types.Actor, e
 	}
 
 	act := &types.Actor{
-		Code:    delegcns.ShardActorCodeID,
+		Code:    shardactor.ShardActorCodeID,
 		Balance: big.Zero(),
 		Head:    statecid,
 	}
@@ -398,7 +402,7 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 		return nil, nil, err
 	}
 
-	err = state.SetActor(delegcns.ShardActorAddr, shardact)
+	err = state.SetActor(shardactor.ShardActorAddr, shardact)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("set reward actor: %w", err)
 	}
