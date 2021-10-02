@@ -1,26 +1,13 @@
-<p align="center">
-  <a href="https://docs.filecoin.io/" title="Filecoin Docs">
-    <img src="documentation/images/lotus_logo_h.png" alt="Project Lotus Logo" width="244" />
-  </a>
-</p>
 
-<h1 align="center">Project Lotus - 莲</h1>
+<h1 align="center">Project Eudico</h1>
 
-<p align="center">
-  <a href="https://circleci.com/gh/filecoin-project/lotus"><img src="https://circleci.com/gh/filecoin-project/lotus.svg?style=svg"></a>
-  <a href="https://codecov.io/gh/filecoin-project/lotus"><img src="https://codecov.io/gh/filecoin-project/lotus/branch/master/graph/badge.svg"></a>
-  <a href="https://goreportcard.com/report/github.com/filecoin-project/lotus"><img src="https://goreportcard.com/badge/github.com/filecoin-project/lotus" /></a>  
-  <a href=""><img src="https://img.shields.io/badge/golang-%3E%3D1.16-blue.svg" /></a>
-  <br>
-</p>
-
-Lotus is an implementation of the Filecoin Distributed Storage Network. For more details about Filecoin, check out the [Filecoin Spec](https://spec.filecoin.io).
+Eudico is a modularised implementation of [Lotus](https://github.com/filecoin-project/lotus), itself an implementation of the Filecoin Distributed Storage Network. For more details about Filecoin, check out the [Filecoin Spec](https://spec.filecoin.io). This is a work-in-progress, intended to enable easier experimentation with future protocol features, and is not meant to be used in the production network.
 
 ## Building & Documentation
 
-> Note: The default `master` branch is the dev branch, please use with caution. For the latest stable version, checkout the most recent [`Latest release`](https://github.com/filecoin-project/lotus/releases).
+> Note: The default `master` branch is the dev branch, please use with caution. 
  
-For complete instructions on how to build, install and setup lotus, please visit [https://docs.filecoin.io/get-started/lotus](https://docs.filecoin.io/get-started/lotus/). Basic build instructions can be found further down in this readme.
+For complete instructions on how to build, install and setup eudico, please visit the Lotus documentation at [https://docs.filecoin.io/get-started/lotus](https://docs.filecoin.io/get-started/lotus/). Basic build instructions can be found further down in this readme.
 
 ## Reporting a Vulnerability
 
@@ -28,18 +15,14 @@ Please send an email to security@filecoin.org. See our [security policy](SECURIT
 
 ## Related packages
 
-These repos are independent and reusable modules, but are tightly integrated into Lotus to make up a fully featured Filecoin implementation:
+These repos are independent and reusable modules, but are tightly integrated into Lotus/Eudico to make up a fully featured Filecoin implementation:
 
 - [go-fil-markets](https://github.com/filecoin-project/go-fil-markets) which has its own [kanban work tracker available here](https://app.zenhub.com/workspaces/markets-shared-components-5daa144a7046a60001c6e253/board)
 - [specs-actors](https://github.com/filecoin-project/specs-actors) which has its own [kanban work tracker available here](https://app.zenhub.com/workspaces/actors-5ee6f3aa87591f0016c05685/board)
 
 ## Contribute
 
-Lotus is a universally open project and welcomes contributions of all kinds: code, docs, and more. However, before making a contribution, we ask you to heed these recommendations:
-
-1. If the proposal entails a protocol change, please first submit a [Filecoin Improvement Proposal](https://github.com/filecoin-project/FIPs).
-2. If the change is complex and requires prior discussion, [open an issue](github.com/filecoin-project/lotus/issues) or a [discussion](https://github.com/filecoin-project/lotus/discussions) to request feedback before you start working on a pull request. This is to avoid disappointment and sunk costs, in case the change is not actually needed or accepted.
-3. Please refrain from submitting PRs to adapt existing code to subjective preferences. The changeset should contain functional or technical improvements/enhancements, bug fixes, new features, or some other clear material contribution. Simple stylistic changes are likely to be rejected in order to reduce code churn.
+Eudico is an open project and welcomes contributions of all kinds: code, docs, and more. However, before making a contribution, we ask you to heed these recommendations.
 
 When implementing a change:
 
@@ -55,7 +38,7 @@ When implementing a change:
 ## Basic Build Instructions
 **System-specific Software Dependencies**:
 
-Building Lotus requires some system dependencies, usually provided by your distribution.
+Building Eudico requires some system dependencies, usually provided by your distribution.
 
 Ubuntu/Debian:
 ```
@@ -71,7 +54,7 @@ For other distributions you can find the required dependencies [here.](https://d
 
 #### Go
 
-To build Lotus, you need a working installation of [Go 1.16.4 or higher](https://golang.org/dl/):
+To build Eudico, you need a working installation of [Go 1.16.4 or higher](https://golang.org/dl/):
 
 ```bash
 wget -c https://golang.org/dl/go1.16.4.linux-amd64.tar.gz -O - | sudo tar -xz -C /usr/local
@@ -86,24 +69,24 @@ echo "export PATH=$PATH:/usr/local/go/bin" >> ~/.bashrc && source ~/.bashrc
 
 See the [official Golang installation instructions](https://golang.org/doc/install) if you get stuck.
 
-### Build and install Lotus
+### Build and install Eudico
 
-Once all the dependencies are installed, you can build and install the Lotus suite (`lotus`, `lotus-miner`, and `lotus-worker`).
+Once all the dependencies are installed, you can build and install the Eudico suite (`eudico`, `eudico-miner`, and `eudico-worker`).
 
 1. Clone the repository:
 
    ```sh
-   git clone https://github.com/filecoin-project/lotus.git
+   git clone https://github.com/filecoin-project/eudico.git
    cd lotus/
    ```
    
-Note: The default branch `master` is the dev branch where the latest new features, bug fixes and improvement are in. However, if you want to run lotus on Filecoin mainnet and want to run a production-ready lotus, get the latest release[ here](https://github.com/filecoin-project/lotus/releases).
+Note: The default branch `master` is the dev branch where the latest new features, bug fixes and improvement are in. 
 
-2. To join mainnet, checkout the [latest release](https://github.com/filecoin-project/lotus/releases).
+2. To join mainnet -- don't!
 
-   If you are changing networks from a previous Lotus installation or there has been a network reset, read the [Switch networks guide](https://docs.filecoin.io/get-started/lotus/switch-networks/) before proceeding.
+   If you are changing networks from a previous installation or there has been a network reset, read the [Switch networks guide](https://docs.filecoin.io/get-started/lotus/switch-networks/) before proceeding.
 
-   For networks other than mainnet, look up the current branch or tag/commit for the network you want to join in the [Filecoin networks dashboard](https://network.filecoin.io), then build Lotus for your specific network below.
+   For networks other than mainnet, look up the current branch or tag/commit for the network you want to join in the [Filecoin networks dashboard](https://network.filecoin.io), then build Eudico for your specific network below.
 
    ```sh
    git checkout <tag_or_branch>
@@ -116,7 +99,7 @@ Note: The default branch `master` is the dev branch where the latest new feature
 3. If you are in China, see "[Lotus: tips when running in China](https://docs.filecoin.io/get-started/lotus/tips-running-in-china/)".
 4. This build instruction uses the prebuilt proofs binaries. If you want to build the proof binaries from source check the [complete instructions](https://docs.filecoin.io/get-started/lotus/installation/#build-and-install-lotus). Note, if you are building the proof binaries from source, [installing rustup](https://docs.filecoin.io/get-started/lotus/installation/#rustup) is also needed.
 
-5. Build and install Lotus:
+5. Build and install Eudico:
 
    ```sh
    make clean all #mainnet
@@ -127,11 +110,11 @@ Note: The default branch `master` is the dev branch where the latest new feature
    sudo make install
    ```
 
-   This will put `lotus`, `lotus-miner` and `lotus-worker` in `/usr/local/bin`.
+   This will put `eudico`, `eudico-miner` and `eudico-worker` in `/usr/local/bin`.
 
-   `lotus` will use the `$HOME/.lotus` folder by default for storage (configuration, chain data, wallets, etc). See [advanced options](https://docs.filecoin.io/get-started/lotus/configuration-and-advanced-usage/) for information on how to customize the Lotus folder.
+   `eudico` will use the `$HOME/.eudico` folder by default for storage (configuration, chain data, wallets, etc). See [advanced options](https://docs.filecoin.io/get-started/lotus/configuration-and-advanced-usage/) for information on how to customize the folder.
 
-6. You should now have Lotus installed. You can now [start the Lotus daemon and sync the chain](https://docs.filecoin.io/get-started/lotus/installation/#start-the-lotus-daemon-and-sync-the-chain).
+6. You should now have Eudico installed. You can now [start the Eudico daemon and sync the chain](https://docs.filecoin.io/get-started/lotus/installation/#start-the-lotus-daemon-and-sync-the-chain).
 
 ## License
 
