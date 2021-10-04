@@ -126,7 +126,7 @@ func (s *ShardingSub) newShard(id string, parentAPI *impl.FullNodeAPI) error {
 	tsExec := delegcns.TipSetExecutor()
 
 	// TODO: Use the weight for the right consensus algorithm.
-	sh.ch = store.NewChainStore(sh.bs, sh.bs, s.ds, delegcns.Weight, s.j)
+	sh.ch = store.NewChainStore(sh.bs, sh.bs, sh.ds, delegcns.Weight, s.j)
 	sh.sm, err = stmgr.NewStateManager(sh.ch, tsExec, s.syscalls, s.us)
 	if err != nil {
 		log.Errorw("Error creating state manager for shard", "shardID", id, "err", err)
@@ -165,7 +165,7 @@ func (s *ShardingSub) newShard(id string, parentAPI *impl.FullNodeAPI) error {
 	// TODO: We are using here for the same exchange of the root chain for the syncer.
 	// We may need to consider adding a new syncer for each shard.
 	// check exchange.NewClient() for this initialization.
-	sh.syncer, err = chain.NewSyncer(s.ds, sh.sm, s.exchange, chain.NewSyncManager, s.host.ConnManager(), s.host.ID(), s.beacon, gen, sh.cons)
+	sh.syncer, err = chain.NewSyncer(sh.ds, sh.sm, s.exchange, chain.NewSyncManager, s.host.ConnManager(), s.host.ID(), s.beacon, gen, sh.cons)
 	if err != nil {
 		log.Errorw("Error creating syncer for shard", "shardID", id, "err", err)
 		return err
@@ -176,7 +176,7 @@ func (s *ShardingSub) newShard(id string, parentAPI *impl.FullNodeAPI) error {
 
 	prov := messagepool.NewProvider(sh.sm, s.pubsub)
 
-	sh.mpool, err = messagepool.New(prov, s.ds, s.us, dtypes.NetworkName(template.NetworkName), s.j)
+	sh.mpool, err = messagepool.New(prov, sh.ds, s.us, dtypes.NetworkName(template.NetworkName), s.j)
 	if err != nil {
 		log.Errorw("Error creating message pool for shard", "shardID", id, "err", err)
 		return err
@@ -288,7 +288,7 @@ func (s *ShardingSub) listenShardEvents(ctx context.Context, sh *Shard) {
 
 		var oldSt, newSt shardactor.ShardState
 
-		bs := blockstore.NewAPIBlockstore(s.api)
+		bs := blockstore.NewAPIBlockstore(api)
 		cst := cbor.NewCborStore(bs)
 		if err := cst.Get(ctx, oldAct.Head, &oldSt); err != nil {
 			return false, nil, err
