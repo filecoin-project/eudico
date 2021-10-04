@@ -13,6 +13,7 @@ func main() {
 		actor.Shard{},
 		actor.MinerState{},
 		actor.AddParams{},
+		actor.SelectParams{},
 		actor.AddShardReturn{},
 	); err != nil {
 		panic(err)

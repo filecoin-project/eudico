@@ -5,6 +5,7 @@ import (
 
 	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/exitcode"
 	actor "github.com/filecoin-project/lotus/chain/sharding/actors"
 	"github.com/filecoin-project/specs-actors/v5/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v5/actors/util/adt"
@@ -31,6 +32,8 @@ func TestConstruction(t *testing.T) {
 
 }
 
+// TODO: Tests have a lot of duplicated code. Consider aggregating them into
+// independent functions to make tests more readable.
 func TestAdd(t *testing.T) {
 	h := newHarness(t)
 	builder := mock.NewBuilder(builtin.StoragePowerActorAddr).WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
@@ -43,6 +46,7 @@ func TestAdd(t *testing.T) {
 		Consensus: actor.Delegated,
 	}
 
+	t.Log("create new shard successfully")
 	// Send 2FIL of stake
 	value := abi.NewTokenAmount(2e18)
 	rt.SetCaller(owner, builtin.AccountActorCodeID)
@@ -62,20 +66,129 @@ func TestAdd(t *testing.T) {
 	require.Equal(t, getState(rt).TotalShards, uint64(1))
 
 	// Verify that the shard was added successfully.
+	// and stake has been assigned correctly.
 	sh := h.getShard(rt, shid)
 	require.Equal(t, len(sh.Miners), 1)
 	require.Equal(t, sh.Status, actor.Active)
 	require.Equal(t, sh.Consensus, actor.Delegated)
-	stake := h.getStakes(rt, sh, owner)
-	require.Equal(t, stake.InitialStake, value)
-	// TODO: Verify the rest of teh state of the shard in
-	// the next iteration when exhaustive testing in done.
-	// For now it is enough to start checking if it works with
-	// the state update and actual spawning of the shard.
+	require.Equal(t, h.getStake(rt, sh, owner), value)
+	require.Equal(t, sh.TotalStake, value)
 
-	// TODO: Check that it fails when we try to create a
+	t.Log("create new shard with ID of existing shard")
+	// Check that it fails when we try to create a
 	// shard with duplicate name.
-	// TODO: Check status if not enough stake is sent.
+	rt.ExpectValidateCallerAny()
+	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
+		rt.Call(h.ShardActor.Add, addParams)
+	})
+
+	t.Log("create new shard with ID of existing shard")
+	addParams = &actor.AddParams{
+		Name:      []byte("testShard2"),
+		Consensus: actor.Delegated,
+	}
+
+	// Send a small amount of stake
+	value = abi.NewTokenAmount(2)
+	rt.SetCaller(owner, builtin.AccountActorCodeID)
+	rt.SetReceived(value)
+	rt.SetBalance(value)
+	// Call add function
+	rt.ExpectValidateCallerAny()
+	ret = rt.Call(h.ShardActor.Add, addParams)
+	res, ok = ret.(*actor.AddShardReturn)
+	require.True(t, ok)
+	shid, err = actor.ShardID([]byte("testShard2"))
+	require.NoError(t, err)
+	// Verify the return value is correct.
+	require.Equal(t, res.ID, shid)
+	rt.Verify()
+	require.Equal(t, getState(rt).TotalShards, uint64(2))
+	// Verify that the shard was added successfully.
+	// and stake has been assigned correctly.
+	sh = h.getShard(rt, shid)
+	require.Equal(t, len(sh.Miners), 0)
+	require.Equal(t, sh.Status, actor.Instantiated)
+	require.Equal(t, sh.Consensus, actor.Delegated)
+	require.Equal(t, h.getStake(rt, sh, owner), value)
+	require.Equal(t, sh.TotalStake, value)
+}
+
+func TestJoin(t *testing.T) {
+	h := newHarness(t)
+	builder := mock.NewBuilder(builtin.StoragePowerActorAddr).WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
+	rt := builder.Build(t)
+	h.constructAndVerify(rt)
+	owner := tutil.NewIDAddr(t, 101)
+	joiner := tutil.NewIDAddr(t, 102)
+
+	addParams := &actor.AddParams{
+		Name:      []byte("testShard"),
+		Consensus: actor.Delegated,
+	}
+
+	t.Log("create new shard")
+	value := abi.NewTokenAmount(5e17)
+	rt.SetCaller(owner, builtin.AccountActorCodeID)
+	rt.SetReceived(value)
+	rt.SetBalance(value)
+	// Anyone can call
+	rt.ExpectValidateCallerAny()
+	// Call add function
+	ret := rt.Call(h.ShardActor.Add, addParams)
+	res, ok := ret.(*actor.AddShardReturn)
+	require.True(t, ok)
+	shid, err := actor.ShardID([]byte("testShard"))
+	require.NoError(t, err)
+	// Verify the return value is correct.
+	require.Equal(t, res.ID, shid)
+	// Check that shard is instantiated but not active.
+	sh := h.getShard(rt, shid)
+	require.Equal(t, len(sh.Miners), 0)
+	require.Equal(t, sh.Status, actor.Instantiated)
+	require.Equal(t, h.getStake(rt, sh, owner), value)
+
+	t.Log("new miner join the shard")
+	joinParams := &actor.SelectParams{ID: shid.Bytes()}
+	value = abi.NewTokenAmount(1e17)
+	rt.ExpectValidateCallerAny()
+	rt.SetReceived(value)
+	rt.SetBalance(value)
+	rt.SetCaller(joiner, builtin.AccountActorCodeID)
+	rt.Call(h.ShardActor.Join, joinParams)
+	// Still not active.
+	sh = h.getShard(rt, shid)
+	require.Equal(t, sh.Status, actor.Instantiated)
+	require.Equal(t, h.getStake(rt, sh, joiner), value)
+	require.Equal(t, len(sh.Miners), 0)
+
+	// Joiner stakes enough to activate and become a miner
+	value = abi.NewTokenAmount(9e17)
+	rt.ExpectValidateCallerAny()
+	rt.SetReceived(value)
+	rt.SetBalance(value)
+	rt.SetCaller(joiner, builtin.AccountActorCodeID)
+	rt.Call(h.ShardActor.Join, joinParams)
+	// Still not active.
+	sh = h.getShard(rt, shid)
+	require.Equal(t, sh.Status, actor.Active)
+	require.Equal(t, h.getStake(rt, sh, joiner), abi.NewTokenAmount(1e18))
+	require.Equal(t, sh.TotalStake, abi.NewTokenAmount(15e17))
+	require.Equal(t, len(sh.Miners), 1)
+
+	// Owner stakes enough to activate and become a miner
+	value = abi.NewTokenAmount(5e17)
+	rt.ExpectValidateCallerAny()
+	rt.SetReceived(value)
+	rt.SetBalance(value)
+	rt.SetCaller(owner, builtin.AccountActorCodeID)
+	rt.Call(h.ShardActor.Join, joinParams)
+	// Still not active.
+	sh = h.getShard(rt, shid)
+	require.Equal(t, sh.Status, actor.Active)
+	require.Equal(t, h.getStake(rt, sh, joiner), abi.NewTokenAmount(1e18))
+	require.Equal(t, sh.TotalStake, abi.NewTokenAmount(2e18))
+	require.Equal(t, len(sh.Miners), 2)
 }
 
 type shActorHarness struct {
@@ -92,7 +205,7 @@ func newHarness(t *testing.T) *shActorHarness {
 }
 func (h *shActorHarness) constructAndVerify(rt *mock.Runtime) {
 	rt.ExpectValidateCallerAddr(builtin.SystemActorAddr)
-	ret := rt.Call(h.ShardActor.Constructor, nil)
+	ret := rt.Call(h.ShardActor.Constructor, &actor.ConstructorParams{NetworkName: "root"})
 	assert.Nil(h.t, ret)
 	rt.Verify()
 
@@ -100,7 +213,6 @@ func (h *shActorHarness) constructAndVerify(rt *mock.Runtime) {
 
 	rt.GetState(&st)
 	assert.Equal(h.t, actor.MinShardStake, st.MinStake)
-	// TODO: This will fail once we introduce configurable network names
 	shid, err := actor.ShardID([]byte("root"))
 	require.NoError(h.t, err)
 	assert.Equal(h.t, st.Network, shid)
@@ -135,7 +247,12 @@ func (h *shActorHarness) getShard(rt *mock.Runtime, id cid.Cid) *actor.Shard {
 	return &out
 }
 
-func (h *shActorHarness) getStakes(rt *mock.Runtime, sh *actor.Shard, addr address.Address) *actor.MinerState {
+func (h *shActorHarness) getStake(rt *mock.Runtime, sh *actor.Shard, addr address.Address) abi.TokenAmount {
+	state := h.getMinerState(rt, sh, addr)
+	return state.InitialStake
+}
+
+func (h *shActorHarness) getMinerState(rt *mock.Runtime, sh *actor.Shard, addr address.Address) *actor.MinerState {
 	stakes, err := adt.AsMap(adt.AsStore(rt), sh.Stake, builtin.DefaultHamtBitwidth)
 	require.NoError(h.t, err)
 	var out actor.MinerState
