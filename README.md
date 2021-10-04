@@ -5,7 +5,7 @@ Eudico is a modularised implementation of [Lotus](https://github.com/filecoin-pr
 
 ## Building & Documentation
 
-> Note: The default `master` branch is the dev branch, please use with caution. 
+> Note: The default `eudico` branch is the dev branch, please use with caution. 
  
 For complete instructions on how to build, install and setup eudico, please visit the Lotus documentation at [https://docs.filecoin.io/get-started/lotus](https://docs.filecoin.io/get-started/lotus/). Basic build instructions can be found further down in this readme.
 
@@ -77,10 +77,10 @@ Once all the dependencies are installed, you can build and install the Eudico su
 
    ```sh
    git clone https://github.com/filecoin-project/eudico.git
-   cd lotus/
+   cd eudico/
    ```
    
-Note: The default branch `master` is the dev branch where the latest new features, bug fixes and improvement are in. 
+Note: The default branch `eudico` is the dev branch where the latest new features, bug fixes and improvement are in. 
 
 2. To join mainnet -- don't!
 
@@ -107,7 +107,7 @@ Note: The default branch `master` is the dev branch where the latest new feature
    # Or to join a testnet or devnet:
    make clean calibnet # Calibration with min 32GiB sectors
 
-   sudo make install
+   sudo make eudico
    ```
 
    This will put `eudico`, `eudico-miner` and `eudico-worker` in `/usr/local/bin`.
