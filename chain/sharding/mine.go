@@ -42,7 +42,7 @@ func (sh *Shard) mineDelegated(ctx context.Context) error {
 				continue
 			}
 
-			log.Infow("try mining at @", "shardID", sh.ID, "height", head.Height())
+			log.Infow("try mining at @", "shardID", sh.ID, "height", base.Height())
 
 			msgs, err := sh.api.MpoolSelect(ctx, base.Key(), 1)
 			if err != nil {

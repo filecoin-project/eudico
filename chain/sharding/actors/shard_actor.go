@@ -32,7 +32,8 @@ func (a ShardActor) Exports() []interface{} {
 		2:                         a.Add,
 		// Join - A miner wants to join the shard
 		// Checkpoint - Add a new checkpoint to the shard.
-		// Kill - The shard wants to be killed
+		// Leave - The miner wants to leave the chain. The shard is killed if the
+		// too many miners leave the shard and the amount staked is below minStake.
 	}
 }
 
