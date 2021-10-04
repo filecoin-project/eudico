@@ -330,9 +330,9 @@ func MakeDelegatedGenesisBlock(ctx context.Context, j journal.Journal, bs bstore
 	}, nil
 }
 
-func SetupShardActor(ctx context.Context, bs bstore.Blockstore) (*types.Actor, error) {
+func SetupShardActor(ctx context.Context, bs bstore.Blockstore, networkName string) (*types.Actor, error) {
 	cst := cbor.NewCborStore(bs)
-	st, err := shardactor.ConstructShardState(adt.WrapStore(ctx, cst))
+	st, err := shardactor.ConstructShardState(adt.WrapStore(ctx, cst), networkName)
 	if err != nil {
 		return nil, err
 	}
@@ -397,7 +397,7 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 
 	// Setup shard actor
 
-	shardact, err := SetupShardActor(ctx, bs)
+	shardact, err := SetupShardActor(ctx, bs, template.NetworkName)
 	if err != nil {
 		return nil, nil, err
 	}

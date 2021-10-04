@@ -98,7 +98,7 @@ func (t *SplitState) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufShardState = []byte{132}
+var lengthBufShardState = []byte{134}
 
 func (t *ShardState) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -117,6 +117,18 @@ func (t *ShardState) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("failed to write cid field t.Network: %w", err)
 	}
 
+	// t.NetworkName (string) (string)
+	if len(t.NetworkName) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.NetworkName was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.NetworkName))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.NetworkName)); err != nil {
+		return err
+	}
+
 	// t.TotalShards (uint64) (uint64)
 
 	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.TotalShards)); err != nil {
@@ -125,6 +137,11 @@ func (t *ShardState) MarshalCBOR(w io.Writer) error {
 
 	// t.MinStake (big.Int) (struct)
 	if err := t.MinStake.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.MinMinerStake (big.Int) (struct)
+	if err := t.MinMinerStake.MarshalCBOR(w); err != nil {
 		return err
 	}
 
@@ -151,7 +168,7 @@ func (t *ShardState) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 4 {
+	if extra != 6 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -166,6 +183,16 @@ func (t *ShardState) UnmarshalCBOR(r io.Reader) error {
 
 		t.Network = c
 
+	}
+	// t.NetworkName (string) (string)
+
+	{
+		sval, err := cbg.ReadStringBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+
+		t.NetworkName = string(sval)
 	}
 	// t.TotalShards (uint64) (uint64)
 
@@ -187,6 +214,15 @@ func (t *ShardState) UnmarshalCBOR(r io.Reader) error {
 
 		if err := t.MinStake.UnmarshalCBOR(br); err != nil {
 			return xerrors.Errorf("unmarshaling t.MinStake: %w", err)
+		}
+
+	}
+	// t.MinMinerStake (big.Int) (struct)
+
+	{
+
+		if err := t.MinMinerStake.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.MinMinerStake: %w", err)
 		}
 
 	}
@@ -562,6 +598,76 @@ func (t *AddParams) UnmarshalCBOR(r io.Reader) error {
 		}
 		t.Consensus = ConsensusType(extra)
 
+	}
+	return nil
+}
+
+var lengthBufSelectParams = []byte{129}
+
+func (t *SelectParams) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufSelectParams); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.ID ([]uint8) (slice)
+	if len(t.ID) > cbg.ByteArrayMaxLen {
+		return xerrors.Errorf("Byte array in field t.ID was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajByteString, uint64(len(t.ID))); err != nil {
+		return err
+	}
+
+	if _, err := w.Write(t.ID[:]); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *SelectParams) UnmarshalCBOR(r io.Reader) error {
+	*t = SelectParams{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 1 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.ID ([]uint8) (slice)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+
+	if extra > cbg.ByteArrayMaxLen {
+		return fmt.Errorf("t.ID: byte array too large (%d)", extra)
+	}
+	if maj != cbg.MajByteString {
+		return fmt.Errorf("expected byte array")
+	}
+
+	if extra > 0 {
+		t.ID = make([]uint8, extra)
+	}
+
+	if _, err := io.ReadFull(br, t.ID[:]); err != nil {
+		return err
 	}
 	return nil
 }
