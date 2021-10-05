@@ -84,6 +84,9 @@ func (a ShardActor) Constructor(rt runtime.Runtime, params *ConstructorParams) *
 // Add creates a new shard
 func (a ShardActor) Add(rt runtime.Runtime, params *AddParams) *AddShardReturn {
 	rt.ValidateImmediateCallerAcceptAny()
+	if string(params.Name) == "" {
+		rt.Abortf(exitcode.ErrIllegalArgument, "can't start a shard with an empty name")
+	}
 	shid, err := ShardID(params.Name)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "shard with the same name already exists")
 	// Get the miner and the amount that it is sending.

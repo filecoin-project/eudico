@@ -2,6 +2,7 @@ package sharding
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/filecoin-project/lotus/api"
@@ -56,6 +57,11 @@ type Shard struct {
 
 	// Pubsub router from the root chain.
 	pubsub *pubsub.PubSub
+
+	// Mining info
+	minlk      sync.Mutex
+	miningCtx  context.Context
+	miningCncl context.CancelFunc
 }
 
 func (sh *Shard) HandleIncomingMessages(ctx context.Context) error {
@@ -143,4 +149,40 @@ func (sh *Shard) HandleIncomingBlocks(ctx context.Context, bserv dtypes.ChainBlo
 
 	go sub.HandleIncomingBlocks(ctx, blocksub, sh.syncer, bserv, sh.host.ConnManager())
 	return nil
+}
+
+// Checks if we are mining in a shard.
+func (sh *Shard) isMining() bool {
+	sh.minlk.Lock()
+	defer sh.minlk.Unlock()
+	if sh.miningCtx != nil {
+		return true
+	}
+	return false
+}
+
+func (sh *Shard) mine(ctx context.Context) {
+	if sh.miningCtx != nil {
+		log.Warnw("already mining in shard", "shardID", sh.ID)
+		return
+	}
+	// Assigning mining context.
+	sh.miningCtx, sh.miningCncl = context.WithCancel(ctx)
+	// TODO: As-is a node will keep mining in a shard until the node process
+	// is completely stopped. In the next iteration we need to figure out
+	// how to manage contexts for when a shard is killed or a node moves into
+	// another shard. (see next function)
+	// Mining in the root chain is an independent process.
+	log.Infow("Started mining in shard", "shardID", sh.ID)
+	// TODO: Support several mining consensus.
+	go sh.mineDelegated()
+}
+
+func (sh *Shard) stopMining(ctx context.Context) {
+	sh.minlk.Lock()
+	defer sh.minlk.Unlock()
+	if sh.miningCncl != nil {
+		log.Infow("Stop mining in shard", "shardID", sh.ID)
+		sh.miningCncl()
+	}
 }
