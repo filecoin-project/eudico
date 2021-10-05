@@ -11,7 +11,8 @@ import (
 	"golang.org/x/xerrors"
 )
 
-func (sh *Shard) mineDelegated(ctx context.Context) error {
+func (sh *Shard) mineDelegated() error {
+	ctx := sh.miningCtx
 	head := sh.ch.GetHeaviestTipSet()
 	if head == nil {
 		log.Errorw("Error getting heaviest tipet. Tipset nil")

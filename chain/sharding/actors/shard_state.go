@@ -59,10 +59,12 @@ type ShardState struct {
 }
 
 type Shard struct {
-	ID         cid.Cid // Digest of chosen name
-	Name       []byte
-	Parent     cid.Cid
-	Consensus  ConsensusType
+	ID        cid.Cid // Digest of chosen name
+	Name      []byte
+	Parent    cid.Cid
+	Consensus ConsensusType
+	// NOTE: Consider adding miners to MinerState in
+	// Stake HAMT.
 	Miners     []address.Address
 	TotalStake abi.TokenAmount
 	// TODO: I just realized that BalanceTable is alreaedy
@@ -123,7 +125,7 @@ func getShard(shards *adt.Map, id cid.Cid) (*Shard, bool, error) {
 	return &out, true, nil
 }
 
-func getMinerState(stakeMap *adt.Map, miner address.Address) (*MinerState, bool, error) {
+func GetMinerState(stakeMap *adt.Map, miner address.Address) (*MinerState, bool, error) {
 	var out MinerState
 	found, err := stakeMap.Get(abi.AddrKey(miner), &out)
 	if err != nil {
@@ -136,7 +138,7 @@ func getMinerState(stakeMap *adt.Map, miner address.Address) (*MinerState, bool,
 }
 
 func getStake(stakeMap *adt.Map, miner address.Address) (abi.TokenAmount, error) {
-	state, has, err := getMinerState(stakeMap, miner)
+	state, has, err := GetMinerState(stakeMap, miner)
 	if err != nil {
 		return abi.NewTokenAmount(0), err
 	}

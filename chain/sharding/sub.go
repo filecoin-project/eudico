@@ -23,8 +23,6 @@ import (
 	"github.com/filecoin-project/lotus/journal"
 	"github.com/filecoin-project/lotus/node/impl"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
-	builtin "github.com/filecoin-project/specs-actors/v5/actors/builtin"
-	adt "github.com/filecoin-project/specs-actors/v5/actors/util/adt"
 	"github.com/ipfs/go-blockservice"
 	ds "github.com/ipfs/go-datastore"
 	nsds "github.com/ipfs/go-datastore/namespace"
@@ -98,7 +96,7 @@ func NewShardSub(
 	}, nil
 }
 
-func (s *ShardingSub) newShard(id string, parentAPI *impl.FullNodeAPI) error {
+func (s *ShardingSub) newShard(id string, parentAPI *impl.FullNodeAPI, isMiner bool) error {
 	var err error
 	ctx := context.TODO()
 	log.Infow("Creating new shard", "shardID", id)
@@ -202,14 +200,6 @@ func (s *ShardingSub) newShard(id string, parentAPI *impl.FullNodeAPI) error {
 	}
 	log.Infow("Listening for new blocks and messages in shard", "shardID", id)
 
-	// TODO: As-is a node will keep mining in a shard until the node process
-	// is completely stopped. In the next iteration we need to figure out
-	// how to manage contexts for when a shard is killed or a node moves into
-	// another shard.
-	// Mining in the root chain is an independent process.
-	log.Infow("Started mining in shard", "shardID", id)
-	go sh.mineDelegated(ctx)
-
 	// Listening to events on the shard actor from the shard chain.
 	// We can create new shards from an existing one, and we need to
 	// monitor that (thus the "hierarchical" in the consensus).
@@ -220,6 +210,12 @@ func (s *ShardingSub) newShard(id string, parentAPI *impl.FullNodeAPI) error {
 	}
 	go s.listenShardEvents(ctx, sh)
 	log.Infow("Listening to shard events in shard", "shardID", id)
+
+	// If is miner start mining in shard.
+	if isMiner {
+		sh.mine(ctx)
+	}
+
 	log.Infow("Successfully spawned shard", "shardID", id)
 
 	return nil
@@ -245,24 +241,30 @@ func (s *ShardingSub) listenShardEvents(ctx context.Context, sh *Shard) {
 		log.Infow("State change detected for shard actor in shard", "shardID", id)
 
 		// Add the new shard to the struct.
-		shardMap, ok := states.(map[string]struct{})
+		shardMap, ok := states.(map[string]diffInfo)
 		if !ok {
-			log.Error("Error casting shardMap")
+			log.Error("Error casting diff structure")
 			return true, err
-		}
-		id := ""
-		for k := range shardMap {
-			// I just want the first one from the map. Once
-			// we have the logic for the actor this must change.
-			id = string(k)
-			break
 		}
 
-		// Create shard with id from parentAPI
-		err = s.newShard(id, api)
-		if err != nil {
-			log.Errorw("Error creating new shard", "shardID", id, "err", err)
-			return true, err
+		// For each new shard detected
+		for k := range shardMap {
+			_, ok := s.shards[k]
+			// If we are not already subscribed to the shard.
+			if !ok {
+				// Create shard with id from parentAPI
+				err = s.newShard(k, api, shardMap[k].isMiner)
+				if err != nil {
+					log.Errorw("Error creating new shard", "shardID", k, "err", err)
+					return true, err
+				}
+			} else {
+				// If diff says we can start mining and we are not mining
+				if mining := s.shards[k].isMining(); !mining && shardMap[k].isMiner {
+					s.shards[k].mine(ctx)
+				}
+
+			}
 		}
 
 		return true, nil
@@ -272,10 +274,6 @@ func (s *ShardingSub) listenShardEvents(ctx context.Context, sh *Shard) {
 		return nil
 	}
 
-	// TODO: Check inconsistency when trying to create a sushard within a shard.
-	// This may be because of a delay in the change of state when spawning the shard actor
-	// in the shard. Once we add additional checks here and in the actor this should be
-	// fixed.
 	match := func(oldTs, newTs *types.TipSet) (bool, events.StateChange, error) {
 		oldAct, err := api.StateGetActor(ctx, shardactor.ShardActorAddr, oldTs.Key())
 		if err != nil {
@@ -302,25 +300,20 @@ func (s *ShardingSub) listenShardEvents(ctx context.Context, sh *Shard) {
 			return false, nil, nil
 		}
 
-		// If there is change check if new shard added
-		if oldSt.TotalShards != newSt.TotalShards {
-			newM, err := shards(adt.WrapStore(ctx, cst), newSt)
-			if err != nil {
-				return false, nil, err
-			}
-			oldM, err := shards(adt.WrapStore(ctx, cst), oldSt)
-			if err != nil {
-				return false, nil, err
-			}
-			diff, err := diffShards(oldM, newM)
-			if err != nil {
-				return false, nil, err
-			}
-			return true, diff, nil
+		// Start running state checks to build diff.
+		// Check first if there are new shards.
+		if f := s.checkNewShard(ctx, cst, oldSt, newSt); f != nil {
+			return f()
+		}
+		// Check if state in existing shards has changed.
+		f, err := s.checkShardChange(ctx, cst, oldSt, newSt)
+		if err != nil {
+			return false, nil, err
+		}
+		if f != nil {
+			return f()
 		}
 
-		// TODO: Take the logic out to functions so that we monitor
-		// changes within a shard to handle join/leaves/etc.
 		return false, nil, nil
 
 	}
@@ -329,31 +322,6 @@ func (s *ShardingSub) listenShardEvents(ctx context.Context, sh *Shard) {
 	if err != nil {
 		return
 	}
-}
-
-func diffShards(oldM *adt.Map, newM *adt.Map) (map[string]struct{}, error) {
-	diff := map[string]struct{}{}
-	var sh shardactor.Shard
-	// TODO: Can we get the ID from the key instead of having
-	// to load and get from the shard object.
-	err := newM.ForEach(&sh, func(k string) error {
-		diff[sh.ID.String()] = struct{}{}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	err = oldM.ForEach(&sh, func(k string) error {
-		delete(diff, sh.ID.String())
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return diff, err
-}
-func shards(s adt.Store, st shardactor.ShardState) (*adt.Map, error) {
-	return adt.AsMap(s, st.Shards, builtin.DefaultHamtBitwidth)
 }
 
 func (s *ShardingSub) Start() {
