@@ -64,6 +64,41 @@ func newPeerTracker(lc fx.Lifecycle, h host.Host, pmgr *peermgr.PeerMgr) *bsPeer
 	return bsPt
 }
 
+// newShardPeerTracker creates a peer tracker to handle sync of a shard chiain
+func newShardPeerTracker(ctx context.Context, h host.Host, pmgr *peermgr.PeerMgr) *bsPeerTracker {
+	bsPt := &bsPeerTracker{
+		peers: make(map[peer.ID]*peerStats),
+		pmgr:  pmgr,
+	}
+
+	evtSub, err := h.EventBus().Subscribe(new(peermgr.FilPeerEvt))
+	if err != nil {
+		panic(err)
+	}
+
+	go func() {
+		for evt := range evtSub.Out() {
+			pEvt := evt.(peermgr.FilPeerEvt)
+			switch pEvt.Type {
+			case peermgr.AddFilPeerEvt:
+				bsPt.addPeer(pEvt.ID)
+			case peermgr.RemoveFilPeerEvt:
+				bsPt.removePeer(pEvt.ID)
+			}
+		}
+	}()
+
+	// OnStop close event subscription.
+	go func() {
+		select {
+		case <-ctx.Done():
+			evtSub.Close()
+		}
+	}()
+
+	return bsPt
+}
+
 func (bpt *bsPeerTracker) addPeer(p peer.ID) {
 	bpt.lk.Lock()
 	defer bpt.lk.Unlock()

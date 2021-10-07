@@ -2,7 +2,6 @@ package sharding
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -82,24 +81,31 @@ func MakeDelegatedGenesisBlock(ctx context.Context, j journal.Journal, bs bstore
 	}
 
 	tickBuf := make([]byte, 32)
-	_, _ = rand.Read(tickBuf)
+	// TODO: We can't use randomness in genesis block
+	// if want to make it deterministic.
+	// _, _ = rand.Read(tickBuf)
 	genesisticket := &types.Ticket{
 		VRFProof: tickBuf,
 	}
 
 	b := &types.BlockHeader{
-		Miner:                 system.Address,
-		Ticket:                genesisticket,
-		Parents:               []cid.Cid{},
-		Height:                0,
-		ParentWeight:          types.NewInt(0),
+		Miner:        system.Address,
+		Ticket:       genesisticket,
+		Parents:      []cid.Cid{},
+		Height:       0,
+		ParentWeight: types.NewInt(0),
+		// TODO: StateRoot generation is non-deterministic between
+		// peers, we'll need to figure out how to handle genesis
+		// so all members of a shard use the same.
 		ParentStateRoot:       stateroot,
 		Messages:              mmb.Cid(),
 		ParentMessageReceipts: emptyroot,
 		BLSAggregate:          nil,
 		BlockSig:              nil,
-		Timestamp:             template.Timestamp,
-		ElectionProof:         new(types.ElectionProof),
+		// NOTE: And finally, Timestamp is another source of non-determinism.
+		//Timestamp:     template.Timestamp,
+		Timestamp:     0,
+		ElectionProof: new(types.ElectionProof),
 		BeaconEntries: []types.BeaconEntry{
 			{
 				Round: 0,

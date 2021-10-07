@@ -10,6 +10,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/protocol"
 
 	"go.opencensus.io/trace"
 	"go.uber.org/fx"
@@ -34,6 +35,9 @@ type client struct {
 	host host.Host
 
 	peerTracker *bsPeerTracker
+
+	// protocolIDs used by the client exchange.
+	protocolIDs []string
 }
 
 var _ Client = (*client)(nil)
@@ -44,6 +48,17 @@ func NewClient(lc fx.Lifecycle, host host.Host, pmgr peermgr.MaybePeerMgr) Clien
 	return &client{
 		host:        host,
 		peerTracker: newPeerTracker(lc, host, pmgr.Mgr),
+		protocolIDs: []string{BlockSyncProtocolID, ChainExchangeProtocolID},
+	}
+}
+
+// NewShardClient creates a new libp2p-based exchange. Client that uses the libp2p
+// ChainExhange protocol as the fetching mechanism to sync a shard chain.
+func NewShardClient(ctx context.Context, host host.Host, pmgr peermgr.MaybePeerMgr, protocolID string) Client {
+	return &client{
+		host:        host,
+		peerTracker: newShardPeerTracker(ctx, host, pmgr.Mgr),
+		protocolIDs: []string{protocolID},
 	}
 }
 
@@ -396,13 +411,24 @@ func (c *client) sendRequestToPeer(ctx context.Context, peer peer.ID, req *Reque
 		}
 	}()
 	// -- TRACE --
-
-	supported, err := c.host.Peerstore().SupportsProtocols(peer, BlockSyncProtocolID, ChainExchangeProtocolID)
+	supported, err := c.host.Peerstore().SupportsProtocols(peer, c.protocolIDs...)
 	if err != nil {
 		c.RemovePeer(peer)
 		return nil, xerrors.Errorf("failed to get protocols for peer: %w", err)
 	}
-	if len(supported) == 0 || (supported[0] != BlockSyncProtocolID && supported[0] != ChainExchangeProtocolID) {
+
+	// See if it supports any some protocol.
+	if len(supported) == 0 {
+		return nil, xerrors.Errorf("peer %s does not support protocols %s",
+			peer, []string{BlockSyncProtocolID, ChainExchangeProtocolID})
+	}
+
+	// Check that peer supports standard and shard protocols.
+	// NOTE: This may need to be revisited, we are being extremely verbose.
+	// I think it is enough to check if the other end supports c.protocolIDs.
+	if len(supported) > 0 && (supported[0] != BlockSyncProtocolID &&
+		supported[0] != ChainExchangeProtocolID &&
+		supported[0] != c.protocolIDs[0]) {
 		return nil, xerrors.Errorf("peer %s does not support protocols %s",
 			peer, []string{BlockSyncProtocolID, ChainExchangeProtocolID})
 	}
@@ -413,7 +439,7 @@ func (c *client) sendRequestToPeer(ctx context.Context, peer peer.ID, req *Reque
 	stream, err := c.host.NewStream(
 		network.WithNoDial(ctx, "should already have connection"),
 		peer,
-		ChainExchangeProtocolID, BlockSyncProtocolID)
+		protocol.ConvertFromStrings(c.protocolIDs)...)
 	if err != nil {
 		c.RemovePeer(peer)
 		return nil, xerrors.Errorf("failed to open stream to peer: %w", err)
