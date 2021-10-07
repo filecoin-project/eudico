@@ -51,6 +51,8 @@ type Service struct {
 	syncer *chain.Syncer
 	cons   consensus.Consensus
 	pmgr   *peermgr.PeerMgr
+
+	protocolID protocol.ID
 }
 
 func NewHelloService(h host.Host, cs *store.ChainStore, syncer *chain.Syncer, cons consensus.Consensus, pmgr peermgr.MaybePeerMgr) *Service {
@@ -65,6 +67,26 @@ func NewHelloService(h host.Host, cs *store.ChainStore, syncer *chain.Syncer, co
 		syncer: syncer,
 		cons:   cons,
 		pmgr:   pmgr.Mgr,
+		// Pointing to default ProtocolID for hello protocol.
+		protocolID: ProtocolID,
+	}
+}
+
+// HelloService using a protocolID for the protocol handler
+func NewShardHelloService(h host.Host, cs *store.ChainStore, syncer *chain.Syncer, cons consensus.Consensus, pmgr peermgr.MaybePeerMgr, protocolID protocol.ID) *Service {
+	if pmgr.Mgr == nil {
+		log.Warn("running without peer manager")
+	}
+
+	return &Service{
+		h: h,
+
+		cs:     cs,
+		syncer: syncer,
+		cons:   cons,
+		pmgr:   pmgr.Mgr,
+		// Pointing to protocolID for shard.
+		protocolID: protocolID,
 	}
 }
 
@@ -124,13 +146,13 @@ func (hs *Service) HandleStream(s inet.Stream) {
 		hs.h.ConnManager().TagPeer(s.Conn().RemotePeer(), "fcpeer", 10)
 
 		// don't bother informing about genesis
-		log.Debugf("Got new tipset through Hello: %s from %s", ts.Cids(), s.Conn().RemotePeer())
+		log.Infof("Got new tipset through Hello: %s from %s", ts.Cids(), s.Conn().RemotePeer())
 		hs.syncer.InformNewHead(s.Conn().RemotePeer(), ts)
 	}
 }
 
 func (hs *Service) SayHello(ctx context.Context, pid peer.ID) error {
-	s, err := hs.h.NewStream(ctx, pid, ProtocolID)
+	s, err := hs.h.NewStream(ctx, pid, hs.protocolID)
 	if err != nil {
 		return xerrors.Errorf("error opening stream: %w", err)
 	}
@@ -152,7 +174,7 @@ func (hs *Service) SayHello(ctx context.Context, pid peer.ID) error {
 		HeaviestTipSetWeight: weight,
 		GenesisHash:          gen.Cid(),
 	}
-	log.Debug("Sending hello message: ", hts.Cids(), hts.Height(), gen.Cid())
+	log.Debugw("Sending hello message: ", hts.Cids(), hts.Height(), gen.Cid())
 
 	t0 := build.Clock.Now()
 	if err := cborutil.WriteCborRPC(s, hmsg); err != nil {

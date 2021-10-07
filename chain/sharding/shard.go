@@ -16,6 +16,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/sub"
 	"github.com/filecoin-project/lotus/chain/types"
+	"github.com/filecoin-project/lotus/lib/peermgr"
 	"github.com/filecoin-project/lotus/node/impl"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/libp2p/go-libp2p-core/host"
@@ -57,14 +58,22 @@ type Shard struct {
 
 	// Pubsub router from the root chain.
 	pubsub *pubsub.PubSub
+	// Reusing peermanager from root chain.
+	pmgr peermgr.MaybePeerMgr
 
-	// Mining info
+	// Shard context
+	ctx context.Context
+	// TODO: Cancelfunc, handle it.
+
+	hello *helloService
+
+	// Mining context
 	minlk      sync.Mutex
 	miningCtx  context.Context
 	miningCncl context.CancelFunc
 }
 
-func (sh *Shard) HandleIncomingMessages(ctx context.Context) error {
+func (sh *Shard) HandleIncomingMessages(ctx context.Context, bootstrapper dtypes.Bootstrapper) error {
 	nn := dtypes.NetworkName(sh.netName)
 	v := sub.NewMessageValidator(sh.host.ID(), sh.mpool)
 
@@ -85,6 +94,13 @@ func (sh *Shard) HandleIncomingMessages(ctx context.Context) error {
 
 		go sub.HandleIncomingMessages(ctx, sh.mpool, msgsub)
 	}
+
+	/*
+		if bootstrapper {
+			subscribe()
+			return nil
+		}
+	*/
 
 	// wait until we are synced within 10 epochs -- env var can override
 	waitForSync(sh.sm, 10, subscribe)

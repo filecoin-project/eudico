@@ -12,7 +12,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/beacon"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
 	"github.com/filecoin-project/lotus/chain/events"
-	"github.com/filecoin-project/lotus/chain/exchange"
 	"github.com/filecoin-project/lotus/chain/messagepool"
 	shardactor "github.com/filecoin-project/lotus/chain/sharding/actors"
 	"github.com/filecoin-project/lotus/chain/stmgr"
@@ -21,6 +20,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/vm"
 	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
 	"github.com/filecoin-project/lotus/journal"
+	"github.com/filecoin-project/lotus/lib/peermgr"
 	"github.com/filecoin-project/lotus/node/impl"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/ipfs/go-blockservice"
@@ -46,13 +46,14 @@ type ShardingSub struct {
 
 	pubsub *pubsub.PubSub
 	// Root ds
-	ds         dtypes.MetadataDS
-	exchange   exchange.Client //TODO: We may need to create a new one for every shard if syncing fails
-	beacon     beacon.Schedule
-	syscalls   vm.SyscallBuilder
-	us         stmgr.UpgradeSchedule
-	verifier   ffiwrapper.Verifier
-	nodeServer api.FullNodeServer
+	ds           dtypes.MetadataDS
+	beacon       beacon.Schedule
+	syscalls     vm.SyscallBuilder
+	us           stmgr.UpgradeSchedule
+	verifier     ffiwrapper.Verifier
+	nodeServer   api.FullNodeServer
+	pmgr         peermgr.MaybePeerMgr
+	bootstrapper dtypes.Bootstrapper
 
 	lk     sync.Mutex
 	shards map[string]*Shard
@@ -66,12 +67,13 @@ func NewShardSub(
 	pubsub *pubsub.PubSub,
 	ds dtypes.MetadataDS,
 	host host.Host,
-	exchange exchange.Client,
 	beacon beacon.Schedule,
 	syscalls vm.SyscallBuilder,
 	us stmgr.UpgradeSchedule,
 	nodeServer api.FullNodeServer,
 	verifier ffiwrapper.Verifier,
+	pmgr peermgr.MaybePeerMgr,
+	bootstrapper dtypes.Bootstrapper,
 	j journal.Journal) (*ShardingSub, error) {
 
 	// Starting shardSub to listen to events in the root chain.
@@ -81,31 +83,35 @@ func NewShardSub(
 	}
 
 	return &ShardingSub{
-		events:     e,
-		api:        &api,
-		pubsub:     pubsub,
-		host:       host,
-		exchange:   exchange,
-		ds:         ds,
-		syscalls:   syscalls,
-		us:         us,
-		j:          j,
-		nodeServer: nodeServer,
-		verifier:   verifier,
-		shards:     make(map[string]*Shard),
+		events:       e,
+		api:          &api,
+		pubsub:       pubsub,
+		host:         host,
+		ds:           ds,
+		syscalls:     syscalls,
+		us:           us,
+		j:            j,
+		pmgr:         pmgr,
+		nodeServer:   nodeServer,
+		bootstrapper: bootstrapper,
+		verifier:     verifier,
+		shards:       make(map[string]*Shard),
 	}, nil
 }
 
 func (s *ShardingSub) newShard(id string, parentAPI *impl.FullNodeAPI, isMiner bool) error {
 	var err error
+	// TODO: This context needs to be handled conveniently.
 	ctx := context.TODO()
 	log.Infow("Creating new shard", "shardID", id)
 	sh := &Shard{
+		ctx:        ctx,
 		ID:         id,
 		host:       s.host,
 		netName:    "shard/" + id,
 		pubsub:     s.pubsub,
 		nodeServer: s.nodeServer,
+		pmgr:       s.pmgr,
 	}
 	s.lk.Lock()
 	s.shards[id] = sh
@@ -130,6 +136,9 @@ func (s *ShardingSub) newShard(id string, parentAPI *impl.FullNodeAPI, isMiner b
 		log.Errorw("Error creating state manager for shard", "shardID", id, "err", err)
 		return err
 	}
+	// Start state manager.
+	sh.sm.Start(ctx)
+
 	// TODO: Have functions to generate the right genesis for the consensus used.
 	// All os this will be extracted to a consensus specific function that
 	// according to the consensus selected for the shard it does the right thing.
@@ -160,18 +169,23 @@ func (s *ShardingSub) newShard(id string, parentAPI *impl.FullNodeAPI, isMiner b
 
 	log.Infow("Genesis and consensus for shard created", "shardID", id)
 
-	// TODO: We are using here for the same exchange of the root chain for the syncer.
-	// We may need to consider adding a new syncer for each shard.
-	// check exchange.NewClient() for this initialization.
-	sh.syncer, err = chain.NewSyncer(sh.ds, sh.sm, s.exchange, chain.NewSyncManager, s.host.ConnManager(), s.host.ID(), s.beacon, gen, sh.cons)
+	// We configure a new handler for the shard syncing exchange protocol.
+	sh.exchangeServer()
+	// We are passing to the syncer a new exchange client for the shard to enable
+	// peers to catch up with the shard chain.
+	// NOTE: We reuse the same peer manager from the root chain.
+	sh.syncer, err = chain.NewSyncer(sh.ds, sh.sm, sh.exchangeClient(ctx), chain.NewSyncManager, s.host.ConnManager(), s.host.ID(), s.beacon, gen, sh.cons)
 	if err != nil {
 		log.Errorw("Error creating syncer for shard", "shardID", id, "err", err)
 		return err
 	}
 	// Start syncer for the shard
 	sh.syncer.Start()
+	// Hello protocol needs to run after the syncer is intialized and the genesis
+	// is created but before we set-up the gossipsub topics to listen for
+	// new blocks and messages.
+	sh.runHello(ctx)
 	bserv := blockservice.New(sh.bs, offline.Exchange(sh.bs))
-
 	prov := messagepool.NewProvider(sh.sm, s.pubsub)
 
 	sh.mpool, err = messagepool.New(prov, sh.ds, s.us, dtypes.NetworkName(template.NetworkName), s.j)
@@ -179,26 +193,27 @@ func (s *ShardingSub) newShard(id string, parentAPI *impl.FullNodeAPI, isMiner b
 		log.Errorw("Error creating message pool for shard", "shardID", id, "err", err)
 		return err
 	}
+
+	// This functions create a new pubsub topic for the shard to start
+	// listening to new messages and blocks for the shard.
+	err = sh.HandleIncomingBlocks(ctx, bserv)
+	if err != nil {
+		log.Errorw("HandleIncomingBlocks failed for shard", "shardID", id, "err", err)
+		return err
+	}
+	err = sh.HandleIncomingMessages(ctx, s.bootstrapper)
+	if err != nil {
+		log.Errorw("HandleIncomingMessages failed for shard", "shardID", id, "err", err)
+		return err
+	}
+	log.Infow("Listening for new blocks and messages in shard", "shardID", id)
+
 	log.Infow("Populating and registering API for", "shardID", id)
 	err = sh.populateAPIs(parentAPI, s.host, tsExec)
 	if err != nil {
 		log.Errorw("Error populating APIs for shard", "shardID", id, "err", err)
 		return err
 	}
-
-	// This functions create a new pubsub topic for the shard to start
-	// listening to new messages and blocks for the shard.
-	err = sh.HandleIncomingMessages(ctx)
-	if err != nil {
-		log.Errorw("HandleIncomingMessages failed for shard", "shardID", id, "err", err)
-		return err
-	}
-	err = sh.HandleIncomingBlocks(ctx, bserv)
-	if err != nil {
-		log.Errorw("HandleIncomingBlocks failed for shard", "shardID", id, "err", err)
-		return err
-	}
-	log.Infow("Listening for new blocks and messages in shard", "shardID", id)
 
 	// Listening to events on the shard actor from the shard chain.
 	// We can create new shards from an existing one, and we need to
