@@ -241,7 +241,7 @@ func (t *ShardState) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufShard = []byte{136}
+var lengthBufShard = []byte{137}
 
 func (t *Shard) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -316,6 +316,18 @@ func (t *Shard) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
+	// t.Genesis ([]uint8) (slice)
+	if len(t.Genesis) > cbg.ByteArrayMaxLen {
+		return xerrors.Errorf("Byte array in field t.Genesis was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajByteString, uint64(len(t.Genesis))); err != nil {
+		return err
+	}
+
+	if _, err := w.Write(t.Genesis[:]); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -333,7 +345,7 @@ func (t *Shard) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 8 {
+	if extra != 9 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -460,6 +472,27 @@ func (t *Shard) UnmarshalCBOR(r io.Reader) error {
 		t.Status = Status(extra)
 
 	}
+	// t.Genesis ([]uint8) (slice)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+
+	if extra > cbg.ByteArrayMaxLen {
+		return fmt.Errorf("t.Genesis: byte array too large (%d)", extra)
+	}
+	if maj != cbg.MajByteString {
+		return fmt.Errorf("expected byte array")
+	}
+
+	if extra > 0 {
+		t.Genesis = make([]uint8, extra)
+	}
+
+	if _, err := io.ReadFull(br, t.Genesis[:]); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -511,7 +544,7 @@ func (t *MinerState) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufAddParams = []byte{130}
+var lengthBufAddParams = []byte{131}
 
 func (t *AddParams) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -543,6 +576,10 @@ func (t *AddParams) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
+	// t.DelegMiner (address.Address) (struct)
+	if err := t.DelegMiner.MarshalCBOR(w); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -560,7 +597,7 @@ func (t *AddParams) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 2 {
+	if extra != 3 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -597,6 +634,15 @@ func (t *AddParams) UnmarshalCBOR(r io.Reader) error {
 			return fmt.Errorf("wrong type for uint64 field")
 		}
 		t.Consensus = ConsensusType(extra)
+
+	}
+	// t.DelegMiner (address.Address) (struct)
+
+	{
+
+		if err := t.DelegMiner.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.DelegMiner: %w", err)
+		}
 
 	}
 	return nil

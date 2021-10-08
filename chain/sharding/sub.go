@@ -99,7 +99,7 @@ func NewShardSub(
 	}, nil
 }
 
-func (s *ShardingSub) newShard(id string, parentAPI *impl.FullNodeAPI, isMiner bool) error {
+func (s *ShardingSub) newShard(id string, parentAPI *impl.FullNodeAPI, genesis []byte, isMiner bool) error {
 	var err error
 	// TODO: This context needs to be handled conveniently.
 	ctx := context.TODO()
@@ -139,32 +139,11 @@ func (s *ShardingSub) newShard(id string, parentAPI *impl.FullNodeAPI, isMiner b
 	// Start state manager.
 	sh.sm.Start(ctx)
 
-	// TODO: Have functions to generate the right genesis for the consensus used.
-	// All os this will be extracted to a consensus specific function that
-	// according to the consensus selected for the shard it does the right thing.
-	template, err := delegatedGenTemplate(sh.netName)
+	gen, err := sh.LoadGenesis(genesis)
 	if err != nil {
-		log.Errorw("Error creating genesis template for shard", "shardID", id, "err", err)
+		log.Errorw("Error loading genesis bootstrap for shard", "shardID", id, "err", err)
 		return err
 	}
-	genBoot, err := MakeDelegatedGenesisBlock(ctx, s.j, sh.bs, s.syscalls, *template)
-	if err != nil {
-		log.Errorw("Error creating genesis block for shard", "shardID", id, "err", err)
-		return err
-	}
-	// Set consensus in new chainStore
-	err = sh.ch.SetGenesis(genBoot.Genesis)
-	if err != nil {
-		log.Errorw("Error setting genesis for shard", "shardID", id, "err", err)
-		return err
-	}
-	//LoadGenesis to pass it
-	gen, err := chain.LoadGenesis(sh.sm)
-	if err != nil {
-		log.Errorw("Error loading genesis for shard", "shardID", id, "err", err)
-		return err
-	}
-
 	sh.cons = delegcns.NewDelegatedConsensus(sh.sm, s.beacon, s.verifier, gen)
 
 	log.Infow("Genesis and consensus for shard created", "shardID", id)
@@ -188,7 +167,7 @@ func (s *ShardingSub) newShard(id string, parentAPI *impl.FullNodeAPI, isMiner b
 	bserv := blockservice.New(sh.bs, offline.Exchange(sh.bs))
 	prov := messagepool.NewProvider(sh.sm, s.pubsub)
 
-	sh.mpool, err = messagepool.New(prov, sh.ds, s.us, dtypes.NetworkName(template.NetworkName), s.j)
+	sh.mpool, err = messagepool.New(prov, sh.ds, s.us, dtypes.NetworkName(sh.netName), s.j)
 	if err != nil {
 		log.Errorw("Error creating message pool for shard", "shardID", id, "err", err)
 		return err
@@ -268,7 +247,7 @@ func (s *ShardingSub) listenShardEvents(ctx context.Context, sh *Shard) {
 			// If we are not already subscribed to the shard.
 			if !ok {
 				// Create shard with id from parentAPI
-				err = s.newShard(k, api, shardMap[k].isMiner)
+				err = s.newShard(k, api, shardMap[k].genesis, shardMap[k].isMiner)
 				if err != nil {
 					log.Errorw("Error creating new shard", "shardID", k, "err", err)
 					return true, err

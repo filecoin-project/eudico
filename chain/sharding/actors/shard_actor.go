@@ -55,8 +55,9 @@ var _ runtime.VMActor = SplitActor{}
 //TODO: Rename to AddShardParams if we keep having more than
 // one actor in the same directory. Although this must be rethought.
 type AddParams struct {
-	Name      []byte
-	Consensus ConsensusType
+	Name       []byte
+	Consensus  ConsensusType
+	DelegMiner address.Address
 	// NOTE: We could additional parameters here
 	// to configure the type of shard to spawn.
 	// When FVM is a thing we'll be able to write
@@ -116,10 +117,17 @@ func (a ShardActor) Add(rt runtime.Runtime, params *AddParams) *AddShardReturn {
 			Status:     status,
 		}
 
-		sh.addStake(rt, &st, sourceAddr, value)
-
 		// Increase the number of child shards for the current network.
 		st.TotalShards++
+
+		// TODO: Everything is specific for the delegated consensus now
+		// (the only consensus supported). We should choose the right option
+		// when we suport new consensus.
+		// Build genesis for the shard assigning delegMiner
+		sh.Genesis, err = writeGenesis(shid, params.DelegMiner, st.TotalShards)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed genesis")
+
+		sh.addStake(rt, &st, sourceAddr, value)
 
 	})
 

@@ -3,12 +3,12 @@ MINER=$(./eudico wallet list | awk 'NR==2 {print $1}')
 
 if [[ "$1" == "add" ]]; then
         echo [*] Create new shard with enough stake to mine
-        ./eudico send --from=$MINER --method=2 --params-json='{"Name":"dGVzdFNoYXJk", "Consensus": 0}' t064 1
+        ./eudico send --from=$MINER --method=2 --params-json='{"Name":"dGVzdFNoYXJk", "Consensus": 0, "DelegMiner": "t1r6o5d5s5zjzqhqs4nh3ac7k5e7dhg5oqa7v64oy"}' t064 1
 fi
 
 if [[ "$1" == "join" ]]; then
         echo [*] Create new shard without stake to mine
-        ./eudico send --from=$MINER --method=2 --params-json='{"Name":"dGVzdFNoYXJk", "Consensus": 0}' t064 0.5
+        ./eudico send --from=$MINER --method=2 --params-json='{"Name":"dGVzdFNoYXJk", "Consensus": 0, "DelegMiner": "t1r6o5d5s5zjzqhqs4nh3ac7k5e7dhg5oqa7v64oy"}' t064 0.5
         echo [*] Wait to see if we mine
         sleep 10
         echo [*] Stake enough to start mining
