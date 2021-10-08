@@ -73,8 +73,12 @@ type Shard struct {
 	// We are currently going to keep a HAMT here in
 	// case MinerState starts growing with additonal params.
 	// If this is not the case, let's switch to BalanceTable
-	Stake  cid.Cid //HAMT[Address]MinerState
+	Stake cid.Cid //HAMT[Address]MinerState
+	// State of the shard
 	Status Status
+	// Genesis bootstrap for the shard. This is created
+	// when the shard is generated.
+	Genesis []byte
 	// TODO:
 	// PowerTable // PowerTable of miners in shard.
 }

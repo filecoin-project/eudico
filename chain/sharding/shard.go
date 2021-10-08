@@ -1,6 +1,7 @@
 package sharding
 
 import (
+	"bytes"
 	"context"
 	"sync"
 	"time"
@@ -19,9 +20,11 @@ import (
 	"github.com/filecoin-project/lotus/lib/peermgr"
 	"github.com/filecoin-project/lotus/node/impl"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
+	"github.com/ipld/go-car"
 	"github.com/libp2p/go-libp2p-core/host"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"golang.org/x/xerrors"
 )
 
 // Shard object abstracting all sharding processes and objects.
@@ -73,6 +76,33 @@ type Shard struct {
 	miningCncl context.CancelFunc
 }
 
+// LoadGenesis from serialized genesis bootstrap
+func (sh *Shard) LoadGenesis(genBytes []byte) (chain.Genesis, error) {
+	c, err := car.LoadCar(sh.bs, bytes.NewReader(genBytes))
+	if err != nil {
+		return nil, xerrors.Errorf("loading genesis car file failed: %w", err)
+	}
+	if len(c.Roots) != 1 {
+		return nil, xerrors.New("expected genesis file to have one root")
+	}
+	root, err := sh.bs.Get(c.Roots[0])
+	if err != nil {
+		return nil, err
+	}
+
+	h, err := types.DecodeBlock(root.RawData())
+	if err != nil {
+		return nil, xerrors.Errorf("decoding block failed: %w", err)
+	}
+
+	err = sh.ch.SetGenesis(h)
+	if err != nil {
+		log.Errorw("Error setting genesis for shard", "err", err)
+		return nil, err
+	}
+	//LoadGenesis to pass it
+	return chain.LoadGenesis(sh.sm)
+}
 func (sh *Shard) HandleIncomingMessages(ctx context.Context, bootstrapper dtypes.Bootstrapper) error {
 	nn := dtypes.NetworkName(sh.netName)
 	v := sub.NewMessageValidator(sh.host.ID(), sh.mpool)

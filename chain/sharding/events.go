@@ -12,6 +12,7 @@ import (
 	adt "github.com/filecoin-project/specs-actors/v5/actors/util/adt"
 	"github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
+	"golang.org/x/xerrors"
 )
 
 // Diff structure for state changes
@@ -23,6 +24,7 @@ type diffFunc func() (bool, events.StateChange, error)
 // Info included in diff structure.
 type diffInfo struct {
 	isMiner bool
+	genesis []byte
 }
 
 // Checks if there's a new shard and if we should start listening to it.
@@ -95,12 +97,21 @@ func (s *ShardingSub) checkShardChange(ctx context.Context, cst *cbor.BasicIpldS
 
 func (s *ShardingSub) diffShards(ctx context.Context, outDiff map[string]diffInfo, shid cid.Cid, cst *cbor.BasicIpldStore, oldSt, newSt shardactor.ShardState) error {
 	// Check if we are in the mining list.
-	in, err := s.isMiner(ctx, adt.WrapStore(ctx, cst), shid, oldSt, newSt)
+	store := adt.WrapStore(ctx, cst)
+	in, err := s.isMiner(ctx, store, shid, oldSt, newSt)
+	if err != nil {
+		return err
+	}
+	// Get genesis for shard
+	gen, err := shardGenesis(ctx, store, newSt, shid)
 	if err != nil {
 		return err
 	}
 	if in {
-		outDiff[shid.String()] = diffInfo{isMiner: true}
+		outDiff[shid.String()] = diffInfo{
+			isMiner: true,
+			genesis: gen,
+		}
 		// If we are in the list of miners we are also in the
 		// list fo stakers, so we can move on to the next shard.
 		return nil
@@ -112,7 +123,7 @@ func (s *ShardingSub) diffShards(ctx context.Context, outDiff map[string]diffInf
 		return err
 	}
 	if in {
-		outDiff[shid.String()] = diffInfo{}
+		outDiff[shid.String()] = diffInfo{genesis: gen}
 	}
 	return nil
 }
@@ -221,6 +232,17 @@ func (s *ShardingSub) addrInStakes(ctx context.Context, store adt.Store, shID ci
 		}
 	}
 	return false, nil
+}
+
+func shardGenesis(ctx context.Context, store adt.Store, st shardactor.ShardState, shid cid.Cid) ([]byte, error) {
+	sh, has, err := st.GetShard(store, shid)
+	if err != nil {
+		return nil, err
+	}
+	if !has {
+		return nil, xerrors.New("no shard with specified shardID")
+	}
+	return sh.Genesis, nil
 }
 
 func (s *ShardingSub) isMiner(ctx context.Context, store adt.Store, shID cid.Cid, oldSt, newSt shardactor.ShardState) (bool, error) {

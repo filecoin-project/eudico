@@ -42,8 +42,9 @@ func TestAdd(t *testing.T) {
 	owner := tutil.NewIDAddr(t, 101)
 
 	addParams := &actor.AddParams{
-		Name:      []byte("testShard"),
-		Consensus: actor.Delegated,
+		Name:       []byte("testShard"),
+		Consensus:  actor.Delegated,
+		DelegMiner: owner,
 	}
 
 	t.Log("create new shard successfully")
@@ -84,8 +85,9 @@ func TestAdd(t *testing.T) {
 
 	t.Log("create new shard with ID of existing shard")
 	addParams = &actor.AddParams{
-		Name:      []byte("testShard2"),
-		Consensus: actor.Delegated,
+		Name:       []byte("testShard2"),
+		Consensus:  actor.Delegated,
+		DelegMiner: owner,
 	}
 
 	// Send a small amount of stake
@@ -123,8 +125,9 @@ func TestJoin(t *testing.T) {
 	joiner := tutil.NewIDAddr(t, 102)
 
 	addParams := &actor.AddParams{
-		Name:      []byte("testShard"),
-		Consensus: actor.Delegated,
+		Name:       []byte("testShard"),
+		Consensus:  actor.Delegated,
+		DelegMiner: owner,
 	}
 
 	t.Log("create new shard")
