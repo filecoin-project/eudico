@@ -9,9 +9,9 @@ import (
 	init6 "github.com/filecoin-project/specs-actors/v6/actors/builtin/init"
 	cid "github.com/ipfs/go-cid"
 
-	"github.com/filecoin-project/specs-actors/v5/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v5/actors/runtime"
-	"github.com/filecoin-project/specs-actors/v5/actors/util/adt"
+	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
+	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
 )
 
 // copied init5 actor but allows the SplitActor to be constructed
