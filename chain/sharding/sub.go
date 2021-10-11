@@ -13,7 +13,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
 	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/messagepool"
-	shardactor "github.com/filecoin-project/lotus/chain/sharding/actors"
+	shardactor "github.com/filecoin-project/lotus/chain/consensus/actors/shard"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"

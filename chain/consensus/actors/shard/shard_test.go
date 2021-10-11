@@ -1,4 +1,4 @@
-package actor_test
+package shard_test
 
 import (
 	"testing"
@@ -6,7 +6,8 @@ import (
 	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/exitcode"
-	actor "github.com/filecoin-project/lotus/chain/sharding/actors"
+	initactor "github.com/filecoin-project/lotus/chain/consensus/actors/init"
+	actor "github.com/filecoin-project/lotus/chain/consensus/actors/shard"
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
 	"github.com/filecoin-project/specs-actors/v6/support/mock"
@@ -208,7 +209,7 @@ func newHarness(t *testing.T) *shActorHarness {
 }
 func (h *shActorHarness) constructAndVerify(rt *mock.Runtime) {
 	rt.ExpectValidateCallerAddr(builtin.SystemActorAddr)
-	ret := rt.Call(h.ShardActor.Constructor, &actor.ConstructorParams{NetworkName: "root"})
+	ret := rt.Call(h.ShardActor.Constructor, &initactor.ConstructorParams{NetworkName: "root"})
 	assert.Nil(h.t, ret)
 	rt.Verify()
 

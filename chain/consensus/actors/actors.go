@@ -1,9 +1,6 @@
 package actor
 
 import (
-	"github.com/filecoin-project/lotus/chain/actors"
-	"github.com/filecoin-project/lotus/chain/vm"
-	exported5 "github.com/filecoin-project/specs-actors/v5/actors/builtin/exported"
 	"github.com/ipfs/go-cid"
 	mh "github.com/multiformats/go-multihash"
 )
@@ -26,6 +23,7 @@ func init() {
 	builtinActors = make(map[cid.Cid]*actorInfo)
 
 	for id, info := range map[*cid.Cid]*actorInfo{ //nolint:nomaprange
+		// TODO: Find better names.
 		&SplitActorCodeID: {name: "deleg/0/split"},
 		&ShardActorCodeID: {name: "deleg/0/shards"},
 	} {
@@ -36,17 +34,4 @@ func init() {
 		*id = c
 		builtinActors[c] = info
 	}
-}
-
-func NewActorRegistry() *vm.ActorRegistry {
-	inv := vm.NewActorRegistry()
-
-	// TODO: drop unneeded
-	inv.Register(vm.ActorsVersionPredicate(actors.Version5), exported5.BuiltinActors()...)
-	inv.Register(nil, InitActor{}) // use our custom init actor
-
-	inv.Register(nil, SplitActor{})
-	inv.Register(nil, ShardActor{})
-
-	return inv
 }

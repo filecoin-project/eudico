@@ -1,10 +1,10 @@
-package actor
+package shard
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"time"
 
 	address "github.com/filecoin-project/go-address"
@@ -19,6 +19,7 @@ import (
 	init_ "github.com/filecoin-project/lotus/chain/actors/builtin/init"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/reward"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/system"
+	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/filecoin-project/lotus/chain/gen"
 	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
 	"github.com/filecoin-project/lotus/chain/state"
@@ -34,30 +35,25 @@ import (
 	xerrors "golang.org/x/xerrors"
 )
 
-const AccountStart = 100
-const MinerStart = 1000
-const MaxAccounts = MinerStart - AccountStart
-
-func writeGenesis(shardID cid.Cid, miner address.Address, seq uint64) ([]byte, error) {
+// TODO: Maybe remove sequence if timestamp works fine.
+func WriteGenesis(netName string, miner, vreg, rem address.Address, seq uint64, w io.Writer) error {
 	bs := bstore.WrapIDStore(bstore.NewMemorySync())
-	template, err := delegatedGenTemplate(shardID.String(), miner)
+	template, err := delegatedGenTemplate(netName, miner, vreg, rem)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	b, err := MakeDelegatedGenesisBlock(context.TODO(), bs, *template, seq)
 	if err != nil {
-		return nil, xerrors.Errorf("make genesis block: %w", err)
+		return xerrors.Errorf("make genesis block: %w", err)
 	}
 	offl := offline.Exchange(bs)
 	blkserv := blockservice.New(bs, offl)
 	dserv := merkledag.NewDAGService(blkserv)
-	buf := new(bytes.Buffer)
 
-	// Serialize as CAR the genesis bootstrap to store it in the shard actor.
-	if err := car.WriteCarWithWalker(context.TODO(), dserv, []cid.Cid{b.Genesis.Cid()}, buf, gen.CarWalkFunc); err != nil {
-		return nil, xerrors.Errorf("write genesis car: %w", err)
+	if err := car.WriteCarWithWalker(context.TODO(), dserv, []cid.Cid{b.Genesis.Cid()}, w, gen.CarWalkFunc); err != nil {
+		return xerrors.Errorf("write genesis car: %w", err)
 	}
-	return buf.Bytes(), nil
+	return nil
 }
 
 // TODO: Extract all of these function to consensus specific code that can be called
@@ -318,7 +314,7 @@ func SetupShardActor(ctx context.Context, bs bstore.Blockstore, networkName stri
 	}
 
 	act := &types.Actor{
-		Code:    ShardActorCodeID,
+		Code:    actor.ShardActorCodeID,
 		Balance: big.Zero(),
 		Head:    statecid,
 	}
@@ -326,22 +322,10 @@ func SetupShardActor(ctx context.Context, bs bstore.Blockstore, networkName stri
 	return act, nil
 }
 
-func delegatedGenTemplate(shardID string, miner address.Address) (*genesis.Template, error) {
-	// TODO: Hardcoding the verifyregRoot address here for now. We'll accept it as param in shardactor.Add in the next
-	// iteration (when we need it).
-	vreg, err := address.NewFromString("t3w4spg6jjgfp4adauycfa3fg5mayljflf6ak2qzitflcqka5sst7b7u2bagle3ttnddk6dn44rhhncijboc4q")
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO: Same here, hardcoding an address until we need to set it in AddParams.
-	rem, err := address.NewFromString("t3tf274q6shnudgrwrwkcw5lzw3u247234wnep37fqx4sobyh2susfvs7qzdwxj64uaizztosuggvyump4xf7a")
-	if err != nil {
-		return nil, err
-	}
+func delegatedGenTemplate(shardID string, miner, vreg, rem address.Address) (*genesis.Template, error) {
 
 	return &genesis.Template{
-		NetworkVersion: network.Version13,
+		NetworkVersion: network.Version14,
 		Accounts: []genesis.Actor{{
 			Type:    genesis.TAccount,
 			Balance: types.FromFil(2),

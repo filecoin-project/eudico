@@ -11,6 +11,7 @@ import (
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/consensus"
+	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
 	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/messagepool"
 	"github.com/filecoin-project/lotus/chain/stmgr"
@@ -221,7 +222,8 @@ func (sh *Shard) mine(ctx context.Context) {
 	// Mining in the root chain is an independent process.
 	log.Infow("Started mining in shard", "shardID", sh.ID)
 	// TODO: Support several mining consensus.
-	go sh.mineDelegated()
+	// TODO: We should check if it throws an error.
+	go delegcns.Mine(sh.ctx, sh.api, nil)
 }
 
 func (sh *Shard) stopMining(ctx context.Context) {

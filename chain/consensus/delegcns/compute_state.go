@@ -5,8 +5,9 @@ import (
 	"sync/atomic"
 
 	"github.com/filecoin-project/go-state-types/network"
-	"github.com/filecoin-project/lotus/chain/actors"
-	"github.com/filecoin-project/lotus/chain/store"
+	"github.com/filecoin-project/lotus/chain/actors/builtin/reward"
+	"github.com/filecoin-project/lotus/chain/consensus/actors/registry"
+	"github.com/filecoin-project/lotus/chain/rand"
 	"github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"go.opencensus.io/stats"
@@ -17,12 +18,8 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 
-	exported6 "github.com/filecoin-project/specs-actors/v6/actors/builtin/exported"
-
-	reward "github.com/filecoin-project/lotus/chain/actors/builtin/reward"
-	"github.com/filecoin-project/lotus/chain/rand"
-	shardactor "github.com/filecoin-project/lotus/chain/sharding/actors"
 	"github.com/filecoin-project/lotus/chain/stmgr"
+	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/vm"
 	"github.com/filecoin-project/lotus/metrics"
@@ -49,23 +46,10 @@ func DefaultUpgradeSchedule() stmgr.UpgradeSchedule {
 	return us
 }
 
-func NewActorRegistry() *vm.ActorRegistry {
-	inv := vm.NewActorRegistry()
-
-	// TODO: drop unneeded
-	inv.Register(vm.ActorsVersionPredicate(actors.Version5), exported6.BuiltinActors()...)
-	inv.Register(nil, shardactor.InitActor{}) // use our custom init actor
-
-	inv.Register(nil, shardactor.SplitActor{})
-	inv.Register(nil, shardactor.ShardActor{})
-
-	return inv
-}
-
 type tipSetExecutor struct{}
 
 func (t *tipSetExecutor) NewActorRegistry() *vm.ActorRegistry {
-	return shardactor.NewActorRegistry()
+	return registry.NewActorRegistry()
 }
 
 func TipSetExecutor() stmgr.Executor {
@@ -87,7 +71,7 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 			Epoch:          epoch,
 			Rand:           r,
 			Bstore:         sm.ChainStore().StateBlockstore(),
-			Actors:         shardactor.NewActorRegistry(),
+			Actors:         registry.NewActorRegistry(),
 			Syscalls:       sm.Syscalls,
 			CircSupplyCalc: sm.GetVMCirculatingSupply,
 			NtwkVersion:    sm.GetNtwkVersion,
@@ -233,7 +217,6 @@ func (t *tipSetExecutor) ExecuteTipSet(ctx context.Context, sm *stmgr.StateManag
 		parentEpoch = parent.Height
 	}
 
-	// TODO: No beacon assigned to StateRand. I don't think is needed for delegated consensus.
 	r := rand.NewStateRand(sm.ChainStore(), ts.Cids(), nil)
 
 	blkmsgs, err := sm.ChainStore().BlockMsgsForTipset(ts)

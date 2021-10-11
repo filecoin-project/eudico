@@ -1,12 +1,15 @@
-package actor
+package shard
 
 import (
-	addr "github.com/filecoin-project/go-address"
+	"bytes"
+
 	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/cbor"
 	"github.com/filecoin-project/go-state-types/exitcode"
+	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
+	initactor "github.com/filecoin-project/lotus/chain/consensus/actors/init"
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
@@ -17,8 +20,8 @@ var _ runtime.VMActor = ShardActor{}
 
 // ShardActorAddr is initialized in genesis with the
 // address t064
-var ShardActorAddr = func() addr.Address {
-	a, err := addr.NewIDAddress(64)
+var ShardActorAddr = func() address.Address {
+	a, err := address.NewIDAddress(64)
 	if err != nil {
 		panic(err)
 	}
@@ -39,7 +42,7 @@ func (a ShardActor) Exports() []interface{} {
 }
 
 func (a ShardActor) Code() cid.Cid {
-	return ShardActorCodeID
+	return actor.ShardActorCodeID
 }
 
 func (a ShardActor) IsSingleton() bool {
@@ -49,8 +52,6 @@ func (a ShardActor) IsSingleton() bool {
 func (a ShardActor) State() cbor.Er {
 	return new(ShardState)
 }
-
-var _ runtime.VMActor = SplitActor{}
 
 //TODO: Rename to AddShardParams if we keep having more than
 // one actor in the same directory. Although this must be rethought.
@@ -74,7 +75,7 @@ type AddShardReturn struct {
 	ID cid.Cid
 }
 
-func (a ShardActor) Constructor(rt runtime.Runtime, params *ConstructorParams) *abi.EmptyValue {
+func (a ShardActor) Constructor(rt runtime.Runtime, params *initactor.ConstructorParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
 	st, err := ConstructShardState(adt.AsStore(rt), params.NetworkName)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
@@ -124,8 +125,22 @@ func (a ShardActor) Add(rt runtime.Runtime, params *AddParams) *AddShardReturn {
 		// (the only consensus supported). We should choose the right option
 		// when we suport new consensus.
 		// Build genesis for the shard assigning delegMiner
-		sh.Genesis, err = writeGenesis(shid, params.DelegMiner, st.TotalShards)
+		buf := new(bytes.Buffer)
+
+		// TODO: Hardcoding the verifyregRoot address here for now.
+		// We'll accept it as param in shardactor.Add in the next
+		// iteration (when we need it).
+		vreg, err := address.NewFromString("t3w4spg6jjgfp4adauycfa3fg5mayljflf6ak2qzitflcqka5sst7b7u2bagle3ttnddk6dn44rhhncijboc4q")
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed parsin vreg addr")
+
+		// TODO: Same here, hardcoding an address
+		// until we need to set it in AddParams.
+		rem, err := address.NewFromString("t3tf274q6shnudgrwrwkcw5lzw3u247234wnep37fqx4sobyh2susfvs7qzdwxj64uaizztosuggvyump4xf7a")
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed parsin rem addr")
+
+		err = WriteGenesis(shid.String(), params.DelegMiner, vreg, rem, st.TotalShards, buf)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed genesis")
+		sh.Genesis = buf.Bytes()
 
 		sh.addStake(rt, &st, sourceAddr, value)
 

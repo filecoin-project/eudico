@@ -1,4 +1,4 @@
-package actor
+package shard
 
 import (
 	address "github.com/filecoin-project/go-address"

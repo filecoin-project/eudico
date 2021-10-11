@@ -6,7 +6,7 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/chain/events"
-	shardactor "github.com/filecoin-project/lotus/chain/sharding/actors"
+	shardactor "github.com/filecoin-project/lotus/chain/consensus/actors/shard"
 	"github.com/filecoin-project/lotus/chain/types"
 	builtin "github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	adt "github.com/filecoin-project/specs-actors/v6/actors/util/adt"

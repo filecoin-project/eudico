@@ -1,10 +1,11 @@
-package actor
+package split
 
 import (
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/cbor"
+	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	builtin5 "github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
@@ -33,7 +34,7 @@ func (a SplitActor) Exports() []interface{} {
 }
 
 func (a SplitActor) Code() cid.Cid {
-	return SplitActorCodeID
+	return actor.SplitActorCodeID
 }
 
 func (a SplitActor) IsSingleton() bool {
