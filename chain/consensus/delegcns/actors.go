@@ -6,7 +6,7 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/cbor"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
-	builtin5 "github.com/filecoin-project/specs-actors/v6/actors/builtin"
+	builtin6 "github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
 	"github.com/ipfs/go-cid"
 	mh "github.com/multiformats/go-multihash"
@@ -89,8 +89,8 @@ func (a SplitActor) Split(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue
 	toSend := big.Div(bal, big.NewInt(int64(len(st.Beneficiaries))))
 
 	for _, beneficiary := range st.Beneficiaries {
-		code := rt.Send(beneficiary, 0, nil, toSend, &builtin5.Discard{})
-		builtin5.RequireSuccess(rt, code, "send failed")
+		code := rt.Send(beneficiary, 0, nil, toSend, &builtin6.Discard{})
+		builtin6.RequireSuccess(rt, code, "send failed")
 	}
 
 	return nil

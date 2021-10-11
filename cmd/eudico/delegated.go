@@ -103,7 +103,7 @@ var delegatedGenesisCmd = &cli.Command{
 		}
 
 		template := genesis.Template{
-			NetworkVersion: network.Version13,
+			NetworkVersion: network.Version14,
 			Accounts: []genesis.Actor{{
 				Type:    genesis.TAccount,
 				Balance: types.FromFil(2),
