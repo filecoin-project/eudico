@@ -6,15 +6,15 @@ import (
 	"github.com/filecoin-project/go-state-types/cbor"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	init0 "github.com/filecoin-project/specs-actors/actors/builtin/init"
-	init5 "github.com/filecoin-project/specs-actors/v5/actors/builtin/init"
+	init6 "github.com/filecoin-project/specs-actors/v6/actors/builtin/init"
 	cid "github.com/ipfs/go-cid"
 
-	"github.com/filecoin-project/specs-actors/v5/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v5/actors/runtime"
-	"github.com/filecoin-project/specs-actors/v5/actors/util/adt"
+	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
+	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
 )
 
-// copied init5 actor but allows the SplitActor to be constructed
+// copied init6 actor but allows the SplitActor to be constructed
 
 // The init actor uniquely has the power to create new actors.
 // It maintains a table resolving pubkey and temporary actor addresses to the canonical ID-addresses.
@@ -35,7 +35,7 @@ func (a InitActor) IsSingleton() bool {
 	return true
 }
 
-func (a InitActor) State() cbor.Er { return new(init5.State) }
+func (a InitActor) State() cbor.Er { return new(init6.State) }
 
 var _ runtime.VMActor = InitActor{}
 
@@ -46,7 +46,7 @@ type ConstructorParams = init0.ConstructorParams
 
 func (a InitActor) Constructor(rt runtime.Runtime, params *ConstructorParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
-	st, err := init5.ConstructState(adt.AsStore(rt), params.NetworkName)
+	st, err := init6.ConstructState(adt.AsStore(rt), params.NetworkName)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
 	rt.StateCreate(st)
 	return nil
@@ -80,7 +80,7 @@ func (a InitActor) Exec(rt runtime.Runtime, params *ExecParams) *ExecReturn {
 
 	// Allocate an ID for this actor.
 	// Store mapping of pubkey or actor address to actor ID
-	var st init5.State
+	var st init6.State
 	var idAddr addr.Address
 	rt.StateTransaction(&st, func() {
 		var err error

@@ -17,7 +17,7 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 
-	exported5 "github.com/filecoin-project/specs-actors/v5/actors/builtin/exported"
+	exported6 "github.com/filecoin-project/specs-actors/v6/actors/builtin/exported"
 
 	reward "github.com/filecoin-project/lotus/chain/actors/builtin/reward"
 	"github.com/filecoin-project/lotus/chain/rand"
@@ -52,7 +52,7 @@ func NewActorRegistry() *vm.ActorRegistry {
 	inv := vm.NewActorRegistry()
 
 	// TODO: drop unneeded
-	inv.Register(vm.ActorsVersionPredicate(actors.Version5), exported5.BuiltinActors()...)
+	inv.Register(vm.ActorsVersionPredicate(actors.Version5), exported6.BuiltinActors()...)
 	inv.Register(nil, InitActor{}) // use our custom init actor
 
 	inv.Register(nil, SplitActor{})

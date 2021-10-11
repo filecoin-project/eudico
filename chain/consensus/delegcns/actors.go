@@ -6,8 +6,8 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/cbor"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
-	builtin5 "github.com/filecoin-project/specs-actors/v5/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v5/actors/runtime"
+	builtin5 "github.com/filecoin-project/specs-actors/v6/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
 	"github.com/ipfs/go-cid"
 	mh "github.com/multiformats/go-multihash"
 )
