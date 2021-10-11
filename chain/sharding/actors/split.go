@@ -5,9 +5,9 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/cbor"
-	"github.com/filecoin-project/specs-actors/v5/actors/builtin"
-	builtin5 "github.com/filecoin-project/specs-actors/v5/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v5/actors/runtime"
+	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
+	builtin5 "github.com/filecoin-project/specs-actors/v6/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
 	cid "github.com/ipfs/go-cid"
 )
 

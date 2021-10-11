@@ -131,7 +131,7 @@ func (s *ShardingSub) newShard(id string, parentAPI *impl.FullNodeAPI, genesis [
 
 	// TODO: Use the weight for the right consensus algorithm.
 	sh.ch = store.NewChainStore(sh.bs, sh.bs, sh.ds, delegcns.Weight, s.j)
-	sh.sm, err = stmgr.NewStateManager(sh.ch, tsExec, s.syscalls, s.us)
+	sh.sm, err = stmgr.NewStateManager(sh.ch, tsExec, s.syscalls, s.us, s.beacon)
 	if err != nil {
 		log.Errorw("Error creating state manager for shard", "shardID", id, "err", err)
 		return err

@@ -3,8 +3,8 @@ package actor
 import (
 	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/specs-actors/v5/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v5/actors/util/adt"
+	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
 	cid "github.com/ipfs/go-cid"
 	mh "github.com/multiformats/go-multihash"
 	"golang.org/x/xerrors"

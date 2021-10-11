@@ -19,9 +19,6 @@ import (
 
 	exported6 "github.com/filecoin-project/specs-actors/v6/actors/builtin/exported"
 
-	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/big"
-	"github.com/filecoin-project/go-state-types/network"
 	reward "github.com/filecoin-project/lotus/chain/actors/builtin/reward"
 	"github.com/filecoin-project/lotus/chain/rand"
 	shardactor "github.com/filecoin-project/lotus/chain/sharding/actors"
@@ -29,12 +26,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/vm"
 	"github.com/filecoin-project/lotus/metrics"
-	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
-	"github.com/ipfs/go-cid"
-	cbg "github.com/whyrusleeping/cbor-gen"
-	"go.opencensus.io/stats"
-	"go.opencensus.io/trace"
-	"golang.org/x/xerrors"
 )
 
 func DefaultUpgradeSchedule() stmgr.UpgradeSchedule {
@@ -63,10 +54,10 @@ func NewActorRegistry() *vm.ActorRegistry {
 
 	// TODO: drop unneeded
 	inv.Register(vm.ActorsVersionPredicate(actors.Version5), exported6.BuiltinActors()...)
-	inv.Register(nil, InitActor{}) // use our custom init actor
+	inv.Register(nil, shardactor.InitActor{}) // use our custom init actor
 
-	inv.Register(nil, SplitActor{})
-	inv.Register(nil, ShardActor{})
+	inv.Register(nil, shardactor.SplitActor{})
+	inv.Register(nil, shardactor.ShardActor{})
 
 	return inv
 }
