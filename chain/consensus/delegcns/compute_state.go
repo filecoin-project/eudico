@@ -6,6 +6,7 @@ import (
 
 	"github.com/filecoin-project/go-state-types/network"
 	"github.com/filecoin-project/lotus/chain/actors"
+	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"go.opencensus.io/stats"
@@ -18,9 +19,9 @@ import (
 
 	exported5 "github.com/filecoin-project/specs-actors/v5/actors/builtin/exported"
 
-	"github.com/filecoin-project/lotus/chain/actors/builtin"
+	reward "github.com/filecoin-project/lotus/chain/actors/builtin/reward"
+	"github.com/filecoin-project/lotus/chain/rand"
 	"github.com/filecoin-project/lotus/chain/stmgr"
-	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/vm"
 	"github.com/filecoin-project/lotus/metrics"
@@ -151,7 +152,7 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 		}
 
 		rwMsg := &types.Message{
-			From:       builtin.RewardActorAddr,
+			From:       reward.Address,
 			To:         b.Miner,
 			Nonce:      uint64(epoch),
 			Value:      types.FromFil(1), // always reward 1 fil
@@ -230,7 +231,8 @@ func (t *tipSetExecutor) ExecuteTipSet(ctx context.Context, sm *stmgr.StateManag
 		parentEpoch = parent.Height
 	}
 
-	r := store.NewChainRand(sm.ChainStore(), ts.Cids())
+	// TODO: No beacon assigned to StateRand. I don't think is needed for delegated consensus.
+	r := rand.NewStateRand(sm.ChainStore(), ts.Cids(), nil)
 
 	blkmsgs, err := sm.ChainStore().BlockMsgsForTipset(ts)
 	if err != nil {

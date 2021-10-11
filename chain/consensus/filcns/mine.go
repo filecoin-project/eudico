@@ -2,7 +2,6 @@ package filcns
 
 import (
 	"context"
-	"github.com/filecoin-project/lotus/chain/consensus"
 
 	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
