@@ -14,7 +14,7 @@ import (
 	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
 )
 
-// copied init5 actor but allows the SplitActor to be constructed
+// copied init6 actor but allows the SplitActor to be constructed
 
 // The init actor uniquely has the power to create new actors.
 // It maintains a table resolving pubkey and temporary actor addresses to the canonical ID-addresses.
