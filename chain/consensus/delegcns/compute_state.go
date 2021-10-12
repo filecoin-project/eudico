@@ -30,7 +30,7 @@ func DefaultUpgradeSchedule() stmgr.UpgradeSchedule {
 
 	updates := []stmgr.Upgrade{{
 		Height:    -1,
-		Network:   network.Version13,
+		Network:   network.Version14,
 		Migration: nil,
 		Expensive: true,
 	},

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"time"
 
 	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -38,7 +37,7 @@ import (
 // TODO: Maybe remove sequence if timestamp works fine.
 func WriteGenesis(netName string, miner, vreg, rem address.Address, seq uint64, w io.Writer) error {
 	bs := bstore.WrapIDStore(bstore.NewMemorySync())
-	template, err := delegatedGenTemplate(netName, miner, vreg, rem)
+	template, err := delegatedGenTemplate(netName, miner, vreg, rem, seq)
 	if err != nil {
 		return err
 	}
@@ -322,7 +321,7 @@ func SetupShardActor(ctx context.Context, bs bstore.Blockstore, networkName stri
 	return act, nil
 }
 
-func delegatedGenTemplate(shardID string, miner, vreg, rem address.Address) (*genesis.Template, error) {
+func delegatedGenTemplate(shardID string, miner, vreg, rem address.Address, seq uint64) (*genesis.Template, error) {
 
 	return &genesis.Template{
 		NetworkVersion: network.Version14,
@@ -333,7 +332,8 @@ func delegatedGenTemplate(shardID string, miner, vreg, rem address.Address) (*ge
 		}},
 		Miners:      nil,
 		NetworkName: shardID,
-		Timestamp:   uint64(time.Now().Unix()),
+		// Timestamp:   uint64(time.Now().Unix()),
+		Timestamp: seq,
 
 		VerifregRootKey: genesis.Actor{
 			Type:    genesis.TAccount,
