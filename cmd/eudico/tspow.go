@@ -2,35 +2,29 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"time"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/network"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/system"
+	"github.com/filecoin-project/lotus/chain/consensus/actors/shard"
+	param "github.com/filecoin-project/lotus/chain/consensus/params"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/gen/slashfilter"
+	"github.com/filecoin-project/lotus/chain/sharding"
 	adt0 "github.com/filecoin-project/specs-actors/actors/util/adt"
 	"github.com/google/uuid"
-	"github.com/ipfs/go-blockservice"
 	"github.com/ipfs/go-cid"
-	offline "github.com/ipfs/go-ipfs-exchange-offline"
 	cbor "github.com/ipfs/go-ipld-cbor"
-	"github.com/ipfs/go-merkledag"
-	"github.com/ipld/go-car"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
 
-	lapi "github.com/filecoin-project/lotus/api"
 	bstore "github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/consensus"
-	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
-	"github.com/filecoin-project/lotus/chain/gen"
 	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
@@ -39,14 +33,13 @@ import (
 	"github.com/filecoin-project/lotus/chain/wallet"
 	lcli "github.com/filecoin-project/lotus/cli"
 	cliutil "github.com/filecoin-project/lotus/cli/util"
-	"github.com/filecoin-project/lotus/cmd/lotus-sim/simulation/mock"
 	"github.com/filecoin-project/lotus/genesis"
 	"github.com/filecoin-project/lotus/journal"
 	"github.com/filecoin-project/lotus/node"
 )
 
 var tpowCmd = &cli.Command{
-	Name:  "tpow",
+	Name:  "tspow",
 	Usage: "TipSet PoW consensus testbed",
 	Subcommands: []*cli.Command{
 		tpowGenesisCmd,
@@ -57,25 +50,28 @@ var tpowCmd = &cli.Command{
 			node.Override(new(store.WeightFunc), tspow.Weight),
 			node.Unset(new(*slashfilter.SlashFilter)),
 			// TODO: This doesn't seem to be right, we should implement the right
-			// executor and upgradeSchedule for this consensus.
-			node.Override(new(stmgr.Executor), delegcns.TipSetExecutor()), //todo
-			node.Override(new(stmgr.UpgradeSchedule), delegcns.DefaultUpgradeSchedule()),
+			// executor and upgradeSchedule for this consensus, we currently
+			// use of the delegated consensus.
+			node.Override(new(stmgr.Executor), tspow.TipSetExecutor()), //todo
+			node.Override(new(stmgr.UpgradeSchedule), tspow.DefaultUpgradeSchedule()),
+
+			// Start shardin sub to listent to shard events
+			node.Override(new(*sharding.ShardingSub), sharding.NewShardSub),
+			node.Override(StartShardingSubKey, func(s *sharding.ShardingSub) {
+				s.Start()
+			}),
 		)),
 	},
 }
 
 var tpowGenesisCmd = &cli.Command{
 	Name:      "genesis",
-	Usage:     "Generate genesis for delegated consensus",
+	Usage:     "Generate genesis for tspow consensus",
 	ArgsUsage: "[outfile]",
 	Action: func(cctx *cli.Context) error {
 		if cctx.Args().Len() != 1 {
 			return xerrors.Errorf("expected 2 arguments")
 		}
-
-		j := journal.NilJournal()
-		bs := bstore.WrapIDStore(bstore.NewMemorySync())
-		syscalls := vm.Syscalls(mock.Verifier)
 
 		memks := wallet.NewMemKeyStore()
 		w, err := wallet.NewWallet(memks)
@@ -92,29 +88,6 @@ var tpowGenesisCmd = &cli.Command{
 			return err
 		}
 
-		template := genesis.Template{
-			NetworkVersion: network.Version13,
-			Accounts:       []genesis.Actor{},
-			Miners:         nil,
-			NetworkName:    "eudico-" + uuid.New().String(),
-			Timestamp:      uint64(time.Now().Unix()),
-
-			VerifregRootKey: genesis.Actor{
-				Type:    genesis.TAccount,
-				Balance: types.FromFil(2),
-				Meta:    json.RawMessage(`{"Owner":"` + vreg.String() + `"}`), // correct??
-			},
-			RemainderAccount: genesis.Actor{
-				Type: genesis.TAccount,
-				Meta: json.RawMessage(`{"Owner":"` + rem.String() + `"}`), // correct??
-			},
-		}
-
-		b, err := MakePoWGenesisBlock(context.TODO(), j, bs, syscalls, template)
-		if err != nil {
-			return xerrors.Errorf("make genesis block: %w", err)
-		}
-
 		fmt.Printf("GENESIS MINER ADDRESS: t0%d\n", genesis2.MinerStart)
 
 		f, err := os.OpenFile(cctx.Args().First(), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
@@ -122,11 +95,7 @@ var tpowGenesisCmd = &cli.Command{
 			return err
 		}
 
-		offl := offline.Exchange(bs)
-		blkserv := blockservice.New(bs, offl)
-		dserv := merkledag.NewDAGService(blkserv)
-
-		if err := car.WriteCarWithWalker(context.TODO(), dserv, []cid.Cid{b.Genesis.Cid()}, f, gen.CarWalkFunc); err != nil {
+		if err := shard.WriteGenesis("eudico-"+uuid.New().String(), shard.PoW, address.Undef, vreg, rem, uint64(time.Now().Unix()), f); err != nil {
 			return xerrors.Errorf("write genesis car: %w", err)
 		}
 
@@ -151,84 +120,16 @@ var tpowMinerCmd = &cli.Command{
 		defer closer()
 		ctx := cliutil.ReqContext(cctx)
 
-		head, err := api.ChainHead(ctx)
-		if err != nil {
-			return xerrors.Errorf("getting head: %w", err)
-		}
-
 		miner, err := address.NewFromString(cctx.Args().First())
 		if err != nil {
 			return err
 		}
-
-		log.Info("starting mining on @", head.Height())
-
-		for {
-			select {
-			case <-ctx.Done():
-				return nil
-			default:
-			}
-
-			base, err := api.ChainHead(ctx)
-			if err != nil {
-				log.Errorw("creating block failed", "error", err)
-				continue
-			}
-			base, _ = types.NewTipSet([]*types.BlockHeader{tspow.BestWorkBlock(base)})
-
-			expDiff := tspow.GenesisWorkTarget
-			if base.Height()+1 >= tspow.MaxDiffLookback {
-				lbr := base.Height() + 1 - tspow.DiffLookback(base.Height())
-				lbts, err := api.ChainGetTipSetByHeight(ctx, lbr, base.Key())
-				if err != nil {
-					return xerrors.Errorf("failed to get lookback tipset+1: %w", err)
-				}
-
-				expDiff = tspow.Difficulty(base, lbts)
-			}
-
-			diffb, err := expDiff.Bytes()
-			if err != nil {
-				return err
-			}
-
-			msgs, err := api.MpoolSelect(ctx, base.Key(), 1)
-			if err != nil {
-				log.Errorw("selecting messages failed", "error", err)
-			}
-
-			bh, err := api.MinerCreateBlock(context.TODO(), &lapi.BlockTemplate{
-				Miner:            miner,
-				Parents:          types.NewTipSetKey(tspow.BestWorkBlock(base).Cid()),
-				BeaconValues:     nil,
-				Ticket:           &types.Ticket{VRFProof: diffb},
-				Messages:         msgs,
-				Epoch:            base.Height() + 1,
-				Timestamp:        uint64(time.Now().Unix()),
-				WinningPoStProof: nil,
-			})
-			if err != nil {
-				log.Errorw("creating block failed", "error", err)
-				continue
-			}
-			if bh == nil {
-				continue
-			}
-
-			log.Info("try mining at @", base.Height(), base.String())
-
-			err = api.SyncSubmitBlock(ctx, &types.BlockMsg{
-				Header:        bh.Header,
-				BlsMessages:   bh.BlsMessages,
-				SecpkMessages: bh.SecpkMessages,
-			})
-			if err != nil {
-				log.Errorw("submitting block failed", "error", err)
-			}
-
-			log.Info("mined a block! ", bh.Cid())
+		if miner == address.Undef {
+			return xerrors.Errorf("no miner address specified to start mining")
 		}
+
+		log.Infow("Starting mining with miner", miner)
+		return tspow.Mine(ctx, miner, nil, api)
 	},
 }
 
@@ -280,7 +181,7 @@ func MakePoWGenesisBlock(ctx context.Context, j journal.Journal, bs bstore.Block
 
 	log.Infof("Empty Genesis root: %s", emptyroot)
 
-	wtb, err := tspow.GenesisWorkTarget.Bytes()
+	wtb, err := param.GenesisWorkTarget.Bytes()
 	if err != nil {
 		return nil, err
 	}

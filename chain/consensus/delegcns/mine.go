@@ -21,10 +21,10 @@ import (
 
 // NOTE: This is super ugly, but I'll use it
 // as a workaround to keep the mining implementation for each consensus
-// for the different type of API interfaces required in the same place.
+// for the different types of API interfaces in the same place.
 // This can't stay like this for long (for everyone's sake), but
 // will defer it to the future when I have time to give it a bit
-// more of thought and we find a more elegant way of takling this.
+// more of thought and we find a more elegant way of tackling this.
 func Mine(ctx context.Context, api *impl.FullNodeAPI, v0api v0api.FullNode) error {
 	if v0api != nil {
 		api := v0api

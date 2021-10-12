@@ -29,6 +29,7 @@ type ConsensusType uint64
 // List of supported/implemented consensus for shards.
 const (
 	Delegated ConsensusType = iota
+	PoW
 )
 
 // ShardStatus describes in what state in its lifecycle a shard is.

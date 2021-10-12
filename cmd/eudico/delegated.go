@@ -37,6 +37,7 @@ var delegatedCmd = &cli.Command{
 			node.Override(new(stmgr.Executor), delegcns.TipSetExecutor()),
 			node.Override(new(stmgr.UpgradeSchedule), delegcns.DefaultUpgradeSchedule()),
 
+			// Start shardin sub to listent to shard events
 			node.Override(new(*sharding.ShardingSub), sharding.NewShardSub),
 			node.Override(StartShardingSubKey, func(s *sharding.ShardingSub) {
 				s.Start()
@@ -81,7 +82,7 @@ var delegatedGenesisCmd = &cli.Command{
 			return err
 		}
 
-		if err := shard.WriteGenesis("eudico-"+uuid.New().String(), miner, vreg, rem, uint64(time.Now().Unix()), f); err != nil {
+		if err := shard.WriteGenesis("eudico-"+uuid.New().String(), shard.Delegated, miner, vreg, rem, uint64(time.Now().Unix()), f); err != nil {
 			return xerrors.Errorf("write genesis car: %w", err)
 		}
 

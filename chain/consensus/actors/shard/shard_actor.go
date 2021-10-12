@@ -14,9 +14,12 @@ import (
 	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
 	cid "github.com/ipfs/go-cid"
+	logging "github.com/ipfs/go-log/v2"
 )
 
 var _ runtime.VMActor = ShardActor{}
+
+var log = logging.Logger("shard-actor")
 
 // ShardActorAddr is initialized in genesis with the
 // address t064
@@ -138,7 +141,7 @@ func (a ShardActor) Add(rt runtime.Runtime, params *AddParams) *AddShardReturn {
 		rem, err := address.NewFromString("t3tf274q6shnudgrwrwkcw5lzw3u247234wnep37fqx4sobyh2susfvs7qzdwxj64uaizztosuggvyump4xf7a")
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed parsin rem addr")
 
-		err = WriteGenesis(shid.String(), params.DelegMiner, vreg, rem, st.TotalShards, buf)
+		err = WriteGenesis(shid.String(), sh.Consensus, params.DelegMiner, vreg, rem, st.TotalShards, buf)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed genesis")
 		sh.Genesis = buf.Bytes()
 

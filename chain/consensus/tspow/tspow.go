@@ -30,6 +30,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/beacon"
 	"github.com/filecoin-project/lotus/chain/consensus"
+	param "github.com/filecoin-project/lotus/chain/consensus/params"
 	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
@@ -41,12 +42,7 @@ import (
 	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 )
 
-var log = logging.Logger("fil-consensus")
-
-var GenesisWorkTarget = func() big.Int {
-	w, _ := big.FromString("4519783675352289407433363")
-	return w
-}()
+var log = logging.Logger("tspow-consensus")
 
 const MaxDiffLookback = 70
 
@@ -73,7 +69,7 @@ func Difficulty(baseTs, lbts *types.TipSet) big.Int {
 	prevdiff.SetBytes(baseTs.Blocks()[0].Ticket.VRFProof)
 	diff := big.Div(types.BigMul(prevdiff, big.NewInt(int64(expLbTime))), big.NewInt(int64(actTime)))
 
-	pgen, _ := big2.NewFloat(0).SetInt(GenesisWorkTarget.Int).Float64()
+	pgen, _ := big2.NewFloat(0).SetInt(param.GenesisWorkTarget.Int).Float64()
 	fdiff, _ := big2.NewFloat(0).SetInt(diff.Int).Float64()
 	pgen = fdiff * 100 / pgen
 	fmt.Printf("adjust %.4f%%, p%s lb%d (%.4f%% gen)\n", 100*float64(expLbTime)/float64(actTime), prevdiff, DiffLookback(baseTs.Height()), pgen)
@@ -145,7 +141,7 @@ func (tsp *TSPoW) ValidateBlock(ctx context.Context, b *types.FullBlock) (err er
 
 	// check work threshold
 	if b.Header.Height < MaxDiffLookback {
-		if !thr.Equals(GenesisWorkTarget) {
+		if !thr.Equals(param.GenesisWorkTarget) {
 			return xerrors.Errorf("wrong work target")
 		}
 	} else {

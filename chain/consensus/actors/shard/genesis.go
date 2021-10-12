@@ -7,7 +7,6 @@ import (
 	"io"
 
 	address "github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/network"
 	bstore "github.com/filecoin-project/lotus/blockstore"
@@ -24,7 +23,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/genesis"
-	adt0 "github.com/filecoin-project/specs-actors/actors/util/adt"
 	"github.com/ipfs/go-blockservice"
 	cid "github.com/ipfs/go-cid"
 	offline "github.com/ipfs/go-ipfs-exchange-offline"
@@ -34,16 +32,37 @@ import (
 	xerrors "golang.org/x/xerrors"
 )
 
-// TODO: Maybe remove sequence if timestamp works fine.
-func WriteGenesis(netName string, miner, vreg, rem address.Address, seq uint64, w io.Writer) error {
+const (
+	networkVersion = network.Version14
+)
+
+func WriteGenesis(netName string, consensus ConsensusType, miner, vreg, rem address.Address, seq uint64, w io.Writer) error {
 	bs := bstore.WrapIDStore(bstore.NewMemorySync())
-	template, err := delegatedGenTemplate(netName, miner, vreg, rem, seq)
-	if err != nil {
-		return err
-	}
-	b, err := MakeDelegatedGenesisBlock(context.TODO(), bs, *template, seq)
-	if err != nil {
-		return xerrors.Errorf("make genesis block: %w", err)
+
+	var b *genesis2.GenesisBootstrap
+	switch consensus {
+	case Delegated:
+		if miner == address.Undef {
+			return xerrors.Errorf("no miner specified for delegated consensus")
+		}
+		template, err := delegatedGenTemplate(netName, miner, vreg, rem, seq)
+		if err != nil {
+			return err
+		}
+		b, err = makeDelegatedGenesisBlock(context.TODO(), bs, *template)
+		if err != nil {
+			return xerrors.Errorf("error making genesis delegated block: %w", err)
+		}
+	case PoW:
+		template, err := powGenTemplate(netName, vreg, rem, seq)
+		if err != nil {
+			return err
+		}
+		b, err = makePoWGenesisBlock(context.TODO(), bs, *template)
+		if err != nil {
+			return xerrors.Errorf("error making genesis delegated block: %w", err)
+		}
+
 	}
 	offl := offline.Exchange(bs)
 	blkserv := blockservice.New(bs, offl)
@@ -53,100 +72,6 @@ func WriteGenesis(netName string, miner, vreg, rem address.Address, seq uint64, 
 		return xerrors.Errorf("write genesis car: %w", err)
 	}
 	return nil
-}
-
-// TODO: Extract all of these function to consensus specific code that can be called
-// from here for shards and from the consensus-specific cmds to start mining in root chain.
-func MakeDelegatedGenesisBlock(ctx context.Context, bs bstore.Blockstore, template genesis.Template, seq uint64) (*genesis2.GenesisBootstrap, error) {
-	st, _, err := MakeInitialStateTree(ctx, bs, template)
-	if err != nil {
-		return nil, xerrors.Errorf("make initial state tree failed: %w", err)
-	}
-
-	stateroot, err := st.Flush(ctx)
-	if err != nil {
-		return nil, xerrors.Errorf("flush state tree failed: %w", err)
-	}
-
-	// temp chainstore
-	//cs := store.NewChainStore(bs, bs, datastore.NewMapDatastore(), j)
-
-	/*	// Verify PreSealed Data
-		stateroot, err = VerifyPreSealedData(ctx, cs, sys, stateroot, template, keyIDs, template.NetworkVersion)
-		if err != nil {
-		        return nil, xerrors.Errorf("failed to verify presealed data: %w", err)
-		}
-
-		stateroot, err = SetupStorageMiners(ctx, cs, sys, stateroot, template.Miners, template.NetworkVersion)
-		if err != nil {
-		        return nil, xerrors.Errorf("setup miners failed: %w", err)
-		}*/
-
-	store := adt.WrapStore(ctx, cbor.NewCborStore(bs))
-	emptyroot, err := adt0.MakeEmptyArray(store).Root()
-	if err != nil {
-		return nil, xerrors.Errorf("amt build failed: %w", err)
-	}
-
-	mm := &types.MsgMeta{
-		BlsMessages:   emptyroot,
-		SecpkMessages: emptyroot,
-	}
-	mmb, err := mm.ToStorageBlock()
-	if err != nil {
-		return nil, xerrors.Errorf("serializing msgmeta failed: %w", err)
-	}
-	if err := bs.Put(mmb); err != nil {
-		return nil, xerrors.Errorf("putting msgmeta block to blockstore: %w", err)
-	}
-
-	tickBuf := make([]byte, 32)
-	// TODO: We can't use randomness in genesis block
-	// if want to make it deterministic. Consider using
-	// a seed to for the ticket generation?
-	// _, _ = rand.Read(tickBuf)
-	genesisticket := &types.Ticket{
-		VRFProof: tickBuf,
-	}
-
-	b := &types.BlockHeader{
-		Miner:                 system.Address,
-		Ticket:                genesisticket,
-		Parents:               []cid.Cid{},
-		Height:                0,
-		ParentWeight:          types.NewInt(0),
-		ParentStateRoot:       stateroot,
-		Messages:              mmb.Cid(),
-		ParentMessageReceipts: emptyroot,
-		BLSAggregate:          nil,
-		BlockSig:              nil,
-		// NOTE: We can't use a Timestamp for this
-		// because then the genesis generation in the shard
-		// is non-deterministic. We use a swquence number for now.
-		//Timestamp:     template.Timestamp,
-		Timestamp:     seq,
-		ElectionProof: new(types.ElectionProof),
-		BeaconEntries: []types.BeaconEntry{
-			{
-				Round: 0,
-				Data:  make([]byte, 32),
-			},
-		},
-		ParentBaseFee: abi.NewTokenAmount(build.InitialBaseFee),
-	}
-
-	sb, err := b.ToStorageBlock()
-	if err != nil {
-		return nil, xerrors.Errorf("serializing block header failed: %w", err)
-	}
-
-	if err := bs.Put(sb); err != nil {
-		return nil, xerrors.Errorf("putting header to blockstore: %w", err)
-	}
-
-	return &genesis2.GenesisBootstrap{
-		Genesis: b,
-	}, nil
 }
 
 func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template genesis.Template) (*state.StateTree, map[address.Address]address.Address, error) {
@@ -192,16 +117,15 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 	if err := state.SetActor(init_.Address, initact); err != nil {
 		return nil, nil, xerrors.Errorf("set init actor: %w", err)
 	}
-	// Setup shard actor
 
+	// Setup shard actor
 	shardact, err := SetupShardActor(ctx, bs, template.NetworkName)
 	if err != nil {
 		return nil, nil, err
 	}
-
 	err = state.SetActor(ShardActorAddr, shardact)
 	if err != nil {
-		return nil, nil, xerrors.Errorf("set reward actor: %w", err)
+		return nil, nil, xerrors.Errorf("set shard actor: %w", err)
 	}
 
 	// Setup reward
@@ -319,30 +243,4 @@ func SetupShardActor(ctx context.Context, bs bstore.Blockstore, networkName stri
 	}
 
 	return act, nil
-}
-
-func delegatedGenTemplate(shardID string, miner, vreg, rem address.Address, seq uint64) (*genesis.Template, error) {
-
-	return &genesis.Template{
-		NetworkVersion: network.Version14,
-		Accounts: []genesis.Actor{{
-			Type:    genesis.TAccount,
-			Balance: types.FromFil(2),
-			Meta:    json.RawMessage(`{"Owner":"` + miner.String() + `"}`),
-		}},
-		Miners:      nil,
-		NetworkName: shardID,
-		// Timestamp:   uint64(time.Now().Unix()),
-		Timestamp: seq,
-
-		VerifregRootKey: genesis.Actor{
-			Type:    genesis.TAccount,
-			Balance: types.FromFil(2),
-			Meta:    json.RawMessage(`{"Owner":"` + vreg.String() + `"}`), // correct??
-		},
-		RemainderAccount: genesis.Actor{
-			Type: genesis.TAccount,
-			Meta: json.RawMessage(`{"Owner":"` + rem.String() + `"}`), // correct??
-		},
-	}, nil
 }
