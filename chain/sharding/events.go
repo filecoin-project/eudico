@@ -5,8 +5,9 @@ import (
 	"reflect"
 
 	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/lotus/chain/events"
+	"github.com/filecoin-project/lotus/chain/consensus/actors/shard"
 	shardactor "github.com/filecoin-project/lotus/chain/consensus/actors/shard"
+	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/types"
 	builtin "github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	adt "github.com/filecoin-project/specs-actors/v6/actors/util/adt"
@@ -23,8 +24,9 @@ type diffFunc func() (bool, events.StateChange, error)
 
 // Info included in diff structure.
 type diffInfo struct {
-	isMiner bool
-	genesis []byte
+	isMiner   bool
+	consensus shard.ConsensusType
+	genesis   []byte
 }
 
 // Checks if there's a new shard and if we should start listening to it.
@@ -102,15 +104,16 @@ func (s *ShardingSub) diffShards(ctx context.Context, outDiff map[string]diffInf
 	if err != nil {
 		return err
 	}
-	// Get genesis for shard
-	gen, err := shardGenesis(ctx, store, newSt, shid)
+	// Get genesis and consensus from shard
+	sh, err := getShard(ctx, store, newSt, shid)
 	if err != nil {
 		return err
 	}
 	if in {
 		outDiff[shid.String()] = diffInfo{
-			isMiner: true,
-			genesis: gen,
+			isMiner:   true,
+			genesis:   sh.Genesis,
+			consensus: sh.Consensus,
 		}
 		// If we are in the list of miners we are also in the
 		// list fo stakers, so we can move on to the next shard.
@@ -123,7 +126,10 @@ func (s *ShardingSub) diffShards(ctx context.Context, outDiff map[string]diffInf
 		return err
 	}
 	if in {
-		outDiff[shid.String()] = diffInfo{genesis: gen}
+		outDiff[shid.String()] = diffInfo{
+			genesis:   sh.Genesis,
+			consensus: sh.Consensus,
+		}
 	}
 	return nil
 }
@@ -234,7 +240,7 @@ func (s *ShardingSub) addrInStakes(ctx context.Context, store adt.Store, shID ci
 	return false, nil
 }
 
-func shardGenesis(ctx context.Context, store adt.Store, st shardactor.ShardState, shid cid.Cid) ([]byte, error) {
+func getShard(ctx context.Context, store adt.Store, st shardactor.ShardState, shid cid.Cid) (*shardactor.Shard, error) {
 	sh, has, err := st.GetShard(store, shid)
 	if err != nil {
 		return nil, err
@@ -242,7 +248,7 @@ func shardGenesis(ctx context.Context, store adt.Store, st shardactor.ShardState
 	if !has {
 		return nil, xerrors.New("no shard with specified shardID")
 	}
-	return sh.Genesis, nil
+	return sh, nil
 }
 
 func (s *ShardingSub) isMiner(ctx context.Context, store adt.Store, shID cid.Cid, oldSt, newSt shardactor.ShardState) (bool, error) {

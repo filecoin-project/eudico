@@ -127,7 +127,7 @@ func TestJoin(t *testing.T) {
 
 	addParams := &actor.AddParams{
 		Name:       []byte("testShard"),
-		Consensus:  actor.Delegated,
+		Consensus:  actor.PoW,
 		DelegMiner: owner,
 	}
 
@@ -193,6 +193,11 @@ func TestJoin(t *testing.T) {
 	require.Equal(t, h.getStake(rt, sh, joiner), abi.NewTokenAmount(1e18))
 	require.Equal(t, sh.TotalStake, abi.NewTokenAmount(2e18))
 	require.Equal(t, len(sh.Miners), 2)
+
+	// TODO: Add a test showing that delegated indeed accepts
+	// only a single miner, and that even if you add enough stake
+	// to become a miner you are not allowed to become a miner (this
+	// is not the case for PoW)
 }
 
 type shActorHarness struct {
@@ -201,12 +206,12 @@ type shActorHarness struct {
 }
 
 func newHarness(t *testing.T) *shActorHarness {
-
 	return &shActorHarness{
 		ShardActor: actor.ShardActor{},
 		t:          t,
 	}
 }
+
 func (h *shActorHarness) constructAndVerify(rt *mock.Runtime) {
 	rt.ExpectValidateCallerAddr(builtin.SystemActorAddr)
 	ret := rt.Call(h.ShardActor.Constructor, &initactor.ConstructorParams{NetworkName: "root"})

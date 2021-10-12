@@ -42,7 +42,7 @@ func Mine(ctx context.Context, api *impl.FullNodeAPI, v0api v0api.FullNode) erro
 			return err
 		}
 
-		log.Info("starting mining on @", head.Height())
+		log.Info("starting delegated mining on @", head.Height())
 
 		timer := time.NewTicker(time.Duration(build.BlockDelaySecs) * time.Second)
 		for {
@@ -54,7 +54,7 @@ func Mine(ctx context.Context, api *impl.FullNodeAPI, v0api v0api.FullNode) erro
 					continue
 				}
 
-				log.Info("try mining at @", base.Height())
+				log.Info("try delegated mining at @", base.Height())
 
 				msgs, err := api.MpoolSelect(ctx, base.Key(), 1)
 				if err != nil {
@@ -86,7 +86,7 @@ func Mine(ctx context.Context, api *impl.FullNodeAPI, v0api v0api.FullNode) erro
 					log.Errorw("submitting block failed", "error", err)
 				}
 
-				log.Info("mined a block! ", bh.Cid(), " msgs ", len(msgs))
+				log.Info("delegated mined a block! ", bh.Cid(), " msgs ", len(msgs))
 			case <-ctx.Done():
 				return nil
 			}
@@ -118,7 +118,7 @@ func Mine(ctx context.Context, api *impl.FullNodeAPI, v0api v0api.FullNode) erro
 					continue
 				}
 
-				log.Info("try mining at @", base.Height())
+				log.Info("try delegated mining at @", base.Height())
 
 				msgs, err := api.MpoolSelect(ctx, base.Key(), 1)
 				if err != nil {
@@ -150,7 +150,7 @@ func Mine(ctx context.Context, api *impl.FullNodeAPI, v0api v0api.FullNode) erro
 					log.Errorw("submitting block failed", "error", err)
 				}
 
-				log.Info("mined a block! ", bh.Cid(), " msgs ", len(msgs))
+				log.Info("delegated mined a block! ", bh.Cid(), " msgs ", len(msgs))
 			case <-ctx.Done():
 				return nil
 			}

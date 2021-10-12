@@ -6,12 +6,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/consensus"
+	"github.com/filecoin-project/lotus/chain/consensus/actors/shard"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
+	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/messagepool"
 	"github.com/filecoin-project/lotus/chain/stmgr"
@@ -47,6 +50,8 @@ type Shard struct {
 	sm *stmgr.StateManager
 	// chain
 	ch *store.ChainStore
+	// Consensus type
+	consType shard.ConsensusType
 	// Consensus of the shard
 	cons consensus.Consensus
 	// Mempool for the shard.
@@ -126,12 +131,10 @@ func (sh *Shard) HandleIncomingMessages(ctx context.Context, bootstrapper dtypes
 		go sub.HandleIncomingMessages(ctx, sh.mpool, msgsub)
 	}
 
-	/*
-		if bootstrapper {
-			subscribe()
-			return nil
-		}
-	*/
+	if bootstrapper {
+		subscribe()
+		return nil
+	}
 
 	// wait until we are synced within 10 epochs -- env var can override
 	waitForSync(sh.sm, 10, subscribe)
@@ -208,22 +211,35 @@ func (sh *Shard) isMining() bool {
 	return false
 }
 
-func (sh *Shard) mine(ctx context.Context) {
+func (sh *Shard) mine(ctx context.Context) error {
 	if sh.miningCtx != nil {
 		log.Warnw("already mining in shard", "shardID", sh.ID)
-		return
+		return nil
 	}
-	// Assigning mining context.
-	sh.miningCtx, sh.miningCncl = context.WithCancel(ctx)
 	// TODO: As-is a node will keep mining in a shard until the node process
 	// is completely stopped. In the next iteration we need to figure out
 	// how to manage contexts for when a shard is killed or a node moves into
 	// another shard. (see next function)
 	// Mining in the root chain is an independent process.
-	log.Infow("Started mining in shard", "shardID", sh.ID)
-	// TODO: Support several mining consensus.
-	// TODO: We should check if it throws an error.
-	go delegcns.Mine(sh.ctx, sh.api, nil)
+	// TODO: We should check if these processes throw an error
+	switch sh.consType {
+	case shard.Delegated:
+		// Assigning mining context.
+		sh.miningCtx, sh.miningCncl = context.WithCancel(ctx)
+		go delegcns.Mine(sh.miningCtx, sh.api, nil)
+	case shard.PoW:
+		miner, err := sh.getWallet(ctx)
+		if err != nil {
+			log.Errorw("no valid identity found for PoW mining", "err", err)
+			return err
+		}
+		sh.miningCtx, sh.miningCncl = context.WithCancel(ctx)
+		go tspow.Mine(sh.miningCtx, miner, sh.api, nil)
+	default:
+		return xerrors.New("consensus type not suported")
+	}
+	log.Infow("Started mining in shard", "shardID", sh.ID, "consensus", sh.consType)
+	return nil
 }
 
 func (sh *Shard) stopMining(ctx context.Context) {
@@ -233,4 +249,24 @@ func (sh *Shard) stopMining(ctx context.Context) {
 		log.Infow("Stop mining in shard", "shardID", sh.ID)
 		sh.miningCncl()
 	}
+}
+
+// Get an identity from the peer's wallet.
+// First check if a default identity has been set and
+// if not take the first from the list.
+// NOTE: We should probably make this configurable.
+func (sh *Shard) getWallet(ctx context.Context) (address.Address, error) {
+	addr, err := sh.api.WalletDefaultAddress(ctx)
+	// If no defualt wallet set
+	if err != nil || addr == address.Undef {
+		addrs, err := sh.api.WalletList(ctx)
+		if err != nil {
+			return address.Undef, err
+		}
+		if len(addrs) == 0 {
+			return address.Undef, xerrors.Errorf("no valid wallet found in peer")
+		}
+		addr = addrs[0]
+	}
+	return addr, nil
 }

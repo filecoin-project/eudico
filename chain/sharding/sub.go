@@ -10,10 +10,9 @@ import (
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/beacon"
-	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
+	shardactor "github.com/filecoin-project/lotus/chain/consensus/actors/shard"
 	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/messagepool"
-	shardactor "github.com/filecoin-project/lotus/chain/consensus/actors/shard"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -99,7 +98,7 @@ func NewShardSub(
 	}, nil
 }
 
-func (s *ShardingSub) newShard(id string, parentAPI *impl.FullNodeAPI, genesis []byte, isMiner bool) error {
+func (s *ShardingSub) newShard(id string, parentAPI *impl.FullNodeAPI, info diffInfo) error {
 	var err error
 	// TODO: This context needs to be handled conveniently.
 	ctx := context.TODO()
@@ -112,6 +111,7 @@ func (s *ShardingSub) newShard(id string, parentAPI *impl.FullNodeAPI, genesis [
 		pubsub:     s.pubsub,
 		nodeServer: s.nodeServer,
 		pmgr:       s.pmgr,
+		consType:   info.consensus,
 	}
 	s.lk.Lock()
 	s.shards[id] = sh
@@ -124,13 +124,19 @@ func (s *ShardingSub) newShard(id string, parentAPI *impl.FullNodeAPI, genesis [
 	// figure out if it works.
 	sh.bs = blockstore.FromDatastore(s.ds)
 
-	// TODO: We are currently limited to the use of delegated
-	// consensus for every shard. In the next iteration the type
-	// of consensus to use will be notified by the shard actor.
-	tsExec := delegcns.TipSetExecutor()
+	// Select the right TipSetExecutor for the consensus algorithms chosen.
+	tsExec, err := tipSetExecutor(info.consensus)
+	if err != nil {
+		log.Errorw("Error getting TipSetExecutor for consensus", "shardID", id, "err", err)
+		return err
+	}
+	weight, err := weight(info.consensus)
+	if err != nil {
+		log.Errorw("Error getting weight for consensus", "shardID", id, "err", err)
+		return err
+	}
 
-	// TODO: Use the weight for the right consensus algorithm.
-	sh.ch = store.NewChainStore(sh.bs, sh.bs, sh.ds, delegcns.Weight, s.j)
+	sh.ch = store.NewChainStore(sh.bs, sh.bs, sh.ds, weight, s.j)
 	sh.sm, err = stmgr.NewStateManager(sh.ch, tsExec, s.syscalls, s.us, s.beacon)
 	if err != nil {
 		log.Errorw("Error creating state manager for shard", "shardID", id, "err", err)
@@ -139,14 +145,17 @@ func (s *ShardingSub) newShard(id string, parentAPI *impl.FullNodeAPI, genesis [
 	// Start state manager.
 	sh.sm.Start(ctx)
 
-	gen, err := sh.LoadGenesis(genesis)
+	gen, err := sh.LoadGenesis(info.genesis)
 	if err != nil {
 		log.Errorw("Error loading genesis bootstrap for shard", "shardID", id, "err", err)
 		return err
 	}
-	sh.cons = delegcns.NewDelegatedConsensus(sh.sm, s.beacon, s.verifier, gen)
-
-	log.Infow("Genesis and consensus for shard created", "shardID", id)
+	sh.cons, err = newConsensus(info.consensus, sh.sm, s.beacon, s.verifier, gen)
+	if err != nil {
+		log.Errorw("Error creating consensus", "shardID", id, "err", err)
+		return err
+	}
+	log.Infow("Genesis and consensus for shard created", "shardID", id, "consensus", info.consensus)
 
 	// We configure a new handler for the shard syncing exchange protocol.
 	sh.exchangeServer()
@@ -206,7 +215,7 @@ func (s *ShardingSub) newShard(id string, parentAPI *impl.FullNodeAPI, genesis [
 	log.Infow("Listening to shard events in shard", "shardID", id)
 
 	// If is miner start mining in shard.
-	if isMiner {
+	if info.isMiner {
 		sh.mine(ctx)
 	}
 
@@ -247,7 +256,7 @@ func (s *ShardingSub) listenShardEvents(ctx context.Context, sh *Shard) {
 			// If we are not already subscribed to the shard.
 			if !ok {
 				// Create shard with id from parentAPI
-				err = s.newShard(k, api, shardMap[k].genesis, shardMap[k].isMiner)
+				err = s.newShard(k, api, shardMap[k])
 				if err != nil {
 					log.Errorw("Error creating new shard", "shardID", k, "err", err)
 					return true, err

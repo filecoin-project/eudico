@@ -35,7 +35,7 @@ func Mine(ctx context.Context, miner address.Address, api *impl.FullNodeAPI, v0a
 			return xerrors.Errorf("getting head: %w", err)
 		}
 
-		log.Info("starting mining on @", head.Height())
+		log.Info("starting PoW mining on @", head.Height())
 
 		for {
 			select {
@@ -101,16 +101,15 @@ func Mine(ctx context.Context, miner address.Address, api *impl.FullNodeAPI, v0a
 				log.Errorw("submitting block failed", "error", err)
 			}
 
-			log.Info("mined a block! ", bh.Cid())
+			log.Info("PoW mined a block! ", bh.Cid())
 		}
 	} else {
-		api := v0api
 		head, err := api.ChainHead(ctx)
 		if err != nil {
 			return xerrors.Errorf("getting head: %w", err)
 		}
 
-		log.Info("starting mining on @", head.Height())
+		log.Info("starting PoW mining on @", head.Height())
 
 		for {
 			select {
@@ -165,7 +164,7 @@ func Mine(ctx context.Context, miner address.Address, api *impl.FullNodeAPI, v0a
 				continue
 			}
 
-			log.Info("try mining at @", base.Height(), base.String())
+			log.Info("try PpW mining at @", base.Height(), base.String())
 
 			err = api.SyncSubmitBlock(ctx, &types.BlockMsg{
 				Header:        bh.Header,
@@ -176,7 +175,7 @@ func Mine(ctx context.Context, miner address.Address, api *impl.FullNodeAPI, v0a
 				log.Errorw("submitting block failed", "error", err)
 			}
 
-			log.Info("mined a block! ", bh.Cid())
+			log.Info("PoW mined a block! ", bh.Cid())
 		}
 	}
 }

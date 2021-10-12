@@ -197,7 +197,11 @@ func (sh *Shard) addStake(rt runtime.Runtime, st *ShardState, sourceAddr address
 
 	// Check if the miner has staked enough to be granted mining rights.
 	if minerStake.GreaterThanEqual(st.MinMinerStake) {
-		sh.Miners = append(sh.Miners, sourceAddr)
+		// Except for delegated consensus if there is already a miner.
+		// There can only be a single miner in delegated consensus.
+		if sh.Consensus != Delegated || len(sh.Miners) < 1 {
+			sh.Miners = append(sh.Miners, sourceAddr)
+		}
 	}
 
 	// Check if shard is still instantiated and there is enough stake to become active
