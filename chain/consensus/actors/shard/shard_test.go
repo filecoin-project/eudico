@@ -5,6 +5,7 @@ import (
 
 	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	initactor "github.com/filecoin-project/lotus/chain/consensus/actors/init"
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors/shard"
@@ -69,7 +70,8 @@ func TestAdd(t *testing.T) {
 
 	// Verify that the shard was added successfully.
 	// and stake has been assigned correctly.
-	sh := h.getShard(rt, shid)
+	sh, found := h.getShard(rt, shid)
+	require.True(h.t, found)
 	require.Equal(t, len(sh.Miners), 1)
 	require.Equal(t, sh.Status, actor.Active)
 	require.Equal(t, sh.Consensus, actor.Delegated)
@@ -109,7 +111,8 @@ func TestAdd(t *testing.T) {
 	require.Equal(t, getState(rt).TotalShards, uint64(2))
 	// Verify that the shard was added successfully.
 	// and stake has been assigned correctly.
-	sh = h.getShard(rt, shid)
+	sh, found = h.getShard(rt, shid)
+	require.True(h.t, found)
 	require.Equal(t, len(sh.Miners), 0)
 	require.Equal(t, sh.Status, actor.Instantiated)
 	require.Equal(t, sh.Consensus, actor.Delegated)
@@ -147,7 +150,8 @@ func TestJoin(t *testing.T) {
 	// Verify the return value is correct.
 	require.Equal(t, res.ID, shid)
 	// Check that shard is instantiated but not active.
-	sh := h.getShard(rt, shid)
+	sh, found := h.getShard(rt, shid)
+	require.True(h.t, found)
 	require.Equal(t, len(sh.Miners), 0)
 	require.Equal(t, sh.Status, actor.Instantiated)
 	require.Equal(t, h.getStake(rt, sh, owner), value)
@@ -161,7 +165,8 @@ func TestJoin(t *testing.T) {
 	rt.SetCaller(joiner, builtin.AccountActorCodeID)
 	rt.Call(h.ShardActor.Join, joinParams)
 	// Still not active.
-	sh = h.getShard(rt, shid)
+	sh, found = h.getShard(rt, shid)
+	require.True(h.t, found)
 	require.Equal(t, sh.Status, actor.Instantiated)
 	require.Equal(t, h.getStake(rt, sh, joiner), value)
 	require.Equal(t, len(sh.Miners), 0)
@@ -174,7 +179,8 @@ func TestJoin(t *testing.T) {
 	rt.SetCaller(joiner, builtin.AccountActorCodeID)
 	rt.Call(h.ShardActor.Join, joinParams)
 	// Still not active.
-	sh = h.getShard(rt, shid)
+	sh, found = h.getShard(rt, shid)
+	require.True(h.t, found)
 	require.Equal(t, sh.Status, actor.Active)
 	require.Equal(t, h.getStake(rt, sh, joiner), abi.NewTokenAmount(1e18))
 	require.Equal(t, sh.TotalStake, abi.NewTokenAmount(15e17))
@@ -188,7 +194,8 @@ func TestJoin(t *testing.T) {
 	rt.SetCaller(owner, builtin.AccountActorCodeID)
 	rt.Call(h.ShardActor.Join, joinParams)
 	// Still not active.
-	sh = h.getShard(rt, shid)
+	sh, found = h.getShard(rt, shid)
+	require.True(h.t, found)
 	require.Equal(t, sh.Status, actor.Active)
 	require.Equal(t, h.getStake(rt, sh, joiner), abi.NewTokenAmount(1e18))
 	require.Equal(t, sh.TotalStake, abi.NewTokenAmount(2e18))
@@ -198,6 +205,82 @@ func TestJoin(t *testing.T) {
 	// only a single miner, and that even if you add enough stake
 	// to become a miner you are not allowed to become a miner (this
 	// is not the case for PoW)
+}
+
+func TestLeave(t *testing.T) {
+	h := newHarness(t)
+	builder := mock.NewBuilder(builtin.StoragePowerActorAddr).WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
+	rt := builder.Build(t)
+	h.constructAndVerify(rt)
+	owner := tutil.NewIDAddr(t, 101)
+	joiner := tutil.NewIDAddr(t, 102)
+
+	addParams := &actor.AddParams{
+		Name:       []byte("testShard"),
+		Consensus:  actor.PoW,
+		DelegMiner: owner,
+	}
+
+	t.Log("create new shard")
+	addValue := abi.NewTokenAmount(1e18)
+	rt.SetCaller(owner, builtin.AccountActorCodeID)
+	rt.SetReceived(addValue)
+	rt.SetBalance(addValue)
+	// Anyone can call
+	rt.ExpectValidateCallerAny()
+	// Call add function
+	ret := rt.Call(h.ShardActor.Add, addParams)
+	res, ok := ret.(*actor.AddShardReturn)
+	require.True(t, ok)
+	shid, err := actor.ShardID([]byte("testShard"))
+	require.NoError(t, err)
+	// Verify the return value is correct.
+	require.Equal(t, res.ID, shid)
+	// Check that shard is instantiated but not active.
+	sh, found := h.getShard(rt, shid)
+	require.True(h.t, found)
+	require.Equal(t, len(sh.Miners), 1)
+	require.Equal(t, sh.Status, actor.Active)
+	require.Equal(t, h.getStake(rt, sh, owner), addValue)
+
+	t.Log("new miner join the shard")
+	joinParams := &actor.SelectParams{ID: shid.Bytes()}
+	joinValue := abi.NewTokenAmount(1e17)
+	rt.ExpectValidateCallerAny()
+	rt.SetReceived(joinValue)
+	rt.SetBalance(big.Add(joinValue, addValue))
+	rt.SetCaller(joiner, builtin.AccountActorCodeID)
+	rt.Call(h.ShardActor.Join, joinParams)
+	// Shard activated
+	sh, found = h.getShard(rt, shid)
+	require.True(h.t, found)
+	require.Equal(t, sh.Status, actor.Active)
+	require.Equal(t, h.getStake(rt, sh, joiner), joinValue)
+	require.Equal(t, len(sh.Miners), 1)
+
+	t.Log("adder leaves the shard")
+	leaveParams := &actor.SelectParams{ID: shid.Bytes()}
+	rt.ExpectValidateCallerAny()
+	rt.SetCaller(owner, builtin.AccountActorCodeID)
+	rt.ExpectSend(owner, builtin.MethodSend, nil, big.Div(addValue, actor.LeavingFeeCoeff), nil, exitcode.Ok)
+	rt.Call(h.ShardActor.Leave, leaveParams)
+	sh, found = h.getShard(rt, shid)
+	require.True(h.t, found)
+	require.Equal(t, sh.Status, actor.Terminating)
+	// Not in stakes anymore.
+	_, found = h.getMinerState(rt, sh, owner)
+	require.False(h.t, found)
+	// Also removed from miners list.
+	require.Equal(t, len(sh.Miners), 0)
+
+	t.Log("joiner leaves the shard")
+	rt.ExpectValidateCallerAny()
+	rt.SetCaller(joiner, builtin.AccountActorCodeID)
+	rt.ExpectSend(joiner, builtin.MethodSend, nil, big.Div(joinValue, actor.LeavingFeeCoeff), nil, exitcode.Ok)
+	rt.Call(h.ShardActor.Leave, leaveParams)
+	// The shard is completely removed
+	sh, found = h.getShard(rt, shid)
+	require.False(h.t, found)
 }
 
 type shActorHarness struct {
@@ -242,7 +325,7 @@ func getState(rt *mock.Runtime) *actor.ShardState {
 	return &st
 }
 
-func (h *shActorHarness) getShard(rt *mock.Runtime, id cid.Cid) *actor.Shard {
+func (h *shActorHarness) getShard(rt *mock.Runtime, id cid.Cid) (*actor.Shard, bool) {
 	var st actor.ShardState
 	rt.GetState(&st)
 
@@ -251,23 +334,22 @@ func (h *shActorHarness) getShard(rt *mock.Runtime, id cid.Cid) *actor.Shard {
 	var out actor.Shard
 	found, err := shards.Get(abi.CidKey(id), &out)
 	require.NoError(h.t, err)
-	require.True(h.t, found)
 
-	return &out
+	return &out, found
 }
 
 func (h *shActorHarness) getStake(rt *mock.Runtime, sh *actor.Shard, addr address.Address) abi.TokenAmount {
-	state := h.getMinerState(rt, sh, addr)
+	state, found := h.getMinerState(rt, sh, addr)
+	require.True(h.t, found)
 	return state.InitialStake
 }
 
-func (h *shActorHarness) getMinerState(rt *mock.Runtime, sh *actor.Shard, addr address.Address) *actor.MinerState {
+func (h *shActorHarness) getMinerState(rt *mock.Runtime, sh *actor.Shard, addr address.Address) (*actor.MinerState, bool) {
 	stakes, err := adt.AsMap(adt.AsStore(rt), sh.Stake, builtin.DefaultHamtBitwidth)
 	require.NoError(h.t, err)
 	var out actor.MinerState
 	found, err := stakes.Get(abi.AddrKey(addr), &out)
 	require.NoError(h.t, err)
-	require.True(h.t, found)
 
-	return &out
+	return &out, found
 }

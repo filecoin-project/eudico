@@ -3,6 +3,7 @@ package shard
 import (
 	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
 	cid "github.com/ipfs/go-cid"
@@ -13,15 +14,25 @@ import (
 // Builder to generate shard IDs from their name
 var builder = cid.V1Builder{Codec: cid.Raw, MhType: mh.IDENTITY}
 
-// MinShardStake required to create a new shard
-// TODO: Kept in 1FIL for testing, change to the right
-// value once we decide it.
-// We could make this value configurable in construction.
-var MinShardStake = abi.NewTokenAmount(1e18)
+var (
+	// MinShardStake required to create a new shard
+	// TODO: Kept in 1FIL for testing, change to the right
+	// value once we decide it.
+	// We could make this value configurable in construction.
+	MinShardStake = abi.NewTokenAmount(1e18)
 
-// MinMinerStake is the minimum take required for a
-// miner to be granted mining rights in the shard and join it.
-var MinMinerStake = abi.NewTokenAmount(1e18)
+	// MinMinerStake is the minimum take required for a
+	// miner to be granted mining rights in the shard and join it.
+	MinMinerStake = abi.NewTokenAmount(1e18)
+
+	// LeavingFee Penalization
+	// Coefficient divided to miner stake when leaving a shard.
+	// NOTE: This is currently set to 1, i.e., the miner recovers
+	// its full stake. This may change once cryptoecon is figured out.
+	// We'll need to decide what to do with the leftover stake, if to
+	// burn it or keep it until the shard is full killed.
+	LeavingFeeCoeff = big.NewInt(1)
+)
 
 // ConsensusType for shard
 type ConsensusType uint64
@@ -167,6 +178,20 @@ func ListShards(s adt.Store, st ShardState) ([]Shard, error) {
 	out := []Shard{}
 	err = shardMap.ForEach(&sh, func(k string) error {
 		out = append(out, sh)
+		return nil
+	})
+	return out, err
+}
+
+func ListStakes(s adt.Store, sh *Shard) ([]MinerState, error) {
+	stakeMap, err := adt.AsMap(s, sh.Stake, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return nil, err
+	}
+	out := []MinerState{}
+	var st MinerState
+	err = stakeMap.ForEach(&st, func(k string) error {
+		out = append(out, st)
 		return nil
 	})
 	return out, err
