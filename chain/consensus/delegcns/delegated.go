@@ -37,7 +37,7 @@ import (
 	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 )
 
-var log = logging.Logger("fil-consensus")
+var log = logging.Logger("delegated-consensus")
 
 type Delegated struct {
 	// The interface for accessing and putting tipsets into local storage

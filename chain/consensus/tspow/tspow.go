@@ -72,7 +72,8 @@ func Difficulty(baseTs, lbts *types.TipSet) big.Int {
 	pgen, _ := big2.NewFloat(0).SetInt(param.GenesisWorkTarget.Int).Float64()
 	fdiff, _ := big2.NewFloat(0).SetInt(diff.Int).Float64()
 	pgen = fdiff * 100 / pgen
-	fmt.Printf("adjust %.4f%%, p%s lb%d (%.4f%% gen)\n", 100*float64(expLbTime)/float64(actTime), prevdiff, DiffLookback(baseTs.Height()), pgen)
+	// Difficulty adjustement print. Really helpful for debugging purposes.
+	log.Debugf("adjust %.4f%%, p%s lb%d (%.4f%% gen)\n", 100*float64(expLbTime)/float64(actTime), prevdiff, DiffLookback(baseTs.Height()), pgen)
 
 	return diff
 }

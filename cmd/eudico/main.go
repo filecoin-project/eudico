@@ -20,6 +20,12 @@ import (
 
 // TODO EUDICO Dedup with cmd/lotus
 
+var eudCmds = []*cli.Command{
+	lcli.WithCategory("daemon", delegatedCmd),
+	lcli.WithCategory("daemon", tpowCmd),
+	lcli.WithCategory("sharding", shardingCmds),
+}
+
 var log = logging.Logger("eudico")
 
 var AdvanceBlockCmd *cli.Command
@@ -29,10 +35,7 @@ func main() {
 
 	lotuslog.SetupLogLevels()
 
-	local := []*cli.Command{
-		delegatedCmd,
-		tpowCmd,
-	}
+	local := eudCmds
 	if AdvanceBlockCmd != nil {
 		local = append(local, AdvanceBlockCmd)
 	}

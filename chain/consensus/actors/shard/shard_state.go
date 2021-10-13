@@ -157,3 +157,17 @@ func getStake(stakeMap *adt.Map, miner address.Address) (abi.TokenAmount, error)
 func ShardID(name []byte) (cid.Cid, error) {
 	return builder.Sum(name)
 }
+
+func ListShards(s adt.Store, st ShardState) ([]Shard, error) {
+	shardMap, err := adt.AsMap(s, st.Shards, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return nil, err
+	}
+	var sh Shard
+	out := []Shard{}
+	err = shardMap.ForEach(&sh, func(k string) error {
+		out = append(out, sh)
+		return nil
+	})
+	return out, err
+}
