@@ -290,6 +290,7 @@ func (sh *Shard) rmStake(rt runtime.Runtime, st *ShardState, sourceAddr address.
 				// Flush shards
 				st.Shards, err = shards.Root()
 				builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush shards")
+				st.TotalShards--
 			}
 			return retFunds
 		}

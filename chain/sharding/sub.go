@@ -22,6 +22,7 @@ import (
 	"github.com/filecoin-project/lotus/lib/peermgr"
 	"github.com/filecoin-project/lotus/node/impl"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
+	"github.com/filecoin-project/lotus/node/modules/helpers"
 	"github.com/ipfs/go-blockservice"
 	ds "github.com/ipfs/go-datastore"
 	nsds "github.com/ipfs/go-datastore/namespace"
@@ -31,6 +32,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/host"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"go.uber.org/fx"
 )
 
 var log = logging.Logger("sharding")
@@ -61,6 +63,8 @@ type ShardingSub struct {
 }
 
 func NewShardSub(
+	mctx helpers.MetricsCtx,
+	lc fx.Lifecycle,
 	api impl.FullNodeAPI,
 	self peer.ID,
 	pubsub *pubsub.PubSub,
@@ -75,8 +79,9 @@ func NewShardSub(
 	bootstrapper dtypes.Bootstrapper,
 	j journal.Journal) (*ShardingSub, error) {
 
+	ctx := helpers.LifecycleCtx(mctx, lc)
 	// Starting shardSub to listen to events in the root chain.
-	e, err := events.NewEvents(context.TODO(), &api)
+	e, err := events.NewEvents(ctx, &api)
 	if err != nil {
 		return nil, err
 	}
@@ -98,13 +103,14 @@ func NewShardSub(
 	}, nil
 }
 
-func (s *ShardingSub) newShard(id string, parentAPI *impl.FullNodeAPI, info diffInfo) error {
+func (s *ShardingSub) newShard(ctx context.Context, id string, parentAPI *impl.FullNodeAPI, info diffInfo) error {
 	var err error
-	// TODO: This context needs to be handled conveniently.
-	ctx := context.TODO()
+	ctx, cancel := context.WithCancel(ctx)
+
 	log.Infow("Creating new shard", "shardID", id)
 	sh := &Shard{
 		ctx:        ctx,
+		ctxCancel:  cancel,
 		ID:         id,
 		host:       s.host,
 		netName:    "shard/" + id,
@@ -113,9 +119,9 @@ func (s *ShardingSub) newShard(id string, parentAPI *impl.FullNodeAPI, info diff
 		pmgr:       s.pmgr,
 		consType:   info.consensus,
 	}
-	s.lk.Lock()
+
+	// Add shard to registry
 	s.shards[id] = sh
-	s.lk.Unlock()
 
 	// Wrap the ds with prefix
 	sh.ds = nsds.Wrap(s.ds, ds.NewKey(sh.netName))
@@ -250,27 +256,9 @@ func (s *ShardingSub) listenShardEvents(ctx context.Context, sh *Shard) {
 			return true, err
 		}
 
-		// For each new shard detected
-		for k := range shardMap {
-			_, ok := s.shards[k]
-			// If we are not already subscribed to the shard.
-			if !ok {
-				// Create shard with id from parentAPI
-				err = s.newShard(k, api, shardMap[k])
-				if err != nil {
-					log.Errorw("Error creating new shard", "shardID", k, "err", err)
-					return true, err
-				}
-			} else {
-				// If diff says we can start mining and we are not mining
-				if mining := s.shards[k].isMining(); !mining && shardMap[k].isMiner {
-					s.shards[k].mine(ctx)
-				}
+		// Trigger the detected change in shards.
+		return s.triggerChange(ctx, api, shardMap)
 
-			}
-		}
-
-		return true, nil
 	}
 
 	revertHandler := func(ctx context.Context, ts *types.TipSet) error {
@@ -327,7 +315,68 @@ func (s *ShardingSub) listenShardEvents(ctx context.Context, sh *Shard) {
 	}
 }
 
-func (s *ShardingSub) Start() {
-	// TODO: Figure out contexts all around the place.
-	s.listenShardEvents(context.TODO(), nil)
+func (s *ShardingSub) triggerChange(ctx context.Context, api *impl.FullNodeAPI, shardMap map[string]diffInfo) (more bool, err error) {
+	s.lk.Lock()
+	defer s.lk.Unlock()
+	// For each new shard detected
+	for k, diff := range shardMap {
+		// If the shard has not been removed.
+		if !diff.isRm {
+			log.Infow("Change event detected for shard", "shardID", k)
+			_, ok := s.shards[k]
+			// If we are not already subscribed to the shard.
+			if !ok {
+				// Create shard with id from parentAPI
+				err := s.newShard(ctx, k, api, diff)
+				if err != nil {
+					log.Errorw("Error creating new shard", "shardID", k, "err", err)
+					return true, err
+				}
+			} else {
+				// If diff says we can start mining and we are not mining
+				if mining := s.shards[k].isMining(); !mining && shardMap[k].isMiner {
+					s.shards[k].mine(ctx)
+				}
+				// TODO: We currently don't support taking part of the stake
+				// from the shard, if we eventually do so, we'll also need
+				// to check if we've been removed from the list of miners
+				// in which case we'll need to stop mining here.
+			}
+		} else {
+			log.Infow("Leave event detected for shard", "shardID", k)
+			// Stop all processes for shard.
+			err := s.shards[k].Close(ctx)
+			if err != nil {
+				log.Errorw("error closing shard", "shardID", k, "err", err)
+				return true, err
+			}
+			// Remove from shard registry.
+			delete(s.shards, k)
+			return false, nil
+		}
+	}
+	return true, nil
+}
+func (s *ShardingSub) Start(ctx context.Context) {
+	s.listenShardEvents(ctx, nil)
+}
+
+func BuildShardingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, s *ShardingSub) {
+	ctx := helpers.LifecycleCtx(mctx, lc)
+	s.Start(ctx)
+
+	lc.Append(fx.Hook{
+		OnStop: func(ctx context.Context) error {
+			// NOTE: Closing sharding sub here. Whatever the hell that means...
+			// It may be worth revisiting this.
+			for _, sh := range s.shards {
+				err := sh.Close(ctx)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	})
+
 }

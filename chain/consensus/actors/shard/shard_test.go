@@ -242,6 +242,7 @@ func TestLeave(t *testing.T) {
 	require.Equal(t, len(sh.Miners), 1)
 	require.Equal(t, sh.Status, actor.Active)
 	require.Equal(t, h.getStake(rt, sh, owner), addValue)
+	require.Equal(t, getState(rt).TotalShards, uint64(1))
 
 	t.Log("new miner join the shard")
 	joinParams := &actor.SelectParams{ID: shid.Bytes()}
@@ -281,6 +282,7 @@ func TestLeave(t *testing.T) {
 	// The shard is completely removed
 	sh, found = h.getShard(rt, shid)
 	require.False(h.t, found)
+	require.Equal(t, getState(rt).TotalShards, uint64(0))
 }
 
 type shActorHarness struct {

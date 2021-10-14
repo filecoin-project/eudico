@@ -72,7 +72,7 @@ func Mine(ctx context.Context, miner address.Address, api *impl.FullNodeAPI, v0a
 				log.Errorw("selecting messages failed", "error", err)
 			}
 
-			bh, err := api.MinerCreateBlock(context.TODO(), &lapi.BlockTemplate{
+			bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
 				Miner:            miner,
 				Parents:          types.NewTipSetKey(BestWorkBlock(base).Cid()),
 				BeaconValues:     nil,
@@ -146,7 +146,7 @@ func Mine(ctx context.Context, miner address.Address, api *impl.FullNodeAPI, v0a
 				log.Errorw("selecting messages failed", "error", err)
 			}
 
-			bh, err := api.MinerCreateBlock(context.TODO(), &lapi.BlockTemplate{
+			bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
 				Miner:            miner,
 				Parents:          types.NewTipSetKey(BestWorkBlock(base).Cid()),
 				BeaconValues:     nil,

@@ -23,6 +23,7 @@ var shardingCmds = &cli.Command{
 		addCmd,
 		joinCmd,
 		listShardsCmd,
+		leaveCmd,
 	},
 }
 
@@ -163,6 +164,7 @@ var addCmd = &cli.Command{
 			return xerrors.Errorf("failed marshalling addParams: %w", err)
 		}
 
+		// Add method
 		params.Method = abi.MethodNum(2)
 		decparams, err := srv.DecodeTypedParamsFromJSON(ctx, params.To, params.Method, string(paramsJson))
 		if err != nil {
@@ -251,7 +253,93 @@ var joinCmd = &cli.Command{
 			return xerrors.Errorf("failed marshalling addParams: %w", err)
 		}
 
+		// Join method
 		params.Method = abi.MethodNum(3)
+		decparams, err := srv.DecodeTypedParamsFromJSON(ctx, params.To, params.Method, string(paramsJson))
+		if err != nil {
+			return fmt.Errorf("failed to decode json params: %w", err)
+		}
+		params.Params = decparams
+
+		proto, err := srv.MessageForSend(ctx, params)
+		if err != nil {
+			return xerrors.Errorf("creating message prototype: %w", err)
+		}
+
+		sm, err := lcli.InteractiveSend(ctx, cctx, srv, proto)
+		if err != nil {
+			return err
+		}
+
+		fmt.Fprintf(cctx.App.Writer, "%s\n", sm.Cid())
+		return nil
+	},
+}
+
+var leaveCmd = &cli.Command{
+	Name:      "leave",
+	Usage:     "Leave a shard and take your stake back",
+	ArgsUsage: "[]",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "from",
+			Usage: "optionally specify the account to send funds from",
+		},
+		&cli.StringFlag{
+			Name:  "name",
+			Usage: "specify name for the shard",
+		},
+		&cli.BoolFlag{
+			Name:  "force",
+			Usage: "Deprecated: use global 'force-send'",
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+
+		if cctx.Args().Len() != 0 {
+			// NOTE: We may need to add an amount argument when we support partial
+			// withdrawal of stake.
+			return lcli.ShowHelp(cctx, fmt.Errorf("'send' expects no arguments, but a set of flags"))
+		}
+
+		srv, err := lcli.GetFullNodeServices(cctx)
+		if err != nil {
+			return err
+		}
+		defer srv.Close() //nolint:errcheck
+
+		ctx := lcli.ReqContext(cctx)
+		var params lcli.SendParams
+
+		params.To = shard.ShardActorAddr
+
+		if from := cctx.String("from"); from != "" {
+			addr, err := address.NewFromString(from)
+			if err != nil {
+				return err
+			}
+
+			params.From = addr
+		}
+
+		addp := selectParams{}
+		if cctx.IsSet("name") {
+			c, err := shard.ShardID([]byte(cctx.String("name")))
+			if err != nil {
+				return lcli.ShowHelp(cctx, fmt.Errorf("could not generate CID for shard with that name"))
+			}
+			addp.ID = c.Bytes()
+		} else {
+			return lcli.ShowHelp(cctx, fmt.Errorf("no name for shard specified"))
+		}
+
+		paramsJson, err := json.Marshal(&addp)
+		if err != nil {
+			return xerrors.Errorf("failed marshalling addParams: %w", err)
+		}
+
+		// Leave method
+		params.Method = abi.MethodNum(4)
 		decparams, err := srv.DecodeTypedParamsFromJSON(ctx, params.To, params.Method, string(paramsJson))
 		if err != nil {
 			return fmt.Errorf("failed to decode json params: %w", err)

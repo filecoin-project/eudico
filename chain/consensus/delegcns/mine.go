@@ -61,7 +61,7 @@ func Mine(ctx context.Context, api *impl.FullNodeAPI, v0api v0api.FullNode) erro
 					log.Errorw("selecting messages failed", "error", err)
 				}
 
-				bh, err := api.MinerCreateBlock(context.TODO(), &lapi.BlockTemplate{
+				bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
 					Miner:            miner,
 					Parents:          base.Key(),
 					Ticket:           nil,
@@ -125,7 +125,7 @@ func Mine(ctx context.Context, api *impl.FullNodeAPI, v0api v0api.FullNode) erro
 					log.Errorw("selecting messages failed", "error", err)
 				}
 
-				bh, err := api.MinerCreateBlock(context.TODO(), &lapi.BlockTemplate{
+				bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
 					Miner:            miner,
 					Parents:          base.Key(),
 					Ticket:           nil,

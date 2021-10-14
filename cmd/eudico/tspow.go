@@ -55,11 +55,9 @@ var tpowCmd = &cli.Command{
 			node.Override(new(stmgr.Executor), tspow.TipSetExecutor()), //todo
 			node.Override(new(stmgr.UpgradeSchedule), tspow.DefaultUpgradeSchedule()),
 
-			// Start shardin sub to listent to shard events
+			// Start sharding sub to listent to shard events
 			node.Override(new(*sharding.ShardingSub), sharding.NewShardSub),
-			node.Override(StartShardingSubKey, func(s *sharding.ShardingSub) {
-				s.Start()
-			}),
+			node.Override(StartShardingSubKey, sharding.BuildShardingSub),
 		)),
 	},
 }

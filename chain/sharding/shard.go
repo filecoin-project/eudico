@@ -27,7 +27,9 @@ import (
 	"github.com/ipld/go-car"
 	"github.com/libp2p/go-libp2p-core/host"
 	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/protocol"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"go.uber.org/multierr"
 	"golang.org/x/xerrors"
 )
 
@@ -71,8 +73,8 @@ type Shard struct {
 	pmgr peermgr.MaybePeerMgr
 
 	// Shard context
-	ctx context.Context
-	// TODO: Cancelfunc, handle it.
+	ctx       context.Context
+	ctxCancel context.CancelFunc
 
 	hello *helloService
 
@@ -109,6 +111,7 @@ func (sh *Shard) LoadGenesis(genBytes []byte) (chain.Genesis, error) {
 	//LoadGenesis to pass it
 	return chain.LoadGenesis(sh.sm)
 }
+
 func (sh *Shard) HandleIncomingMessages(ctx context.Context, bootstrapper dtypes.Bootstrapper) error {
 	nn := dtypes.NetworkName(sh.netName)
 	v := sub.NewMessageValidator(sh.host.ID(), sh.mpool)
@@ -139,6 +142,43 @@ func (sh *Shard) HandleIncomingMessages(ctx context.Context, bootstrapper dtypes
 	// wait until we are synced within 10 epochs -- env var can override
 	waitForSync(sh.sm, 10, subscribe)
 	return nil
+}
+
+// Close the shard
+//
+// Stop all processes and remove all handlers.
+func (sh *Shard) Close(ctx context.Context) error {
+	log.Infow("Closing shard", "shardID", sh.ID)
+	// Remove hello and exchange handlers to stop accepting requests from peers.
+	sh.host.RemoveStreamHandler(protocol.ID(BlockSyncProtoPrefix + sh.netName))
+	sh.host.RemoveStreamHandler(protocol.ID(HelloProtoPrefix + sh.netName))
+	// Remove pubsub topic validators for the shard.
+	err1 := sh.pubsub.UnregisterTopicValidator(build.BlocksTopic(dtypes.NetworkName(sh.netName)))
+	err2 := sh.pubsub.UnregisterTopicValidator(build.MessagesTopic(dtypes.NetworkName(sh.netName)))
+	// Close chainstore
+	err3 := sh.ch.Close()
+	// Stop state manager
+	err4 := sh.sm.Stop(ctx)
+	// Stop syncer
+	sh.syncer.Stop()
+	// Close message pool
+	err5 := sh.mpool.Close()
+
+	// TODO: Do we need to do something else to fully close the
+	// shard. We'll need to revisit this.
+	// Check: https://github.com/filecoin-project/eudico/issues/38
+	// TODO: We should maybe check also if it is worth removing the
+	// chainstore for the shard from the datastore (as it is no longer
+	// needed).
+	sh.ctxCancel()
+
+	return multierr.Combine(
+		err1,
+		err2,
+		err3,
+		err4,
+		err5,
+	)
 }
 
 func waitForSync(stmgr *stmgr.StateManager, epochs int, subscribe func()) {
