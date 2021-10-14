@@ -214,6 +214,7 @@ func TestLeave(t *testing.T) {
 	h.constructAndVerify(rt)
 	owner := tutil.NewIDAddr(t, 101)
 	joiner := tutil.NewIDAddr(t, 102)
+	joiner2 := tutil.NewIDAddr(t, 103)
 
 	addParams := &actor.AddParams{
 		Name:       []byte("testShard"),
@@ -259,8 +260,37 @@ func TestLeave(t *testing.T) {
 	require.Equal(t, h.getStake(rt, sh, joiner), joinValue)
 	require.Equal(t, len(sh.Miners), 1)
 
-	t.Log("adder leaves the shard")
+	t.Log("new miner 2 join the shard")
+	joinValue2 := abi.NewTokenAmount(1e18)
+	rt.ExpectValidateCallerAny()
+	rt.SetReceived(joinValue2)
+	rt.SetBalance(big.Add(joinValue2, big.Add(joinValue, addValue)))
+	rt.SetCaller(joiner2, builtin.AccountActorCodeID)
+	rt.Call(h.ShardActor.Join, joinParams)
+	// Shard activated
+	sh, found = h.getShard(rt, shid)
+	require.True(h.t, found)
+	require.Equal(t, sh.Status, actor.Active)
+	require.Equal(t, h.getStake(rt, sh, joiner2), joinValue2)
+	require.Equal(t, len(sh.Miners), 2)
+
+	t.Log("second joiner leaves the shard")
 	leaveParams := &actor.SelectParams{ID: shid.Bytes()}
+	rt.ExpectValidateCallerAny()
+	rt.SetCaller(joiner2, builtin.AccountActorCodeID)
+	rt.ExpectSend(joiner2, builtin.MethodSend, nil, big.Div(joinValue2, actor.LeavingFeeCoeff), nil, exitcode.Ok)
+	rt.Call(h.ShardActor.Leave, leaveParams)
+	sh, found = h.getShard(rt, shid)
+	require.True(h.t, found)
+	// The shard is still active
+	require.Equal(t, sh.Status, actor.Active)
+	// Not in stakes anymore.
+	_, found = h.getMinerState(rt, sh, joiner2)
+	require.False(h.t, found)
+	// Also removed from miners list.
+	require.Equal(t, len(sh.Miners), 1)
+
+	t.Log("adder leaves the shard")
 	rt.ExpectValidateCallerAny()
 	rt.SetCaller(owner, builtin.AccountActorCodeID)
 	rt.ExpectSend(owner, builtin.MethodSend, nil, big.Div(addValue, actor.LeavingFeeCoeff), nil, exitcode.Ok)
@@ -271,8 +301,17 @@ func TestLeave(t *testing.T) {
 	// Not in stakes anymore.
 	_, found = h.getMinerState(rt, sh, owner)
 	require.False(h.t, found)
+	_, found = h.getMinerState(rt, sh, joiner)
+	require.True(h.t, found)
 	// Also removed from miners list.
 	require.Equal(t, len(sh.Miners), 0)
+
+	t.Log("calling twice to get stake twice")
+	rt.ExpectValidateCallerAny()
+	rt.SetCaller(owner, builtin.AccountActorCodeID)
+	rt.ExpectAbort(exitcode.ErrForbidden, func() {
+		rt.Call(h.ShardActor.Leave, leaveParams)
+	})
 
 	t.Log("joiner leaves the shard")
 	rt.ExpectValidateCallerAny()

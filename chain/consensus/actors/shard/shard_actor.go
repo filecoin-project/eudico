@@ -185,6 +185,7 @@ func (a ShardActor) Leave(rt runtime.Runtime, params *SelectParams) *abi.EmptyVa
 	c, err := cid.Cast(params.ID)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed to cast cid for shard")
 
+	priorBalance := rt.CurrentBalance()
 	var st ShardState
 	var retFunds abi.TokenAmount
 	rt.StateTransaction(&st, func() {
@@ -196,6 +197,9 @@ func (a ShardActor) Leave(rt runtime.Runtime, params *SelectParams) *abi.EmptyVa
 		// Remove stake. Kill the shard if needed
 		retFunds = sh.rmStake(rt, &st, sourceAddr)
 	})
+
+	// Never send back if we don't have enough balance
+	builtin.RequireState(rt, retFunds.LessThanEqual(priorBalance), "reward %v exceeds balance %v", retFunds, priorBalance)
 
 	// Send funds back to owner
 	code := rt.Send(sourceAddr, builtin.MethodSend, nil, retFunds, &builtin.Discard{})
@@ -250,10 +254,14 @@ func (sh *Shard) addStake(rt runtime.Runtime, st *ShardState, sourceAddr address
 }
 
 func (sh *Shard) rmStake(rt runtime.Runtime, st *ShardState, sourceAddr address.Address) abi.TokenAmount {
+
 	stakes, err := adt.AsMap(adt.AsStore(rt), sh.Stake, builtin.DefaultHamtBitwidth)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state for stakes in shard")
 	minerStake, err := getStake(stakes, sourceAddr)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get stake for miner")
+	if minerStake.Equals(abi.NewTokenAmount(0)) {
+		rt.Abortf(exitcode.ErrForbidden, "caller hasn't stake in this shard")
+	}
 	retFunds := big.Div(minerStake, LeavingFeeCoeff)
 
 	// Remove from stakes
@@ -294,14 +302,17 @@ func (sh *Shard) rmStake(rt runtime.Runtime, st *ShardState, sourceAddr address.
 			}
 			return retFunds
 		}
+		// Terminating because there is not minimum stake
 		sh.Status = Terminating
-		// There are still miners with stake in the shard, so don't kill it
-		err = shards.Put(abi.CidKey(sh.ID), sh)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put new shard in shard map")
-		// Flush shards
-		st.Shards, err = shards.Root()
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush shards")
 	}
+
+	// There are still miners with stake in the shard, so don't kill it
+	// The shard is either active or terminating.
+	err = shards.Put(abi.CidKey(sh.ID), sh)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put new shard in shard map")
+	// Flush shards
+	st.Shards, err = shards.Root()
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush shards")
 	return retFunds
 }
 

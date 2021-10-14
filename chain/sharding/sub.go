@@ -291,18 +291,21 @@ func (s *ShardingSub) listenShardEvents(ctx context.Context, sh *Shard) {
 			return false, nil, nil
 		}
 
+		outDiff := make(map[string]diffInfo)
 		// Start running state checks to build diff.
 		// Check first if there are new shards.
-		if f := s.checkNewShard(ctx, cst, oldSt, newSt); f != nil {
-			return f()
-		}
-		// Check if state in existing shards has changed.
-		f, err := s.checkShardChange(ctx, cst, oldSt, newSt)
-		if err != nil {
+		if err := s.checkNewShard(ctx, outDiff, cst, oldSt, newSt); err != nil {
+			log.Errorw("error in checkNewShard", "err", err)
 			return false, nil, err
 		}
-		if f != nil {
-			return f()
+		// Check if state in existing shards has changed.
+		if err := s.checkShardChange(ctx, outDiff, cst, oldSt, newSt); err != nil {
+			log.Errorw("error in checkShardChange", "err", err)
+			return false, nil, err
+		}
+
+		if len(outDiff) > 0 {
+			return true, outDiff, nil
 		}
 
 		return false, nil, nil
@@ -322,7 +325,7 @@ func (s *ShardingSub) triggerChange(ctx context.Context, api *impl.FullNodeAPI, 
 	for k, diff := range shardMap {
 		// If the shard has not been removed.
 		if !diff.isRm {
-			log.Infow("Change event detected for shard", "shardID", k)
+			log.Infow("Change event triggered for shard", "shardID", k)
 			_, ok := s.shards[k]
 			// If we are not already subscribed to the shard.
 			if !ok {
@@ -343,7 +346,7 @@ func (s *ShardingSub) triggerChange(ctx context.Context, api *impl.FullNodeAPI, 
 				// in which case we'll need to stop mining here.
 			}
 		} else {
-			log.Infow("Leave event detected for shard", "shardID", k)
+			log.Infow("Leave event triggered for shard", "shardID", k)
 			// Stop all processes for shard.
 			err := s.shards[k].Close(ctx)
 			if err != nil {
