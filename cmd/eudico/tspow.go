@@ -111,7 +111,7 @@ var tpowMinerCmd = &cli.Command{
 	Name:  "miner",
 	Usage: "run tspow conesensus miner",
 	Action: func(cctx *cli.Context) error {
-		api, closer, err := lcli.GetFullNodeAPI(cctx)
+		api, closer, err := lcli.GetFullNodeAPIV1(cctx)
 		if err != nil {
 			return err
 		}
@@ -127,7 +127,7 @@ var tpowMinerCmd = &cli.Command{
 		}
 
 		log.Infow("Starting mining with miner", miner)
-		return tspow.Mine(ctx, miner, nil, api)
+		return tspow.Mine(ctx, miner, api)
 	},
 }
 

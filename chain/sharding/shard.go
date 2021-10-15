@@ -266,7 +266,7 @@ func (sh *Shard) mine(ctx context.Context) error {
 	case shard.Delegated:
 		// Assigning mining context.
 		sh.miningCtx, sh.miningCncl = context.WithCancel(ctx)
-		go delegcns.Mine(sh.miningCtx, sh.api, nil)
+		go delegcns.Mine(sh.miningCtx, sh.api)
 	case shard.PoW:
 		miner, err := sh.getWallet(ctx)
 		if err != nil {
@@ -274,7 +274,7 @@ func (sh *Shard) mine(ctx context.Context) error {
 			return err
 		}
 		sh.miningCtx, sh.miningCncl = context.WithCancel(ctx)
-		go tspow.Mine(sh.miningCtx, miner, sh.api, nil)
+		go tspow.Mine(sh.miningCtx, miner, sh.api)
 	default:
 		return xerrors.New("consensus type not suported")
 	}

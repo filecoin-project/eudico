@@ -12,148 +12,74 @@ import (
 
 	"github.com/filecoin-project/lotus/api"
 	lapi "github.com/filecoin-project/lotus/api"
-	"github.com/filecoin-project/lotus/api/v0api"
+	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/filecoin-project/lotus/node/impl"
 )
 
-// NOTE: This is super ugly, but I'll use it
-// as a workaround to keep the mining implementation for each consensus
-// for the different types of API interfaces in the same place.
-// This can't stay like this for long (for everyone's sake), but
-// will defer it to the future when I have time to give it a bit
-// more of thought and we find a more elegant way of tackling this.
-func Mine(ctx context.Context, api *impl.FullNodeAPI, v0api v0api.FullNode) error {
-	if v0api != nil {
-		api := v0api
-		head, err := api.ChainHead(ctx)
-		if err != nil {
-			return xerrors.Errorf("getting head: %w", err)
-		}
+func Mine(ctx context.Context, api v1api.FullNode) error {
+	head, err := api.ChainHead(ctx)
+	if err != nil {
+		return xerrors.Errorf("getting head: %w", err)
+	}
 
-		minerid, err := address.NewFromString("t0100")
-		if err != nil {
-			return err
-		}
-		miner, err := api.StateAccountKey(ctx, minerid, types.EmptyTSK)
-		if err != nil {
-			return err
-		}
+	minerid, err := address.NewFromString("t0100")
+	if err != nil {
+		return err
+	}
+	miner, err := api.StateAccountKey(ctx, minerid, types.EmptyTSK)
+	if err != nil {
+		return err
+	}
 
-		log.Info("starting delegated mining on @", head.Height())
+	log.Info("starting mining on @", head.Height())
 
-		timer := time.NewTicker(time.Duration(build.BlockDelaySecs) * time.Second)
-		for {
-			select {
-			case <-timer.C:
-				base, err := api.ChainHead(ctx)
-				if err != nil {
-					log.Errorw("creating block failed", "error", err)
-					continue
-				}
-
-				log.Info("try delegated mining at @", base.Height())
-
-				msgs, err := api.MpoolSelect(ctx, base.Key(), 1)
-				if err != nil {
-					log.Errorw("selecting messages failed", "error", err)
-				}
-
-				bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
-					Miner:            miner,
-					Parents:          base.Key(),
-					Ticket:           nil,
-					Eproof:           nil,
-					BeaconValues:     nil,
-					Messages:         msgs,
-					Epoch:            base.Height() + 1,
-					Timestamp:        base.MinTimestamp() + build.BlockDelaySecs,
-					WinningPoStProof: nil,
-				})
-				if err != nil {
-					log.Errorw("creating block failed", "error", err)
-					continue
-				}
-
-				err = api.SyncSubmitBlock(ctx, &types.BlockMsg{
-					Header:        bh.Header,
-					BlsMessages:   bh.BlsMessages,
-					SecpkMessages: bh.SecpkMessages,
-				})
-				if err != nil {
-					log.Errorw("submitting block failed", "error", err)
-				}
-
-				log.Info("delegated mined a block! ", bh.Cid(), " msgs ", len(msgs))
-			case <-ctx.Done():
-				return nil
+	timer := time.NewTicker(time.Duration(build.BlockDelaySecs) * time.Second)
+	for {
+		select {
+		case <-timer.C:
+			base, err := api.ChainHead(ctx)
+			if err != nil {
+				log.Errorw("creating block failed", "error", err)
+				continue
 			}
-		}
-	} else {
-		head, err := api.ChainHead(ctx)
-		if err != nil {
-			return xerrors.Errorf("getting head: %w", err)
-		}
 
-		minerid, err := address.NewFromString("t0100")
-		if err != nil {
-			return err
-		}
-		miner, err := api.StateAccountKey(ctx, minerid, types.EmptyTSK)
-		if err != nil {
-			return err
-		}
+			log.Info("try delegated mining at @", base.Height())
 
-		log.Info("starting mining on @", head.Height())
-
-		timer := time.NewTicker(time.Duration(build.BlockDelaySecs) * time.Second)
-		for {
-			select {
-			case <-timer.C:
-				base, err := api.ChainHead(ctx)
-				if err != nil {
-					log.Errorw("creating block failed", "error", err)
-					continue
-				}
-
-				log.Info("try delegated mining at @", base.Height())
-
-				msgs, err := api.MpoolSelect(ctx, base.Key(), 1)
-				if err != nil {
-					log.Errorw("selecting messages failed", "error", err)
-				}
-
-				bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
-					Miner:            miner,
-					Parents:          base.Key(),
-					Ticket:           nil,
-					Eproof:           nil,
-					BeaconValues:     nil,
-					Messages:         msgs,
-					Epoch:            base.Height() + 1,
-					Timestamp:        base.MinTimestamp() + build.BlockDelaySecs,
-					WinningPoStProof: nil,
-				})
-				if err != nil {
-					log.Errorw("creating block failed", "error", err)
-					continue
-				}
-
-				err = api.SyncSubmitBlock(ctx, &types.BlockMsg{
-					Header:        bh.Header,
-					BlsMessages:   bh.BlsMessages,
-					SecpkMessages: bh.SecpkMessages,
-				})
-				if err != nil {
-					log.Errorw("submitting block failed", "error", err)
-				}
-
-				log.Info("delegated mined a block! ", bh.Cid(), " msgs ", len(msgs))
-			case <-ctx.Done():
-				return nil
+			msgs, err := api.MpoolSelect(ctx, base.Key(), 1)
+			if err != nil {
+				log.Errorw("selecting messages failed", "error", err)
 			}
+
+			bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
+				Miner:            miner,
+				Parents:          base.Key(),
+				Ticket:           nil,
+				Eproof:           nil,
+				BeaconValues:     nil,
+				Messages:         msgs,
+				Epoch:            base.Height() + 1,
+				Timestamp:        base.MinTimestamp() + build.BlockDelaySecs,
+				WinningPoStProof: nil,
+			})
+			if err != nil {
+				log.Errorw("creating block failed", "error", err)
+				continue
+			}
+
+			err = api.SyncSubmitBlock(ctx, &types.BlockMsg{
+				Header:        bh.Header,
+				BlsMessages:   bh.BlsMessages,
+				SecpkMessages: bh.SecpkMessages,
+			})
+			if err != nil {
+				log.Errorw("submitting block failed", "error", err)
+			}
+
+			log.Info("delegated mined a block! ", bh.Cid(), " msgs ", len(msgs))
+		case <-ctx.Done():
+			return nil
 		}
 	}
 }

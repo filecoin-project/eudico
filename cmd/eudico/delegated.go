@@ -22,8 +22,6 @@ import (
 	"github.com/filecoin-project/lotus/node"
 )
 
-var StartShardingSubKey = node.AddInvoke()
-
 var delegatedCmd = &cli.Command{
 	Name:  "delegated",
 	Usage: "Delegated consensus testbed",
@@ -98,12 +96,12 @@ var delegatedMinerCmd = &cli.Command{
 	Name:  "miner",
 	Usage: "run delegated conesensus miner",
 	Action: func(cctx *cli.Context) error {
-		api, closer, err := lcli.GetFullNodeAPI(cctx)
+		api, closer, err := lcli.GetFullNodeAPIV1(cctx)
 		if err != nil {
 			return err
 		}
 		defer closer()
 		ctx := cliutil.ReqContext(cctx)
-		return delegcns.Mine(ctx, nil, api)
+		return delegcns.Mine(ctx, api)
 	},
 }
