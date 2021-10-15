@@ -62,8 +62,17 @@ func WriteGenesis(netName string, consensus ConsensusType, miner, vreg, rem addr
 		if err != nil {
 			return xerrors.Errorf("error making genesis delegated block: %w", err)
 		}
-
+	case FilCns:
+		template, err := filCnsGenTemplate(netName, miner, vreg, rem, seq)
+		if err != nil {
+			return err
+		}
+		b, err = makeFilCnsGenesisBlock(context.TODO(), bs, *template)
+		if err != nil {
+			return xerrors.Errorf("error making genesis delegated block: %w", err)
+		}
 	}
+
 	offl := offline.Exchange(bs)
 	blkserv := blockservice.New(bs, offl)
 	dserv := merkledag.NewDAGService(blkserv)

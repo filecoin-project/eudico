@@ -41,6 +41,7 @@ type ConsensusType uint64
 const (
 	Delegated ConsensusType = iota
 	PoW
+	FilCns
 )
 
 // ShardStatus describes in what state in its lifecycle a shard is.
