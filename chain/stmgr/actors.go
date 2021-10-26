@@ -3,6 +3,7 @@ package stmgr
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/filecoin-project/lotus/chain/rand"
@@ -84,6 +85,7 @@ func GetPowerRaw(ctx context.Context, sm *StateManager, st cid.Cid, maddr addres
 			return power.Claim{}, power.Claim{}, false, err
 		}
 	}
+	fmt.Println(">>>>>>>  Mining power")
 
 	return mpow, tpow, minpow, nil
 }

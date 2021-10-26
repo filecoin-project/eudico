@@ -660,3 +660,115 @@ func MakeGenesisBlock(ctx context.Context, j journal.Journal, bs bstore.Blocksto
 		Genesis: b,
 	}, nil
 }
+
+func MakeGenesisBlock2(ctx context.Context, j journal.Journal, bs bstore.Blockstore, sys vm.SyscallBuilder, template genesis.Template) (*GenesisBootstrap, error) {
+	if j == nil {
+		j = journal.NilJournal()
+	}
+	st, keyIDs, err := MakeInitialStateTree(ctx, bs, template)
+	if err != nil {
+		return nil, xerrors.Errorf("make initial state tree failed: %w", err)
+	}
+
+	stateroot, err := st.Flush(ctx)
+	if err != nil {
+		return nil, xerrors.Errorf("flush state tree failed: %w", err)
+	}
+
+	// temp chainstore
+	cs := store.NewChainStore(bs, bs, datastore.NewMapDatastore(), nil, j)
+
+	// Verify PreSealed Data
+	stateroot, err = VerifyPreSealedData(ctx, cs, sys, stateroot, template, keyIDs, template.NetworkVersion)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to verify presealed data: %w", err)
+	}
+
+	stateroot, err = SetupStorageMiners(ctx, cs, sys, stateroot, template.Miners, template.NetworkVersion)
+	if err != nil {
+		return nil, xerrors.Errorf("setup miners failed: %w", err)
+	}
+
+	store := adt.WrapStore(ctx, cbor.NewCborStore(bs))
+	emptyroot, err := adt0.MakeEmptyArray(store).Root()
+	if err != nil {
+		return nil, xerrors.Errorf("amt build failed: %w", err)
+	}
+
+	mm := &types.MsgMeta{
+		BlsMessages:   emptyroot,
+		SecpkMessages: emptyroot,
+	}
+	mmb, err := mm.ToStorageBlock()
+	if err != nil {
+		return nil, xerrors.Errorf("serializing msgmeta failed: %w", err)
+	}
+	if err := bs.Put(mmb); err != nil {
+		return nil, xerrors.Errorf("putting msgmeta block to blockstore: %w", err)
+	}
+
+	log.Infof("Empty Genesis root: %s", emptyroot)
+
+	tickBuf := make([]byte, 32)
+	_, _ = rand.Read(tickBuf)
+	genesisticket := &types.Ticket{
+		VRFProof: tickBuf,
+	}
+
+	filecoinGenesisCid, err := cid.Decode("bafyreiaqpwbbyjo4a42saasj36kkrpv4tsherf2e7bvezkert2a7dhonoi")
+	if err != nil {
+		return nil, xerrors.Errorf("failed to decode filecoin genesis block CID: %w", err)
+	}
+
+	if !expectedCid().Equals(filecoinGenesisCid) {
+		return nil, xerrors.Errorf("expectedCid != filecoinGenesisCid")
+	}
+
+	gblk, err := getGenesisBlock()
+	if err != nil {
+		return nil, xerrors.Errorf("failed to construct filecoin genesis block: %w", err)
+	}
+
+	if !filecoinGenesisCid.Equals(gblk.Cid()) {
+		return nil, xerrors.Errorf("filecoinGenesisCid != gblk.Cid")
+	}
+
+	if err := bs.Put(gblk); err != nil {
+		return nil, xerrors.Errorf("failed writing filecoin genesis block to blockstore: %w", err)
+	}
+
+	b := &types.BlockHeader{
+		Miner:                 system.Address,
+		Ticket:                genesisticket,
+		Parents:               []cid.Cid{filecoinGenesisCid},
+		Height:                0,
+		ParentWeight:          types.NewInt(0),
+		ParentStateRoot:       stateroot,
+		Messages:              mmb.Cid(),
+		ParentMessageReceipts: emptyroot,
+		BLSAggregate:          nil,
+		BlockSig:              nil,
+		Timestamp:             template.Timestamp,
+		ElectionProof:         new(types.ElectionProof),
+		BeaconEntries: []types.BeaconEntry{
+			{
+				Round: 0,
+				Data:  make([]byte, 32),
+			},
+		},
+		ParentBaseFee: abi.NewTokenAmount(build.InitialBaseFee),
+	}
+
+	sb, err := b.ToStorageBlock()
+	if err != nil {
+		return nil, xerrors.Errorf("serializing block header failed: %w", err)
+	}
+
+	if err := bs.Put(sb); err != nil {
+		return nil, xerrors.Errorf("putting header to blockstore: %w", err)
+	}
+
+	return &GenesisBootstrap{
+		Genesis: b,
+	}, nil
+}

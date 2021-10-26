@@ -68,7 +68,7 @@ var tpowGenesisCmd = &cli.Command{
 	ArgsUsage: "[outfile]",
 	Action: func(cctx *cli.Context) error {
 		if cctx.Args().Len() != 1 {
-			return xerrors.Errorf("expected 2 arguments")
+			return xerrors.Errorf("expected 1 argument")
 		}
 
 		memks := wallet.NewMemKeyStore()

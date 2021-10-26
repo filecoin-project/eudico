@@ -60,16 +60,19 @@ func WriteGenesis(netName string, consensus ConsensusType, miner, vreg, rem addr
 		}
 		b, err = makePoWGenesisBlock(context.TODO(), bs, *template)
 		if err != nil {
-			return xerrors.Errorf("error making genesis delegated block: %w", err)
+			return xerrors.Errorf("error making genesis filcns block: %w", err)
 		}
 	case FilCns:
+		if miner == address.Undef {
+			return xerrors.Errorf("no miner specified for filecoin consensus")
+		}
 		template, err := filCnsGenTemplate(netName, miner, vreg, rem, seq)
 		if err != nil {
 			return err
 		}
-		b, err = makeFilCnsGenesisBlock(context.TODO(), bs, *template)
+		b, err = makeFilCnsGenesisBlock(context.TODO(), bs, *template, miner)
 		if err != nil {
-			return xerrors.Errorf("error making genesis delegated block: %w", err)
+			return xerrors.Errorf("error making genesis filcns block: %w", err)
 		}
 	}
 
