@@ -78,7 +78,8 @@ var delegatedGenesisCmd = &cli.Command{
 			return err
 		}
 
-		if err := shard.WriteGenesis("eudico-"+uuid.New().String(), shard.Delegated, miner, vreg, rem, uint64(time.Now().Unix()), f); err != nil {
+		repoPath := cctx.String("repo")
+		if err := shard.WriteGenesis("eudico-"+uuid.New().String(), shard.Delegated, repoPath, miner, vreg, rem, uint64(time.Now().Unix()), f); err != nil {
 			return xerrors.Errorf("write genesis car: %w", err)
 		}
 

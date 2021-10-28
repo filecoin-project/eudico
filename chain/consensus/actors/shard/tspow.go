@@ -21,7 +21,7 @@ import (
 )
 
 func makePoWGenesisBlock(ctx context.Context, bs bstore.Blockstore, template genesis.Template) (*genesis2.GenesisBootstrap, error) {
-	st, _, err := MakeInitialStateTree(ctx, bs, template)
+	st, _, err := MakeInitialStateTree(ctx, PoW, bs, template)
 	if err != nil {
 		return nil, xerrors.Errorf("make initial state tree failed: %w", err)
 	}

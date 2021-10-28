@@ -21,7 +21,7 @@ import (
 
 // TODO: We can probably deduplicate some code with pow genesis generation.
 func makeDelegatedGenesisBlock(ctx context.Context, bs bstore.Blockstore, template genesis.Template) (*genesis2.GenesisBootstrap, error) {
-	st, _, err := MakeInitialStateTree(ctx, bs, template)
+	st, _, err := MakeInitialStateTree(ctx, Delegated, bs, template)
 	if err != nil {
 		return nil, xerrors.Errorf("make initial state tree failed: %w", err)
 	}
@@ -64,7 +64,7 @@ func makeDelegatedGenesisBlock(ctx context.Context, bs bstore.Blockstore, templa
 	}
 
 	tickBuf := make([]byte, 32)
-	// TODO: We can't use randomness in genesis block
+	// NOTE: We can't use randomness in genesis block
 	// if want to make it deterministic. Consider using
 	// a seed to for the ticket generation?
 	// _, _ = rand.Read(tickBuf)

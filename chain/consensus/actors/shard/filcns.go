@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"path/filepath"
 
@@ -14,44 +13,141 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	bstore "github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/chain/actors/adt"
 	miner_builtin "github.com/filecoin-project/lotus/chain/actors/builtin/miner"
+	"github.com/filecoin-project/lotus/chain/actors/builtin/system"
 	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
+	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/vm"
 	"github.com/filecoin-project/lotus/cmd/lotus-seed/seed"
 	"github.com/filecoin-project/lotus/cmd/lotus-sim/simulation/mock"
 	"github.com/filecoin-project/lotus/genesis"
 	"github.com/filecoin-project/lotus/journal"
+	adt0 "github.com/filecoin-project/specs-actors/actors/util/adt"
+	cid "github.com/ipfs/go-cid"
+	"github.com/ipfs/go-datastore"
+	cbor "github.com/ipfs/go-ipld-cbor"
 	"github.com/mitchellh/go-homedir"
 	xerrors "golang.org/x/xerrors"
 )
 
-func makeFilCnsGenesisBlock(ctx context.Context, bs bstore.Blockstore, template genesis.Template, miner address.Address) (*genesis2.GenesisBootstrap, error) {
+var (
+	defaultPreSealSectorSize = "2KiB"
+)
+
+func makeFilCnsGenesisBlock(ctx context.Context, bs bstore.Blockstore, template genesis.Template, miner address.Address, repoPath string) (*genesis2.GenesisBootstrap, error) {
 	j := journal.NilJournal()
-	syscalls := vm.Syscalls(mock.Verifier)
-	// TODO: Add pre-seal data like is done in lotus-seed.
-	minerInfo, err := preSealedData(miner, "2KiB", 2, 0)
+	sys := vm.Syscalls(mock.Verifier)
+
+	// Add some preSealed data for the genesis miner.
+	// NOTE: We may not need this and be able to go without it. Revisit
+	// when we add FilCns support in shards.
+	minerInfo, err := preSealedData(miner, filepath.Join(repoPath, template.NetworkName), defaultPreSealSectorSize, 2, 0)
 	if err != nil {
 		return nil, err
 	}
+	// Add genesis miner and pre-sealed data to the genesis block.
 	err = addMiner(minerInfo, &template)
 	if err != nil {
 		return nil, err
 	}
-	// TODO: Add miner lotus-seed genesis add-miner devnet.json ~/.genesis-sectors/pre-seal-t01000.json
-	// And verify if it is deterministic.
-	// TODO: Reusing standard filecoin consensus generation. We need to setup shard actor in this genesis
-	// so we most probably need to take it out as we did with delegaed consensus.
-	return genesis2.MakeGenesisBlock2(context.TODO(), j, bs, syscalls, template)
 
+	return mkFilCnsGenesis(ctx, j, bs, sys, template)
 }
 
-// See preSelCmd from cmd/lotus-seed/main.go
-func preSealedData(miner address.Address, sectorSz string, numSectors int, sectorOffset int) (string, error) {
-	// genesis = node.Override(new(modules.Genesis), testing.MakeGenesis(cctx.String(makeGenFlag), cctx.String(preTemplateFlag)))
-	// No dir root specified
-	sbroot, err := homedir.Expand("/tmp/genesis")
-	fmt.Println(">>>>>>>  SBROOT", sbroot)
+func mkFilCnsGenesis(ctx context.Context, j journal.Journal, bs bstore.Blockstore, sys vm.SyscallBuilder, template genesis.Template) (*genesis2.GenesisBootstrap, error) {
+	st, keyIDs, err := MakeInitialStateTree(ctx, FilCns, bs, template)
+	if err != nil {
+		return nil, xerrors.Errorf("make initial state tree failed: %w", err)
+	}
+
+	stateroot, err := st.Flush(ctx)
+	if err != nil {
+		return nil, xerrors.Errorf("flush state tree failed: %w", err)
+	}
+
+	// temp chainstore
+	cs := store.NewChainStore(bs, bs, datastore.NewMapDatastore(), nil, j)
+
+	// Verify PreSealed Data
+	stateroot, err = genesis2.VerifyPreSealedData(ctx, cs, sys, stateroot, template, keyIDs, template.NetworkVersion)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to verify presealed data: %w", err)
+	}
+
+	stateroot, err = genesis2.SetupStorageMiners(ctx, cs, sys, stateroot, template.Miners, template.NetworkVersion)
+	if err != nil {
+		return nil, xerrors.Errorf("setup miners failed: %w", err)
+	}
+
+	store := adt.WrapStore(ctx, cbor.NewCborStore(bs))
+	emptyroot, err := adt0.MakeEmptyArray(store).Root()
+	if err != nil {
+		return nil, xerrors.Errorf("amt build failed: %w", err)
+	}
+
+	mm := &types.MsgMeta{
+		BlsMessages:   emptyroot,
+		SecpkMessages: emptyroot,
+	}
+	mmb, err := mm.ToStorageBlock()
+	if err != nil {
+		return nil, xerrors.Errorf("serializing msgmeta failed: %w", err)
+	}
+	if err := bs.Put(mmb); err != nil {
+		return nil, xerrors.Errorf("putting msgmeta block to blockstore: %w", err)
+	}
+
+	log.Infof("Empty Genesis root: %s", emptyroot)
+
+	tickBuf := make([]byte, 32)
+	// NOTE: We can't use randomness in genesis block
+	// if want to make it deterministic. Consider using
+	// a seed to for the ticket generation?
+	// _, _ = rand.Read(tickBuf)
+	genesisticket := &types.Ticket{
+		VRFProof: tickBuf,
+	}
+
+	b := &types.BlockHeader{
+		Miner:                 system.Address,
+		Ticket:                genesisticket,
+		Parents:               []cid.Cid{},
+		Height:                0,
+		ParentWeight:          types.NewInt(0),
+		ParentStateRoot:       stateroot,
+		Messages:              mmb.Cid(),
+		ParentMessageReceipts: emptyroot,
+		BLSAggregate:          nil,
+		BlockSig:              nil,
+		Timestamp:             template.Timestamp,
+		ElectionProof:         new(types.ElectionProof),
+		BeaconEntries: []types.BeaconEntry{
+			{
+				Round: 0,
+				Data:  make([]byte, 32),
+			},
+		},
+		ParentBaseFee: abi.NewTokenAmount(build.InitialBaseFee),
+	}
+
+	sb, err := b.ToStorageBlock()
+	if err != nil {
+		return nil, xerrors.Errorf("serializing block header failed: %w", err)
+	}
+
+	if err := bs.Put(sb); err != nil {
+		return nil, xerrors.Errorf("putting header to blockstore: %w", err)
+	}
+
+	return &genesis2.GenesisBootstrap{
+		Genesis: b,
+	}, nil
+}
+
+func preSealedData(tAddr address.Address, dir string, sectorSz string, numSectors int, sectorOffset int) (string, error) {
+	sbroot, err := homedir.Expand(dir)
 	if err != nil {
 		return "", err
 	}
@@ -85,19 +181,12 @@ func preSealedData(miner address.Address, sectorSz string, numSectors int, secto
 	}
 
 	fakeSectors := false
-	// TODO: We should add here the right t ID for the miner
-	// that is joining the shard and sealing the data.
-	// ADD T ADDRESS AS INPUT? DO WE NEED THE SOURCE ADDRESS ALSO?
-	miner, err = address.NewFromString("t01000")
-	if err != nil {
-		panic(err)
-	}
-	gm, key, err := seed.PreSeal(miner, spt, abi.SectorNumber(sectorOffset), numSectors, sbroot, []byte("this should be random"), k, fakeSectors)
+	gm, key, err := seed.PreSeal(tAddr, spt, abi.SectorNumber(sectorOffset), numSectors, sbroot, []byte("assume this is random"), k, fakeSectors)
 	if err != nil {
 		return "", err
 	}
 
-	return writeGenesisMiner(miner, sbroot, gm, key)
+	return writeGenesisMiner(tAddr, sbroot, gm, key)
 }
 
 func writeGenesisMiner(maddr address.Address, sbroot string, gm *genesis.Miner, key *types.KeyInfo) (string, error) {
@@ -123,7 +212,6 @@ func writeGenesisMiner(maddr address.Address, sbroot string, gm *genesis.Miner, 
 			return "", err
 		}
 
-		// TODO: allow providing key
 		if err := ioutil.WriteFile(prefPath+".key", []byte(hex.EncodeToString(b)), 0664); err != nil {
 			return "", err
 		}
@@ -163,7 +251,7 @@ func addMiner(preSealInfo string, template *genesis.Template) error {
 		log.Infof("Giving %s some initial balance", miner.Owner)
 		template.Accounts = append(template.Accounts, genesis.Actor{
 			Type:    genesis.TAccount,
-			Balance: big.Mul(big.NewInt(50_000_000), big.NewInt(int64(build.FilecoinPrecision))),
+			Balance: big.Mul(big.NewInt(2), big.NewInt(int64(build.FilecoinPrecision))),
 			Meta:    (&genesis.AccountMeta{Owner: miner.Owner}).ActorMeta(),
 		})
 	}

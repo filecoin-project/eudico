@@ -93,7 +93,8 @@ var tpowGenesisCmd = &cli.Command{
 			return err
 		}
 
-		if err := shard.WriteGenesis("eudico-"+uuid.New().String(), shard.PoW, address.Undef, vreg, rem, uint64(time.Now().Unix()), f); err != nil {
+		repoPath := cctx.String("repo")
+		if err := shard.WriteGenesis("eudico-"+uuid.New().String(), shard.PoW, repoPath, address.Undef, vreg, rem, uint64(time.Now().Unix()), f); err != nil {
 			return xerrors.Errorf("write genesis car: %w", err)
 		}
 

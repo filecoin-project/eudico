@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/filecoin-project/go-address"
@@ -11,8 +12,6 @@ import (
 	lcli "github.com/filecoin-project/lotus/cli"
 	cliutil "github.com/filecoin-project/lotus/cli/util"
 	"github.com/google/uuid"
-	"github.com/ipfs/go-datastore"
-	dssync "github.com/ipfs/go-datastore/sync"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
 
@@ -45,18 +44,22 @@ var filCnsGenesisCmd = &cli.Command{
 	Usage:     "Generate genesis for filecoin consensus",
 	ArgsUsage: "[miner secpk addr] [outfile]",
 	Action: func(cctx *cli.Context) error {
-		if cctx.Args().Len() != 2 {
-			return xerrors.Errorf("expected 2 arguments")
+		if cctx.Args().Len() != 1 {
+			return xerrors.Errorf("expected 1 argument")
 		}
 
-		// TODO: Miner not currently being used for anything.
-		// Figure out if we need it.
-		miner, err := address.NewFromString(cctx.Args().First())
+		// NOTE: We currently only support a single miner with
+		// pre-sealed data in genesis, that is why we force the
+		// miner ID here. If we wanted to supported more than one,
+		// some changes may need to be done in WriteGenesis (and
+		// of course we whould accept a new argument here).
+		minerID := "t01000"
+		miner, err := address.NewFromString(minerID)
 		if err != nil {
 			return xerrors.Errorf("parsing miner address: %w", err)
 		}
-		if miner.Protocol() != address.SECP256K1 {
-			return xerrors.Errorf("must be secp address")
+		if miner.Protocol() != address.ID {
+			return xerrors.Errorf("must be miner ID (t0x) address")
 		}
 
 		memks := wallet.NewMemKeyStore()
@@ -73,12 +76,13 @@ var filCnsGenesisCmd = &cli.Command{
 			return err
 		}
 
-		f, err := os.OpenFile(cctx.Args().Get(1), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		f, err := os.OpenFile(cctx.Args().Get(0), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 		if err != nil {
 			return err
 		}
 
-		if err := shard.WriteGenesis("eudico-"+uuid.New().String(), shard.FilCns, miner, vreg, rem, uint64(time.Now().Unix()), f); err != nil {
+		repoPath := cctx.String("repo")
+		if err := shard.WriteGenesis("eudico-"+uuid.New().String(), shard.FilCns, repoPath, miner, vreg, rem, uint64(time.Now().Unix()), f); err != nil {
 			return xerrors.Errorf("write genesis car: %w", err)
 		}
 
@@ -113,16 +117,17 @@ var filCnsMinerCmd = &cli.Command{
 
 		log.Infow("Starting mining with miner", miner)
 
-		// TODO: I don't think using a mapDatastore here is a good idea.
-		// Use a proper one, check miner_builder.
-		ds := dssync.MutexWrap(datastore.NewMapDatastore())
+		netName, err := api.StateNetworkName(ctx)
+		if err != nil {
+			return err
+		}
 
-		repoPath := "/tmp/genesis"
-		ssize := "2KiB"
+		genPath := filepath.Join(cctx.String("repo"), string(netName))
+		ssize := filcnsminer.DefaultPreSealSectorSize
 		isGenesis := true
-		psPaths := []string{"/tmp/genesis"}
-		psMeta := "/tmp/genesis/pre-seal-t01000.json"
-		mopts := filcnsminer.NewOpts("t01000", repoPath, ssize, psPaths, psMeta, isGenesis)
-		return filcnsminer.Mine(ctx, ds, miner, api, mopts)
+		psPaths := []string{genPath}
+		psMeta := filepath.Join(genPath, "pre-seal-"+miner.String()+".json")
+		mopts := filcnsminer.NewOpts(miner.String(), genPath, ssize, psPaths, psMeta, isGenesis)
+		return filcnsminer.Mine(ctx, miner, api, mopts)
 	},
 }

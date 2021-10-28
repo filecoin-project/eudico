@@ -8,21 +8,27 @@ import (
 
 	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/go-state-types/network"
 	bstore "github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
+	"github.com/filecoin-project/lotus/chain/actors/builtin/cron"
 	init_ "github.com/filecoin-project/lotus/chain/actors/builtin/init"
+	"github.com/filecoin-project/lotus/chain/actors/builtin/market"
+	"github.com/filecoin-project/lotus/chain/actors/builtin/power"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/reward"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/system"
+	"github.com/filecoin-project/lotus/chain/actors/builtin/verifreg"
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/filecoin-project/lotus/chain/gen"
 	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
 	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/genesis"
+	"github.com/filecoin-project/lotus/lib/sigs"
 	"github.com/ipfs/go-blockservice"
 	cid "github.com/ipfs/go-cid"
 	offline "github.com/ipfs/go-ipfs-exchange-offline"
@@ -36,7 +42,7 @@ const (
 	networkVersion = network.Version14
 )
 
-func WriteGenesis(netName string, consensus ConsensusType, miner, vreg, rem address.Address, seq uint64, w io.Writer) error {
+func WriteGenesis(netName string, consensus ConsensusType, repoPath string, miner, vreg, rem address.Address, seq uint64, w io.Writer) error {
 	bs := bstore.WrapIDStore(bstore.NewMemorySync())
 
 	var b *genesis2.GenesisBootstrap
@@ -70,7 +76,7 @@ func WriteGenesis(netName string, consensus ConsensusType, miner, vreg, rem addr
 		if err != nil {
 			return err
 		}
-		b, err = makeFilCnsGenesisBlock(context.TODO(), bs, *template, miner)
+		b, err = makeFilCnsGenesisBlock(context.TODO(), bs, *template, miner, repoPath)
 		if err != nil {
 			return xerrors.Errorf("error making genesis filcns block: %w", err)
 		}
@@ -86,7 +92,7 @@ func WriteGenesis(netName string, consensus ConsensusType, miner, vreg, rem addr
 	return nil
 }
 
-func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template genesis.Template) (*state.StateTree, map[address.Address]address.Address, error) {
+func MakeInitialStateTree(ctx context.Context, consensus ConsensusType, bs bstore.Blockstore, template genesis.Template) (*state.StateTree, map[address.Address]address.Address, error) {
 	// Create empty state tree
 
 	cst := cbor.NewCborStore(bs)
@@ -152,6 +158,46 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 		return nil, nil, xerrors.Errorf("set reward actor: %w", err)
 	}
 
+	// NOTE: Cron, power and verified actors only instantiated for Filecoin consensus (at least for now)
+	if consensus == FilCns {
+		// Setup cron
+		cronact, err := genesis2.SetupCronActor(ctx, bs, av)
+		if err != nil {
+			return nil, nil, xerrors.Errorf("setup cron actor: %w", err)
+		}
+		if err := state.SetActor(cron.Address, cronact); err != nil {
+			return nil, nil, xerrors.Errorf("set cron actor: %w", err)
+		}
+
+		// Create empty power actor
+		spact, err := genesis2.SetupStoragePowerActor(ctx, bs, av)
+		if err != nil {
+			return nil, nil, xerrors.Errorf("setup storage power actor: %w", err)
+		}
+		if err := state.SetActor(power.Address, spact); err != nil {
+			return nil, nil, xerrors.Errorf("set storage power actor: %w", err)
+		}
+
+		// Create empty market actor
+		marketact, err := genesis2.SetupStorageMarketActor(ctx, bs, av)
+		if err != nil {
+			return nil, nil, xerrors.Errorf("setup storage market actor: %w", err)
+		}
+		if err := state.SetActor(market.Address, marketact); err != nil {
+			return nil, nil, xerrors.Errorf("set storage market actor: %w", err)
+		}
+
+		// Create verified registry
+		verifact, err := genesis2.SetupVerifiedRegistryActor(ctx, bs, av)
+		if err != nil {
+			return nil, nil, xerrors.Errorf("setup verified registry market actor: %w", err)
+		}
+
+		if err := state.SetActor(verifreg.Address, verifact); err != nil {
+			return nil, nil, xerrors.Errorf("set verified registry actor: %w", err)
+		}
+	}
+
 	bact, err := genesis2.MakeAccountActor(ctx, cst, av, builtin.BurntFundsActorAddr, big.Zero())
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup burnt funds actor state: %w", err)
@@ -184,6 +230,67 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 			return nil, nil, xerrors.New("unsupported account type")
 		}
 
+	}
+
+	// This is only needed if we set up the verified actor.
+	if consensus == FilCns {
+		switch template.VerifregRootKey.Type {
+		case genesis.TAccount:
+			var ainfo genesis.AccountMeta
+			if err := json.Unmarshal(template.VerifregRootKey.Meta, &ainfo); err != nil {
+				return nil, nil, xerrors.Errorf("unmarshaling account meta: %w", err)
+			}
+
+			_, ok := keyIDs[ainfo.Owner]
+			if ok {
+				return nil, nil, fmt.Errorf("rootkey account has already been declared, cannot be assigned 80: %s", ainfo.Owner)
+			}
+
+			vact, err := genesis2.MakeAccountActor(ctx, cst, av, ainfo.Owner, template.VerifregRootKey.Balance)
+			if err != nil {
+				return nil, nil, xerrors.Errorf("setup verifreg rootkey account state: %w", err)
+			}
+			if err = state.SetActor(builtin.RootVerifierAddress, vact); err != nil {
+				return nil, nil, xerrors.Errorf("set verifreg rootkey account actor: %w", err)
+			}
+		case genesis.TMultisig:
+			if err = genesis2.CreateMultisigAccount(ctx, cst, state, builtin.RootVerifierAddress, template.VerifregRootKey, keyIDs, av); err != nil {
+				return nil, nil, xerrors.Errorf("failed to set up verified registry signer: %w", err)
+			}
+		default:
+			return nil, nil, xerrors.Errorf("unknown account type for verifreg rootkey: %w", err)
+		}
+
+		// Setup the first verifier as ID-address 81
+		// TODO: remove this
+		skBytes, err := sigs.Generate(crypto.SigTypeBLS)
+		if err != nil {
+			return nil, nil, xerrors.Errorf("creating random verifier secret key: %w", err)
+		}
+
+		verifierPk, err := sigs.ToPublic(crypto.SigTypeBLS, skBytes)
+		if err != nil {
+			return nil, nil, xerrors.Errorf("creating random verifier public key: %w", err)
+		}
+
+		verifierAd, err := address.NewBLSAddress(verifierPk)
+		if err != nil {
+			return nil, nil, xerrors.Errorf("creating random verifier address: %w", err)
+		}
+
+		verifierId, err := address.NewIDAddress(81)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		verifierAct, err := genesis2.MakeAccountActor(ctx, cst, av, verifierAd, big.Zero())
+		if err != nil {
+			return nil, nil, xerrors.Errorf("setup first verifier state: %w", err)
+		}
+
+		if err = state.SetActor(verifierId, verifierAct); err != nil {
+			return nil, nil, xerrors.Errorf("set first verifier actor: %w", err)
+		}
 	}
 
 	totalFilAllocated := big.Zero()

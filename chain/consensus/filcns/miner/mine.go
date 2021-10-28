@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -59,6 +60,21 @@ import (
 	"golang.org/x/xerrors"
 )
 
+// NOTE: The Filecoin consensus in Eudico is used for testing purposes,
+// so we ignore DRAND verifications to avoid weird errors while testing.
+// Remove this init function if you want to verify past DRAND becaons in blocks.
+func init() {
+	os.Setenv("LOTUS_IGNORE_DRAND", "_yes_")
+}
+
+var (
+	// DefaultPreSealSectorSize is determined by the
+	// preSeal performed by miners in genesis in Eudico.
+	// Check chain/consensus/actors/shard/filcns, the value
+	// should be the same there.
+	DefaultPreSealSectorSize = "2KiB"
+)
+
 var log = logging.Logger("filcns-miner")
 var scfg = sectorstorage.SealerConfig{
 	ParallelFetchLimit: 1,
@@ -89,7 +105,7 @@ func NewOpts(minerActor string, repoPath string, pssize string, pspaths []string
 	}
 }
 
-func Mine(ctx context.Context, ds datastore.Datastore, miner address.Address, v1api v1api.FullNode, mopts *MinerOpts) error {
+func Mine(ctx context.Context, miner address.Address, v1api v1api.FullNode, mopts *MinerOpts) error {
 	// TODO: Is this the right minerID.
 	mid, err := modules.MinerID(dtypes.MinerAddress(miner))
 	if err != nil {
@@ -115,6 +131,13 @@ func Mine(ctx context.Context, ds datastore.Datastore, miner address.Address, v1
 		// If not initialize it
 		lr, err = initMiner(ctx, v1api, r, mopts)
 	}
+	if err != nil {
+		return err
+	}
+
+	// Use the metadata datastore for mining as it is
+	// done in node/modules/storageminer.go:StorageMiner
+	ds, err := lr.Datastore(ctx, datastore.NewKey("/metadata").String())
 	if err != nil {
 		return err
 	}
@@ -154,7 +177,7 @@ func Mine(ctx context.Context, ds datastore.Datastore, miner address.Address, v1
 func initMiner(ctx context.Context, v1api v1api.FullNode, r *repo.FsRepo, mopts *MinerOpts) (repo.LockedRepo, error) {
 	log.Info("Initializing lotus miner")
 
-	// TODO: Consider removign this alias and fixing the code below.
+	// NOTE: This is horrible! -.- Consider removing these aliases once the code is stable.
 	repoPath := mopts.repoPath
 	genesisMiner := mopts.isGenesis
 	preSealedPaths := mopts.preSealedPaths
@@ -182,12 +205,12 @@ func initMiner(ctx context.Context, v1api v1api.FullNode, r *repo.FsRepo, mopts 
 
 	log.Info("Trying to connect to full node RPC")
 
-	// TODO: This needs to be configurable and taken somewhere else.
-	err = importKeyv1(ctx, v1api, "/tmp/genesis/pre-seal-t01000.key")
+	err = importKeyv1(ctx, v1api, filepath.Join(repoPath, "pre-seal-t01000.key"))
 	if err != nil {
-		fmt.Println(">>>> Couldn't import key for miner with pre-sealed data")
-		panic(err)
+		log.Errorw("Error initializing miner", "err", err)
+		return nil, xerrors.Errorf("couldn't import miner pre-sealing key: %w", err)
 	}
+
 	log.Info("Checking full node sync status")
 
 	// We need to support initializing genesis miners and new joiners to the network.

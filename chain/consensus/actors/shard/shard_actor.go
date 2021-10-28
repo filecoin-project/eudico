@@ -140,7 +140,9 @@ func (a ShardActor) Add(rt runtime.Runtime, params *AddParams) *AddShardReturn {
 		rem, err := address.NewFromString("t3tf274q6shnudgrwrwkcw5lzw3u247234wnep37fqx4sobyh2susfvs7qzdwxj64uaizztosuggvyump4xf7a")
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed parsin rem addr")
 
-		err = WriteGenesis(shid.String(), sh.Consensus, params.DelegMiner, vreg, rem, st.TotalShards, buf)
+		// TODO: Setting a dummy /tmp/ repo for genesis generation in writeGenesis. It is not used by
+		// current consensus algorithms, but it may be used in the future.
+		err = WriteGenesis(shid.String(), sh.Consensus, "/tmp/"+sh.ID.String(), params.DelegMiner, vreg, rem, st.TotalShards, buf)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed genesis")
 		sh.Genesis = buf.Bytes()
 
