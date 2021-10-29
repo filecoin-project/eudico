@@ -66,9 +66,19 @@ func WriteGenesis(netName string, consensus ConsensusType, repoPath string, mine
 		}
 		b, err = makePoWGenesisBlock(context.TODO(), bs, *template)
 		if err != nil {
-			return xerrors.Errorf("error making genesis filcns block: %w", err)
+			return xerrors.Errorf("error making genesis pow block: %w", err)
 		}
 	case FilCns:
+		// TODO: We should make this configurable and unsderstand
+		// why something is set even if the param is not sent.
+		minerID := "t01000"
+		miner, err := address.NewFromString(minerID)
+		if err != nil {
+			return xerrors.Errorf("parsing miner address: %w", err)
+		}
+		if miner.Protocol() != address.ID {
+			return xerrors.Errorf("must be miner ID (t0x) address")
+		}
 		if miner == address.Undef {
 			return xerrors.Errorf("no miner specified for filecoin consensus")
 		}

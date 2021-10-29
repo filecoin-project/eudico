@@ -6,6 +6,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/consensus/actors/shard"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
+	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
@@ -19,6 +20,8 @@ func tipSetExecutor(consensus shard.ConsensusType) (stmgr.Executor, error) {
 		return delegcns.TipSetExecutor(), nil
 	case shard.PoW:
 		return tspow.TipSetExecutor(), nil
+	case shard.FilCns:
+		return filcns.NewTipSetExecutor(), nil
 	default:
 		return nil, xerrors.New("consensus type not suported")
 	}
@@ -30,6 +33,8 @@ func weight(consensus shard.ConsensusType) (store.WeightFunc, error) {
 		return delegcns.Weight, nil
 	case shard.PoW:
 		return tspow.Weight, nil
+	case shard.FilCns:
+		return filcns.Weight, nil
 	default:
 		return nil, xerrors.New("consensus type not suported")
 	}
@@ -45,6 +50,8 @@ func newConsensus(consensus shard.ConsensusType,
 		return delegcns.NewDelegatedConsensus(sm, beacon, verifier, genesis), nil
 	case shard.PoW:
 		return tspow.NewTSPoWConsensus(sm, beacon, verifier, genesis), nil
+	case shard.FilCns:
+		return filcns.NewFilecoinExpectedConsensus(sm, beacon, verifier, genesis), nil
 	default:
 		return nil, xerrors.New("consensus type not suported")
 	}

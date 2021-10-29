@@ -3,6 +3,7 @@ package sharding
 import (
 	"bytes"
 	"context"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/consensus/actors/shard"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
+	filcnsminer "github.com/filecoin-project/lotus/chain/consensus/filcns/miner"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/messagepool"
@@ -272,6 +274,25 @@ func (sh *Shard) mine(ctx context.Context) error {
 		}
 		sh.miningCtx, sh.miningCncl = context.WithCancel(ctx)
 		go tspow.Mine(sh.miningCtx, miner, sh.api)
+	case shard.FilCns:
+
+		// TODO: We should make this configurable.
+		minerID := "t01000"
+		miner, err := address.NewFromString(minerID)
+		if err != nil {
+			return xerrors.Errorf("parsing miner address: %w", err)
+		}
+		if miner.Protocol() != address.ID {
+			return xerrors.Errorf("must be miner ID (t0x) address")
+		}
+		ssize := filcnsminer.DefaultPreSealSectorSize
+		isGenesis := true
+		// TODO: This needs to be the same one configured in the shard-actor.
+		genPath := "/tmp/" + sh.ID + "/" + sh.ID
+		psPaths := []string{genPath}
+		psMeta := filepath.Join(genPath, "pre-seal-"+miner.String()+".json")
+		mopts := filcnsminer.NewOpts(miner.String(), genPath, ssize, psPaths, psMeta, isGenesis)
+		go filcnsminer.Mine(ctx, miner, sh.api, mopts)
 	default:
 		return xerrors.New("consensus type not suported")
 	}
