@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync/atomic"
 
-	"github.com/filecoin-project/lotus/chain/consensus/actors/shard"
+	"github.com/filecoin-project/lotus/chain/consensus/actors/registry"
 	"github.com/filecoin-project/lotus/chain/rand"
 
 	"github.com/ipfs/go-cid"
@@ -53,7 +53,7 @@ func NewActorRegistry() *vm.ActorRegistry {
 	// NOTE: Overwritting filCns registry with the Eudico-specific
 	// one that supports sharding. This is a conflict we'll need to
 	// handle when rebasing lotus.
-	return shard.NewActorRegistry()
+	return registry.NewActorRegistry()
 }
 
 type TipSetExecutor struct{}

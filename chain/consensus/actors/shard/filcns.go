@@ -60,6 +60,10 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin/reward"
 	"github.com/filecoin-project/lotus/chain/actors/policy"
 	"github.com/filecoin-project/lotus/chain/state"
+
+	initactor "github.com/filecoin-project/lotus/chain/consensus/actors/init"
+	"github.com/filecoin-project/lotus/chain/consensus/actors/split"
+	exported6 "github.com/filecoin-project/specs-actors/v6/actors/builtin/exported"
 )
 
 const MinerStart = 1000
@@ -173,6 +177,26 @@ func mkFilCnsGenesis(ctx context.Context, j journal.Journal, bs bstore.Blockstor
 	}, nil
 }
 
+// NOTE: This is a copy of the actor registry at
+// chain/consensus/registry, but in order to use pre-seal data
+// without import cycles we need to duplicate it here.
+// Probably there's a better way of doing it, we'll
+// revisit it.
+func minerActorRegistry() *vm.ActorRegistry {
+	inv := vm.NewActorRegistry()
+
+	// TODO: drop unneeded
+	inv.Register(vm.ActorsVersionPredicate(actors.Version6), exported6.BuiltinActors()...)
+	inv.Register(nil, initactor.InitActor{}) // use our custom init actor
+
+	inv.Register(nil, split.SplitActor{})
+	inv.Register(nil, ShardActor{})
+
+	return inv
+}
+
+// NOTE: This is an adaptation of what commands in lotus-seed do for pre-sealed data.
+// Look there for the original way this was implemented for lotus.
 func preSealedData(tAddr address.Address, dir string, sectorSz string, numSectors int, sectorOffset int) (string, error) {
 	sbroot, err := homedir.Expand(dir)
 	if err != nil {
@@ -315,6 +339,11 @@ func filCnsGenTemplate(shardID string, miner, vreg, rem address.Address, seq uin
 	}, nil
 }
 
+// TODO: From here on this is duplicated from the chain/genesis package but had to include it here
+// to break import cycles. Without this we wouldn't be able to use filcns in shards. Once
+// the proof-of-concept is over we'll have to think more deeply how to structure the code better.
+// But we want to move fast so this will become a problem of future me.
+
 // TODO: copied from actors test harness, deduplicate or remove from here
 type fakeRand struct{}
 
@@ -373,7 +402,7 @@ func VerifyPreSealedData(ctx context.Context, cs *store.ChainStore, sys vm.Sysca
 		Epoch:          0,
 		Rand:           &fakeRand{},
 		Bstore:         cs.StateBlockstore(),
-		Actors:         NewActorRegistry(),
+		Actors:         minerActorRegistry(),
 		Syscalls:       mkFakedSigSyscalls(sys),
 		CircSupplyCalc: nil,
 		NtwkVersion: func(_ context.Context, _ abi.ChainEpoch) network.Version {
@@ -489,7 +518,7 @@ func SetupStorageMiners(ctx context.Context, cs *store.ChainStore, sys vm.Syscal
 		Epoch:          0,
 		Rand:           &fakeRand{},
 		Bstore:         cs.StateBlockstore(),
-		Actors:         NewActorRegistry(),
+		Actors:         minerActorRegistry(),
 		Syscalls:       mkFakedSigSyscalls(sys),
 		CircSupplyCalc: csc,
 		NtwkVersion: func(_ context.Context, _ abi.ChainEpoch) network.Version {
