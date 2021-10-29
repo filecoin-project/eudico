@@ -114,6 +114,9 @@ var filCnsMinerCmd = &cli.Command{
 		if miner == address.Undef {
 			return xerrors.Errorf("no miner address specified to start mining")
 		}
+		if miner.Protocol() != address.ID {
+			return xerrors.Errorf("must be miner ID (t0x) address")
+		}
 
 		log.Infow("Starting mining with miner", miner)
 

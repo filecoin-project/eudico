@@ -319,7 +319,7 @@ func TestLeave(t *testing.T) {
 	rt.ExpectSend(joiner, builtin.MethodSend, nil, big.Div(joinValue, actor.LeavingFeeCoeff), nil, exitcode.Ok)
 	rt.Call(h.ShardActor.Leave, leaveParams)
 	// The shard is completely removed
-	sh, found = h.getShard(rt, shid)
+	_, found = h.getShard(rt, shid)
 	require.False(h.t, found)
 	require.Equal(t, getState(rt).TotalShards, uint64(0))
 }

@@ -6,7 +6,6 @@ import (
 	big2 "math/big"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/multiformats/go-multihash"
@@ -188,7 +187,7 @@ func (tsp *TSPoW) ValidateBlock(ctx context.Context, b *types.FullBlock) (err er
 		}
 		return nil
 	})
-	pweight, err := Weight(nil, nil, baseTs)
+	pweight, err := Weight(context.TODO(), nil, baseTs)
 	if err != nil {
 		return xerrors.Errorf("getting parent weight: %w", err)
 	}
@@ -657,13 +656,6 @@ func (tsp *TSPoW) validateBlockHeader(ctx context.Context, b *types.BlockHeader)
 	}
 
 	return "", nil
-}
-
-func (tsp *TSPoW) isChainNearSynced() bool {
-	ts := tsp.store.GetHeaviestTipSet()
-	timestamp := ts.MinTimestamp()
-	timestampTime := time.Unix(int64(timestamp), 0)
-	return build.Clock.Since(timestampTime) < 6*time.Hour
 }
 
 func BestWorkBlock(ts *types.TipSet) *types.BlockHeader {

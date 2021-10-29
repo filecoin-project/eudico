@@ -23,8 +23,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin/system"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/verifreg"
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
-	"github.com/filecoin-project/lotus/chain/gen"
-	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
+	genesis2 "github.com/filecoin-project/lotus/chain/consensus/genesis"
 	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/genesis"
@@ -33,6 +32,7 @@ import (
 	cid "github.com/ipfs/go-cid"
 	offline "github.com/ipfs/go-ipfs-exchange-offline"
 	cbor "github.com/ipfs/go-ipld-cbor"
+	format "github.com/ipfs/go-ipld-format"
 	"github.com/ipfs/go-merkledag"
 	"github.com/ipld/go-car"
 	xerrors "golang.org/x/xerrors"
@@ -86,7 +86,7 @@ func WriteGenesis(netName string, consensus ConsensusType, repoPath string, mine
 	blkserv := blockservice.New(bs, offl)
 	dserv := merkledag.NewDAGService(blkserv)
 
-	if err := car.WriteCarWithWalker(context.TODO(), dserv, []cid.Cid{b.Genesis.Cid()}, w, gen.CarWalkFunc); err != nil {
+	if err := car.WriteCarWithWalker(context.TODO(), dserv, []cid.Cid{b.Genesis.Cid()}, w, CarWalkFunc); err != nil {
 		return xerrors.Errorf("write genesis car: %w", err)
 	}
 	return nil
@@ -362,4 +362,16 @@ func SetupShardActor(ctx context.Context, bs bstore.Blockstore, networkName stri
 	}
 
 	return act, nil
+}
+
+func CarWalkFunc(nd format.Node) (out []*format.Link, err error) {
+	for _, link := range nd.Links() {
+		pref := link.Cid.Prefix()
+		if pref.Codec == cid.FilCommitmentSealed || pref.Codec == cid.FilCommitmentUnsealed {
+			continue
+		}
+		out = append(out, link)
+	}
+
+	return out, nil
 }

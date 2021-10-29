@@ -6,7 +6,6 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/chain/consensus/actors/shard"
-	shardactor "github.com/filecoin-project/lotus/chain/consensus/actors/shard"
 	"github.com/filecoin-project/lotus/chain/types"
 	builtin "github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	adt "github.com/filecoin-project/specs-actors/v6/actors/util/adt"
@@ -14,9 +13,6 @@ import (
 	cbor "github.com/ipfs/go-ipld-cbor"
 	"golang.org/x/xerrors"
 )
-
-// Diff structure for state changes
-type diffType map[string]diffInfo
 
 // Info included in diff structure.
 type diffInfo struct {
@@ -27,7 +23,7 @@ type diffInfo struct {
 }
 
 // Checks if there's a new shard and if we should start listening to it.
-func (s *ShardingSub) checkNewShard(ctx context.Context, outDiff map[string]diffInfo, cst *cbor.BasicIpldStore, oldSt, newSt shardactor.ShardState) error {
+func (s *ShardingSub) checkNewShard(ctx context.Context, outDiff map[string]diffInfo, cst *cbor.BasicIpldStore, oldSt, newSt shard.ShardState) error {
 	if oldSt.TotalShards < newSt.TotalShards {
 		log.Infow("New shard event detected")
 		// Get shard maps
@@ -59,7 +55,7 @@ func (s *ShardingSub) checkNewShard(ctx context.Context, outDiff map[string]diff
 }
 
 // Checks if there are new joiners or miners.
-func (s *ShardingSub) checkShardChange(ctx context.Context, outDiff map[string]diffInfo, cst *cbor.BasicIpldStore, oldSt, newSt shardactor.ShardState) error {
+func (s *ShardingSub) checkShardChange(ctx context.Context, outDiff map[string]diffInfo, cst *cbor.BasicIpldStore, oldSt, newSt shard.ShardState) error {
 	// Get shard maps
 	newM, err := shards(adt.WrapStore(ctx, cst), newSt)
 	if err != nil {
@@ -123,7 +119,7 @@ func (s *ShardingSub) checkShardChange(ctx context.Context, outDiff map[string]d
 	return nil
 }
 
-func (s *ShardingSub) rmShards(ctx context.Context, outDiff map[string]diffInfo, shid cid.Cid, cst *cbor.BasicIpldStore, oldSt, newSt shardactor.ShardState) error {
+func (s *ShardingSub) rmShards(ctx context.Context, outDiff map[string]diffInfo, shid cid.Cid, cst *cbor.BasicIpldStore, oldSt, newSt shard.ShardState) error {
 	// Check if we've been removed from the list of stakers.
 	//
 	// We invert oldSt for newSt so we can also check if we were
@@ -142,7 +138,7 @@ func (s *ShardingSub) rmShards(ctx context.Context, outDiff map[string]diffInfo,
 	return nil
 }
 
-func (s *ShardingSub) diffShards(ctx context.Context, outDiff map[string]diffInfo, shid cid.Cid, cst *cbor.BasicIpldStore, oldSt, newSt shardactor.ShardState) error {
+func (s *ShardingSub) diffShards(ctx context.Context, outDiff map[string]diffInfo, shid cid.Cid, cst *cbor.BasicIpldStore, oldSt, newSt shard.ShardState) error {
 	// Check if we are in the mining list.
 	store := adt.WrapStore(ctx, cst)
 	in, err := s.isMiner(ctx, store, shid, oldSt, newSt)
@@ -185,7 +181,7 @@ func (s *ShardingSub) diffShards(ctx context.Context, outDiff map[string]diffInf
 // Checks if a shard has left or joined the list of shards.
 func newShards(oldM *adt.Map, newM *adt.Map) (map[cid.Cid]struct{}, error) {
 	diff := map[cid.Cid]struct{}{}
-	var sh shardactor.Shard
+	var sh shard.Shard
 	// TODO: Can we get the ID from the key instead of having
 	// to load and get from the shard object?
 	err := newM.ForEach(&sh, func(k string) error {
@@ -206,9 +202,9 @@ func newShards(oldM *adt.Map, newM *adt.Map) (map[cid.Cid]struct{}, error) {
 }
 
 // Check if shard states have changed.
-func changedShards(oldM *adt.Map, newM *adt.Map) (map[cid.Cid]*shardactor.Shard, error) {
-	diff := make(map[cid.Cid]*shardactor.Shard, 0)
-	var sh shardactor.Shard
+func changedShards(oldM *adt.Map, newM *adt.Map) (map[cid.Cid]*shard.Shard, error) {
+	diff := make(map[cid.Cid]*shard.Shard)
+	var sh shard.Shard
 
 	err := newM.ForEach(&sh, func(k string) error {
 		diff[sh.ID] = &sh
@@ -230,7 +226,7 @@ func changedShards(oldM *adt.Map, newM *adt.Map) (map[cid.Cid]*shardactor.Shard,
 	return diff, err
 }
 
-func (s *ShardingSub) addrInStakes(ctx context.Context, store adt.Store, shID cid.Cid, oldSt, newSt shardactor.ShardState) (bool, error) {
+func (s *ShardingSub) addrInStakes(ctx context.Context, store adt.Store, shID cid.Cid, oldSt, newSt shard.ShardState) (bool, error) {
 	oldSh, oldHas, err := oldSt.GetShard(store, shID)
 	if err != nil {
 		return false, err
@@ -263,11 +259,11 @@ func (s *ShardingSub) addrInStakes(ctx context.Context, store adt.Store, shID ci
 			if err != nil {
 				return false, err
 			}
-			_, has, err := shardactor.GetMinerState(newM, addr)
+			_, has, err := shard.GetMinerState(newM, addr)
 			if err != nil {
 				return false, err
 			}
-			_, oldhas, err := shardactor.GetMinerState(oldM, addr)
+			_, oldhas, err := shard.GetMinerState(oldM, addr)
 			if err != nil {
 				return false, err
 			}
@@ -276,7 +272,7 @@ func (s *ShardingSub) addrInStakes(ctx context.Context, store adt.Store, shID ci
 				return true, nil
 			}
 		} else {
-			_, has, err := shardactor.GetMinerState(newM, addr)
+			_, has, err := shard.GetMinerState(newM, addr)
 			if err != nil {
 				return false, err
 			}
@@ -288,7 +284,7 @@ func (s *ShardingSub) addrInStakes(ctx context.Context, store adt.Store, shID ci
 	return false, nil
 }
 
-func getShard(ctx context.Context, store adt.Store, st shardactor.ShardState, shid cid.Cid) (*shardactor.Shard, error) {
+func getShard(ctx context.Context, store adt.Store, st shard.ShardState, shid cid.Cid) (*shard.Shard, error) {
 	sh, has, err := st.GetShard(store, shid)
 	if err != nil {
 		return nil, err
@@ -299,7 +295,7 @@ func getShard(ctx context.Context, store adt.Store, st shardactor.ShardState, sh
 	return sh, nil
 }
 
-func (s *ShardingSub) isMiner(ctx context.Context, store adt.Store, shID cid.Cid, oldSt, newSt shardactor.ShardState) (bool, error) {
+func (s *ShardingSub) isMiner(ctx context.Context, store adt.Store, shID cid.Cid, oldSt, newSt shard.ShardState) (bool, error) {
 	oldSh, oldHas, err := oldSt.GetShard(store, shID)
 	if err != nil {
 		return false, err
@@ -352,11 +348,11 @@ func containsAddr(addr address.Address, ls []address.Address) bool {
 }
 
 // wraps a shard map.
-func shards(s adt.Store, st shardactor.ShardState) (*adt.Map, error) {
+func shards(s adt.Store, st shard.ShardState) (*adt.Map, error) {
 	return adt.AsMap(s, st.Shards, builtin.DefaultHamtBitwidth)
 }
 
 // wraps a stake map.
-func stakes(s adt.Store, sh *shardactor.Shard) (*adt.Map, error) {
+func stakes(s adt.Store, sh *shard.Shard) (*adt.Map, error) {
 	return adt.AsMap(s, sh.Stake, builtin.DefaultHamtBitwidth)
 }

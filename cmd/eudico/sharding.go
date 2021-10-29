@@ -68,6 +68,9 @@ var listShardsCmd = &cli.Command{
 		}
 
 		shards, err := shard.ListShards(s, st)
+		if err != nil {
+			return xerrors.Errorf("error getting list of shards: %w", err)
+		}
 		if err := cst.Get(ctx, act.Head, &st); err != nil {
 			return xerrors.Errorf("error getting list of shards: %w", err)
 		}

@@ -23,7 +23,6 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-statestore"
-	"github.com/filecoin-project/lotus/api"
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v0api"
 	"github.com/filecoin-project/lotus/api/v1api"
@@ -40,7 +39,6 @@ import (
 	"github.com/filecoin-project/lotus/genesis"
 	"github.com/filecoin-project/lotus/journal"
 	"github.com/filecoin-project/lotus/journal/fsjournal"
-	lotusminer "github.com/filecoin-project/lotus/miner"
 	storageminer "github.com/filecoin-project/lotus/miner"
 	"github.com/filecoin-project/lotus/node/modules"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
@@ -52,7 +50,6 @@ import (
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/namespace"
-	nsds "github.com/ipfs/go-datastore/namespace"
 	logging "github.com/ipfs/go-log/v2"
 	crypto "github.com/libp2p/go-libp2p-core/crypto"
 	peer "github.com/libp2p/go-libp2p-core/peer"
@@ -148,7 +145,7 @@ func Mine(ctx context.Context, miner address.Address, v1api v1api.FullNode, mopt
 		return err
 	}
 	ind := stores.NewIndex()
-	nds := nsds.Wrap(ds, datastore.NewKey(string(netname)))
+	nds := namespace.Wrap(ds, datastore.NewKey(string(netname)))
 	sf := modules.NewSlashFilter(nds)
 	lstor, err := stores.NewLocal(ctx, lr, ind, []string{})
 	// NOTE: No remote storage supported for now.
@@ -158,20 +155,21 @@ func Mine(ctx context.Context, miner address.Address, v1api v1api.FullNode, mopt
 		return err
 	}
 	prover, err := sectorstorage.New(ctx, lstor, nil, lr, ind, scfg, sst, sst)
+	if err != nil {
+		return err
+	}
 	epp, err := storage.NewWinningPoStProver(v1api, prover, ffiwrapper.ProofVerifier, mid)
 	if err != nil {
 		return err
 	}
-	m := lotusminer.NewMiner(v1api, epp, miner, sf, journal.NilJournal())
+	m := storageminer.NewMiner(v1api, epp, miner, sf, journal.NilJournal())
 	err = m.Start(ctx)
 	if err != nil {
 		return err
 	}
-	select {
-	case <-ctx.Done():
-		// Closing repo
-		return lr.Close()
-	}
+
+	<-ctx.Done()
+	return nil
 }
 
 func initMiner(ctx context.Context, v1api v1api.FullNode, r *repo.FsRepo, mopts *MinerOpts) (repo.LockedRepo, error) {
@@ -522,6 +520,7 @@ func configureStorageMiner(ctx context.Context, api v1api.FullNode, addr address
 
 	return nil
 }
+
 func migratePreSealMeta(ctx context.Context, api v1api.FullNode, metadata string, maddr address.Address, mds dtypes.MetadataDS) error {
 	metadata, err := homedir.Expand(metadata)
 	if err != nil {
@@ -654,12 +653,10 @@ func findMarketDealID(ctx context.Context, api v1api.FullNode, deal market2.Deal
 func createStorageMiner(ctx context.Context, api v1api.FullNode, peerid peer.ID, gasPrice types.BigInt, ssize abi.SectorSize) (address.Address, error) {
 	var err error
 	var owner address.Address
-	// NOTE: Always using default address here
-	//if cctx.String("owner") != "" {
-	//	owner, err = address.NewFromString(cctx.String("owner"))
-	//} else {
+	// NOTE: Always using default address here.
+	// We must make this configurable if we want to initialize a miner
+	// with some other address.
 	owner, err = api.WalletDefaultAddress(ctx)
-	//}
 	if err != nil {
 		return address.Undef, err
 	}
@@ -805,10 +802,10 @@ func SyncWait(ctx context.Context, napi v0api.FullNode, watch bool) error {
 		working := -1
 		for i, ss := range state.ActiveSyncs {
 			switch ss.Stage {
-			case api.StageSyncComplete:
+			case lapi.StageSyncComplete:
 			default:
 				working = i
-			case api.StageIdle:
+			case lapi.StageIdle:
 				// not complete, not actively working
 			}
 		}

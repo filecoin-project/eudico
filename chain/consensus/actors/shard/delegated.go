@@ -10,7 +10,7 @@ import (
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/system"
-	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
+	genesis2 "github.com/filecoin-project/lotus/chain/consensus/genesis"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/genesis"
 	adt0 "github.com/filecoin-project/specs-actors/actors/util/adt"
