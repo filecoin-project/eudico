@@ -48,3 +48,6 @@ bin/ipget
 bin/tmp/*
 .idea
 scratchpad
+
+gen.gen
+*.key

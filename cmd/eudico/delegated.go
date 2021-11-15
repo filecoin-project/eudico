@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/lotus/chain/checkpointing"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/wallet"
 	"github.com/urfave/cli/v2"
@@ -33,6 +34,10 @@ var delegatedCmd = &cli.Command{
 			node.Override(new(store.WeightFunc), delegcns.Weight),
 			node.Override(new(stmgr.Executor), delegcns.TipSetExecutor()),
 			node.Override(new(stmgr.UpgradeSchedule), delegcns.DefaultUpgradeSchedule()),
+
+			// Start checkpoint sub
+			node.Override(new(*checkpointing.CheckpointingSub), checkpointing.NewCheckpointSub),
+			node.Override(StartCheckpointingSubKey, checkpointing.BuildCheckpointingSub),
 		)),
 	},
 }
