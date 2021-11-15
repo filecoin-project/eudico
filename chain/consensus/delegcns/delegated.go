@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/Gurpartap/async"
 	"github.com/filecoin-project/go-state-types/big"
@@ -36,6 +35,8 @@ import (
 	"github.com/filecoin-project/lotus/metrics"
 	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 )
+
+var _ consensus.Consensus = &Delegated{}
 
 var log = logging.Logger("delegated-consensus")
 
@@ -135,7 +136,7 @@ func (deleg *Delegated) ValidateBlock(ctx context.Context, b *types.FullBlock) (
 		}
 		return nil
 	})
-	pweight, err := Weight(nil, nil, baseTs)
+	pweight, err := Weight(context.TODO(), nil, baseTs)
 	if err != nil {
 		return xerrors.Errorf("getting parent weight: %w", err)
 	}
@@ -582,12 +583,3 @@ func (deleg *Delegated) validateBlockHeader(ctx context.Context, b *types.BlockH
 
 	return "", nil
 }
-
-func (deleg *Delegated) isChainNearSynced() bool {
-	ts := deleg.store.GetHeaviestTipSet()
-	timestamp := ts.MinTimestamp()
-	timestampTime := time.Unix(int64(timestamp), 0)
-	return build.Clock.Since(timestampTime) < 6*time.Hour
-}
-
-var _ consensus.Consensus = &Delegated{}

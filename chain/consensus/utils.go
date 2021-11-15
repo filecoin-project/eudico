@@ -6,7 +6,8 @@ import (
 
 	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 	"github.com/ipfs/go-cid"
-	logging "github.com/ipfs/go-log/v2"
+
+	// logging "github.com/ipfs/go-log/v2"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"go.opencensus.io/trace"
 	"golang.org/x/xerrors"
@@ -15,7 +16,7 @@ import (
 	"github.com/filecoin-project/go-state-types/crypto"
 )
 
-var log = logging.Logger("consensus")
+// var log = logging.Logger("consensus")
 
 var ErrTemporal = errors.New("temporal error")
 

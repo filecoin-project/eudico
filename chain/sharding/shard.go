@@ -245,10 +245,7 @@ func (sh *Shard) HandleIncomingBlocks(ctx context.Context, bserv dtypes.ChainBlo
 func (sh *Shard) isMining() bool {
 	sh.minlk.Lock()
 	defer sh.minlk.Unlock()
-	if sh.miningCtx != nil {
-		return true
-	}
-	return false
+	return sh.miningCtx != nil
 }
 
 func (sh *Shard) mine(ctx context.Context) error {
