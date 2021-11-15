@@ -5,7 +5,6 @@ import (
 	"reflect"
 
 	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/lotus/chain/consensus/actors/shard"
 	shardactor "github.com/filecoin-project/lotus/chain/consensus/actors/shard"
 	"github.com/filecoin-project/lotus/chain/types"
 	builtin "github.com/filecoin-project/specs-actors/v6/actors/builtin"
@@ -15,12 +14,9 @@ import (
 	"golang.org/x/xerrors"
 )
 
-// Diff structure for state changes
-type diffType map[string]diffInfo
-
 // Info included in diff structure.
 type diffInfo struct {
-	consensus shard.ConsensusType
+	consensus shardactor.ConsensusType
 	genesis   []byte
 	isMiner   bool
 	isRm      bool
@@ -207,7 +203,7 @@ func newShards(oldM *adt.Map, newM *adt.Map) (map[cid.Cid]struct{}, error) {
 
 // Check if shard states have changed.
 func changedShards(oldM *adt.Map, newM *adt.Map) (map[cid.Cid]*shardactor.Shard, error) {
-	diff := make(map[cid.Cid]*shardactor.Shard, 0)
+	diff := make(map[cid.Cid]*shardactor.Shard)
 	var sh shardactor.Shard
 
 	err := newM.ForEach(&sh, func(k string) error {

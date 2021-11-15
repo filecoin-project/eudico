@@ -14,7 +14,6 @@ import (
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
 
-	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/consensus"
 	param "github.com/filecoin-project/lotus/chain/consensus/params"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -96,7 +95,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	}
 }
 
-func (tsp *TSPoW) CreateBlock(ctx context.Context, w api.Wallet, bt *api.BlockTemplate) (*types.FullBlock, error) {
+func (tsp *TSPoW) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.BlockTemplate) (*types.FullBlock, error) {
 	pts, err := tsp.sm.ChainStore().LoadTipSet(bt.Parents)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to load parent tipset: %w", err)
@@ -212,8 +211,8 @@ func (tsp *TSPoW) CreateBlock(ctx context.Context, w api.Wallet, bt *api.BlockTe
 		return nil, xerrors.Errorf("failed to get signing bytes for block: %w", err)
 	}
 
-	sig, err := w.WalletSign(ctx, bt.Miner, nosigbytes, api.MsgMeta{
-		Type: api.MTBlock,
+	sig, err := w.WalletSign(ctx, bt.Miner, nosigbytes, lapi.MsgMeta{
+		Type: lapi.MTBlock,
 	})
 	if err != nil {
 		return nil, xerrors.Errorf("failed to sign new block: %w", err)
