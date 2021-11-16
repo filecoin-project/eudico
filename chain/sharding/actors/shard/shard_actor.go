@@ -9,6 +9,7 @@ import (
 	"github.com/filecoin-project/go-state-types/cbor"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
+	"github.com/filecoin-project/lotus/chain/sharding/actors/naming"
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
@@ -27,9 +28,9 @@ type ShardActor struct{}
 func (a ShardActor) Exports() []interface{} {
 	return []interface{}{
 		builtin.MethodConstructor: a.Constructor,
-		2:                         a.Add,
-		3:                         a.Join,
-		4:                         a.Leave,
+		2:                         a.Join,
+		3:                         a.Leave,
+		3:                         a.Kill,
 		// Checkpoint - Add a new checkpoint to the shard.
 	}
 }
@@ -97,9 +98,9 @@ func (sh *ShardState) initGenesis(rt runtime.Runtime, params *ConstructParams) {
 	rem, err := address.NewFromString("t3tf274q6shnudgrwrwkcw5lzw3u247234wnep37fqx4sobyh2susfvs7qzdwxj64uaizztosuggvyump4xf7a")
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed parsin rem addr")
 
-	// TODO: Get the actor address in order to generate the genesis of the subnet.
-	// We may need to find an alternative way.
-	err = WriteGenesis(shid.String(), sh.Consensus, params.DelegMiner, vreg, rem, st.TotalShards, buf)
+	// Getting actor ID from recceiver.
+	netName := naming.GenShardID(params.NetworkName, rt.Receiver())
+	err = WriteGenesis(netName, sh.Consensus, params.DelegMiner, vreg, rem, rt.ValueReceived().Uint64(), buf)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed genesis")
 	sh.Genesis = buf.Bytes()
 }
@@ -137,18 +138,13 @@ func (a ShardActor) Join(rt runtime.Runtime, params *SelectParams) *abi.EmptyVal
 	rt.ValidateImmediateCallerAcceptAny()
 	sourceAddr := rt.Caller()
 	value := rt.ValueReceived()
-	// Decode cid for shard
-	c, err := cid.Cast(params.ID)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed to cast cid for shard")
 
 	var st ShardState
 	rt.StateTransaction(&st, func() {
-		sh, has, err := st.GetShard(adt.AsStore(rt), c)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching shard state")
-		if !has {
-			rt.Abortf(exitcode.ErrIllegalArgument, "shard for ID hasn't been instantiated yet")
-		}
+		// TODO:
+		// If there are no miners, check if there is enough stake
 		// Add stake for the miner
+		// Trigger the call to the SCA.
 		sh.addStake(rt, &st, sourceAddr, value)
 	})
 
@@ -191,7 +187,39 @@ func (a ShardActor) Leave(rt runtime.Runtime, params *SelectParams) *abi.EmptyVa
 	return nil
 }
 
-func (sh *Shard) addStake(rt runtime.Runtime, st *ShardState, sourceAddr address.Address, value abi.TokenAmount) {
+func (a ShardActor) Kill(rt runtime.Runtime, params *SelectParams) *abi.EmptyValue {
+	rt.ValidateImmediateCallerAcceptAny()
+	sourceAddr := rt.Caller()
+	// Decode cid for shard
+	c, err := cid.Cast(params.ID)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed to cast cid for shard")
+
+	priorBalance := rt.CurrentBalance()
+	var st ShardState
+	var retFunds abi.TokenAmount
+	rt.StateTransaction(&st, func() {
+		sh, has, err := st.GetShard(adt.AsStore(rt), c)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching shard state")
+		if !has {
+			rt.Abortf(exitcode.ErrIllegalArgument, "shard for ID hasn't been instantiated yet")
+		}
+		// Remove stake. Kill the shard if needed
+		retFunds = sh.rmStake(rt, &st, sourceAddr)
+	})
+
+	// Never send back if we don't have enough balance
+	builtin.RequireState(rt, retFunds.LessThanEqual(priorBalance), "reward %v exceeds balance %v", retFunds, priorBalance)
+
+	// Send funds back to owner
+	code := rt.Send(sourceAddr, builtin.MethodSend, nil, retFunds, &builtin.Discard{})
+	if !code.IsSuccess() {
+		rt.Abortf(exitcode.ErrIllegalState, "failed to send stake back to address, code: %v", code)
+	}
+
+	return nil
+}
+
+func (sh *ShardState) addStake(rt runtime.Runtime, st *ShardState, sourceAddr address.Address, value abi.TokenAmount) {
 	// NOTE: There's currently no minimum stake required. Any stake is accepted even
 	// if a peer is not granted mining rights. According to the final design we may
 	// choose to accept only stakes over a minimum amount.
@@ -234,7 +262,7 @@ func (sh *Shard) addStake(rt runtime.Runtime, st *ShardState, sourceAddr address
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush shards")
 }
 
-func (sh *Shard) rmStake(rt runtime.Runtime, st *ShardState, sourceAddr address.Address) abi.TokenAmount {
+func (sh *ShardState) rmStake(rt runtime.Runtime, st *ShardState, sourceAddr address.Address) abi.TokenAmount {
 
 	stakes, err := adt.AsMap(adt.AsStore(rt), sh.Stake, builtin.DefaultHamtBitwidth)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state for stakes in shard")
