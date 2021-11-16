@@ -8,6 +8,7 @@ import (
 	"github.com/filecoin-project/go-state-types/exitcode"
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
 	initactor "github.com/filecoin-project/lotus/chain/consensus/actors/init"
+	"github.com/filecoin-project/lotus/chain/sharding/actors/naming"
 	"github.com/filecoin-project/specs-actors/v3/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v3/actors/util/adt"
 	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
@@ -84,8 +85,8 @@ func (a ShardCoordActor) Register(rt runtime.Runtime, _ *abi.EmptyValue) *AddSha
 	var shcid cid.Cid
 	rt.StateTransaction(&st, func() {
 		var err error
-		shid := genShardID(st.NetworkName, shardActorAddr)
-		shcid, err = ShardCid(shid)
+		shid := naming.GenShardID(st.NetworkName, shardActorAddr)
+		shcid, err = naming.ShardCid(shid)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed computing CID from shardID")
 		// Check if the shard with that ID already exists
 		if _, has, _ := st.GetShard(adt.AsStore(rt), shcid); has {
@@ -212,8 +213,8 @@ func (a ShardCoordActor) Kill(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyV
 	var sh *Shard
 	rt.StateTransaction(&st, func() {
 		var has bool
-		shid := genShardID(st.NetworkName, shardActorAddr)
-		shcid, err := ShardCid(shid)
+		shid := naming.GenShardID(st.NetworkName, shardActorAddr)
+		shcid, err := naming.ShardCid(shid)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed computing CID from shardID")
 		// Check if the shard for the actor exists
 		sh, has, err = st.GetShard(adt.AsStore(rt), shcid)
@@ -274,77 +275,3 @@ func (sh *Shard) flushShard(rt runtime.Runtime, st *SCAState) {
 	st.Shards, err = shards.Root()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush shards")
 }
-
-/*
-func (sh *Shard) rmStake(rt runtime.Runtime, st *SCAState, sourceAddr address.Address) abi.TokenAmount {
-
-	stakes, err := adt.AsMap(adt.AsStore(rt), sh.Stake, builtin.DefaultHamtBitwidth)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state for stakes in shard")
-	minerStake, err := getStake(stakes, sourceAddr)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get stake for miner")
-	if minerStake.Equals(abi.NewTokenAmount(0)) {
-		rt.Abortf(exitcode.ErrForbidden, "caller hasn't stake in this shard")
-	}
-	retFunds := big.Div(minerStake, LeavingFeeCoeff)
-
-	// Remove from stakes
-	err = stakes.Delete(abi.AddrKey(sourceAddr))
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to remove miner stake in stake map")
-	// Flush stakes adding miner stake.
-	sh.Stake, err = stakes.Root()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush stakes")
-
-	// Remove miner from list of miners if it is there.
-	// NOTE: If we decide to support part-recovery of stake from shards
-	// we need to check if the miner keeps its mining rights.
-	sh.Miners = rmMiner(sourceAddr, sh.Miners)
-
-	// We are removing what we return to the miner, the rest stays
-	// in the shard, we'll need to figure out what to do with the balance
-	sh.TotalStake = big.Sub(sh.TotalStake, retFunds)
-
-	shards, err := adt.AsMap(adt.AsStore(rt), st.Shards, builtin.DefaultHamtBitwidth)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state for shards")
-	// Check if shard is still instantiated and there is enough stake to become active
-	if sh.TotalStake.LessThan(st.MinStake) {
-		lstakes, err := ListStakes(adt.AsStore(rt), sh)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get list of stakes")
-		if len(lstakes) == 0 {
-			// No stakes left, we can kill the shard but maybe not
-			// remove it if there is still stake.
-			// FIXME: Decide what to do with the pending state, if any.
-			sh.Status = Killed
-			if sh.TotalStake.LessThanEqual(big.NewInt(0)) {
-				// Remove shard completely.
-				err = shards.Delete(abi.CidKey(sh.ID))
-				builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put new shard in shard map")
-				// Flush shards
-				st.Shards, err = shards.Root()
-				builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush shards")
-				st.TotalShards--
-			}
-			return retFunds
-		}
-		// Terminating because there is not minimum stake
-		sh.Status = Terminating
-	}
-
-	// There are still miners with stake in the shard, so don't kill it
-	// The shard is either active or terminating.
-	err = shards.Put(abi.CidKey(sh.ID), sh)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put new shard in shard map")
-	// Flush shards
-	st.Shards, err = shards.Root()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush shards")
-	return retFunds
-}
-
-func rmMiner(miner address.Address, ls []address.Address) []address.Address {
-	for i, v := range ls {
-		if v == miner {
-			return append(ls[:i], ls[i+1:]...)
-		}
-	}
-	return ls
-}
-*/

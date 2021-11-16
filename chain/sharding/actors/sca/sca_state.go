@@ -3,15 +3,12 @@ package sca
 import (
 	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/lotus/chain/sharding/actors/naming"
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
 	cid "github.com/ipfs/go-cid"
-	mh "github.com/multiformats/go-multihash"
 	"golang.org/x/xerrors"
 )
-
-// Builder to generate shard IDs from their name
-var builder = cid.V1Builder{Codec: cid.Raw, MhType: mh.IDENTITY}
 
 var (
 	// MinShardStake required to register a new shard
@@ -65,7 +62,7 @@ func ConstructSCAState(store adt.Store, networkName string) (*SCAState, error) {
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}
-	networkCid, err := ShardCid(networkName)
+	networkCid, err := naming.ShardCid(networkName)
 	if err != nil {
 		panic(err)
 	}
@@ -101,8 +98,8 @@ func getShard(shards *adt.Map, id cid.Cid) (*Shard, bool, error) {
 
 // Get shard from its shard actor address.
 func (st *SCAState) getShardFromActorAddr(s adt.Store, addr address.Address) (*Shard, bool, error) {
-	shid := genShardID(st.NetworkName, addr)
-	shcid, err := ShardCid(shid)
+	shid := naming.GenShardID(st.NetworkName, addr)
+	shcid, err := naming.ShardCid(shid)
 	if err != nil {
 		return nil, false, err
 	}
@@ -122,43 +119,3 @@ func ListShards(s adt.Store, st SCAState) ([]Shard, error) {
 	})
 	return out, err
 }
-
-/*
-func GetMinerState(stakeMap *adt.Map, miner address.Address) (*MinerState, bool, error) {
-	var out MinerState
-	found, err := stakeMap.Get(abi.AddrKey(miner), &out)
-	if err != nil {
-		return nil, false, xerrors.Errorf("failed to get stake from miner %v: %w", miner, err)
-	}
-	if !found {
-		return nil, false, nil
-	}
-	return &out, true, nil
-}
-
-func getStake(stakeMap *adt.Map, miner address.Address) (abi.TokenAmount, error) {
-	state, has, err := GetMinerState(stakeMap, miner)
-	if err != nil {
-		return abi.NewTokenAmount(0), err
-	}
-	// If the miner has no stake.
-	if !has {
-		return abi.NewTokenAmount(0), nil
-	}
-	return state.InitialStake, nil
-}
-
-func ListStakes(s adt.Store, sh *Shard) ([]MinerState, error) {
-	stakeMap, err := adt.AsMap(s, sh.Stake, builtin.DefaultHamtBitwidth)
-	if err != nil {
-		return nil, err
-	}
-	out := []MinerState{}
-	var st MinerState
-	err = stakeMap.ForEach(&st, func(k string) error {
-		out = append(out, st)
-		return nil
-	})
-	return out, err
-}
-*/

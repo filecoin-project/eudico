@@ -8,6 +8,7 @@ import (
 	"github.com/filecoin-project/go-state-types/exitcode"
 	actors "github.com/filecoin-project/lotus/chain/consensus/actors"
 	initactor "github.com/filecoin-project/lotus/chain/consensus/actors/init"
+	"github.com/filecoin-project/lotus/chain/sharding/actors/naming"
 	actor "github.com/filecoin-project/lotus/chain/sharding/actors/sca"
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
@@ -53,7 +54,7 @@ func TestRegister(t *testing.T) {
 	ret := rt.Call(h.ShardCoordActor.Register, nil)
 	res, ok := ret.(*actor.AddShardReturn)
 	require.True(t, ok)
-	shid, err := actor.ShardCid("root/t0101")
+	shid, err := naming.ShardCid("root/t0101")
 	require.NoError(t, err)
 	// Verify the return value is correct.
 	require.Equal(t, res.Cid, shid)
@@ -102,7 +103,7 @@ func TestRegister(t *testing.T) {
 	ret = rt.Call(h.ShardCoordActor.Register, nil)
 	res, ok = ret.(*actor.AddShardReturn)
 	require.True(t, ok)
-	shid, err = actor.ShardCid("root/t0102")
+	shid, err = naming.ShardCid("root/t0102")
 	require.NoError(t, err)
 	// Verify the return value is correct.
 	require.Equal(t, res.Cid, shid)
@@ -319,7 +320,7 @@ func (h *shActorHarness) constructAndVerify(rt *mock.Runtime) {
 	rt.GetState(&st)
 	assert.Equal(h.t, actor.MinShardStake, st.MinStake)
 	shid := "root"
-	shcid, err := actor.ShardCid(shid)
+	shcid, err := naming.ShardCid(shid)
 	require.NoError(h.t, err)
 	assert.Equal(h.t, st.Network, shcid)
 	assert.Equal(h.t, st.NetworkName, shid)
