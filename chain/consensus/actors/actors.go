@@ -8,8 +8,9 @@ import (
 //go:generate go run ./gen
 
 var (
-	SplitActorCodeID cid.Cid
-	ShardActorCodeID cid.Cid
+	SplitActorCodeID      cid.Cid
+	ShardCoordActorCodeID cid.Cid
+	ShardActorCodeID      cid.Cid
 )
 
 var builtinActors map[cid.Cid]*actorInfo
@@ -23,9 +24,9 @@ func init() {
 	builtinActors = make(map[cid.Cid]*actorInfo)
 
 	for id, info := range map[*cid.Cid]*actorInfo{ //nolint:nomaprange
-		// TODO: Find better names.
-		&SplitActorCodeID: {name: "deleg/0/split"},
-		&ShardActorCodeID: {name: "deleg/0/shards"},
+		&SplitActorCodeID:      {name: "fil/0/split"},
+		&ShardCoordActorCodeID: {name: "sharding/0/sac"},
+		&ShardActorCodeID:      {name: "sharding/0/shard"},
 	} {
 		c, err := builder.Sum([]byte(info.name))
 		if err != nil {
