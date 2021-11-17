@@ -20,6 +20,7 @@ import (
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/filecoin-project/lotus/chain/gen"
 	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
+	"github.com/filecoin-project/lotus/chain/sharding/actors/sca"
 	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/genesis"
@@ -123,7 +124,7 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 	if err != nil {
 		return nil, nil, err
 	}
-	err = state.SetActor(ShardActorAddr, shardact)
+	err = state.SetActor(sca.ShardCoordActorAddr, shardact)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("set shard actor: %w", err)
 	}
@@ -226,7 +227,7 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 
 func SetupShardActor(ctx context.Context, bs bstore.Blockstore, networkName string) (*types.Actor, error) {
 	cst := cbor.NewCborStore(bs)
-	st, err := ConstructShardState(adt.WrapStore(ctx, cst), networkName)
+	st, err := sca.ConstructSCAState(adt.WrapStore(ctx, cst), networkName)
 	if err != nil {
 		return nil, err
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/filecoin-project/go-state-types/exitcode"
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/filecoin-project/lotus/chain/sharding/actors/naming"
+	"github.com/filecoin-project/lotus/chain/sharding/actors/sca"
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
@@ -30,7 +31,7 @@ func (a ShardActor) Exports() []interface{} {
 		builtin.MethodConstructor: a.Constructor,
 		2:                         a.Join,
 		3:                         a.Leave,
-		3:                         a.Kill,
+		4:                         a.Kill,
 		// Checkpoint - Add a new checkpoint to the shard.
 	}
 }
@@ -47,25 +48,14 @@ func (a ShardActor) State() cbor.Er {
 	return new(ShardState)
 }
 
-// CreateParams specifies the configuration parameters for the
+// ConstructParams specifies the configuration parameters for the
 // shard actor constructor.
 type ConstructParams struct {
-	NetworkName   string
-	Name          []byte
-	Consensus     ConsensusType
-	MinMinerStake abi.TokenAmount
-	DelegMiner    address.Address
-	Metadata      []byte
-}
-
-// SelectParams params used to select a specific shard.
-// It is used by several functions in the actor.
-type SelectParams struct {
-	ID []byte
-}
-
-type AddShardReturn struct {
-	ID cid.Cid
+	NetworkName   string          // Name of the current network.
+	Name          string          // Name for the subnet
+	Consensus     ConsensusType   // Consensus for subnet.
+	MinMinerStake abi.TokenAmount // MinStake to give miner rights
+	DelegMiner    address.Address // Miner in delegated consensus
 }
 
 func (a ShardActor) Constructor(rt runtime.Runtime, params *ConstructParams) *abi.EmptyValue {
@@ -73,6 +63,7 @@ func (a ShardActor) Constructor(rt runtime.Runtime, params *ConstructParams) *ab
 	rt.ValidateImmediateCallerType(builtin.InitActorCodeID)
 	st, err := ConstructShardState(adt.AsStore(rt), params)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
+	st.initGenesis(rt, params)
 
 	rt.StateCreate(st)
 	return nil
@@ -82,8 +73,7 @@ func (a ShardActor) Checkpoint(rt runtime.Runtime, params abi.EmptyValue) abi.Em
 	panic("checkpoint not implemented yet")
 }
 
-func (sh *ShardState) initGenesis(rt runtime.Runtime, params *ConstructParams) {
-	rt.NewActorAddress()
+func (st *ShardState) initGenesis(rt runtime.Runtime, params *ConstructParams) {
 	// Build genesis for the shard assigning delegMiner
 	buf := new(bytes.Buffer)
 
@@ -100,83 +90,100 @@ func (sh *ShardState) initGenesis(rt runtime.Runtime, params *ConstructParams) {
 
 	// Getting actor ID from recceiver.
 	netName := naming.GenShardID(params.NetworkName, rt.Receiver())
-	err = WriteGenesis(netName, sh.Consensus, params.DelegMiner, vreg, rem, rt.ValueReceived().Uint64(), buf)
+	err = WriteGenesis(netName, st.Consensus, params.DelegMiner, vreg, rem, rt.ValueReceived().Uint64(), buf)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed genesis")
-	sh.Genesis = buf.Bytes()
+	st.Genesis = buf.Bytes()
 }
-
-/*
-// initShard initialzes a shard.
-func (a ShardActor) initShard(rt runtime.Runtime, params *ConstructParams) *AddShardReturn {
-	rt.ValidateImmediateCallerAcceptAny()
-	if string(params.Name) == "" {
-		rt.Abortf(exitcode.ErrIllegalArgument, "can't start a shard with an empty name")
-	}
-	// TODO: Add checks for minStakes?
-	if
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "shard with the same name already exists")
-	// Get the miner and the amount that it is sending.
-	sourceAddr := rt.Caller()
-	value := rt.ValueReceived()
-
-	var st ShardState
-	rt.StateTransaction(&st, func() {
-
-		// TODO: Everything is specific for the delegated consensus now
-		// (the only consensus supported). We should choose the right option
-		// when we suport new consensus.
-		sh.addStake(rt, &st, sourceAddr, value)
-
-	})
-
-	return &AddShardReturn{ID: shid}
-}
-*/
 
 // Join adds stake to the shard and/or joins if the source is still not part of it.
-func (a ShardActor) Join(rt runtime.Runtime, params *SelectParams) *abi.EmptyValue {
+// TODO: Join may not be the best name for this function, consider changing it.
+func (a ShardActor) Join(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerAcceptAny()
 	sourceAddr := rt.Caller()
 	value := rt.ValueReceived()
 
 	var st ShardState
 	rt.StateTransaction(&st, func() {
-		// TODO:
-		// If there are no miners, check if there is enough stake
-		// Add stake for the miner
-		// Trigger the call to the SCA.
-		sh.addStake(rt, &st, sourceAddr, value)
+		st.addStake(rt, sourceAddr, value)
+	})
+
+	// If the subnet is not registered, i.e. in an instantiated state
+	if st.Status == Instantiated {
+		// If we have enough stake we can register the subnet in the SCA
+		if st.TotalStake.GreaterThanEqual(sca.MinShardStake) {
+			if rt.CurrentBalance().GreaterThanEqual(st.TotalStake) {
+				// Send a transaction with the total stake to the shard actor.
+				// We are discarding the result (which is the CID assigned for the shard)
+				// because we can compute it deterministically, but we can consider keeping it.
+				code := rt.Send(sca.ShardCoordActorAddr, sca.Methods.Register, nil, st.TotalStake, &builtin.Discard{})
+				if !code.IsSuccess() {
+					rt.Abortf(exitcode.ErrIllegalState, "failed registering subnet in SCA")
+				}
+			}
+		}
+	} else {
+		// We need to send an addStake transaction to SCA
+		if rt.CurrentBalance().GreaterThanEqual(value) {
+			// Top-up stake in SCA
+			code := rt.Send(sca.ShardCoordActorAddr, sca.Methods.AddStake, nil, value, &builtin.Discard{})
+			if !code.IsSuccess() {
+				rt.Abortf(exitcode.ErrIllegalState, "failed sending addStake to SCA")
+			}
+		}
+	}
+
+	rt.StateTransaction(&st, func() {
+		// Mutate state
+		st.mutateState(rt)
 	})
 
 	return nil
 }
 
 // Leave can be used for users to leave the shard and recover their state.
+//
 // NOTE: At this stage we will only support to fully leave the shard and
 // not to recover part of the stake. We are going to set a leaving fee
 // but this will need to be revisited when we design sharding cryptoecon model.
-func (a ShardActor) Leave(rt runtime.Runtime, params *SelectParams) *abi.EmptyValue {
+func (a ShardActor) Leave(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerAcceptAny()
 	sourceAddr := rt.Caller()
-	// Decode cid for shard
-	c, err := cid.Cast(params.ID)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed to cast cid for shard")
+
+	var (
+		st         ShardState
+		minerStake abi.TokenAmount
+		stakes     *adt.BalanceTable
+		err        error
+	)
+	// We first get the miner stake to know how much to release from the SCA stake
+	rt.StateTransaction(&st, func() {
+		stakes, err = adt.AsBalanceTable(adt.AsStore(rt), st.Stake)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state balance map for stakes")
+		minerStake, err = stakes.Get(sourceAddr)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get stake for miner")
+		if minerStake.Equals(abi.NewTokenAmount(0)) {
+			rt.Abortf(exitcode.ErrForbidden, "caller has no stake in shard")
+		}
+	})
+
+	// Release stake from SCA if all the stake hasn't been released already because the subnet
+	// is in a terminating state
+	if st.Status != Terminating {
+		code := rt.Send(sca.ShardCoordActorAddr, sca.Methods.ReleaseStake, &sca.FundParams{Value: minerStake}, big.Zero(), &builtin.Discard{})
+		if !code.IsSuccess() {
+			rt.Abortf(exitcode.ErrIllegalState, "failed releasing stake in SCA")
+		}
+	}
 
 	priorBalance := rt.CurrentBalance()
-	var st ShardState
 	var retFunds abi.TokenAmount
 	rt.StateTransaction(&st, func() {
-		sh, has, err := st.GetShard(adt.AsStore(rt), c)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching shard state")
-		if !has {
-			rt.Abortf(exitcode.ErrIllegalArgument, "shard for ID hasn't been instantiated yet")
-		}
-		// Remove stake. Kill the shard if needed
-		retFunds = sh.rmStake(rt, &st, sourceAddr)
+		// Remove stake from stake balanace table.
+		retFunds = st.rmStake(rt, sourceAddr, stakes, minerStake)
 	})
 
 	// Never send back if we don't have enough balance
-	builtin.RequireState(rt, retFunds.LessThanEqual(priorBalance), "reward %v exceeds balance %v", retFunds, priorBalance)
+	builtin.RequireState(rt, retFunds.LessThanEqual(priorBalance), "returning stake %v exceeds balance %v", retFunds, priorBalance)
 
 	// Send funds back to owner
 	code := rt.Send(sourceAddr, builtin.MethodSend, nil, retFunds, &builtin.Discard{})
@@ -184,144 +191,122 @@ func (a ShardActor) Leave(rt runtime.Runtime, params *SelectParams) *abi.EmptyVa
 		rt.Abortf(exitcode.ErrIllegalState, "failed to send stake back to address, code: %v", code)
 	}
 
+	rt.StateTransaction(&st, func() {
+		// Mutate state
+		st.mutateState(rt)
+	})
 	return nil
 }
 
-func (a ShardActor) Kill(rt runtime.Runtime, params *SelectParams) *abi.EmptyValue {
+// Kill is used to signal that the subnet must be terminated.
+//
+// In the current policy any user can terminate the subnet and recover their stake
+// as long as there are no miners in the network.
+func (a ShardActor) Kill(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerAcceptAny()
-	sourceAddr := rt.Caller()
-	// Decode cid for shard
-	c, err := cid.Cast(params.ID)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed to cast cid for shard")
-
-	priorBalance := rt.CurrentBalance()
 	var st ShardState
-	var retFunds abi.TokenAmount
 	rt.StateTransaction(&st, func() {
-		sh, has, err := st.GetShard(adt.AsStore(rt), c)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching shard state")
-		if !has {
-			rt.Abortf(exitcode.ErrIllegalArgument, "shard for ID hasn't been instantiated yet")
+		if st.Status == Terminating || st.Status == Killed {
+			rt.Abortf(exitcode.ErrIllegalState, "the subnet is already in a killed or terminating state")
 		}
-		// Remove stake. Kill the shard if needed
-		retFunds = sh.rmStake(rt, &st, sourceAddr)
+		if len(st.Miners) != 0 {
+			rt.Abortf(exitcode.ErrIllegalState, "this subnet can only be called when all miners have left")
+		}
+		// Move to terminating state
+		st.Status = Terminating
+
 	})
 
-	// Never send back if we don't have enough balance
-	builtin.RequireState(rt, retFunds.LessThanEqual(priorBalance), "reward %v exceeds balance %v", retFunds, priorBalance)
-
-	// Send funds back to owner
-	code := rt.Send(sourceAddr, builtin.MethodSend, nil, retFunds, &builtin.Discard{})
+	// Kill (unregister) subnet from SCA and release full stake
+	code := rt.Send(sca.ShardCoordActorAddr, sca.Methods.Kill, nil, big.Zero(), &builtin.Discard{})
 	if !code.IsSuccess() {
-		rt.Abortf(exitcode.ErrIllegalState, "failed to send stake back to address, code: %v", code)
+		rt.Abortf(exitcode.ErrIllegalState, "failed killing subnet in SCA")
 	}
 
+	rt.StateTransaction(&st, func() {
+		// Mutate state
+		st.mutateState(rt)
+	})
 	return nil
 }
 
-func (sh *ShardState) addStake(rt runtime.Runtime, st *ShardState, sourceAddr address.Address, value abi.TokenAmount) {
+func (st *ShardState) mutateState(rt runtime.Runtime) {
+
+	switch st.Status {
+	case Instantiated:
+		if st.TotalStake.GreaterThanEqual(sca.MinShardStake) {
+			st.Status = Active
+		}
+	case Active:
+		if st.TotalStake.LessThan(sca.MinShardStake) {
+			st.Status = Inactive
+		}
+	case Inactive:
+		if st.TotalStake.GreaterThanEqual(sca.MinShardStake) {
+			st.Status = Active
+		}
+	// In the current implementation after Kill is triggered, the
+	// subnet enters a killing state and can't be revived. The subnet
+	// stays in a terminating state until all the funds have been recovered.
+	case Terminating:
+		if st.TotalStake.Equals(abi.NewTokenAmount(0)) &&
+			rt.CurrentBalance().Equals(abi.NewTokenAmount(0)) {
+			st.Status = Killed
+		}
+	case Killed:
+		break
+	}
+}
+func (st *ShardState) addStake(rt runtime.Runtime, sourceAddr address.Address, value abi.TokenAmount) {
 	// NOTE: There's currently no minimum stake required. Any stake is accepted even
 	// if a peer is not granted mining rights. According to the final design we may
 	// choose to accept only stakes over a minimum amount.
+	stakes, err := adt.AsBalanceTable(adt.AsStore(rt), st.Stake)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state balance map for stakes")
 	// Add the amount staked by miner to stake map.
-	stakes, err := adt.AsMap(adt.AsStore(rt), sh.Stake, builtin.DefaultHamtBitwidth)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state for stakes in stakes")
-	minerStake, err := getStake(stakes, sourceAddr)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get stake for miner")
-	minerStake = big.Add(minerStake, value)
-	err = stakes.Put(abi.AddrKey(sourceAddr), &MinerState{InitialStake: minerStake})
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put miner stake in stake map")
-	// Flush stakes adding miner stake.
-	sh.Stake, err = stakes.Root()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush shards")
+	err = stakes.Add(sourceAddr, value)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error adding stake to user balance table")
+	// Flust stakes adding miner stake.
+	st.Stake, err = stakes.Root()
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flust stards")
 
-	// Add to totalStake in the shard.
-	sh.TotalStake = big.Add(sh.TotalStake, value)
+	// Add to totalStake in the stard.
+	st.TotalStake = big.Add(st.TotalStake, value)
 
 	// Check if the miner has staked enough to be granted mining rights.
+	minerStake, err := stakes.Get(sourceAddr)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get stake for miner")
 	if minerStake.GreaterThanEqual(st.MinMinerStake) {
 		// Except for delegated consensus if there is already a miner.
 		// There can only be a single miner in delegated consensus.
-		if sh.Consensus != Delegated || len(sh.Miners) < 1 {
-			sh.Miners = append(sh.Miners, sourceAddr)
+		if st.Consensus != Delegated || len(st.Miners) < 1 {
+			st.Miners = append(st.Miners, sourceAddr)
 		}
 	}
 
-	// Check if shard is still instantiated and there is enough stake to become active
-	if sh.TotalStake.GreaterThanEqual(st.MinStake) {
-		sh.Status = Active
-	}
-
-	// Update shard in the list of shards.
-	shards, err := adt.AsMap(adt.AsStore(rt), st.Shards, builtin.DefaultHamtBitwidth)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state for shards")
-	err = shards.Put(abi.CidKey(sh.ID), sh)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put new shard in shard map")
-	// Flush shards
-	st.Shards, err = shards.Root()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush shards")
 }
 
-func (sh *ShardState) rmStake(rt runtime.Runtime, st *ShardState, sourceAddr address.Address) abi.TokenAmount {
-
-	stakes, err := adt.AsMap(adt.AsStore(rt), sh.Stake, builtin.DefaultHamtBitwidth)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state for stakes in shard")
-	minerStake, err := getStake(stakes, sourceAddr)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get stake for miner")
-	if minerStake.Equals(abi.NewTokenAmount(0)) {
-		rt.Abortf(exitcode.ErrForbidden, "caller hasn't stake in this shard")
-	}
+func (st *ShardState) rmStake(rt runtime.Runtime, sourceAddr address.Address, stakes *adt.BalanceTable, minerStake abi.TokenAmount) abi.TokenAmount {
 	retFunds := big.Div(minerStake, LeavingFeeCoeff)
 
 	// Remove from stakes
-	err = stakes.Delete(abi.AddrKey(sourceAddr))
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to remove miner stake in stake map")
+	err := stakes.MustSubtract(sourceAddr, minerStake)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed substracting ablanace for miner")
 	// Flush stakes adding miner stake.
-	sh.Stake, err = stakes.Root()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush stakes")
+	st.Stake, err = stakes.Root()
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flust stakes")
 
 	// Remove miner from list of miners if it is there.
-	// NOTE: If we decide to support part-recovery of stake from shards
+	// NOTE: If we decide to support part-recovery of stake from stards
 	// we need to check if the miner keeps its mining rights.
-	sh.Miners = rmMiner(sourceAddr, sh.Miners)
+	st.Miners = rmMiner(sourceAddr, st.Miners)
 
 	// We are removing what we return to the miner, the rest stays
-	// in the shard, we'll need to figure out what to do with the balance
-	sh.TotalStake = big.Sub(sh.TotalStake, retFunds)
+	// in the subnet, right now the leavingCoeff==1 so there won't be
+	// balance letf, we'll need to figure out how to distribute this
+	// in the future.
+	st.TotalStake = big.Sub(st.TotalStake, retFunds)
 
-	shards, err := adt.AsMap(adt.AsStore(rt), st.Shards, builtin.DefaultHamtBitwidth)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state for shards")
-	// Check if shard is still instantiated and there is enough stake to become active
-	if sh.TotalStake.LessThan(st.MinStake) {
-		lstakes, err := ListStakes(adt.AsStore(rt), sh)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get list of stakes")
-		if len(lstakes) == 0 {
-			// No stakes left, we can kill the shard but maybe not
-			// remove it if there is still stake.
-			// FIXME: Decide what to do with the pending state, if any.
-			sh.Status = Killed
-			if sh.TotalStake.LessThanEqual(big.NewInt(0)) {
-				// Remove shard completely.
-				err = shards.Delete(abi.CidKey(sh.ID))
-				builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put new shard in shard map")
-				// Flush shards
-				st.Shards, err = shards.Root()
-				builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush shards")
-				st.TotalShards--
-			}
-			return retFunds
-		}
-		// Terminating because there is not minimum stake
-		sh.Status = Terminating
-	}
-
-	// There are still miners with stake in the shard, so don't kill it
-	// The shard is either active or terminating.
-	err = shards.Put(abi.CidKey(sh.ID), sh)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put new shard in shard map")
-	// Flush shards
-	st.Shards, err = shards.Root()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush shards")
 	return retFunds
 }
 

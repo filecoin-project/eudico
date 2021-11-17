@@ -5,8 +5,6 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/lotus/chain/sharding/actors/naming"
-	"github.com/filecoin-project/lotus/chain/sharding/actors/sca"
-	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
 	cid "github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
@@ -42,8 +40,9 @@ const (
 type Status uint64
 
 const (
-	Instantiated Status = iota // Waiting to onboard minimum stake and power
+	Instantiated Status = iota // Waiting to onboard minimum stake to register in SCA
 	Active                     // Active and operating
+	Inactive                   // Inactive for lack of stake
 	Terminating                // Waiting for everyone to take their funds back and close the shard
 	Killed                     // Not active anymore.
 
@@ -56,8 +55,6 @@ type ShardState struct {
 	Consensus ConsensusType
 	// Minimum stake required by new joiners.
 	MinMinerStake abi.TokenAmount
-	// Minimum stake to create a new shard
-	MinStake abi.TokenAmount
 	// NOTE: Consider adding miners list as AMT
 	Miners     []address.Address
 	TotalStake abi.TokenAmount
@@ -90,83 +87,9 @@ func ConstructShardState(store adt.Store, params *ConstructParams) (*ShardState,
 		ParentCid:     parentCid,
 		ParentID:      params.NetworkName,
 		Consensus:     params.Consensus,
-		MinStake:      sca.MinShardStake,
 		MinMinerStake: params.MinMinerStake,
 		Miners:        make([]address.Address, 0),
 		Stake:         emptyStakeCid,
 		Status:        Instantiated,
 	}, nil
-}
-
-// GetShard gets a shard from the actor state.
-func (st *ShardState) GetShard(s adt.Store, id cid.Cid) (*Shard, bool, error) {
-	claims, err := adt.AsMap(s, st.Shards, builtin.DefaultHamtBitwidth)
-	if err != nil {
-		return nil, false, xerrors.Errorf("failed to load claims: %w", err)
-	}
-	return getShard(claims, id)
-}
-
-func getShard(shards *adt.Map, id cid.Cid) (*Shard, bool, error) {
-	var out Shard
-	found, err := shards.Get(abi.CidKey(id), &out)
-	if err != nil {
-		return nil, false, xerrors.Errorf("failed to get shard with id %v: %w", id, err)
-	}
-	if !found {
-		return nil, false, nil
-	}
-	return &out, true, nil
-}
-
-func GetMinerState(stakeMap *adt.Map, miner address.Address) (*MinerState, bool, error) {
-	var out MinerState
-	found, err := stakeMap.Get(abi.AddrKey(miner), &out)
-	if err != nil {
-		return nil, false, xerrors.Errorf("failed to get stake from miner %v: %w", miner, err)
-	}
-	if !found {
-		return nil, false, nil
-	}
-	return &out, true, nil
-}
-
-func getStake(stakeMap *adt.Map, miner address.Address) (abi.TokenAmount, error) {
-	state, has, err := GetMinerState(stakeMap, miner)
-	if err != nil {
-		return abi.NewTokenAmount(0), err
-	}
-	// If the miner has no stake.
-	if !has {
-		return abi.NewTokenAmount(0), nil
-	}
-	return state.InitialStake, nil
-}
-
-func ListShards(s adt.Store, st ShardState) ([]Shard, error) {
-	shardMap, err := adt.AsMap(s, st.Shards, builtin.DefaultHamtBitwidth)
-	if err != nil {
-		return nil, err
-	}
-	var sh Shard
-	out := []Shard{}
-	err = shardMap.ForEach(&sh, func(k string) error {
-		out = append(out, sh)
-		return nil
-	})
-	return out, err
-}
-
-func ListStakes(s adt.Store, sh *Shard) ([]MinerState, error) {
-	stakeMap, err := adt.AsMap(s, sh.Stake, builtin.DefaultHamtBitwidth)
-	if err != nil {
-		return nil, err
-	}
-	out := []MinerState{}
-	var st MinerState
-	err = stakeMap.ForEach(&st, func(k string) error {
-		out = append(out, st)
-		return nil
-	})
-	return out, err
 }

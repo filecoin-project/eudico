@@ -24,10 +24,9 @@ func TestExports(t *testing.T) {
 }
 
 func TestConstruction(t *testing.T) {
+	builder := mock.NewBuilder(actor.ShardCoordActorAddr).WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
+
 	actor := newHarness(t)
-
-	builder := mock.NewBuilder(builtin.StoragePowerActorAddr).WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
-
 	t.Run("simple construction", func(t *testing.T) {
 		rt := builder.Build(t)
 		actor.constructAndVerify(rt)

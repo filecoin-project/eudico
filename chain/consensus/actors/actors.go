@@ -24,8 +24,8 @@ func init() {
 	builtinActors = make(map[cid.Cid]*actorInfo)
 
 	for id, info := range map[*cid.Cid]*actorInfo{ //nolint:nomaprange
-		&SplitActorCodeID:      {name: "fil/0/split"},
-		&ShardCoordActorCodeID: {name: "sharding/0/sac"},
+		&SplitActorCodeID:      {name: "example/0/split"},
+		&ShardCoordActorCodeID: {name: "sharding/0/sca"},
 		&ShardActorCodeID:      {name: "sharding/0/shard"},
 	} {
 		c, err := builder.Sum([]byte(info.name))

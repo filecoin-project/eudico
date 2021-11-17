@@ -7,8 +7,9 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
-	initactor "github.com/filecoin-project/lotus/chain/consensus/actors/init"
-	actor "github.com/filecoin-project/lotus/chain/consensus/actors/shard"
+	"github.com/filecoin-project/lotus/chain/sharding/actors/naming"
+	"github.com/filecoin-project/lotus/chain/sharding/actors/sca"
+	actor "github.com/filecoin-project/lotus/chain/sharding/actors/shard"
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
 	"github.com/filecoin-project/specs-actors/v6/support/mock"
@@ -23,305 +24,241 @@ func TestExports(t *testing.T) {
 }
 
 func TestConstruction(t *testing.T) {
-	actor := newHarness(t)
-
-	builder := mock.NewBuilder(builtin.StoragePowerActorAddr).WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
 
 	t.Run("simple construction", func(t *testing.T) {
-		rt := builder.Build(t)
-		actor.constructAndVerify(rt)
+		actor := newHarness(t)
+		rt := getRuntime(t)
+		actor.constructAndVerify(t, rt)
 	})
 
-}
-
-// TODO: Tests have a lot of duplicated code. Consider aggregating them into
-// independent functions to make tests more readable.
-func TestAdd(t *testing.T) {
-	h := newHarness(t)
-	builder := mock.NewBuilder(builtin.StoragePowerActorAddr).WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
-	rt := builder.Build(t)
-	h.constructAndVerify(rt)
-	owner := tutil.NewIDAddr(t, 101)
-
-	addParams := &actor.AddParams{
-		Name:       []byte("testShard"),
-		Consensus:  actor.Delegated,
-		DelegMiner: owner,
-	}
-
-	t.Log("create new shard successfully")
-	// Send 2FIL of stake
-	value := abi.NewTokenAmount(2e18)
-	rt.SetCaller(owner, builtin.AccountActorCodeID)
-	rt.SetReceived(value)
-	rt.SetBalance(value)
-	// Anyone can call
-	rt.ExpectValidateCallerAny()
-	// Call add function
-	ret := rt.Call(h.ShardActor.Add, addParams)
-	res, ok := ret.(*actor.AddShardReturn)
-	require.True(t, ok)
-	shid, err := actor.ShardID([]byte("testShard"))
-	require.NoError(t, err)
-	// Verify the return value is correct.
-	require.Equal(t, res.ID, shid)
-	rt.Verify()
-	require.Equal(t, getState(rt).TotalShards, uint64(1))
-
-	// Verify that the shard was added successfully.
-	// and stake has been assigned correctly.
-	sh, found := h.getShard(rt, shid)
-	require.True(h.t, found)
-	require.Equal(t, len(sh.Miners), 1)
-	require.Equal(t, sh.Status, actor.Active)
-	require.Equal(t, sh.Consensus, actor.Delegated)
-	require.Equal(t, h.getStake(rt, sh, owner), value)
-	require.Equal(t, sh.TotalStake, value)
-
-	t.Log("create new shard with ID of existing shard")
-	// Check that it fails when we try to create a
-	// shard with duplicate name.
-	rt.ExpectValidateCallerAny()
-	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
-		rt.Call(h.ShardActor.Add, addParams)
-	})
-
-	t.Log("create new shard with ID of existing shard")
-	addParams = &actor.AddParams{
-		Name:       []byte("testShard2"),
-		Consensus:  actor.Delegated,
-		DelegMiner: owner,
-	}
-
-	// Send a small amount of stake
-	value = abi.NewTokenAmount(2)
-	rt.SetCaller(owner, builtin.AccountActorCodeID)
-	rt.SetReceived(value)
-	rt.SetBalance(value)
-	// Call add function
-	rt.ExpectValidateCallerAny()
-	ret = rt.Call(h.ShardActor.Add, addParams)
-	res, ok = ret.(*actor.AddShardReturn)
-	require.True(t, ok)
-	shid, err = actor.ShardID([]byte("testShard2"))
-	require.NoError(t, err)
-	// Verify the return value is correct.
-	require.Equal(t, res.ID, shid)
-	rt.Verify()
-	require.Equal(t, getState(rt).TotalShards, uint64(2))
-	// Verify that the shard was added successfully.
-	// and stake has been assigned correctly.
-	sh, found = h.getShard(rt, shid)
-	require.True(h.t, found)
-	require.Equal(t, len(sh.Miners), 0)
-	require.Equal(t, sh.Status, actor.Instantiated)
-	require.Equal(t, sh.Consensus, actor.Delegated)
-	require.Equal(t, h.getStake(rt, sh, owner), value)
-	require.Equal(t, sh.TotalStake, value)
 }
 
 func TestJoin(t *testing.T) {
 	h := newHarness(t)
-	builder := mock.NewBuilder(builtin.StoragePowerActorAddr).WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
-	rt := builder.Build(t)
-	h.constructAndVerify(rt)
-	owner := tutil.NewIDAddr(t, 101)
-	joiner := tutil.NewIDAddr(t, 102)
+	rt := getRuntime(t)
+	h.constructAndVerify(t, rt)
+	notMiner := tutil.NewIDAddr(t, 103)
+	miner := tutil.NewIDAddr(t, 104)
+	totalStake := abi.NewTokenAmount(0)
 
-	addParams := &actor.AddParams{
-		Name:       []byte("testShard"),
-		Consensus:  actor.PoW,
-		DelegMiner: owner,
-	}
-
-	t.Log("create new shard")
+	t.Log("join new shard without enough funds to register")
 	value := abi.NewTokenAmount(5e17)
-	rt.SetCaller(owner, builtin.AccountActorCodeID)
+	rt.SetCaller(notMiner, builtin.AccountActorCodeID)
 	rt.SetReceived(value)
 	rt.SetBalance(value)
 	// Anyone can call
 	rt.ExpectValidateCallerAny()
-	// Call add function
-	ret := rt.Call(h.ShardActor.Add, addParams)
-	res, ok := ret.(*actor.AddShardReturn)
-	require.True(t, ok)
-	shid, err := actor.ShardID([]byte("testShard"))
-	require.NoError(t, err)
-	// Verify the return value is correct.
-	require.Equal(t, res.ID, shid)
-	// Check that shard is instantiated but not active.
-	sh, found := h.getShard(rt, shid)
-	require.True(h.t, found)
-	require.Equal(t, len(sh.Miners), 0)
-	require.Equal(t, sh.Status, actor.Instantiated)
-	require.Equal(t, h.getStake(rt, sh, owner), value)
+	ret := rt.Call(h.ShardActor.Join, nil)
+	assert.Nil(h.t, ret)
+	// Check that the subnet is instantiated but not active.
+	st := getState(rt)
+	require.Equal(t, len(st.Miners), 0)
+	require.Equal(t, st.Status, actor.Instantiated)
+	require.Equal(t, getStake(t, rt, notMiner), value)
+	totalStake = big.Add(totalStake, value)
+	require.Equal(t, st.TotalStake, totalStake)
 
-	t.Log("new miner join the shard")
-	joinParams := &actor.SelectParams{ID: shid.Bytes()}
-	value = abi.NewTokenAmount(1e17)
-	rt.ExpectValidateCallerAny()
+	t.Log("new miner join the shard and activates it")
+	value = abi.NewTokenAmount(1e18)
 	rt.SetReceived(value)
-	rt.SetBalance(value)
-	rt.SetCaller(joiner, builtin.AccountActorCodeID)
-	rt.Call(h.ShardActor.Join, joinParams)
-	// Still not active.
-	sh, found = h.getShard(rt, shid)
-	require.True(h.t, found)
-	require.Equal(t, sh.Status, actor.Instantiated)
-	require.Equal(t, h.getStake(rt, sh, joiner), value)
-	require.Equal(t, len(sh.Miners), 0)
-
-	// Joiner stakes enough to activate and become a miner
-	value = abi.NewTokenAmount(9e17)
+	totalStake = big.Add(totalStake, value)
+	rt.SetBalance(totalStake)
+	rt.SetCaller(miner, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerAny()
-	rt.SetReceived(value)
-	rt.SetBalance(value)
-	rt.SetCaller(joiner, builtin.AccountActorCodeID)
-	rt.Call(h.ShardActor.Join, joinParams)
-	// Still not active.
-	sh, found = h.getShard(rt, shid)
-	require.True(h.t, found)
-	require.Equal(t, sh.Status, actor.Active)
-	require.Equal(t, h.getStake(rt, sh, joiner), abi.NewTokenAmount(1e18))
-	require.Equal(t, sh.TotalStake, abi.NewTokenAmount(15e17))
-	require.Equal(t, len(sh.Miners), 1)
+	rt.ExpectSend(sca.ShardCoordActorAddr, sca.Methods.Register, nil, totalStake, nil, exitcode.Ok)
+	rt.Call(h.ShardActor.Join, nil)
+	// Check that we are active
+	st = getState(rt)
+	require.Equal(t, len(st.Miners), 1)
+	require.Equal(t, st.Status, actor.Active)
+	require.Equal(t, getStake(t, rt, miner), value)
+	require.Equal(t, st.TotalStake, totalStake)
 
-	// Owner stakes enough to activate and become a miner
+	t.Log("existing participant not mining tops-up to become miner")
 	value = abi.NewTokenAmount(5e17)
-	rt.ExpectValidateCallerAny()
 	rt.SetReceived(value)
 	rt.SetBalance(value)
-	rt.SetCaller(owner, builtin.AccountActorCodeID)
-	rt.Call(h.ShardActor.Join, joinParams)
-	// Still not active.
-	sh, found = h.getShard(rt, shid)
-	require.True(h.t, found)
-	require.Equal(t, sh.Status, actor.Active)
-	require.Equal(t, h.getStake(rt, sh, joiner), abi.NewTokenAmount(1e18))
-	require.Equal(t, sh.TotalStake, abi.NewTokenAmount(2e18))
-	require.Equal(t, len(sh.Miners), 2)
-
-	// TODO: Add a test showing that delegated indeed accepts
-	// only a single miner, and that even if you add enough stake
-	// to become a miner you are not allowed to become a miner (this
-	// is not the case for PoW)
+	rt.SetCaller(notMiner, builtin.AccountActorCodeID)
+	rt.ExpectValidateCallerAny()
+	// Triggers a stake top-up in SCA
+	rt.ExpectSend(sca.ShardCoordActorAddr, sca.Methods.AddStake, nil, value, nil, exitcode.Ok)
+	rt.Call(h.ShardActor.Join, nil)
+	// Check that the subnet is instantiated but not active.
+	st = getState(rt)
+	// If we use delegated consensus we only accept one miner.
+	require.Equal(t, len(st.Miners), 2)
+	require.Equal(t, st.Status, actor.Active)
+	require.Equal(t, getStake(t, rt, notMiner), big.Mul(abi.NewTokenAmount(2), value))
+	totalStake = big.Add(totalStake, value)
+	require.Equal(t, st.TotalStake, totalStake)
 }
 
-func TestLeave(t *testing.T) {
+func TestLeaveAndKill(t *testing.T) {
 	h := newHarness(t)
-	builder := mock.NewBuilder(builtin.StoragePowerActorAddr).WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
-	rt := builder.Build(t)
-	h.constructAndVerify(rt)
-	owner := tutil.NewIDAddr(t, 101)
+	rt := getRuntime(t)
+	h.constructAndVerify(t, rt)
 	joiner := tutil.NewIDAddr(t, 102)
 	joiner2 := tutil.NewIDAddr(t, 103)
+	joiner3 := tutil.NewIDAddr(t, 104)
+	totalStake := abi.NewTokenAmount(0)
 
-	addParams := &actor.AddParams{
-		Name:       []byte("testShard"),
-		Consensus:  actor.PoW,
-		DelegMiner: owner,
-	}
-
-	t.Log("create new shard")
-	addValue := abi.NewTokenAmount(1e18)
-	rt.SetCaller(owner, builtin.AccountActorCodeID)
-	rt.SetReceived(addValue)
-	rt.SetBalance(addValue)
+	t.Log("first miner joins subnet")
+	value := abi.NewTokenAmount(1e18)
+	rt.SetCaller(joiner, builtin.AccountActorCodeID)
+	rt.SetReceived(value)
+	rt.SetBalance(value)
+	totalStake = big.Add(totalStake, value)
 	// Anyone can call
 	rt.ExpectValidateCallerAny()
-	// Call add function
-	ret := rt.Call(h.ShardActor.Add, addParams)
-	res, ok := ret.(*actor.AddShardReturn)
-	require.True(t, ok)
-	shid, err := actor.ShardID([]byte("testShard"))
-	require.NoError(t, err)
-	// Verify the return value is correct.
-	require.Equal(t, res.ID, shid)
-	// Check that shard is instantiated but not active.
-	sh, found := h.getShard(rt, shid)
-	require.True(h.t, found)
-	require.Equal(t, len(sh.Miners), 1)
-	require.Equal(t, sh.Status, actor.Active)
-	require.Equal(t, h.getStake(rt, sh, owner), addValue)
-	require.Equal(t, getState(rt).TotalShards, uint64(1))
+	rt.ExpectSend(sca.ShardCoordActorAddr, sca.Methods.Register, nil, totalStake, nil, exitcode.Ok)
+	ret := rt.Call(h.ShardActor.Join, nil)
+	assert.Nil(h.t, ret)
+	// Check that the subnet is instantiated but not active.
+	st := getState(rt)
+	require.Equal(t, len(st.Miners), 1)
+	require.Equal(t, st.Status, actor.Active)
+	require.Equal(t, getStake(t, rt, joiner), value)
+	require.Equal(t, st.TotalStake, totalStake)
 
-	t.Log("new miner join the shard")
-	joinParams := &actor.SelectParams{ID: shid.Bytes()}
-	joinValue := abi.NewTokenAmount(1e17)
-	rt.ExpectValidateCallerAny()
-	rt.SetReceived(joinValue)
-	rt.SetBalance(big.Add(joinValue, addValue))
-	rt.SetCaller(joiner, builtin.AccountActorCodeID)
-	rt.Call(h.ShardActor.Join, joinParams)
-	// Shard activated
-	sh, found = h.getShard(rt, shid)
-	require.True(h.t, found)
-	require.Equal(t, sh.Status, actor.Active)
-	require.Equal(t, h.getStake(rt, sh, joiner), joinValue)
-	require.Equal(t, len(sh.Miners), 1)
-
-	t.Log("new miner 2 join the shard")
-	joinValue2 := abi.NewTokenAmount(1e18)
-	rt.ExpectValidateCallerAny()
-	rt.SetReceived(joinValue2)
-	rt.SetBalance(big.Add(joinValue2, big.Add(joinValue, addValue)))
+	t.Log("second miner joins subnet")
+	value = abi.NewTokenAmount(1e18)
+	rt.SetReceived(value)
+	totalStake = big.Add(totalStake, value)
+	rt.SetBalance(value)
 	rt.SetCaller(joiner2, builtin.AccountActorCodeID)
-	rt.Call(h.ShardActor.Join, joinParams)
-	// Shard activated
-	sh, found = h.getShard(rt, shid)
-	require.True(h.t, found)
-	require.Equal(t, sh.Status, actor.Active)
-	require.Equal(t, h.getStake(rt, sh, joiner2), joinValue2)
-	require.Equal(t, len(sh.Miners), 2)
+	rt.ExpectValidateCallerAny()
+	rt.ExpectSend(sca.ShardCoordActorAddr, sca.Methods.AddStake, nil, value, nil, exitcode.Ok)
+	rt.Call(h.ShardActor.Join, nil)
+	// Check that we are active
+	st = getState(rt)
+	require.Equal(t, len(st.Miners), 2)
+	require.Equal(t, st.Status, actor.Active)
+	require.Equal(t, getStake(t, rt, joiner2), value)
+	require.Equal(t, st.TotalStake, totalStake)
+
+	t.Log("non-miner user joins subnet")
+	value = abi.NewTokenAmount(1e17)
+	rt.SetReceived(value)
+	totalStake = big.Add(totalStake, value)
+	rt.SetBalance(value)
+	rt.SetCaller(joiner3, builtin.AccountActorCodeID)
+	rt.ExpectValidateCallerAny()
+	rt.ExpectSend(sca.ShardCoordActorAddr, sca.Methods.AddStake, nil, value, nil, exitcode.Ok)
+	rt.Call(h.ShardActor.Join, nil)
+	// Check that we are active
+	st = getState(rt)
+	require.Equal(t, len(st.Miners), 2)
+	require.Equal(t, st.Status, actor.Active)
+	require.Equal(t, getStake(t, rt, joiner3), value)
+	require.Equal(t, st.TotalStake, totalStake)
 
 	t.Log("second joiner leaves the shard")
-	leaveParams := &actor.SelectParams{ID: shid.Bytes()}
 	rt.ExpectValidateCallerAny()
 	rt.SetCaller(joiner2, builtin.AccountActorCodeID)
-	rt.ExpectSend(joiner2, builtin.MethodSend, nil, big.Div(joinValue2, actor.LeavingFeeCoeff), nil, exitcode.Ok)
-	rt.Call(h.ShardActor.Leave, leaveParams)
-	sh, found = h.getShard(rt, shid)
-	require.True(h.t, found)
-	// The shard is still active
-	require.Equal(t, sh.Status, actor.Active)
-	// Not in stakes anymore.
-	_, found = h.getMinerState(rt, sh, joiner2)
-	require.False(h.t, found)
-	// Also removed from miners list.
-	require.Equal(t, len(sh.Miners), 1)
+	minerStake := getStake(t, rt, joiner2)
+	totalStake = big.Sub(totalStake, minerStake)
+	rt.SetBalance(minerStake)
+	rt.ExpectSend(sca.ShardCoordActorAddr, sca.Methods.ReleaseStake, &sca.FundParams{Value: minerStake}, big.Zero(), nil, exitcode.Ok)
+	rt.ExpectSend(joiner2, builtin.MethodSend, nil, big.Div(minerStake, actor.LeavingFeeCoeff), nil, exitcode.Ok)
+	rt.Call(h.ShardActor.Leave, nil)
+	st = getState(rt)
+	require.Equal(t, st.Status, actor.Active)
+	require.Equal(t, len(st.Miners), 1)
+	require.Equal(t, getStake(t, rt, joiner2), big.Zero())
+	require.Equal(t, st.TotalStake, totalStake)
 
-	t.Log("adder leaves the shard")
+	t.Log("subnet can't be killed if there are still miners")
 	rt.ExpectValidateCallerAny()
-	rt.SetCaller(owner, builtin.AccountActorCodeID)
-	rt.ExpectSend(owner, builtin.MethodSend, nil, big.Div(addValue, actor.LeavingFeeCoeff), nil, exitcode.Ok)
-	rt.Call(h.ShardActor.Leave, leaveParams)
-	sh, found = h.getShard(rt, shid)
-	require.True(h.t, found)
-	require.Equal(t, sh.Status, actor.Terminating)
-	// Not in stakes anymore.
-	_, found = h.getMinerState(rt, sh, owner)
-	require.False(h.t, found)
-	_, found = h.getMinerState(rt, sh, joiner)
-	require.True(h.t, found)
-	// Also removed from miners list.
-	require.Equal(t, len(sh.Miners), 0)
-
-	t.Log("calling twice to get stake twice")
-	rt.ExpectValidateCallerAny()
-	rt.SetCaller(owner, builtin.AccountActorCodeID)
-	rt.ExpectAbort(exitcode.ErrForbidden, func() {
-		rt.Call(h.ShardActor.Leave, leaveParams)
+	rt.SetCaller(joiner2, builtin.AccountActorCodeID)
+	rt.ExpectAbort(exitcode.ErrIllegalState, func() {
+		rt.Call(h.ShardActor.Kill, nil)
 	})
 
-	t.Log("joiner leaves the shard")
+	t.Log("first joiner inactivates the subnet")
 	rt.ExpectValidateCallerAny()
 	rt.SetCaller(joiner, builtin.AccountActorCodeID)
-	rt.ExpectSend(joiner, builtin.MethodSend, nil, big.Div(joinValue, actor.LeavingFeeCoeff), nil, exitcode.Ok)
-	rt.Call(h.ShardActor.Leave, leaveParams)
-	// The shard is completely removed
-	_, found = h.getShard(rt, shid)
-	require.False(h.t, found)
-	require.Equal(t, getState(rt).TotalShards, uint64(0))
+	minerStake = getStake(t, rt, joiner)
+	totalStake = big.Sub(totalStake, minerStake)
+	rt.SetBalance(minerStake)
+	rt.ExpectSend(sca.ShardCoordActorAddr, sca.Methods.ReleaseStake, &sca.FundParams{Value: minerStake}, big.Zero(), nil, exitcode.Ok)
+	rt.ExpectSend(joiner, builtin.MethodSend, nil, big.Div(minerStake, actor.LeavingFeeCoeff), nil, exitcode.Ok)
+	rt.Call(h.ShardActor.Leave, nil)
+	st = getState(rt)
+	require.Equal(t, st.Status, actor.Inactive)
+	require.Equal(t, len(st.Miners), 0)
+	require.Equal(t, getStake(t, rt, joiner), big.Zero())
+	require.Equal(t, st.TotalStake, totalStake)
+
+	t.Log("miner can't leave twice")
+	rt.ExpectValidateCallerAny()
+	rt.ExpectAbort(exitcode.ErrForbidden, func() {
+		rt.Call(h.ShardActor.Leave, nil)
+	})
+
+	t.Log("third kills the subnet, and takes its stake")
+	minerStake = getStake(t, rt, joiner3)
+	rt.SetCaller(joiner3, builtin.AccountActorCodeID)
+	rt.ExpectValidateCallerAny()
+	rt.SetBalance(minerStake)
+	rt.ExpectSend(sca.ShardCoordActorAddr, sca.Methods.Kill, nil, big.Zero(), nil, exitcode.Ok)
+	rt.Call(h.ShardActor.Kill, nil)
+	st = getState(rt)
+	require.Equal(t, st.Status, actor.Terminating)
+
+	t.Log("subnet can't be killed twice")
+	rt.ExpectValidateCallerAny()
+	rt.ExpectAbort(exitcode.ErrIllegalState, func() {
+		rt.Call(h.ShardActor.Kill, nil)
+	})
+
+	rt.ExpectValidateCallerAny()
+	totalStake = big.Sub(totalStake, minerStake)
+	rt.SetBalance(minerStake)
+	rt.ExpectSend(joiner3, builtin.MethodSend, nil, big.Div(minerStake, actor.LeavingFeeCoeff), nil, exitcode.Ok)
+	rt.Call(h.ShardActor.Leave, nil)
+	st = getState(rt)
+	require.Equal(t, st.Status, actor.Killed)
+	require.Equal(t, len(st.Miners), 0)
+	require.Equal(t, getStake(t, rt, joiner3), big.Zero())
+	require.Equal(t, st.TotalStake.Abs(), totalStake.Abs())
+
+	// TODO: Check that a miner can't leave twice and get their stake twice.
+	// TODO: Check killing states. Joiner 2 calls kill and then the other guy takes it stake.
+	/*
+
+		t.Log("adder leaves the shard")
+		rt.ExpectValidateCallerAny()
+		rt.SetCaller(owner, builtin.AccountActorCodeID)
+		rt.ExpectSend(owner, builtin.MethodSend, nil, big.Div(addValue, actor.LeavingFeeCoeff), nil, exitcode.Ok)
+		rt.Call(h.ShardActor.Leave, leaveParams)
+		sh, found = h.getShard(rt, shid)
+		require.True(h.t, found)
+		require.Equal(t, sh.Status, actor.Terminating)
+		// Not in stakes anymore.
+		_, found = h.getMinerState(rt, sh, owner)
+		require.False(h.t, found)
+		_, found = h.getMinerState(rt, sh, joiner)
+		require.True(h.t, found)
+		// Also removed from miners list.
+		require.Equal(t, len(sh.Miners), 0)
+
+		t.Log("calling twice to get stake twice")
+		rt.ExpectValidateCallerAny()
+		rt.SetCaller(owner, builtin.AccountActorCodeID)
+		rt.ExpectAbort(exitcode.ErrForbidden, func() {
+			rt.Call(h.ShardActor.Leave, leaveParams)
+		})
+
+		t.Log("joiner leaves the shard")
+		rt.ExpectValidateCallerAny()
+		rt.SetCaller(joiner, builtin.AccountActorCodeID)
+		rt.ExpectSend(joiner, builtin.MethodSend, nil, big.Div(joinValue, actor.LeavingFeeCoeff), nil, exitcode.Ok)
+		rt.Call(h.ShardActor.Leave, leaveParams)
+		// The shard is completely removed
+		_, found = h.getShard(rt, shid)
+		require.False(h.t, found)
+		require.Equal(t, getState(rt).TotalShards, uint64(0))
+	*/
 }
 
 type shActorHarness struct {
@@ -336,20 +273,33 @@ func newHarness(t *testing.T) *shActorHarness {
 	}
 }
 
-func (h *shActorHarness) constructAndVerify(rt *mock.Runtime) {
-	rt.ExpectValidateCallerAddr(builtin.SystemActorAddr)
-	ret := rt.Call(h.ShardActor.Constructor, &initactor.ConstructorParams{NetworkName: "root"})
+func (h *shActorHarness) constructAndVerify(t *testing.T, rt *mock.Runtime) {
+	rt.ExpectValidateCallerType(builtin.InitActorCodeID)
+	ret := rt.Call(h.ShardActor.Constructor,
+		&actor.ConstructParams{
+			NetworkName:   "root",
+			Name:          "myTestSubnet",
+			Consensus:     actor.PoW,
+			MinMinerStake: actor.MinMinerStake,
+			DelegMiner:    tutil.NewIDAddr(t, 101),
+		})
 	assert.Nil(h.t, ret)
 	rt.Verify()
 
 	var st actor.ShardState
 
 	rt.GetState(&st)
-	assert.Equal(h.t, actor.MinShardStake, st.MinStake)
-	shid, err := actor.ShardID([]byte("root"))
+	parentcid, err := naming.ShardCid("root")
 	require.NoError(h.t, err)
-	assert.Equal(h.t, st.Network, shid)
-	verifyEmptyMap(h.t, rt, st.Shards)
+	assert.Equal(h.t, st.ParentID, "root")
+	assert.Equal(h.t, st.ParentCid, parentcid)
+	assert.Equal(h.t, st.Consensus, actor.PoW)
+	assert.Equal(h.t, st.MinMinerStake, actor.MinMinerStake)
+	assert.Equal(h.t, st.Status, actor.Instantiated)
+	// Verify that the genesis for the subnet has been generated.
+	// TODO: Consider making some test verifications over genesis.
+	assert.NotEqual(h.t, len(st.Genesis), 0)
+	verifyEmptyMap(h.t, rt, st.Stake)
 }
 
 func verifyEmptyMap(t testing.TB, rt *mock.Runtime, cid cid.Cid) {
@@ -360,37 +310,24 @@ func verifyEmptyMap(t testing.TB, rt *mock.Runtime, cid cid.Cid) {
 	assert.Empty(t, keys)
 }
 
+func getRuntime(t *testing.T) *mock.Runtime {
+	shardActorAddr := tutil.NewIDAddr(t, 100)
+	builder := mock.NewBuilder(shardActorAddr).WithCaller(builtin.InitActorAddr, builtin.InitActorCodeID)
+	return builder.Build(t)
+}
+
 func getState(rt *mock.Runtime) *actor.ShardState {
 	var st actor.ShardState
 	rt.GetState(&st)
 	return &st
 }
 
-func (h *shActorHarness) getShard(rt *mock.Runtime, id cid.Cid) (*actor.Shard, bool) {
+func getStake(t *testing.T, rt *mock.Runtime, addr address.Address) abi.TokenAmount {
 	var st actor.ShardState
 	rt.GetState(&st)
-
-	shards, err := adt.AsMap(adt.AsStore(rt), st.Shards, builtin.DefaultHamtBitwidth)
-	require.NoError(h.t, err)
-	var out actor.Shard
-	found, err := shards.Get(abi.CidKey(id), &out)
-	require.NoError(h.t, err)
-
-	return &out, found
-}
-
-func (h *shActorHarness) getStake(rt *mock.Runtime, sh *actor.Shard, addr address.Address) abi.TokenAmount {
-	state, found := h.getMinerState(rt, sh, addr)
-	require.True(h.t, found)
-	return state.InitialStake
-}
-
-func (h *shActorHarness) getMinerState(rt *mock.Runtime, sh *actor.Shard, addr address.Address) (*actor.MinerState, bool) {
-	stakes, err := adt.AsMap(adt.AsStore(rt), sh.Stake, builtin.DefaultHamtBitwidth)
-	require.NoError(h.t, err)
-	var out actor.MinerState
-	found, err := stakes.Get(abi.AddrKey(addr), &out)
-	require.NoError(h.t, err)
-
-	return &out, found
+	stakes, err := adt.AsBalanceTable(adt.AsStore(rt), st.Stake)
+	require.NoError(t, err)
+	out, err := stakes.Get(addr)
+	require.NoError(t, err)
+	return out
 }

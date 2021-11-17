@@ -9,6 +9,7 @@ import (
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
 	initactor "github.com/filecoin-project/lotus/chain/consensus/actors/init"
 	"github.com/filecoin-project/lotus/chain/sharding/actors/naming"
+	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v3/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v3/actors/util/adt"
 	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
@@ -26,6 +27,14 @@ var ShardCoordActorAddr = func() address.Address {
 	}
 	return a
 }()
+
+var Methods = struct {
+	Constructor  abi.MethodNum
+	Register     abi.MethodNum
+	AddStake     abi.MethodNum
+	ReleaseStake abi.MethodNum
+	Kill         abi.MethodNum
+}{builtin0.MethodConstructor, 2, 3, 4, 5}
 
 type FundParams struct {
 	Value abi.TokenAmount

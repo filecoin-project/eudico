@@ -1,7 +1,7 @@
 package main
 
 import (
-	actor "github.com/filecoin-project/lotus/chain/consensus/actors/shard"
+	actor "github.com/filecoin-project/lotus/chain/sharding/actors/shard"
 
 	gen "github.com/whyrusleeping/cbor-gen"
 )
@@ -9,11 +9,7 @@ import (
 func main() {
 	if err := gen.WriteTupleEncodersToFile("./cbor_gen.go", "shard",
 		actor.ShardState{},
-		actor.Shard{},
-		actor.MinerState{},
-		actor.AddParams{},
-		actor.SelectParams{},
-		actor.AddShardReturn{},
+		actor.ConstructParams{},
 	); err != nil {
 		panic(err)
 	}
