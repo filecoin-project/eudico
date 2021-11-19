@@ -120,6 +120,8 @@ const (
 
 	SetApiEndpointKey
 
+	StartShardingSubKey
+
 	_nInvokes // keep this last
 )
 

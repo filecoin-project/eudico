@@ -277,7 +277,7 @@ func (h *shActorHarness) constructAndVerify(t *testing.T, rt *mock.Runtime) {
 	rt.ExpectValidateCallerType(builtin.InitActorCodeID)
 	ret := rt.Call(h.ShardActor.Constructor,
 		&actor.ConstructParams{
-			NetworkName:   "root",
+			NetworkName:   naming.Root.String(),
 			Name:          "myTestSubnet",
 			Consensus:     actor.PoW,
 			MinMinerStake: actor.MinMinerStake,
@@ -289,9 +289,9 @@ func (h *shActorHarness) constructAndVerify(t *testing.T, rt *mock.Runtime) {
 	var st actor.ShardState
 
 	rt.GetState(&st)
-	parentcid, err := naming.ShardCid("root")
+	parentcid, err := naming.Root.Cid()
 	require.NoError(h.t, err)
-	assert.Equal(h.t, st.ParentID, "root")
+	assert.Equal(h.t, st.ParentID, naming.Root)
 	assert.Equal(h.t, st.ParentCid, parentcid)
 	assert.Equal(h.t, st.Consensus, actor.PoW)
 	assert.Equal(h.t, st.MinMinerStake, actor.MinMinerStake)

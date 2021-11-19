@@ -11,6 +11,7 @@ import (
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/filecoin-project/lotus/chain/sharding/actors/naming"
 	"github.com/filecoin-project/lotus/chain/sharding/actors/sca"
+	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
@@ -25,6 +26,13 @@ var _ runtime.VMActor = ShardActor{}
 var log = logging.Logger("shard-actor")
 
 type ShardActor struct{}
+
+var Methods = struct {
+	Constructor abi.MethodNum
+	Join        abi.MethodNum
+	Leave       abi.MethodNum
+	Kill        abi.MethodNum
+}{builtin0.MethodConstructor, 2, 3, 4}
 
 func (a ShardActor) Exports() []interface{} {
 	return []interface{}{
@@ -89,7 +97,7 @@ func (st *ShardState) initGenesis(rt runtime.Runtime, params *ConstructParams) {
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed parsin rem addr")
 
 	// Getting actor ID from recceiver.
-	netName := naming.GenShardID(params.NetworkName, rt.Receiver())
+	netName := naming.NewSubnetID(naming.SubnetID(params.NetworkName), rt.Receiver())
 	err = WriteGenesis(netName, st.Consensus, params.DelegMiner, vreg, rem, rt.ValueReceived().Uint64(), buf)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed genesis")
 	st.Genesis = buf.Bytes()

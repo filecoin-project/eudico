@@ -9,6 +9,7 @@ import (
 	"sort"
 
 	address "github.com/filecoin-project/go-address"
+	naming "github.com/filecoin-project/lotus/chain/sharding/actors/naming"
 	cid "github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	xerrors "golang.org/x/xerrors"
@@ -50,7 +51,7 @@ func (t *ShardState) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("failed to write cid field t.ParentCid: %w", err)
 	}
 
-	// t.ParentID (string) (string)
+	// t.ParentID (naming.SubnetID) (string)
 	if len(t.ParentID) > cbg.MaxLength {
 		return xerrors.Errorf("Value in field t.ParentID was too long")
 	}
@@ -159,7 +160,7 @@ func (t *ShardState) UnmarshalCBOR(r io.Reader) error {
 		t.ParentCid = c
 
 	}
-	// t.ParentID (string) (string)
+	// t.ParentID (naming.SubnetID) (string)
 
 	{
 		sval, err := cbg.ReadStringBuf(br, scratch)
@@ -167,7 +168,7 @@ func (t *ShardState) UnmarshalCBOR(r io.Reader) error {
 			return err
 		}
 
-		t.ParentID = string(sval)
+		t.ParentID = naming.SubnetID(sval)
 	}
 	// t.Consensus (shard.ConsensusType) (uint64)
 

@@ -1,18 +1,24 @@
 package sharding
 
 import (
+	"bytes"
 	"context"
-	"reflect"
+	"fmt"
 	"sync"
 
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/blockstore"
+	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain"
+	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/beacon"
-	shardactor "github.com/filecoin-project/lotus/chain/consensus/actors/shard"
+	act "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/messagepool"
+	"github.com/filecoin-project/lotus/chain/sharding/actors/naming"
+	"github.com/filecoin-project/lotus/chain/sharding/actors/shard"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -20,10 +26,18 @@ import (
 	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
 	"github.com/filecoin-project/lotus/journal"
 	"github.com/filecoin-project/lotus/lib/peermgr"
-	"github.com/filecoin-project/lotus/node/impl"
+	"github.com/filecoin-project/lotus/node/impl/client"
+	"github.com/filecoin-project/lotus/node/impl/common"
+	"github.com/filecoin-project/lotus/node/impl/full"
+	"github.com/filecoin-project/lotus/node/impl/market"
+	"github.com/filecoin-project/lotus/node/impl/net"
+	"github.com/filecoin-project/lotus/node/impl/paych"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/modules/helpers"
+	"github.com/filecoin-project/specs-actors/actors/builtin"
+	init_ "github.com/filecoin-project/specs-actors/actors/builtin/init"
 	"github.com/ipfs/go-blockservice"
+	"github.com/ipfs/go-cid"
 	ds "github.com/ipfs/go-datastore"
 	nsds "github.com/ipfs/go-datastore/namespace"
 	offline "github.com/ipfs/go-ipfs-exchange-offline"
@@ -33,6 +47,7 @@ import (
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"go.uber.org/fx"
+	"golang.org/x/xerrors"
 )
 
 var log = logging.Logger("sharding")
@@ -42,7 +57,8 @@ type ShardingSub struct {
 	// Listener for events of the root chain.
 	events *events.Events
 	// This is the API for the fullNode in the root chain.
-	api  *impl.FullNodeAPI
+	// api  *impl.FullNodeAPI
+	api  *wrappedAPI
 	host host.Host
 
 	pubsub *pubsub.PubSub
@@ -56,16 +72,37 @@ type ShardingSub struct {
 	pmgr         peermgr.MaybePeerMgr
 	bootstrapper dtypes.Bootstrapper
 
-	lk     sync.Mutex
-	shards map[string]*Shard
+	lk     sync.RWMutex
+	shards map[naming.SubnetID]*Shard
 
 	j journal.Journal
+}
+
+type wrappedAPI struct {
+	common.CommonAPI
+	net.NetAPI
+	full.ChainAPI
+	client.API
+	full.MpoolAPI
+	full.GasAPI
+	market.MarketAPI
+	paych.PaychAPI
+	full.StateAPI
+	full.MsigAPI
+	full.WalletAPI
+	full.SyncAPI
+	full.BeaconAPI
+
+	DS          dtypes.MetadataDS
+	NetworkName dtypes.NetworkName
+
+	*ShardingSub
 }
 
 func NewShardSub(
 	mctx helpers.MetricsCtx,
 	lc fx.Lifecycle,
-	api impl.FullNodeAPI,
+	//api impl.FullNodeAPI,
 	self peer.ID,
 	pubsub *pubsub.PubSub,
 	ds dtypes.MetadataDS,
@@ -77,18 +114,25 @@ func NewShardSub(
 	verifier ffiwrapper.Verifier,
 	pmgr peermgr.MaybePeerMgr,
 	bootstrapper dtypes.Bootstrapper,
+	commonapi common.CommonAPI,
+	netapi net.NetAPI,
+	chainapi full.ChainAPI,
+	clientapi client.API,
+	mpoolapi full.MpoolAPI,
+	gasapi full.GasAPI,
+	marketapi market.MarketAPI,
+	paychapi paych.PaychAPI,
+	stateapi full.StateAPI,
+	msigapi full.MsigAPI,
+	walletapi full.WalletAPI,
+	netName dtypes.NetworkName,
+	syncapi full.SyncAPI,
+	beaconapi full.BeaconAPI,
 	j journal.Journal) (*ShardingSub, error) {
 
+	var err error
 	ctx := helpers.LifecycleCtx(mctx, lc)
-	// Starting shardSub to listen to events in the root chain.
-	e, err := events.NewEvents(ctx, &api)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ShardingSub{
-		events:       e,
-		api:          &api,
+	s := &ShardingSub{
 		pubsub:       pubsub,
 		host:         host,
 		ds:           ds,
@@ -99,11 +143,40 @@ func NewShardSub(
 		nodeServer:   nodeServer,
 		bootstrapper: bootstrapper,
 		verifier:     verifier,
-		shards:       make(map[string]*Shard),
-	}, nil
+		shards:       make(map[naming.SubnetID]*Shard),
+	}
+
+	s.api = &wrappedAPI{
+		commonapi,
+		netapi,
+		chainapi,
+		clientapi,
+		mpoolapi,
+		gasapi,
+		marketapi,
+		paychapi,
+		stateapi,
+		msigapi,
+		walletapi,
+		syncapi,
+		beaconapi,
+		ds,
+		netName,
+		s,
+	}
+
+	// Starting shardSub to listen to events in the root chain.
+	s.events, err = events.NewEvents(ctx, s.api)
+	if err != nil {
+		return nil, err
+	}
+
+	return s, nil
 }
 
-func (s *ShardingSub) newShard(ctx context.Context, id string, parentAPI *impl.FullNodeAPI, info diffInfo) error {
+func (s *ShardingSub) startShard(ctx context.Context, id naming.SubnetID,
+	parentAPI *wrappedAPI, consensus shard.ConsensusType,
+	genesis []byte) error {
 	var err error
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -113,30 +186,29 @@ func (s *ShardingSub) newShard(ctx context.Context, id string, parentAPI *impl.F
 		ctxCancel:  cancel,
 		ID:         id,
 		host:       s.host,
-		netName:    "shard/" + id,
 		pubsub:     s.pubsub,
 		nodeServer: s.nodeServer,
 		pmgr:       s.pmgr,
-		consType:   info.consensus,
+		consType:   consensus,
 	}
 
 	// Add shard to registry
 	s.shards[id] = sh
 
 	// Wrap the ds with prefix
-	sh.ds = nsds.Wrap(s.ds, ds.NewKey(sh.netName))
+	sh.ds = nsds.Wrap(s.ds, ds.NewKey(sh.ID.String()))
 	// TODO: We should not use the metadata datastore here. We need
 	// to create the corresponding blockstores. Deferring once we
 	// figure out if it works.
 	sh.bs = blockstore.FromDatastore(s.ds)
 
 	// Select the right TipSetExecutor for the consensus algorithms chosen.
-	tsExec, err := tipSetExecutor(info.consensus)
+	tsExec, err := tipSetExecutor(consensus)
 	if err != nil {
 		log.Errorw("Error getting TipSetExecutor for consensus", "shardID", id, "err", err)
 		return err
 	}
-	weight, err := weight(info.consensus)
+	weight, err := weight(consensus)
 	if err != nil {
 		log.Errorw("Error getting weight for consensus", "shardID", id, "err", err)
 		return err
@@ -151,17 +223,17 @@ func (s *ShardingSub) newShard(ctx context.Context, id string, parentAPI *impl.F
 	// Start state manager.
 	sh.sm.Start(ctx)
 
-	gen, err := sh.LoadGenesis(info.genesis)
+	gen, err := sh.LoadGenesis(genesis)
 	if err != nil {
 		log.Errorw("Error loading genesis bootstrap for shard", "shardID", id, "err", err)
 		return err
 	}
-	sh.cons, err = newConsensus(info.consensus, sh.sm, s.beacon, s.verifier, gen)
+	sh.cons, err = newConsensus(consensus, sh.sm, s.beacon, s.verifier, gen)
 	if err != nil {
 		log.Errorw("Error creating consensus", "shardID", id, "err", err)
 		return err
 	}
-	log.Infow("Genesis and consensus for shard created", "shardID", id, "consensus", info.consensus)
+	log.Infow("Genesis and consensus for shard created", "shardID", id, "consensus", consensus)
 
 	// We configure a new handler for the shard syncing exchange protocol.
 	sh.exchangeServer()
@@ -182,7 +254,7 @@ func (s *ShardingSub) newShard(ctx context.Context, id string, parentAPI *impl.F
 	bserv := blockservice.New(sh.bs, offline.Exchange(sh.bs))
 	prov := messagepool.NewProvider(sh.sm, s.pubsub)
 
-	sh.mpool, err = messagepool.New(prov, sh.ds, s.us, dtypes.NetworkName(sh.netName), s.j)
+	sh.mpool, err = messagepool.New(prov, sh.ds, s.us, dtypes.NetworkName(sh.ID.String()), s.j)
 	if err != nil {
 		log.Errorw("Error creating message pool for shard", "shardID", id, "err", err)
 		return err
@@ -220,10 +292,13 @@ func (s *ShardingSub) newShard(ctx context.Context, id string, parentAPI *impl.F
 	go s.listenShardEvents(ctx, sh)
 	log.Infow("Listening to shard events in shard", "shardID", id)
 
-	// If is miner start mining in shard.
-	if info.isMiner {
-		sh.mine(ctx)
-	}
+	/* TODO: Determine when to start mining in a chain. This may be an
+	independent command
+		// If is miner start mining in shard.
+		if info.isMiner {
+			sh.mine(ctx)
+		}
+	*/
 
 	log.Infow("Successfully spawned shard", "shardID", id)
 
@@ -233,7 +308,7 @@ func (s *ShardingSub) newShard(ctx context.Context, id string, parentAPI *impl.F
 func (s *ShardingSub) listenShardEvents(ctx context.Context, sh *Shard) {
 	api := s.api
 	evs := s.events
-	id := "root"
+	id := naming.Root
 
 	// If shard is nil, we are listening from the root chain.
 	if sh != nil {
@@ -266,47 +341,50 @@ func (s *ShardingSub) listenShardEvents(ctx context.Context, sh *Shard) {
 	}
 
 	match := func(oldTs, newTs *types.TipSet) (bool, events.StateChange, error) {
-		oldAct, err := api.StateGetActor(ctx, shardactor.ShardActorAddr, oldTs.Key())
-		if err != nil {
-			return false, nil, err
-		}
-		newAct, err := api.StateGetActor(ctx, shardactor.ShardActorAddr, newTs.Key())
-		if err != nil {
-			return false, nil, err
-		}
+		/*
+				oldAct, err := api.StateGetActor(ctx, shardactor.ShardActorAddr, oldTs.Key())
+				if err != nil {
+					return false, nil, err
+				}
+				newAct, err := api.StateGetActor(ctx, shardactor.ShardActorAddr, newTs.Key())
+				if err != nil {
+					return false, nil, err
+				}
 
-		var oldSt, newSt shardactor.ShardState
+			var oldSt, newSt shardactor.ShardState
 
-		bs := blockstore.NewAPIBlockstore(api)
-		cst := cbor.NewCborStore(bs)
-		if err := cst.Get(ctx, oldAct.Head, &oldSt); err != nil {
-			return false, nil, err
-		}
-		if err := cst.Get(ctx, newAct.Head, &newSt); err != nil {
-			return false, nil, err
-		}
+			bs := blockstore.NewAPIBlockstore(api)
+			cst := cbor.NewCborStore(bs)
+			if err := cst.Get(ctx, oldAct.Head, &oldSt); err != nil {
+				return false, nil, err
+			}
+			if err := cst.Get(ctx, newAct.Head, &newSt); err != nil {
+				return false, nil, err
+			}
 
-		// If no changes in the state return false.
-		if reflect.DeepEqual(newSt, oldSt) {
-			return false, nil, nil
-		}
+			// If no changes in the state return false.
+			if reflect.DeepEqual(newSt, oldSt) {
+				return false, nil, nil
+			}
 
-		outDiff := make(map[string]diffInfo)
-		// Start running state checks to build diff.
-		// Check first if there are new shards.
-		if err := s.checkNewShard(ctx, outDiff, cst, oldSt, newSt); err != nil {
-			log.Errorw("error in checkNewShard", "err", err)
-			return false, nil, err
-		}
-		// Check if state in existing shards has changed.
-		if err := s.checkShardChange(ctx, outDiff, cst, oldSt, newSt); err != nil {
-			log.Errorw("error in checkShardChange", "err", err)
-			return false, nil, err
-		}
+			/*
+				outDiff := make(map[string]diffInfo)
+				// Start running state checks to build diff.
+				// Check first if there are new shards.
+				if err := s.checkNewShard(ctx, outDiff, cst, oldSt, newSt); err != nil {
+					log.Errorw("error in checkNewShard", "err", err)
+					return false, nil, err
+				}
+				// Check if state in existing shards has changed.
+				if err := s.checkShardChange(ctx, outDiff, cst, oldSt, newSt); err != nil {
+					log.Errorw("error in checkShardChange", "err", err)
+					return false, nil, err
+				}
 
-		if len(outDiff) > 0 {
-			return true, outDiff, nil
-		}
+				if len(outDiff) > 0 {
+					return true, outDiff, nil
+				}
+		*/
 
 		return false, nil, nil
 
@@ -318,50 +396,62 @@ func (s *ShardingSub) listenShardEvents(ctx context.Context, sh *Shard) {
 	}
 }
 
-func (s *ShardingSub) triggerChange(ctx context.Context, api *impl.FullNodeAPI, shardMap map[string]diffInfo) (more bool, err error) {
-	s.lk.Lock()
-	defer s.lk.Unlock()
-	// For each new shard detected
-	for k, diff := range shardMap {
-		// If the shard has not been removed.
-		if !diff.isRm {
-			log.Infow("Change event triggered for shard", "shardID", k)
-			_, ok := s.shards[k]
-			// If we are not already subscribed to the shard.
-			if !ok {
-				// Create shard with id from parentAPI
-				err := s.newShard(ctx, k, api, diff)
-				if err != nil {
-					log.Errorw("Error creating new shard", "shardID", k, "err", err)
-					return true, err
+func (s *ShardingSub) triggerChange(ctx context.Context, api *wrappedAPI, shardMap map[string]diffInfo) (more bool, err error) {
+	/*
+		s.lk.Lock()
+		defer s.lk.Unlock()
+		// For each new shard detected
+		for k, diff := range shardMap {
+			// If the shard has not been removed.
+			if !diff.isRm {
+				log.Infow("Change event triggered for shard", "shardID", k)
+				_, ok := s.shards[k]
+				// If we are not already subscribed to the shard.
+				if !ok {
+					// Create shard with id from parentAPI
+					err := s.startShard(ctx, k, api, diff)
+					if err != nil {
+						log.Errorw("Error creating new shard", "shardID", k, "err", err)
+						return true, err
+					}
+				} else {
+					// If diff says we can start mining and we are not mining
+					if mining := s.shards[k].isMining(); !mining && shardMap[k].isMiner {
+						s.shards[k].mine(ctx)
+					}
+					// TODO: We currently don't support taking part of the stake
+					// from the shard, if we eventually do so, we'll also need
+					// to check if we've been removed from the list of miners
+					// in which case we'll need to stop mining here.
 				}
 			} else {
-				// If diff says we can start mining and we are not mining
-				if mining := s.shards[k].isMining(); !mining && shardMap[k].isMiner {
-					s.shards[k].mine(ctx)
+				log.Infow("Leave event triggered for shard", "shardID", k)
+				// Stop all processes for shard.
+				err := s.shards[k].Close(ctx)
+				if err != nil {
+					log.Errorw("error closing shard", "shardID", k, "err", err)
+					return true, err
 				}
-				// TODO: We currently don't support taking part of the stake
-				// from the shard, if we eventually do so, we'll also need
-				// to check if we've been removed from the list of miners
-				// in which case we'll need to stop mining here.
+				// Remove from shard registry.
+				delete(s.shards, k)
+				return false, nil
 			}
-		} else {
-			log.Infow("Leave event triggered for shard", "shardID", k)
-			// Stop all processes for shard.
-			err := s.shards[k].Close(ctx)
-			if err != nil {
-				log.Errorw("error closing shard", "shardID", k, "err", err)
-				return true, err
-			}
-			// Remove from shard registry.
-			delete(s.shards, k)
-			return false, nil
 		}
-	}
+	*/
 	return true, nil
 }
 func (s *ShardingSub) Start(ctx context.Context) {
 	s.listenShardEvents(ctx, nil)
+}
+
+func (s *ShardingSub) Close(ctx context.Context) error {
+	for _, sh := range s.shards {
+		err := sh.Close(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func BuildShardingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, s *ShardingSub) {
@@ -372,14 +462,151 @@ func BuildShardingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, s *ShardingSub) 
 		OnStop: func(ctx context.Context) error {
 			// NOTE: Closing sharding sub here. Whatever the hell that means...
 			// It may be worth revisiting this.
-			for _, sh := range s.shards {
-				err := sh.Close(ctx)
-				if err != nil {
-					return err
-				}
-			}
-			return nil
+			return s.Close(ctx)
 		},
 	})
 
+}
+
+func (s *ShardingSub) AddShard(
+	ctx context.Context, wallet address.Address,
+	parent naming.SubnetID, name string,
+	consensus uint64, minerStake abi.TokenAmount,
+	delegminer address.Address) (address.Address, error) {
+
+	// Get the api for the parent network hosting the shard actor
+	// for the subnet.
+	parentAPI := s.subnetAPI(parent)
+	if parentAPI == nil {
+
+		return address.Undef, xerrors.Errorf("not syncing with parent network")
+	}
+	// Populate constructor parameters for subnet actor
+	addp := &shard.ConstructParams{
+		NetworkName:   string(s.api.NetName),
+		MinMinerStake: minerStake,
+		Name:          name,
+		Consensus:     shard.ConsensusType(consensus),
+		DelegMiner:    delegminer,
+	}
+
+	seraddp, err := actors.SerializeParams(addp)
+	if err != nil {
+		return address.Undef, err
+	}
+
+	params := &init_.ExecParams{
+		CodeCID:           act.ShardActorCodeID,
+		ConstructorParams: seraddp,
+	}
+	serparams, err := actors.SerializeParams(params)
+	if err != nil {
+		return address.Undef, xerrors.Errorf("failed serializing init actor params: %s", err)
+	}
+
+	smsg, aerr := parentAPI.MpoolPushMessage(ctx, &types.Message{
+		To:     builtin.InitActorAddr,
+		From:   wallet,
+		Value:  abi.NewTokenAmount(0),
+		Method: builtin.MethodsInit.Exec,
+		Params: serparams,
+	}, nil)
+	if aerr != nil {
+		return address.Undef, aerr
+	}
+
+	msg := smsg.Cid()
+	mw, aerr := parentAPI.StateWaitMsg(ctx, msg, build.MessageConfidence, api.LookbackNoLimit, true)
+	if aerr != nil {
+		return address.Undef, aerr
+	}
+
+	fmt.Printf("Return: %x\n", mw.Receipt.Return)
+	r := &init_.ExecReturn{}
+	if err := r.UnmarshalCBOR(bytes.NewReader(mw.Receipt.Return)); err != nil {
+		return address.Undef, err
+	}
+	return r.IDAddress, nil
+}
+
+func (s *ShardingSub) subnetAPI(n naming.SubnetID) *wrappedAPI {
+	if n.String() == string(s.api.NetName) {
+		return s.api
+	}
+	sh, ok := s.shards[n]
+	if !ok {
+		return nil
+	}
+	return sh.api
+}
+
+func (s *ShardingSub) JoinShard(
+	ctx context.Context, wallet address.Address,
+	value abi.TokenAmount,
+	id naming.SubnetID) (cid.Cid, error) {
+
+	// TODO: Think a bit deeper the locking strategy for shards.
+	s.lk.Lock()
+	defer s.lk.Unlock()
+
+	// Get actor from subnet ID
+	shardActor, err := id.Actor()
+	if err != nil {
+		return cid.Undef, err
+	}
+
+	// Get the api for the parent network hosting the shard actor
+	// for the subnet.
+	parentAPI := s.subnetAPI(id.Parent())
+	if parentAPI == nil {
+		return cid.Undef, xerrors.Errorf("not syncing with parent network")
+	}
+
+	// Get the parent and the actor to know hwere to send the message.
+	// Not everything needes to be sent to the root.
+	smsg, aerr := parentAPI.MpoolPushMessage(ctx, &types.Message{
+		To:     shardActor,
+		From:   wallet,
+		Value:  value,
+		Method: shard.Methods.Join,
+		Params: nil,
+	}, nil)
+	if aerr != nil {
+		return cid.Undef, aerr
+	}
+
+	msg := smsg.Cid()
+
+	// Wait state message.
+	_, aerr = parentAPI.StateWaitMsg(ctx, msg, build.MessageConfidence, api.LookbackNoLimit, true)
+	if aerr != nil {
+		return cid.Undef, aerr
+	}
+
+	// See if we are already syncing with that chain. If this
+	// is the case we don't have to do much after the stake has been added.
+	if s.subnetAPI(id) != nil {
+		return smsg.Cid(), nil
+	}
+
+	// If not we need to initialize the subnet in our client to start syncing.
+	// Get genesis from actor state.
+	act, err := parentAPI.StateGetActor(ctx, shardActor, types.EmptyTSK)
+	if err != nil {
+		return cid.Undef, err
+	}
+
+	var st shard.ShardState
+	bs := blockstore.NewAPIBlockstore(parentAPI)
+	cst := cbor.NewCborStore(bs)
+	if err := cst.Get(ctx, act.Head, &st); err != nil {
+		return cid.Undef, err
+	}
+
+	err = s.startShard(ctx, id, parentAPI, st.Consensus, st.Genesis)
+
+	// Get genesis from state.
+	// See if I am in the list of miners.
+
+	return smsg.Cid(), nil
 }

@@ -1,17 +1,7 @@
 package sharding
 
 import (
-	"context"
-	"reflect"
-
-	"github.com/filecoin-project/go-address"
-	shardactor "github.com/filecoin-project/lotus/chain/consensus/actors/shard"
-	"github.com/filecoin-project/lotus/chain/types"
-	builtin "github.com/filecoin-project/specs-actors/v6/actors/builtin"
-	adt "github.com/filecoin-project/specs-actors/v6/actors/util/adt"
-	"github.com/ipfs/go-cid"
-	cbor "github.com/ipfs/go-ipld-cbor"
-	"golang.org/x/xerrors"
+	shardactor "github.com/filecoin-project/lotus/chain/sharding/actors/shard"
 )
 
 // Info included in diff structure.
@@ -22,10 +12,41 @@ type diffInfo struct {
 	isRm      bool
 }
 
+/*
 // Checks if there's a new shard and if we should start listening to it.
 func (s *ShardingSub) checkNewShard(ctx context.Context, outDiff map[string]diffInfo, cst *cbor.BasicIpldStore, oldSt, newSt shardactor.ShardState) error {
-	if oldSt.TotalShards < newSt.TotalShards {
-		log.Infow("New shard event detected")
+		if oldSt.TotalShards < newSt.TotalShards {
+			log.Infow("New shard event detected")
+			// Get shard maps
+			newM, err := shards(adt.WrapStore(ctx, cst), newSt)
+			if err != nil {
+				return err
+			}
+			oldM, err := shards(adt.WrapStore(ctx, cst), oldSt)
+			if err != nil {
+				return err
+			}
+
+			// Get the id of new shards in a map.
+			diff, err := newShards(oldM, newM)
+			if err != nil {
+				return err
+			}
+
+			// For each shard check if we should join
+			for k := range diff {
+				err := s.diffShards(ctx, outDiff, k, cst, oldSt, newSt)
+				if err != nil {
+					log.Errorf("error checking if I should join new shard: %s", err)
+					return err
+				}
+			}
+		}
+	return nil
+}
+
+// Checks if there are new joiners or miners.
+func (s *ShardingSub) checkShardChange(ctx context.Context, outDiff map[string]diffInfo, cst *cbor.BasicIpldStore, oldSt, newSt shardactor.ShardState) error {
 		// Get shard maps
 		newM, err := shards(adt.WrapStore(ctx, cst), newSt)
 		if err != nil {
@@ -35,87 +56,57 @@ func (s *ShardingSub) checkNewShard(ctx context.Context, outDiff map[string]diff
 		if err != nil {
 			return err
 		}
-
-		// Get the id of new shards in a map.
-		diff, err := newShards(oldM, newM)
+		chSh, err := changedShards(oldM, newM)
 		if err != nil {
 			return err
 		}
 
-		// For each shard check if we should join
-		for k := range diff {
-			err := s.diffShards(ctx, outDiff, k, cst, oldSt, newSt)
-			if err != nil {
-				log.Errorf("error checking if I should join new shard: %s", err)
-				return err
+		// If any shard has changed, or a shard has been removed.
+		if len(chSh) > 0 || oldSt.TotalShards > newSt.TotalShards {
+			log.Infow("Shard change event detected")
+			left := map[cid.Cid]struct{}{}
+
+			// If the number of shards is reduced.
+			// Get the id of the shards that have left.
+			// We invert the order of states because
+			// we want to check if a shard left.
+			if oldSt.TotalShards > newSt.TotalShards {
+				left, err = newShards(newM, oldM)
+				if err != nil {
+					return err
+				}
 			}
-		}
-	}
-	return nil
-}
 
-// Checks if there are new joiners or miners.
-func (s *ShardingSub) checkShardChange(ctx context.Context, outDiff map[string]diffInfo, cst *cbor.BasicIpldStore, oldSt, newSt shardactor.ShardState) error {
-	// Get shard maps
-	newM, err := shards(adt.WrapStore(ctx, cst), newSt)
-	if err != nil {
-		return err
-	}
-	oldM, err := shards(adt.WrapStore(ctx, cst), oldSt)
-	if err != nil {
-		return err
-	}
-	chSh, err := changedShards(oldM, newM)
-	if err != nil {
-		return err
-	}
+			// For each shard that has been removed.
+			for shid := range left {
+				// Check if I previously was in the list of stakers.
+				err = s.rmShards(ctx, outDiff, shid, cst, oldSt, newSt)
+				if err != nil {
+					log.Errorf("error checking if shard changed: %s", err)
+					return err
+				}
 
-	// If any shard has changed, or a shard has been removed.
-	if len(chSh) > 0 || oldSt.TotalShards > newSt.TotalShards {
-		log.Infow("Shard change event detected")
-		left := map[cid.Cid]struct{}{}
-
-		// If the number of shards is reduced.
-		// Get the id of the shards that have left.
-		// We invert the order of states because
-		// we want to check if a shard left.
-		if oldSt.TotalShards > newSt.TotalShards {
-			left, err = newShards(newM, oldM)
-			if err != nil {
-				return err
 			}
-		}
 
-		// For each shard that has been removed.
-		for shid := range left {
-			// Check if I previously was in the list of stakers.
-			err = s.rmShards(ctx, outDiff, shid, cst, oldSt, newSt)
-			if err != nil {
-				log.Errorf("error checking if shard changed: %s", err)
-				return err
+			// For each shard that has changed
+			for shid := range chSh {
+				// First check if it is because I was added as a staker.
+				err := s.diffShards(ctx, outDiff, shid, cst, oldSt, newSt)
+				if err != nil {
+					log.Errorf("error checking if shard changed: %s", err)
+					return err
+				}
+				// Then check if it is beacuse I left the stakers list.
+				err = s.rmShards(ctx, outDiff, shid, cst, oldSt, newSt)
+				if err != nil {
+					log.Errorf("error checking if shard changed: %s", err)
+					return err
+				}
+
 			}
+			return nil
 
 		}
-
-		// For each shard that has changed
-		for shid := range chSh {
-			// First check if it is because I was added as a staker.
-			err := s.diffShards(ctx, outDiff, shid, cst, oldSt, newSt)
-			if err != nil {
-				log.Errorf("error checking if shard changed: %s", err)
-				return err
-			}
-			// Then check if it is beacuse I left the stakers list.
-			err = s.rmShards(ctx, outDiff, shid, cst, oldSt, newSt)
-			if err != nil {
-				log.Errorf("error checking if shard changed: %s", err)
-				return err
-			}
-
-		}
-		return nil
-
-	}
 	return nil
 }
 
@@ -180,25 +171,26 @@ func (s *ShardingSub) diffShards(ctx context.Context, outDiff map[string]diffInf
 
 // Checks if a shard has left or joined the list of shards.
 func newShards(oldM *adt.Map, newM *adt.Map) (map[cid.Cid]struct{}, error) {
-	diff := map[cid.Cid]struct{}{}
-	var sh shardactor.Shard
-	// TODO: Can we get the ID from the key instead of having
-	// to load and get from the shard object?
-	err := newM.ForEach(&sh, func(k string) error {
-		diff[sh.ID] = struct{}{}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	err = oldM.ForEach(&sh, func(k string) error {
-		delete(diff, sh.ID)
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return diff, err
+	/*
+		diff := map[cid.Cid]struct{}{}
+			var sh shardactor.Shard
+			// TODO: Can we get the ID from the key instead of having
+			// to load and get from the shard object?
+			err := newM.ForEach(&sh, func(k string) error {
+				diff[sh.ID] = struct{}{}
+				return nil
+			})
+			if err != nil {
+				return nil, err
+			}
+			err = oldM.ForEach(&sh, func(k string) error {
+				delete(diff, sh.ID)
+				return nil
+			})
+			if err != nil {
+				return nil, err
+			}
+		return diff, err
 }
 
 // Check if shard states have changed.
@@ -356,3 +348,4 @@ func shards(s adt.Store, st shardactor.ShardState) (*adt.Map, error) {
 func stakes(s adt.Store, sh *shardactor.Shard) (*adt.Map, error) {
 	return adt.AsMap(s, sh.Stake, builtin.DefaultHamtBitwidth)
 }
+*/

@@ -5,16 +5,15 @@ import (
 	"time"
 
 	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/lotus/chain/sharding"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/wallet"
-	"github.com/google/uuid"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/lotus/chain/consensus"
-	"github.com/filecoin-project/lotus/chain/consensus/actors/shard"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
+	"github.com/filecoin-project/lotus/chain/sharding/actors/naming"
+	"github.com/filecoin-project/lotus/chain/sharding/actors/shard"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	lcli "github.com/filecoin-project/lotus/cli"
@@ -34,10 +33,6 @@ var delegatedCmd = &cli.Command{
 			node.Override(new(store.WeightFunc), delegcns.Weight),
 			node.Override(new(stmgr.Executor), delegcns.TipSetExecutor()),
 			node.Override(new(stmgr.UpgradeSchedule), delegcns.DefaultUpgradeSchedule()),
-
-			// Start sharding sub to listent to shard events
-			node.Override(new(*sharding.ShardingSub), sharding.NewShardSub),
-			node.Override(StartShardingSubKey, sharding.BuildShardingSub),
 		)),
 	},
 }
@@ -78,7 +73,7 @@ var delegatedGenesisCmd = &cli.Command{
 			return err
 		}
 
-		if err := shard.WriteGenesis("eudico-"+uuid.New().String(), shard.Delegated, miner, vreg, rem, uint64(time.Now().Unix()), f); err != nil {
+		if err := shard.WriteGenesis(naming.Root, shard.Delegated, miner, vreg, rem, uint64(time.Now().Unix()), f); err != nil {
 			return xerrors.Errorf("write genesis car: %w", err)
 		}
 

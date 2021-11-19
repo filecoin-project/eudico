@@ -8,6 +8,7 @@ import (
 	"math"
 	"sort"
 
+	naming "github.com/filecoin-project/lotus/chain/sharding/actors/naming"
 	cid "github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	xerrors "golang.org/x/xerrors"
@@ -37,7 +38,7 @@ func (t *SCAState) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("failed to write cid field t.Network: %w", err)
 	}
 
-	// t.NetworkName (string) (string)
+	// t.NetworkName (naming.SubnetID) (string)
 	if len(t.NetworkName) > cbg.MaxLength {
 		return xerrors.Errorf("Value in field t.NetworkName was too long")
 	}
@@ -99,7 +100,7 @@ func (t *SCAState) UnmarshalCBOR(r io.Reader) error {
 		t.Network = c
 
 	}
-	// t.NetworkName (string) (string)
+	// t.NetworkName (naming.SubnetID) (string)
 
 	{
 		sval, err := cbg.ReadStringBuf(br, scratch)
@@ -107,7 +108,7 @@ func (t *SCAState) UnmarshalCBOR(r io.Reader) error {
 			return err
 		}
 
-		t.NetworkName = string(sval)
+		t.NetworkName = naming.SubnetID(sval)
 	}
 	// t.TotalShards (uint64) (uint64)
 
@@ -166,7 +167,7 @@ func (t *Shard) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("failed to write cid field t.Cid: %w", err)
 	}
 
-	// t.ID (string) (string)
+	// t.ID (naming.SubnetID) (string)
 	if len(t.ID) > cbg.MaxLength {
 		return xerrors.Errorf("Value in field t.ID was too long")
 	}
@@ -184,7 +185,7 @@ func (t *Shard) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("failed to write cid field t.Parent: %w", err)
 	}
 
-	// t.ParentID (string) (string)
+	// t.ParentID (naming.SubnetID) (string)
 	if len(t.ParentID) > cbg.MaxLength {
 		return xerrors.Errorf("Value in field t.ParentID was too long")
 	}
@@ -246,7 +247,7 @@ func (t *Shard) UnmarshalCBOR(r io.Reader) error {
 		t.Cid = c
 
 	}
-	// t.ID (string) (string)
+	// t.ID (naming.SubnetID) (string)
 
 	{
 		sval, err := cbg.ReadStringBuf(br, scratch)
@@ -254,7 +255,7 @@ func (t *Shard) UnmarshalCBOR(r io.Reader) error {
 			return err
 		}
 
-		t.ID = string(sval)
+		t.ID = naming.SubnetID(sval)
 	}
 	// t.Parent (cid.Cid) (struct)
 
@@ -268,7 +269,7 @@ func (t *Shard) UnmarshalCBOR(r io.Reader) error {
 		t.Parent = c
 
 	}
-	// t.ParentID (string) (string)
+	// t.ParentID (naming.SubnetID) (string)
 
 	{
 		sval, err := cbg.ReadStringBuf(br, scratch)
@@ -276,7 +277,7 @@ func (t *Shard) UnmarshalCBOR(r io.Reader) error {
 			return err
 		}
 
-		t.ParentID = string(sval)
+		t.ParentID = naming.SubnetID(sval)
 	}
 	// t.Stake (big.Int) (struct)
 

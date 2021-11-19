@@ -74,7 +74,7 @@ func (a ShardCoordActor) State() cbor.Er {
 
 func (a ShardCoordActor) Constructor(rt runtime.Runtime, params *initactor.ConstructorParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
-	st, err := ConstructSCAState(adt.AsStore(rt), params.NetworkName)
+	st, err := ConstructSCAState(adt.AsStore(rt), naming.SubnetID(params.NetworkName))
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
 	rt.StateCreate(st)
 	return nil
@@ -94,8 +94,8 @@ func (a ShardCoordActor) Register(rt runtime.Runtime, _ *abi.EmptyValue) *AddSha
 	var shcid cid.Cid
 	rt.StateTransaction(&st, func() {
 		var err error
-		shid := naming.GenShardID(st.NetworkName, shardActorAddr)
-		shcid, err = naming.ShardCid(shid)
+		shid := naming.NewSubnetID(st.NetworkName, shardActorAddr)
+		shcid, err = shid.Cid()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed computing CID from shardID")
 		// Check if the shard with that ID already exists
 		if _, has, _ := st.GetShard(adt.AsStore(rt), shcid); has {
@@ -222,8 +222,8 @@ func (a ShardCoordActor) Kill(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyV
 	var sh *Shard
 	rt.StateTransaction(&st, func() {
 		var has bool
-		shid := naming.GenShardID(st.NetworkName, shardActorAddr)
-		shcid, err := naming.ShardCid(shid)
+		shid := naming.NewSubnetID(st.NetworkName, shardActorAddr)
+		shcid, err := shid.Cid()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed computing CID from shardID")
 		// Check if the shard for the actor exists
 		sh, has, err = st.GetShard(adt.AsStore(rt), shcid)

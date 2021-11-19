@@ -33,7 +33,7 @@ type SCAState struct {
 	// CID of the current network
 	Network cid.Cid
 	// ID of the current network
-	NetworkName string
+	NetworkName naming.SubnetID
 	// Total shards below this one.
 	TotalShards uint64
 	// Minimum stake to create a new shard
@@ -43,10 +43,10 @@ type SCAState struct {
 }
 
 type Shard struct {
-	Cid      cid.Cid // Cid of the shard ID
-	ID       string  // human-readable name of the shard ID (path in the hierarchy)
+	Cid      cid.Cid         // Cid of the shard ID
+	ID       naming.SubnetID // human-readable name of the shard ID (path in the hierarchy)
 	Parent   cid.Cid
-	ParentID string
+	ParentID naming.SubnetID
 	Stake    abi.TokenAmount
 	// The SCA doesn't keep track of the stake from miners, just locks the funds.
 	// Is up to the shard actor to handle this and distribute the stake
@@ -57,12 +57,12 @@ type Shard struct {
 	Status Status
 }
 
-func ConstructSCAState(store adt.Store, networkName string) (*SCAState, error) {
+func ConstructSCAState(store adt.Store, networkName naming.SubnetID) (*SCAState, error) {
 	emptyShardsMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}
-	networkCid, err := naming.ShardCid(networkName)
+	networkCid, err := networkName.Cid()
 	if err != nil {
 		panic(err)
 	}
@@ -98,8 +98,8 @@ func getShard(shards *adt.Map, id cid.Cid) (*Shard, bool, error) {
 
 // Get shard from its shard actor address.
 func (st *SCAState) getShardFromActorAddr(s adt.Store, addr address.Address) (*Shard, bool, error) {
-	shid := naming.GenShardID(st.NetworkName, addr)
-	shcid, err := naming.ShardCid(shid)
+	shid := naming.NewSubnetID(st.NetworkName, addr)
+	shcid, err := shid.Cid()
 	if err != nil {
 		return nil, false, err
 	}

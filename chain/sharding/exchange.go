@@ -43,7 +43,7 @@ type helloService struct {
 
 // Creates a new hello service for the shard
 func (sh *Shard) newHelloService() {
-	pid := protocol.ID(HelloProtoPrefix + sh.netName)
+	pid := protocol.ID(HelloProtoPrefix + sh.ID.String())
 	sh.hello = &helloService{
 		// NOTE: We added a NewShardHelloService to leverage the standard code for send hello.
 		// I don't think we added complexity there, but if not bring all the required code here
@@ -52,7 +52,7 @@ func (sh *Shard) newHelloService() {
 		lk:    keymutex.New(0),
 	}
 	log.Infow("Setting up hello protocol/service for shard with protocolID", "protocolID", pid)
-	sh.host.SetStreamHandler(protocol.ID(HelloProtoPrefix+sh.netName), sh.handleHelloStream)
+	sh.host.SetStreamHandler(protocol.ID(HelloProtoPrefix+sh.ID.String()), sh.handleHelloStream)
 }
 
 func (sh *Shard) helloBack(p peer.ID, epoch abi.ChainEpoch) {
@@ -75,14 +75,14 @@ func (sh *Shard) helloBack(p peer.ID, epoch abi.ChainEpoch) {
 // Required to allow others to get in sync with the shard chain.
 func (sh *Shard) exchangeServer() {
 	srv := exchange.NewServer(sh.ch)
-	sh.host.SetStreamHandler(protocol.ID(BlockSyncProtoPrefix+sh.netName), srv.HandleStream)
-	log.Infow("Listening to exchange server with protocolID", "protocolID", BlockSyncProtoPrefix+sh.netName)
+	sh.host.SetStreamHandler(protocol.ID(BlockSyncProtoPrefix+sh.ID.String()), srv.HandleStream)
+	log.Infow("Listening to exchange server with protocolID", "protocolID", BlockSyncProtoPrefix+sh.ID.String())
 }
 
 // create a new exchange client for the shard chain.
 func (sh *Shard) exchangeClient(ctx context.Context) exchange.Client {
-	log.Infow("Set up exchange client for shard with protocolID", "protocolID", BlockSyncProtoPrefix+sh.netName)
-	return exchange.NewShardClient(ctx, sh.host, sh.pmgr, BlockSyncProtoPrefix+sh.netName)
+	log.Infow("Set up exchange client for shard with protocolID", "protocolID", BlockSyncProtoPrefix+sh.ID.String())
+	return exchange.NewShardClient(ctx, sh.host, sh.pmgr, BlockSyncProtoPrefix+sh.ID.String())
 }
 
 // RunHello service. This methos is an adaptation of the one used
@@ -124,7 +124,7 @@ func (sh *Shard) runHello(ctx context.Context) error {
 // It directly uses the same message format than the root's chain hello protocol.
 func (sh *Shard) sendHello(ctx context.Context, svc *hello.Service, p peer.ID) {
 	h := sh.host
-	pid := protocol.ID(HelloProtoPrefix + sh.netName)
+	pid := protocol.ID(HelloProtoPrefix + sh.ID.String())
 	log.Debugw("Saying hello to peer", "peerID", p)
 	if err := svc.SayHello(ctx, p); err != nil {
 		protos, _ := h.Peerstore().GetProtocols(p)

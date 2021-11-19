@@ -51,7 +51,7 @@ const (
 type ShardState struct {
 	Name      string
 	ParentCid cid.Cid
-	ParentID  string
+	ParentID  naming.SubnetID
 	Consensus ConsensusType
 	// Minimum stake required by new joiners.
 	MinMinerStake abi.TokenAmount
@@ -79,13 +79,14 @@ func ConstructShardState(store adt.Store, params *ConstructParams) (*ShardState,
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to persist empty array")
 	*/
 
-	parentCid, err := naming.ShardCid(params.NetworkName)
+	parentID := naming.SubnetID(params.NetworkName)
+	parentCid, err := parentID.Cid()
 	if err != nil {
 		panic(err)
 	}
 	return &ShardState{
 		ParentCid:     parentCid,
-		ParentID:      params.NetworkName,
+		ParentID:      parentID,
 		Consensus:     params.Consensus,
 		MinMinerStake: params.MinMinerStake,
 		Miners:        make([]address.Address, 0),

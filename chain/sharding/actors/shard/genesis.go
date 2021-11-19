@@ -20,6 +20,7 @@ import (
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/filecoin-project/lotus/chain/gen"
 	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
+	"github.com/filecoin-project/lotus/chain/sharding/actors/naming"
 	"github.com/filecoin-project/lotus/chain/sharding/actors/sca"
 	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -37,7 +38,7 @@ const (
 	networkVersion = network.Version14
 )
 
-func WriteGenesis(netName string, consensus ConsensusType, miner, vreg, rem address.Address, seq uint64, w io.Writer) error {
+func WriteGenesis(netName naming.SubnetID, consensus ConsensusType, miner, vreg, rem address.Address, seq uint64, w io.Writer) error {
 	bs := bstore.WrapIDStore(bstore.NewMemorySync())
 
 	var b *genesis2.GenesisBootstrap
@@ -46,7 +47,7 @@ func WriteGenesis(netName string, consensus ConsensusType, miner, vreg, rem addr
 		if miner == address.Undef {
 			return xerrors.Errorf("no miner specified for delegated consensus")
 		}
-		template, err := delegatedGenTemplate(netName, miner, vreg, rem, seq)
+		template, err := delegatedGenTemplate(netName.String(), miner, vreg, rem, seq)
 		if err != nil {
 			return err
 		}
@@ -55,7 +56,7 @@ func WriteGenesis(netName string, consensus ConsensusType, miner, vreg, rem addr
 			return xerrors.Errorf("error making genesis delegated block: %w", err)
 		}
 	case PoW:
-		template, err := powGenTemplate(netName, vreg, rem, seq)
+		template, err := powGenTemplate(netName.String(), vreg, rem, seq)
 		if err != nil {
 			return err
 		}
@@ -227,7 +228,7 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 
 func SetupShardActor(ctx context.Context, bs bstore.Blockstore, networkName string) (*types.Actor, error) {
 	cst := cbor.NewCborStore(bs)
-	st, err := sca.ConstructSCAState(adt.WrapStore(ctx, cst), networkName)
+	st, err := sca.ConstructSCAState(adt.WrapStore(ctx, cst), naming.SubnetID(networkName))
 	if err != nil {
 		return nil, err
 	}

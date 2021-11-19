@@ -21,6 +21,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/market"
 	"github.com/filecoin-project/lotus/chain/messagepool"
 	"github.com/filecoin-project/lotus/chain/messagesigner"
+	"github.com/filecoin-project/lotus/chain/sharding"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	rpcstmgr "github.com/filecoin-project/lotus/chain/stmgr/rpc"
 	"github.com/filecoin-project/lotus/chain/store"
@@ -133,6 +134,11 @@ var ChainNode = Options(
 	Override(HandleMigrateClientFundsKey, modules.HandleMigrateClientFunds),
 
 	Override(new(*full.GasPriceCache), full.NewGasPriceCache),
+
+	// Sharding
+	// Start sharding sub to listent to shard events
+	Override(new(*sharding.ShardingSub), sharding.NewShardSub),
+	Override(StartShardingSubKey, sharding.BuildShardingSub),
 
 	// Lite node API
 	ApplyIf(isLiteNode,

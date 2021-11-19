@@ -16,6 +16,7 @@ import (
 	"github.com/filecoin-project/lotus/node/impl/market"
 	"github.com/filecoin-project/lotus/node/impl/net"
 	"github.com/filecoin-project/lotus/node/impl/paych"
+	"github.com/filecoin-project/lotus/node/impl/sharding"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/modules/lp2p"
 )
@@ -36,6 +37,8 @@ type FullNodeAPI struct {
 	full.WalletAPI
 	full.SyncAPI
 	full.BeaconAPI
+
+	sharding.ShardingAPI
 
 	DS          dtypes.MetadataDS
 	NetworkName dtypes.NetworkName

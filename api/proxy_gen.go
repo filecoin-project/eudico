@@ -21,6 +21,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/paych"
+	"github.com/filecoin-project/lotus/chain/sharding/actors/naming"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/extern/sector-storage/fsutil"
 	"github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
@@ -100,6 +101,8 @@ type FullNodeStruct struct {
 	CommonStruct
 
 	NetStruct
+
+	ShardingStruct
 
 	Internal struct {
 		BeaconGetEntry func(p0 context.Context, p1 abi.ChainEpoch) (*types.BeaconEntry, error) `perm:"read"`
@@ -472,6 +475,8 @@ type FullNodeStub struct {
 	CommonStub
 
 	NetStub
+
+	ShardingStub
 }
 
 type GatewayStruct struct {
@@ -586,6 +591,17 @@ type NetStruct struct {
 }
 
 type NetStub struct {
+}
+
+type ShardingStruct struct {
+	Internal struct {
+		AddShard func(p0 context.Context, p1 address.Address, p2 naming.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 address.Address) (address.Address, error) `perm:"write"`
+
+		JoinShard func(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 naming.SubnetID) (cid.Cid, error) `perm:"write"`
+	}
+}
+
+type ShardingStub struct {
 }
 
 type SignableStruct struct {
@@ -3569,6 +3585,28 @@ func (s *NetStub) NetPubsubScores(p0 context.Context) ([]PubsubScore, error) {
 	return *new([]PubsubScore), ErrNotSupported
 }
 
+func (s *ShardingStruct) AddShard(p0 context.Context, p1 address.Address, p2 naming.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 address.Address) (address.Address, error) {
+	if s.Internal.AddShard == nil {
+		return *new(address.Address), ErrNotSupported
+	}
+	return s.Internal.AddShard(p0, p1, p2, p3, p4, p5, p6)
+}
+
+func (s *ShardingStub) AddShard(p0 context.Context, p1 address.Address, p2 naming.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 address.Address) (address.Address, error) {
+	return *new(address.Address), ErrNotSupported
+}
+
+func (s *ShardingStruct) JoinShard(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 naming.SubnetID) (cid.Cid, error) {
+	if s.Internal.JoinShard == nil {
+		return *new(cid.Cid), ErrNotSupported
+	}
+	return s.Internal.JoinShard(p0, p1, p2, p3)
+}
+
+func (s *ShardingStub) JoinShard(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 naming.SubnetID) (cid.Cid, error) {
+	return *new(cid.Cid), ErrNotSupported
+}
+
 func (s *SignableStruct) Sign(p0 context.Context, p1 SignFunc) error {
 	if s.Internal.Sign == nil {
 		return ErrNotSupported
@@ -5016,6 +5054,7 @@ var _ CommonNet = new(CommonNetStruct)
 var _ FullNode = new(FullNodeStruct)
 var _ Gateway = new(GatewayStruct)
 var _ Net = new(NetStruct)
+var _ Sharding = new(ShardingStruct)
 var _ Signable = new(SignableStruct)
 var _ StorageMiner = new(StorageMinerStruct)
 var _ Wallet = new(WalletStruct)

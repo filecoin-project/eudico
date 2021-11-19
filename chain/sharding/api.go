@@ -1,22 +1,28 @@
 package sharding
 
 import (
+	"context"
+	"time"
+
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/messagesigner"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/node/config"
-	"github.com/filecoin-project/lotus/node/impl"
 	"github.com/filecoin-project/lotus/node/impl/client"
 	"github.com/filecoin-project/lotus/node/impl/full"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
+	"github.com/filecoin-project/lotus/node/modules/lp2p"
 	"github.com/libp2p/go-libp2p-core/host"
+	peer "github.com/libp2p/go-libp2p-core/peer"
 )
 
 // PopulateAPIs populates the impl/fullNode for a shard.
 // NOTE: We may be able to do this with DI in the future.
 func (sh *Shard) populateAPIs(
-	parentAPI *impl.FullNodeAPI,
+	parentAPI *wrappedAPI,
 	h host.Host,
 	tsExec stmgr.Executor, // Tipset Executor of the consensus used for shard.
 ) error {
@@ -79,7 +85,7 @@ func (sh *Shard) populateAPIs(
 	syncAPI := full.SyncAPI{
 		Syncer:  sh.syncer,
 		PubSub:  sh.pubsub,
-		NetName: dtypes.NetworkName(sh.netName),
+		NetName: dtypes.NetworkName(sh.ID.String()),
 	}
 
 	// NOTE: From here we are inheriting APIs from the parent shard.
@@ -105,7 +111,7 @@ func (sh *Shard) populateAPIs(
 		RtvlBlockstoreAccessor:    parentAPI.RtvlBlockstoreAccessor,
 	}
 
-	sh.api = &impl.FullNodeAPI{
+	sh.api = &wrappedAPI{
 		CommonAPI:   parentAPI.CommonAPI,
 		NetAPI:      parentAPI.NetAPI,
 		ChainAPI:    chainAPI,
@@ -120,9 +126,87 @@ func (sh *Shard) populateAPIs(
 		SyncAPI:     syncAPI,
 		BeaconAPI:   parentAPI.BeaconAPI,
 		DS:          sh.ds,
-		NetworkName: dtypes.NetworkName(sh.netName),
+		NetworkName: dtypes.NetworkName(sh.ID.String()),
 	}
 
 	// Register API so it can be accessed from CLI
-	return sh.nodeServer(sh.ID, sh.api)
+	return sh.nodeServer(sh.ID.String(), sh.api)
+}
+
+func (n *wrappedAPI) CreateBackup(ctx context.Context, fpath string) error {
+	panic("backup not implemented for wrapped abstraction")
+}
+
+func (n *wrappedAPI) NodeStatus(ctx context.Context, inclChainStatus bool) (status api.NodeStatus, err error) {
+	curTs, err := n.ChainHead(ctx)
+	if err != nil {
+		return status, err
+	}
+
+	status.SyncStatus.Epoch = uint64(curTs.Height())
+	timestamp := time.Unix(int64(curTs.MinTimestamp()), 0)
+	delta := time.Since(timestamp).Seconds()
+	status.SyncStatus.Behind = uint64(delta / 30)
+
+	// get peers in the messages and blocks topics
+	peersMsgs := make(map[peer.ID]struct{})
+	peersBlocks := make(map[peer.ID]struct{})
+
+	for _, p := range n.PubSub.ListPeers(build.MessagesTopic(n.NetworkName)) {
+		peersMsgs[p] = struct{}{}
+	}
+
+	for _, p := range n.PubSub.ListPeers(build.BlocksTopic(n.NetworkName)) {
+		peersBlocks[p] = struct{}{}
+	}
+
+	// get scores for all connected and recent peers
+	scores, err := n.NetPubsubScores(ctx)
+	if err != nil {
+		return status, err
+	}
+
+	for _, score := range scores {
+		if score.Score.Score > lp2p.PublishScoreThreshold {
+			_, inMsgs := peersMsgs[score.ID]
+			if inMsgs {
+				status.PeerStatus.PeersToPublishMsgs++
+			}
+
+			_, inBlocks := peersBlocks[score.ID]
+			if inBlocks {
+				status.PeerStatus.PeersToPublishBlocks++
+			}
+		}
+	}
+
+	if inclChainStatus && status.SyncStatus.Epoch > uint64(build.Finality) {
+		blockCnt := 0
+		ts := curTs
+
+		for i := 0; i < 100; i++ {
+			blockCnt += len(ts.Blocks())
+			tsk := ts.Parents()
+			ts, err = n.ChainGetTipSet(ctx, tsk)
+			if err != nil {
+				return status, err
+			}
+		}
+
+		status.ChainStatus.BlocksPerTipsetLast100 = float64(blockCnt) / 100
+
+		for i := 100; i < int(build.Finality); i++ {
+			blockCnt += len(ts.Blocks())
+			tsk := ts.Parents()
+			ts, err = n.ChainGetTipSet(ctx, tsk)
+			if err != nil {
+				return status, err
+			}
+		}
+
+		status.ChainStatus.BlocksPerTipsetLastFinality = float64(blockCnt) / float64(build.Finality)
+
+	}
+
+	return status, nil
 }

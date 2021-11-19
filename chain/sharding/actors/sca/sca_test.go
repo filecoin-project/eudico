@@ -53,7 +53,7 @@ func TestRegister(t *testing.T) {
 	ret := rt.Call(h.ShardCoordActor.Register, nil)
 	res, ok := ret.(*actor.AddShardReturn)
 	require.True(t, ok)
-	shid, err := naming.ShardCid("root/t0101")
+	shid, err := naming.SubnetID("/root/t0101").Cid()
 	require.NoError(t, err)
 	// Verify the return value is correct.
 	require.Equal(t, res.Cid, shid)
@@ -64,8 +64,8 @@ func TestRegister(t *testing.T) {
 	sh, found := h.getShard(rt, shid)
 	require.True(h.t, found)
 	require.Equal(t, sh.Stake, value)
-	require.Equal(t, sh.ID, "root/t0101")
-	require.Equal(t, sh.ParentID, "root")
+	require.Equal(t, sh.ID.String(), "/root/t0101")
+	require.Equal(t, sh.ParentID.String(), "/root")
 	require.Equal(t, sh.Status, actor.Active)
 
 	t.Log("try registering existing shard")
@@ -102,7 +102,7 @@ func TestRegister(t *testing.T) {
 	ret = rt.Call(h.ShardCoordActor.Register, nil)
 	res, ok = ret.(*actor.AddShardReturn)
 	require.True(t, ok)
-	shid, err = naming.ShardCid("root/t0102")
+	shid, err = naming.SubnetID("/root/t0102").Cid()
 	require.NoError(t, err)
 	// Verify the return value is correct.
 	require.Equal(t, res.Cid, shid)
@@ -112,8 +112,8 @@ func TestRegister(t *testing.T) {
 	sh, found = h.getShard(rt, shid)
 	require.True(h.t, found)
 	require.Equal(t, sh.Stake, value)
-	require.Equal(t, sh.ID, "root/t0102")
-	require.Equal(t, sh.ParentID, "root")
+	require.Equal(t, sh.ID.String(), "/root/t0102")
+	require.Equal(t, sh.ParentID.String(), "/root")
 	require.Equal(t, sh.Status, actor.Active)
 }
 
@@ -310,7 +310,7 @@ func newHarness(t *testing.T) *shActorHarness {
 
 func (h *shActorHarness) constructAndVerify(rt *mock.Runtime) {
 	rt.ExpectValidateCallerAddr(builtin.SystemActorAddr)
-	ret := rt.Call(h.ShardCoordActor.Constructor, &initactor.ConstructorParams{NetworkName: "root"})
+	ret := rt.Call(h.ShardCoordActor.Constructor, &initactor.ConstructorParams{NetworkName: "/root"})
 	assert.Nil(h.t, ret)
 	rt.Verify()
 
@@ -318,8 +318,8 @@ func (h *shActorHarness) constructAndVerify(rt *mock.Runtime) {
 
 	rt.GetState(&st)
 	assert.Equal(h.t, actor.MinShardStake, st.MinStake)
-	shid := "root"
-	shcid, err := naming.ShardCid(shid)
+	shid := naming.Root
+	shcid, err := shid.Cid()
 	require.NoError(h.t, err)
 	assert.Equal(h.t, st.Network, shcid)
 	assert.Equal(h.t, st.NetworkName, shid)

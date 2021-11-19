@@ -5,13 +5,16 @@ import (
 )
 
 type Common = api.Common
+type Sharding = api.Sharding
 type Net = api.Net
 type CommonNet = api.CommonNet
 
 type CommonStruct = api.CommonStruct
 type CommonStub = api.CommonStub
 type NetStruct = api.NetStruct
+type ShardingStruct = api.ShardingStruct
 type NetStub = api.NetStub
+type ShardingStub = api.ShardingStub
 type CommonNetStruct = api.CommonNetStruct
 type CommonNetStub = api.CommonNetStub
 

@@ -47,6 +47,7 @@ import (
 type FullNode interface {
 	Common
 	Net
+	Sharding
 
 	// MethodGroup: Chain
 	// The Chain method group contains methods for interacting with the

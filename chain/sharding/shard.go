@@ -12,17 +12,17 @@ import (
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/consensus"
-	"github.com/filecoin-project/lotus/chain/consensus/actors/shard"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/messagepool"
+	"github.com/filecoin-project/lotus/chain/sharding/actors/naming"
+	"github.com/filecoin-project/lotus/chain/sharding/actors/shard"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/sub"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/lib/peermgr"
-	"github.com/filecoin-project/lotus/node/impl"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/ipld/go-car"
 	"github.com/libp2p/go-libp2p-core/host"
@@ -37,9 +37,7 @@ import (
 type Shard struct {
 	host host.Host
 	// ShardID
-	ID string
-	// network name for shard
-	netName string
+	ID naming.SubnetID
 	// Pubsub subcription for shard.
 	// sub *pubsub.Subscription
 	// Metadata datastore.
@@ -65,7 +63,7 @@ type Shard struct {
 
 	// Events for shard chain
 	events *events.Events
-	api    *impl.FullNodeAPI
+	api    *wrappedAPI
 
 	// Pubsub router from the root chain.
 	pubsub *pubsub.PubSub
@@ -113,7 +111,7 @@ func (sh *Shard) LoadGenesis(genBytes []byte) (chain.Genesis, error) {
 }
 
 func (sh *Shard) HandleIncomingMessages(ctx context.Context, bootstrapper dtypes.Bootstrapper) error {
-	nn := dtypes.NetworkName(sh.netName)
+	nn := dtypes.NetworkName(sh.ID.String())
 	v := sub.NewMessageValidator(sh.host.ID(), sh.mpool)
 
 	if err := sh.pubsub.RegisterTopicValidator(build.MessagesTopic(nn), v.Validate); err != nil {
@@ -150,11 +148,11 @@ func (sh *Shard) HandleIncomingMessages(ctx context.Context, bootstrapper dtypes
 func (sh *Shard) Close(ctx context.Context) error {
 	log.Infow("Closing shard", "shardID", sh.ID)
 	// Remove hello and exchange handlers to stop accepting requests from peers.
-	sh.host.RemoveStreamHandler(protocol.ID(BlockSyncProtoPrefix + sh.netName))
-	sh.host.RemoveStreamHandler(protocol.ID(HelloProtoPrefix + sh.netName))
+	sh.host.RemoveStreamHandler(protocol.ID(BlockSyncProtoPrefix + sh.ID.String()))
+	sh.host.RemoveStreamHandler(protocol.ID(HelloProtoPrefix + sh.ID.String()))
 	// Remove pubsub topic validators for the shard.
-	err1 := sh.pubsub.UnregisterTopicValidator(build.BlocksTopic(dtypes.NetworkName(sh.netName)))
-	err2 := sh.pubsub.UnregisterTopicValidator(build.MessagesTopic(dtypes.NetworkName(sh.netName)))
+	err1 := sh.pubsub.UnregisterTopicValidator(build.BlocksTopic(dtypes.NetworkName(sh.ID.String())))
+	err2 := sh.pubsub.UnregisterTopicValidator(build.MessagesTopic(dtypes.NetworkName(sh.ID.String())))
 	// Close chainstore
 	err3 := sh.ch.Close()
 	// Stop state manager
@@ -218,7 +216,7 @@ func waitForSync(stmgr *stmgr.StateManager, epochs int, subscribe func()) {
 }
 
 func (sh *Shard) HandleIncomingBlocks(ctx context.Context, bserv dtypes.ChainBlockService) error {
-	nn := dtypes.NetworkName(sh.netName)
+	nn := dtypes.NetworkName(sh.ID.String())
 	v := sub.NewBlockValidator(
 		sh.host.ID(), sh.ch, sh.cons,
 		func(p peer.ID) {
