@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path"
 	"runtime/pprof"
@@ -17,12 +18,14 @@ import (
 	"github.com/filecoin-project/go-jsonrpc"
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/chain/sharding"
 	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/lib/peermgr"
 	"github.com/filecoin-project/lotus/lib/ulimit"
 	"github.com/filecoin-project/lotus/metrics"
 	"github.com/filecoin-project/lotus/node"
+	"github.com/filecoin-project/lotus/node/impl"
 	"github.com/filecoin-project/lotus/node/modules"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/modules/testing"
@@ -273,15 +276,31 @@ func daemonCmd(overrides node.Option) *cli.Command {
 			shardMux := mux.NewRouter()
 			globalMux.NewRoute().PathPrefix("/shard/").Handler(shardMux)
 
-			serveNamedApi := func(p string, api api.FullNode) error {
+			serveNamedApi := func(p string, iapi api.FullNode) error {
 				pp := path.Join("/shard/", p+"/")
 
-				// Instantiate the full node handler.
-				h, err := node.FullNodeHandler(pp, api, true, serverOptions...)
-				if err != nil {
-					return fmt.Errorf("failed to instantiate rpc handler: %s", err)
+				var h http.Handler
+				// If this is a full node API
+				api, ok := iapi.(*impl.FullNodeAPI)
+				if ok {
+					// Instantiate the full node handler.
+					h, err = node.FullNodeHandler(pp, api, true, serverOptions...)
+					if err != nil {
+						return fmt.Errorf("failed to instantiate rpc handler: %s", err)
+					}
+				} else {
+					// If not instantiate a subnet api
+					api, ok := iapi.(*sharding.SubnetAPI)
+					if !ok {
+						return xerrors.Errorf("Couldn't instantiate new subnet API. Something went wrong: %s", err)
+					}
+					// Instantiate the full node handler.
+					h, err = sharding.FullNodeHandler(pp, api, true, serverOptions...)
+					if err != nil {
+						return fmt.Errorf("failed to instantiate rpc handler: %s", err)
+					}
 				}
-				fmt.Println("[*] serve new shard API", pp)
+				fmt.Println("[*] serve new subnet API", pp)
 				shardMux.NewRoute().PathPrefix(pp).Handler(h)
 				return nil
 			}

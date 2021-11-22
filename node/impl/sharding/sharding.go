@@ -33,3 +33,18 @@ func (a *ShardingAPI) JoinShard(ctx context.Context, wallet address.Address,
 	value abi.TokenAmount, id naming.SubnetID) (cid.Cid, error) {
 	return a.Sub.JoinShard(ctx, wallet, value, id)
 }
+
+func (a *ShardingAPI) Mine(ctx context.Context, wallet address.Address,
+	id naming.SubnetID, stop bool) error {
+	return a.Sub.Mine(ctx, wallet, id, stop)
+}
+
+func (a *ShardingAPI) Leave(ctx context.Context, wallet address.Address,
+	id naming.SubnetID) (cid.Cid, error) {
+	return a.Sub.Leave(ctx, wallet, id)
+}
+
+func (a *ShardingAPI) Kill(ctx context.Context, wallet address.Address,
+	id naming.SubnetID) (cid.Cid, error) {
+	return a.Sub.Kill(ctx, wallet, id)
+}

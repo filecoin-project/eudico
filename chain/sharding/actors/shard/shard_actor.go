@@ -218,7 +218,7 @@ func (a ShardActor) Kill(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue 
 			rt.Abortf(exitcode.ErrIllegalState, "the subnet is already in a killed or terminating state")
 		}
 		if len(st.Miners) != 0 {
-			rt.Abortf(exitcode.ErrIllegalState, "this subnet can only be called when all miners have left")
+			rt.Abortf(exitcode.ErrIllegalState, "this subnet can only be killed when all miners have left")
 		}
 		// Move to terminating state
 		st.Status = Terminating

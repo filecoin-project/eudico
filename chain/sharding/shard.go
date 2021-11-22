@@ -63,7 +63,7 @@ type Shard struct {
 
 	// Events for shard chain
 	events *events.Events
-	api    *wrappedAPI
+	api    *SubnetAPI
 
 	// Pubsub router from the root chain.
 	pubsub *pubsub.PubSub
@@ -277,13 +277,15 @@ func (sh *Shard) mine(ctx context.Context) error {
 	return nil
 }
 
-func (sh *Shard) stopMining(ctx context.Context) {
+func (sh *Shard) stopMining(ctx context.Context) error {
 	sh.minlk.Lock()
 	defer sh.minlk.Unlock()
 	if sh.miningCncl != nil {
 		log.Infow("Stop mining in shard", "shardID", sh.ID)
 		sh.miningCncl()
+		return nil
 	}
+	return xerrors.Errorf("Currently not mining in subnet")
 }
 
 // Get an identity from the peer's wallet.

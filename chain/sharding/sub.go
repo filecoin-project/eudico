@@ -54,11 +54,12 @@ var log = logging.Logger("sharding")
 
 // ShardingSub is the sharding manager in the root chain
 type ShardingSub struct {
+	ctx context.Context
 	// Listener for events of the root chain.
 	events *events.Events
 	// This is the API for the fullNode in the root chain.
 	// api  *impl.FullNodeAPI
-	api  *wrappedAPI
+	api  *SubnetAPI
 	host host.Host
 
 	pubsub *pubsub.PubSub
@@ -76,27 +77,6 @@ type ShardingSub struct {
 	shards map[naming.SubnetID]*Shard
 
 	j journal.Journal
-}
-
-type wrappedAPI struct {
-	common.CommonAPI
-	net.NetAPI
-	full.ChainAPI
-	client.API
-	full.MpoolAPI
-	full.GasAPI
-	market.MarketAPI
-	paych.PaychAPI
-	full.StateAPI
-	full.MsigAPI
-	full.WalletAPI
-	full.SyncAPI
-	full.BeaconAPI
-
-	DS          dtypes.MetadataDS
-	NetworkName dtypes.NetworkName
-
-	*ShardingSub
 }
 
 func NewShardSub(
@@ -133,6 +113,7 @@ func NewShardSub(
 	var err error
 	ctx := helpers.LifecycleCtx(mctx, lc)
 	s := &ShardingSub{
+		ctx:          ctx,
 		pubsub:       pubsub,
 		host:         host,
 		ds:           ds,
@@ -146,7 +127,7 @@ func NewShardSub(
 		shards:       make(map[naming.SubnetID]*Shard),
 	}
 
-	s.api = &wrappedAPI{
+	s.api = &SubnetAPI{
 		commonapi,
 		netapi,
 		chainapi,
@@ -175,10 +156,11 @@ func NewShardSub(
 }
 
 func (s *ShardingSub) startShard(ctx context.Context, id naming.SubnetID,
-	parentAPI *wrappedAPI, consensus shard.ConsensusType,
+	parentAPI *SubnetAPI, consensus shard.ConsensusType,
 	genesis []byte) error {
 	var err error
-	ctx, cancel := context.WithCancel(ctx)
+	// Subnets inherit the context from the SubnetManager.
+	ctx, cancel := context.WithCancel(s.ctx)
 
 	log.Infow("Creating new shard", "shardID", id)
 	sh := &Shard{
@@ -396,7 +378,7 @@ func (s *ShardingSub) listenShardEvents(ctx context.Context, sh *Shard) {
 	}
 }
 
-func (s *ShardingSub) triggerChange(ctx context.Context, api *wrappedAPI, shardMap map[string]diffInfo) (more bool, err error) {
+func (s *ShardingSub) triggerChange(ctx context.Context, api *SubnetAPI, shardMap map[string]diffInfo) (more bool, err error) {
 	/*
 		s.lk.Lock()
 		defer s.lk.Unlock()
@@ -476,7 +458,7 @@ func (s *ShardingSub) AddShard(
 
 	// Get the api for the parent network hosting the shard actor
 	// for the subnet.
-	parentAPI := s.subnetAPI(parent)
+	parentAPI := s.getAPI(parent)
 	if parentAPI == nil {
 
 		return address.Undef, xerrors.Errorf("not syncing with parent network")
@@ -529,7 +511,7 @@ func (s *ShardingSub) AddShard(
 	return r.IDAddress, nil
 }
 
-func (s *ShardingSub) subnetAPI(n naming.SubnetID) *wrappedAPI {
+func (s *ShardingSub) getAPI(n naming.SubnetID) *SubnetAPI {
 	if n.String() == string(s.api.NetName) {
 		return s.api
 	}
@@ -538,6 +520,29 @@ func (s *ShardingSub) subnetAPI(n naming.SubnetID) *wrappedAPI {
 		return nil
 	}
 	return sh.api
+}
+
+func (s *ShardingSub) getSubnet(n naming.SubnetID) (*Shard, error) {
+	sh, ok := s.shards[n]
+	if !ok {
+		return nil, xerrors.Errorf("Not part of subnet %v. Consider joining it", n)
+	}
+	return sh, nil
+}
+
+func (a *SubnetAPI) getActorState(ctx context.Context, shardActor address.Address) (*shard.ShardState, error) {
+	act, err := a.StateGetActor(ctx, shardActor, types.EmptyTSK)
+	if err != nil {
+		return nil, err
+	}
+
+	var st shard.ShardState
+	bs := blockstore.NewAPIBlockstore(a)
+	cst := cbor.NewCborStore(bs)
+	if err := cst.Get(ctx, act.Head, &st); err != nil {
+		return nil, err
+	}
+	return &st, nil
 }
 
 func (s *ShardingSub) JoinShard(
@@ -557,13 +562,13 @@ func (s *ShardingSub) JoinShard(
 
 	// Get the api for the parent network hosting the shard actor
 	// for the subnet.
-	parentAPI := s.subnetAPI(id.Parent())
+	parentAPI := s.getAPI(id.Parent())
 	if parentAPI == nil {
 		return cid.Undef, xerrors.Errorf("not syncing with parent network")
 	}
 
-	// Get the parent and the actor to know hwere to send the message.
-	// Not everything needes to be sent to the root.
+	// Get the parent and the actor to know where to send the message.
+	// Not everything needs to be sent to the root.
 	smsg, aerr := parentAPI.MpoolPushMessage(ctx, &types.Message{
 		To:     shardActor,
 		From:   wallet,
@@ -585,28 +590,163 @@ func (s *ShardingSub) JoinShard(
 
 	// See if we are already syncing with that chain. If this
 	// is the case we don't have to do much after the stake has been added.
-	if s.subnetAPI(id) != nil {
+	if s.getAPI(id) != nil {
+		log.Infow("Already joined subnet %v. Adding more stake to shard", id)
 		return smsg.Cid(), nil
 	}
 
 	// If not we need to initialize the subnet in our client to start syncing.
 	// Get genesis from actor state.
-	act, err := parentAPI.StateGetActor(ctx, shardActor, types.EmptyTSK)
+	st, err := parentAPI.getActorState(ctx, shardActor)
+	if err != nil {
+		return cid.Undef, nil
+	}
+	err = s.startShard(ctx, id, parentAPI, st.Consensus, st.Genesis)
+
+	return smsg.Cid(), nil
+}
+
+func (s *ShardingSub) Mine(
+	ctx context.Context, wallet address.Address,
+	id naming.SubnetID, stop bool) error {
+
+	// TODO: Think a bit deeper the locking strategy for shards.
+	s.lk.RLock()
+	defer s.lk.RUnlock()
+
+	// Get actor from subnet ID
+	shardActor, err := id.Actor()
+	if err != nil {
+		return err
+	}
+
+	// Get subnet
+	sh, err := s.getSubnet(id)
+	if err != nil {
+		return err
+	}
+
+	// If stop try to stop mining right away
+	if stop {
+		return sh.stopMining(ctx)
+	}
+
+	// Get the api for the parent network hosting the shard actor
+	// for the subnet.
+	parentAPI := s.getAPI(id.Parent())
+	if parentAPI == nil {
+		return xerrors.Errorf("not syncing with parent network")
+	}
+	// Get actor state to check if the shard is active and we are in the list
+	// of miners
+	st, err := parentAPI.getActorState(ctx, shardActor)
+	if err != nil {
+		return nil
+	}
+
+	if st.IsMiner(wallet) && st.Status != shard.Killed {
+		log.Infow("Starting to mine subnet", "subnetID", id)
+		// We need to start mining from the context of the subnet manager.
+		return sh.mine(s.ctx)
+	}
+
+	return xerrors.Errorf("Address %v Not a miner in subnet, or subnet already killed", wallet)
+}
+
+func (s *ShardingSub) Leave(
+	ctx context.Context, wallet address.Address,
+	id naming.SubnetID) (cid.Cid, error) {
+
+	// TODO: Think a bit deeper the locking strategy for shards.
+	s.lk.Lock()
+	defer s.lk.Unlock()
+
+	// Get actor from subnet ID
+	shardActor, err := id.Actor()
 	if err != nil {
 		return cid.Undef, err
 	}
 
-	var st shard.ShardState
-	bs := blockstore.NewAPIBlockstore(parentAPI)
-	cst := cbor.NewCborStore(bs)
-	if err := cst.Get(ctx, act.Head, &st); err != nil {
+	// Get the api for the parent network hosting the shard actor
+	// for the subnet.
+	parentAPI := s.getAPI(id.Parent())
+	if parentAPI == nil {
+		return cid.Undef, xerrors.Errorf("not syncing with parent network")
+	}
+
+	// Get the parent and the actor to know where to send the message.
+	smsg, aerr := parentAPI.MpoolPushMessage(ctx, &types.Message{
+		To:     shardActor,
+		From:   wallet,
+		Value:  abi.NewTokenAmount(0),
+		Method: shard.Methods.Leave,
+		Params: nil,
+	}, nil)
+	if aerr != nil {
+		return cid.Undef, aerr
+	}
+
+	msg := smsg.Cid()
+
+	// Wait state message.
+	_, aerr = parentAPI.StateWaitMsg(ctx, msg, build.MessageConfidence, api.LookbackNoLimit, true)
+	if aerr != nil {
+		return cid.Undef, aerr
+	}
+
+	// See if we are already syncing with that chain. If this
+	// is the case we can remove the subnet
+	if sh, _ := s.getSubnet(id); s != nil {
+		log.Infow("Stop syncing with subnet", "subnetID", id)
+		delete(s.shards, id)
+		return msg, sh.Close(ctx)
+	}
+
+	return smsg.Cid(), nil
+}
+
+func (s *ShardingSub) Kill(
+	ctx context.Context, wallet address.Address,
+	id naming.SubnetID) (cid.Cid, error) {
+
+	// TODO: Think a bit deeper the locking strategy for shards.
+	s.lk.RLock()
+	defer s.lk.RUnlock()
+
+	// Get actor from subnet ID
+	shardActor, err := id.Actor()
+	if err != nil {
 		return cid.Undef, err
 	}
 
-	err = s.startShard(ctx, id, parentAPI, st.Consensus, st.Genesis)
+	// Get the api for the parent network hosting the shard actor
+	// for the subnet.
+	parentAPI := s.getAPI(id.Parent())
+	if parentAPI == nil {
+		return cid.Undef, xerrors.Errorf("not syncing with parent network")
+	}
 
-	// Get genesis from state.
-	// See if I am in the list of miners.
+	// Get the parent and the actor to know where to send the message.
+	smsg, aerr := parentAPI.MpoolPushMessage(ctx, &types.Message{
+		To:     shardActor,
+		From:   wallet,
+		Value:  abi.NewTokenAmount(0),
+		Method: shard.Methods.Kill,
+		Params: nil,
+	}, nil)
+	if aerr != nil {
+		return cid.Undef, aerr
+	}
+
+	msg := smsg.Cid()
+
+	// Wait state message.
+	_, aerr = parentAPI.StateWaitMsg(ctx, msg, build.MessageConfidence, api.LookbackNoLimit, true)
+	if aerr != nil {
+		return cid.Undef, aerr
+	}
+
+	log.Infow("Successfully send kill signal to ", "subnetID", id)
 
 	return smsg.Cid(), nil
 }

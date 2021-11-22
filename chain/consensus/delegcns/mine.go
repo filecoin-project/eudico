@@ -25,7 +25,7 @@ func Mine(ctx context.Context, api v1api.FullNode) error {
 
 	// NOTE: Miner in delegated consensus is always the one with
 	// ID=t0100, if we want this to be configurable it may require
-	// come tweaking in delegated genesis and mining.
+	// some tweaking in delegated genesis and mining.
 	// Leaving it like this for now.
 	minerid, err := address.NewFromString("t0100")
 	if err != nil {

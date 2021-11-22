@@ -9,10 +9,10 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	big "github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/lotus/api/v0api"
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
-	shard "github.com/filecoin-project/lotus/chain/consensus/actors/rm-shard"
 	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	"github.com/filecoin-project/lotus/chain/sharding/actors/naming"
 	"github.com/filecoin-project/lotus/chain/sharding/actors/sca"
@@ -32,13 +32,10 @@ var shardingCmds = &cli.Command{
 		addCmd,
 		joinCmd,
 		listShardsCmd,
-		// leaveCmd,
-		// killCmd,
+		mineCmd,
+		leaveCmd,
+		killCmd,
 	},
-}
-
-type selectParams struct {
-	ID []byte // This ID is a cid.Bytes()
 }
 
 var listShardsCmd = &cli.Command{
@@ -76,7 +73,11 @@ var listShardsCmd = &cli.Command{
 			return xerrors.Errorf("error getting list of shards: %w", err)
 		}
 		for _, sh := range shards {
-			fmt.Printf("%s (%s): stake=%v, status=%v\n", sh.Cid, sh.ID, sh.Status, types.FIL(sh.Stake))
+			status := "Active"
+			if sh.Status != 0 {
+				status = "Inactive"
+			}
+			fmt.Printf("%s (%s): status=%v, stake=%v\n", sh.Cid, sh.ID, status, types.FIL(sh.Stake))
 		}
 
 		return nil
@@ -108,10 +109,6 @@ var addCmd = &cli.Command{
 			Name:  "delegminer",
 			Usage: "optionally specify miner for delegated consensus",
 		},
-		&cli.BoolFlag{
-			Name:  "force",
-			Usage: "Deprecated: use global 'force-send'",
-		},
 	},
 	Action: func(cctx *cli.Context) error {
 
@@ -121,14 +118,8 @@ var addCmd = &cli.Command{
 		}
 		defer closer()
 		if cctx.Args().Len() != 0 {
-			return lcli.ShowHelp(cctx, fmt.Errorf("'send' expects no arguments, just a set of flags"))
+			return lcli.ShowHelp(cctx, fmt.Errorf("'add' expects no arguments, just a set of flags"))
 		}
-
-		srv, err := lcli.GetFullNodeServices(cctx)
-		if err != nil {
-			return err
-		}
-		defer srv.Close() //nolint:errcheck
 
 		ctx := lcli.ReqContext(cctx)
 
@@ -206,88 +197,221 @@ func printReceiptReturn(ctx context.Context, api v0api.FullNode, m *types.Messag
 var joinCmd = &cli.Command{
 	Name:      "join",
 	Usage:     "Join or add additional stake to a shard",
-	ArgsUsage: "[<actor address> <stake amount>]",
+	ArgsUsage: "[<stake amount>]",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
 			Name:  "from",
 			Usage: "optionally specify the account to send funds from",
 		},
 		&cli.StringFlag{
-			Name:  "name",
-			Usage: "specify name for the shard",
-		},
-		&cli.BoolFlag{
-			Name:  "force",
-			Usage: "Deprecated: use global 'force-send'",
+			Name:  "subnet",
+			Usage: "specify the id of the subnet to join",
+			Value: naming.Root.String(),
 		},
 	},
 	Action: func(cctx *cli.Context) error {
 
 		if cctx.Args().Len() != 1 {
-			return lcli.ShowHelp(cctx, fmt.Errorf("'send' expects one argument, amount to stake, and a set of flags"))
+			return lcli.ShowHelp(cctx, fmt.Errorf("'join' expects the amount of stake as an argument, and a set of flags"))
 		}
-
-		srv, err := lcli.GetFullNodeServices(cctx)
+		api, closer, err := lcli.GetFullNodeAPI(cctx)
 		if err != nil {
 			return err
 		}
-		defer srv.Close() //nolint:errcheck
+		defer closer()
 
 		ctx := lcli.ReqContext(cctx)
-		var params lcli.SendParams
 
-		params.To = shard.ShardActorAddr
+		// Try to get default address first
+		addr, _ := api.WalletDefaultAddress(ctx)
+		if from := cctx.String("from"); from != "" {
+			addr, err = address.NewFromString(from)
+			if err != nil {
+				return err
+			}
+		}
+
+		// If subnet not set use root. Otherwise, use flag value
+		var subnet string
+		if cctx.String("subnet") != naming.Root.String() {
+			subnet = cctx.String("subnet")
+		}
 
 		val, err := types.ParseFIL(cctx.Args().Get(0))
 		if err != nil {
 			return lcli.ShowHelp(cctx, fmt.Errorf("failed to parse amount: %w", err))
 		}
-		params.Val = abi.TokenAmount(val)
 
-		if from := cctx.String("from"); from != "" {
-			addr, err := address.NewFromString(from)
-			if err != nil {
-				return err
-			}
-
-			params.From = addr
-		}
-
-		addp := selectParams{}
-		if cctx.IsSet("name") {
-			c, err := shard.ShardID([]byte(cctx.String("name")))
-			if err != nil {
-				return lcli.ShowHelp(cctx, fmt.Errorf("could not generate CID for shard with that name"))
-			}
-			addp.ID = c.Bytes()
-		} else {
-			return lcli.ShowHelp(cctx, fmt.Errorf("no name for shard specified"))
-		}
-
-		paramsJson, err := json.Marshal(&addp)
-		if err != nil {
-			return xerrors.Errorf("failed marshalling addParams: %w", err)
-		}
-
-		// Join method
-		params.Method = abi.MethodNum(3)
-		decparams, err := srv.DecodeTypedParamsFromJSON(ctx, params.To, params.Method, string(paramsJson))
-		if err != nil {
-			return fmt.Errorf("failed to decode json params: %w", err)
-		}
-		params.Params = decparams
-
-		proto, err := srv.MessageForSend(ctx, params)
-		if err != nil {
-			return xerrors.Errorf("creating message prototype: %w", err)
-		}
-
-		sm, err := lcli.InteractiveSend(ctx, cctx, srv, proto)
+		c, err := api.JoinShard(ctx, addr, big.Int(val), naming.SubnetID(subnet))
 		if err != nil {
 			return err
 		}
+		fmt.Fprintf(cctx.App.Writer, "Successfully added stake to subnet in message: %s\n", c)
+		return nil
+	},
+}
 
-		fmt.Fprintf(cctx.App.Writer, "%s\n", sm.Cid())
+var mineCmd = &cli.Command{
+	Name:      "mine",
+	Usage:     "Start mining in a subnet",
+	ArgsUsage: "[]",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "from",
+			Usage: "optionally specify the account to mine from",
+		},
+		&cli.StringFlag{
+			Name:  "subnet",
+			Usage: "specify the id of the subnet to mine",
+			Value: naming.Root.String(),
+		},
+		&cli.BoolFlag{
+			Name:  "stop",
+			Usage: "use this flag to determine if you want to start or stop mining",
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+
+		if cctx.Args().Len() != 0 {
+			return lcli.ShowHelp(cctx, fmt.Errorf("'mine' expects no arguments, just a set of flags"))
+		}
+		api, closer, err := lcli.GetFullNodeAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+
+		ctx := lcli.ReqContext(cctx)
+
+		// Try to get default address first
+		addr, _ := api.WalletDefaultAddress(ctx)
+		if from := cctx.String("from"); from != "" {
+			addr, err = address.NewFromString(from)
+			if err != nil {
+				return err
+			}
+		}
+
+		// Get actor ID for wallet to use for mining.
+		walletID, err := api.StateLookupID(ctx, addr, types.EmptyTSK)
+		if err != nil {
+			return err
+		}
+		// If subnet not set use root. Otherwise, use flag value
+		var subnet string
+		if cctx.String("subnet") != naming.Root.String() {
+			subnet = cctx.String("subnet")
+		}
+
+		err = api.Mine(ctx, walletID, naming.SubnetID(subnet), cctx.Bool("stop"))
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(cctx.App.Writer, "Successfully started/stopped mining in subnet: %s\n", subnet)
+		return nil
+	},
+}
+
+var leaveCmd = &cli.Command{
+	Name:      "leave",
+	Usage:     "Leave a subnet",
+	ArgsUsage: "[]",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "from",
+			Usage: "optionally specify the account to send message from",
+		},
+		&cli.StringFlag{
+			Name:  "subnet",
+			Usage: "specify the id of the subnet to mine",
+			Value: naming.Root.String(),
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+
+		if cctx.Args().Len() != 0 {
+			return lcli.ShowHelp(cctx, fmt.Errorf("'leave' expects no arguments, just a set of flags"))
+		}
+		api, closer, err := lcli.GetFullNodeAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+
+		ctx := lcli.ReqContext(cctx)
+
+		// Try to get default address first
+		addr, _ := api.WalletDefaultAddress(ctx)
+		if from := cctx.String("from"); from != "" {
+			addr, err = address.NewFromString(from)
+			if err != nil {
+				return err
+			}
+		}
+
+		// If subnet not set use root. Otherwise, use flag value
+		var subnet string
+		if cctx.String("subnet") != naming.Root.String() {
+			subnet = cctx.String("subnet")
+		}
+
+		c, err := api.Leave(ctx, addr, naming.SubnetID(subnet))
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(cctx.App.Writer, "Successfully left subnet in message: %s\n", c)
+		return nil
+	},
+}
+
+var killCmd = &cli.Command{
+	Name:      "kill",
+	Usage:     "Send kill signal to a subnet",
+	ArgsUsage: "[]",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "from",
+			Usage: "optionally specify the account to send message from",
+		},
+		&cli.StringFlag{
+			Name:  "subnet",
+			Usage: "specify the id of the subnet to mine",
+			Value: naming.Root.String(),
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+
+		if cctx.Args().Len() != 0 {
+			return lcli.ShowHelp(cctx, fmt.Errorf("'kill' expects no arguments, just a set of flags"))
+		}
+		api, closer, err := lcli.GetFullNodeAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+
+		ctx := lcli.ReqContext(cctx)
+
+		// Try to get default address first
+		addr, _ := api.WalletDefaultAddress(ctx)
+		if from := cctx.String("from"); from != "" {
+			addr, err = address.NewFromString(from)
+			if err != nil {
+				return err
+			}
+		}
+
+		// If subnet not set use root. Otherwise, use flag value
+		var subnet string
+		if cctx.String("subnet") != naming.Root.String() {
+			subnet = cctx.String("subnet")
+		}
+
+		c, err := api.Kill(ctx, addr, naming.SubnetID(subnet))
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(cctx.App.Writer, "Successfully sent kill to subnet in message: %s\n", c)
 		return nil
 	},
 }

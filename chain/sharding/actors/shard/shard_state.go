@@ -94,3 +94,12 @@ func ConstructShardState(store adt.Store, params *ConstructParams) (*ShardState,
 		Status:        Instantiated,
 	}, nil
 }
+
+func (st *ShardState) IsMiner(addr address.Address) bool {
+	for _, a := range st.Miners {
+		if a == addr {
+			return true
+		}
+	}
+	return false
+}

@@ -13,5 +13,7 @@ type Sharding interface {
 	AddShard(ctx context.Context, wallet address.Address, parent naming.SubnetID, name string, consensus uint64, minerStake abi.TokenAmount,
 		delegminer address.Address) (address.Address, error) // perm:write
 	JoinShard(ctx context.Context, wallet address.Address, value abi.TokenAmount, id naming.SubnetID) (cid.Cid, error) // perm:write
-
+	Mine(ctx context.Context, wallet address.Address, id naming.SubnetID, stop bool) error                             // perm:write
+	Leave(ctx context.Context, wallet address.Address, id naming.SubnetID) (cid.Cid, error)                            // perm:write
+	Kill(ctx context.Context, wallet address.Address, id naming.SubnetID) (cid.Cid, error)                             // perm:write
 }

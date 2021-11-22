@@ -598,6 +598,12 @@ type ShardingStruct struct {
 		AddShard func(p0 context.Context, p1 address.Address, p2 naming.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 address.Address) (address.Address, error) `perm:"write"`
 
 		JoinShard func(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 naming.SubnetID) (cid.Cid, error) `perm:"write"`
+
+		Kill func(p0 context.Context, p1 address.Address, p2 naming.SubnetID) (cid.Cid, error) `perm:"write"`
+
+		Leave func(p0 context.Context, p1 address.Address, p2 naming.SubnetID) (cid.Cid, error) `perm:"write"`
+
+		Mine func(p0 context.Context, p1 address.Address, p2 naming.SubnetID, p3 bool) error `perm:"write"`
 	}
 }
 
@@ -3605,6 +3611,39 @@ func (s *ShardingStruct) JoinShard(p0 context.Context, p1 address.Address, p2 ab
 
 func (s *ShardingStub) JoinShard(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 naming.SubnetID) (cid.Cid, error) {
 	return *new(cid.Cid), ErrNotSupported
+}
+
+func (s *ShardingStruct) Kill(p0 context.Context, p1 address.Address, p2 naming.SubnetID) (cid.Cid, error) {
+	if s.Internal.Kill == nil {
+		return *new(cid.Cid), ErrNotSupported
+	}
+	return s.Internal.Kill(p0, p1, p2)
+}
+
+func (s *ShardingStub) Kill(p0 context.Context, p1 address.Address, p2 naming.SubnetID) (cid.Cid, error) {
+	return *new(cid.Cid), ErrNotSupported
+}
+
+func (s *ShardingStruct) Leave(p0 context.Context, p1 address.Address, p2 naming.SubnetID) (cid.Cid, error) {
+	if s.Internal.Leave == nil {
+		return *new(cid.Cid), ErrNotSupported
+	}
+	return s.Internal.Leave(p0, p1, p2)
+}
+
+func (s *ShardingStub) Leave(p0 context.Context, p1 address.Address, p2 naming.SubnetID) (cid.Cid, error) {
+	return *new(cid.Cid), ErrNotSupported
+}
+
+func (s *ShardingStruct) Mine(p0 context.Context, p1 address.Address, p2 naming.SubnetID, p3 bool) error {
+	if s.Internal.Mine == nil {
+		return ErrNotSupported
+	}
+	return s.Internal.Mine(p0, p1, p2, p3)
+}
+
+func (s *ShardingStub) Mine(p0 context.Context, p1 address.Address, p2 naming.SubnetID, p3 bool) error {
+	return ErrNotSupported
 }
 
 func (s *SignableStruct) Sign(p0 context.Context, p1 SignFunc) error {

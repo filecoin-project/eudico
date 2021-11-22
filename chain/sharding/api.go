@@ -2,27 +2,62 @@ package sharding
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"path"
 	"time"
 
+	"github.com/filecoin-project/go-jsonrpc"
+	"github.com/filecoin-project/go-jsonrpc/auth"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/api/v0api"
+	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/messagesigner"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/types"
+	"github.com/filecoin-project/lotus/metrics/proxy"
 	"github.com/filecoin-project/lotus/node/config"
 	"github.com/filecoin-project/lotus/node/impl/client"
+	"github.com/filecoin-project/lotus/node/impl/common"
 	"github.com/filecoin-project/lotus/node/impl/full"
+	"github.com/filecoin-project/lotus/node/impl/market"
+	"github.com/filecoin-project/lotus/node/impl/net"
+	"github.com/filecoin-project/lotus/node/impl/paych"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/modules/lp2p"
+	"github.com/gorilla/mux"
+	"github.com/ipfs/go-cid"
 	"github.com/libp2p/go-libp2p-core/host"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 )
 
+type SubnetAPI struct {
+	common.CommonAPI
+	net.NetAPI
+	full.ChainAPI
+	client.API
+	full.MpoolAPI
+	full.GasAPI
+	market.MarketAPI
+	paych.PaychAPI
+	full.StateAPI
+	full.MsigAPI
+	full.WalletAPI
+	full.SyncAPI
+	full.BeaconAPI
+
+	DS          dtypes.MetadataDS
+	NetworkName dtypes.NetworkName
+
+	*ShardingSub
+}
+
 // PopulateAPIs populates the impl/fullNode for a shard.
 // NOTE: We may be able to do this with DI in the future.
 func (sh *Shard) populateAPIs(
-	parentAPI *wrappedAPI,
+	parentAPI *SubnetAPI,
 	h host.Host,
 	tsExec stmgr.Executor, // Tipset Executor of the consensus used for shard.
 ) error {
@@ -111,7 +146,7 @@ func (sh *Shard) populateAPIs(
 		RtvlBlockstoreAccessor:    parentAPI.RtvlBlockstoreAccessor,
 	}
 
-	sh.api = &wrappedAPI{
+	sh.api = &SubnetAPI{
 		CommonAPI:   parentAPI.CommonAPI,
 		NetAPI:      parentAPI.NetAPI,
 		ChainAPI:    chainAPI,
@@ -133,11 +168,11 @@ func (sh *Shard) populateAPIs(
 	return sh.nodeServer(sh.ID.String(), sh.api)
 }
 
-func (n *wrappedAPI) CreateBackup(ctx context.Context, fpath string) error {
+func (n *SubnetAPI) CreateBackup(ctx context.Context, fpath string) error {
 	panic("backup not implemented for wrapped abstraction")
 }
 
-func (n *wrappedAPI) NodeStatus(ctx context.Context, inclChainStatus bool) (status api.NodeStatus, err error) {
+func (n *SubnetAPI) NodeStatus(ctx context.Context, inclChainStatus bool) (status api.NodeStatus, err error) {
 	curTs, err := n.ChainHead(ctx)
 	if err != nil {
 		return status, err
@@ -209,4 +244,72 @@ func (n *wrappedAPI) NodeStatus(ctx context.Context, inclChainStatus bool) (stat
 	}
 
 	return status, nil
+}
+
+// The next two fucntions are exact copies from node/rpc.go to be able to handle subnet APIs
+// as if they were FullNode API implementations.
+// FullNodeHandler returns a full node handler, to be mounted as-is on the server.
+func FullNodeHandler(prefix string, a v1api.FullNode, permissioned bool, opts ...jsonrpc.ServerOption) (http.Handler, error) {
+	m := mux.NewRouter()
+
+	serveRpc := func(path string, hnd interface{}) {
+		rpcServer := jsonrpc.NewServer(opts...)
+		rpcServer.Register("Filecoin", hnd)
+
+		var handler http.Handler = rpcServer
+		if permissioned {
+			handler = &auth.Handler{Verify: a.AuthVerify, Next: rpcServer.ServeHTTP}
+		}
+
+		m.Handle(path, handler)
+	}
+
+	fnapi := proxy.MetricedFullAPI(a)
+	if permissioned {
+		fnapi = api.PermissionedFullAPI(fnapi)
+	}
+
+	serveRpc(path.Join("/", prefix, "/rpc/v1"), fnapi)
+	serveRpc(path.Join("/", prefix, "/rpc/v0"), &v0api.WrapperV1Full{FullNode: fnapi})
+
+	// Import handler
+	handleImportFunc := handleImport(a.(*SubnetAPI))
+	if permissioned {
+		importAH := &auth.Handler{
+			Verify: a.AuthVerify,
+			Next:   handleImportFunc,
+		}
+		m.Handle(prefix+"/rest/v0/import", importAH)
+	} else {
+		m.HandleFunc(prefix+"/rest/v0/import", handleImportFunc)
+	}
+
+	return m, nil
+}
+
+func handleImport(a *SubnetAPI) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "PUT" {
+			w.WriteHeader(404)
+			return
+		}
+		if !auth.HasPerm(r.Context(), nil, api.PermWrite) {
+			w.WriteHeader(401)
+			_ = json.NewEncoder(w).Encode(struct{ Error string }{"unauthorized: missing write permission"})
+			return
+		}
+
+		c, err := a.ClientImportLocal(r.Context(), r.Body)
+		if err != nil {
+			w.WriteHeader(500)
+			_ = json.NewEncoder(w).Encode(struct{ Error string }{err.Error()})
+			return
+		}
+		w.WriteHeader(200)
+		err = json.NewEncoder(w).Encode(struct{ Cid cid.Cid }{c})
+		if err != nil {
+			log.Errorf("/rest/v0/import: Writing response failed: %+v", err)
+			return
+		}
+	}
 }
