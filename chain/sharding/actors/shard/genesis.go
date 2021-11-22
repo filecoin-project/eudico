@@ -239,7 +239,7 @@ func SetupShardActor(ctx context.Context, bs bstore.Blockstore, networkName stri
 	}
 
 	act := &types.Actor{
-		Code:    actor.ShardActorCodeID,
+		Code:    actor.ShardCoordActorCodeID,
 		Balance: big.Zero(),
 		Head:    statecid,
 	}

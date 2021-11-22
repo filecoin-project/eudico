@@ -79,7 +79,7 @@ func ConstructSCAState(store adt.Store, networkName naming.SubnetID) (*SCAState,
 func (st *SCAState) GetShard(s adt.Store, id cid.Cid) (*Shard, bool, error) {
 	claims, err := adt.AsMap(s, st.Shards, builtin.DefaultHamtBitwidth)
 	if err != nil {
-		return nil, false, xerrors.Errorf("failed to load claims: %w", err)
+		return nil, false, xerrors.Errorf("failed to load shards: %w", err)
 	}
 	return getShard(claims, id)
 }
