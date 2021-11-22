@@ -1,351 +1,92 @@
 package sharding
 
 import (
-	shardactor "github.com/filecoin-project/lotus/chain/sharding/actors/shard"
+	"context"
+	"reflect"
+
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/lotus/blockstore"
+	"github.com/filecoin-project/lotus/chain/events"
+	"github.com/filecoin-project/lotus/chain/sharding/actors/naming"
+	"github.com/filecoin-project/lotus/chain/sharding/actors/sca"
+	"github.com/filecoin-project/lotus/chain/types"
+	cbor "github.com/ipfs/go-ipld-cbor"
 )
 
-// Info included in diff structure.
-type diffInfo struct {
-	consensus shardactor.ConsensusType
-	genesis   []byte
-	isMiner   bool
-	isRm      bool
-}
+// listenSCAEvents is the routine responsible for listening to events in
+// the SCA of each subnet.
+//
+// TODO: This is a placeholder. with what we have implemented so far there
+// is no need to synchronously listen to new events. We'll need this once
+// we propagate checkpoints and support cross-shard transactions.
+func (s *ShardingSub) listenSCAEvents(ctx context.Context, sh *Shard) {
+	api := s.api
+	evs := s.events
+	id := naming.Root
 
-/*
-// Checks if there's a new shard and if we should start listening to it.
-func (s *ShardingSub) checkNewShard(ctx context.Context, outDiff map[string]diffInfo, cst *cbor.BasicIpldStore, oldSt, newSt shardactor.ShardState) error {
-		if oldSt.TotalShards < newSt.TotalShards {
-			log.Infow("New shard event detected")
-			// Get shard maps
-			newM, err := shards(adt.WrapStore(ctx, cst), newSt)
-			if err != nil {
-				return err
-			}
-			oldM, err := shards(adt.WrapStore(ctx, cst), oldSt)
-			if err != nil {
-				return err
-			}
-
-			// Get the id of new shards in a map.
-			diff, err := newShards(oldM, newM)
-			if err != nil {
-				return err
-			}
-
-			// For each shard check if we should join
-			for k := range diff {
-				err := s.diffShards(ctx, outDiff, k, cst, oldSt, newSt)
-				if err != nil {
-					log.Errorf("error checking if I should join new shard: %s", err)
-					return err
-				}
-			}
-		}
-	return nil
-}
-
-// Checks if there are new joiners or miners.
-func (s *ShardingSub) checkShardChange(ctx context.Context, outDiff map[string]diffInfo, cst *cbor.BasicIpldStore, oldSt, newSt shardactor.ShardState) error {
-		// Get shard maps
-		newM, err := shards(adt.WrapStore(ctx, cst), newSt)
-		if err != nil {
-			return err
-		}
-		oldM, err := shards(adt.WrapStore(ctx, cst), oldSt)
-		if err != nil {
-			return err
-		}
-		chSh, err := changedShards(oldM, newM)
-		if err != nil {
-			return err
-		}
-
-		// If any shard has changed, or a shard has been removed.
-		if len(chSh) > 0 || oldSt.TotalShards > newSt.TotalShards {
-			log.Infow("Shard change event detected")
-			left := map[cid.Cid]struct{}{}
-
-			// If the number of shards is reduced.
-			// Get the id of the shards that have left.
-			// We invert the order of states because
-			// we want to check if a shard left.
-			if oldSt.TotalShards > newSt.TotalShards {
-				left, err = newShards(newM, oldM)
-				if err != nil {
-					return err
-				}
-			}
-
-			// For each shard that has been removed.
-			for shid := range left {
-				// Check if I previously was in the list of stakers.
-				err = s.rmShards(ctx, outDiff, shid, cst, oldSt, newSt)
-				if err != nil {
-					log.Errorf("error checking if shard changed: %s", err)
-					return err
-				}
-
-			}
-
-			// For each shard that has changed
-			for shid := range chSh {
-				// First check if it is because I was added as a staker.
-				err := s.diffShards(ctx, outDiff, shid, cst, oldSt, newSt)
-				if err != nil {
-					log.Errorf("error checking if shard changed: %s", err)
-					return err
-				}
-				// Then check if it is beacuse I left the stakers list.
-				err = s.rmShards(ctx, outDiff, shid, cst, oldSt, newSt)
-				if err != nil {
-					log.Errorf("error checking if shard changed: %s", err)
-					return err
-				}
-
-			}
-			return nil
-
-		}
-	return nil
-}
-
-func (s *ShardingSub) rmShards(ctx context.Context, outDiff map[string]diffInfo, shid cid.Cid, cst *cbor.BasicIpldStore, oldSt, newSt shardactor.ShardState) error {
-	// Check if we've been removed from the list of stakers.
-	//
-	// We invert oldSt for newSt so we can also check if we were
-	// stakers in the removed shards. The old state will have the shard
-	// while in the new state the shard has been removed.
-	in, err := s.addrInStakes(ctx, adt.WrapStore(ctx, cst), shid, newSt, oldSt)
-	if err != nil {
-		log.Errorf("Error checking states to see if peer in list of stakers: %s", err)
-		return err
+	// If shard is nil, we are listening from the root chain.
+	// TODO: Revisit this, there is probably a most elegan way to
+	// do this.
+	if sh != nil {
+		id = sh.ID
+		api = sh.api
+		evs = sh.events
 	}
-	if in {
-		outDiff[shid.String()] = diffInfo{
-			isRm: true,
-		}
-	}
-	return nil
-}
 
-func (s *ShardingSub) diffShards(ctx context.Context, outDiff map[string]diffInfo, shid cid.Cid, cst *cbor.BasicIpldStore, oldSt, newSt shardactor.ShardState) error {
-	// Check if we are in the mining list.
-	store := adt.WrapStore(ctx, cst)
-	in, err := s.isMiner(ctx, store, shid, oldSt, newSt)
-	if err != nil {
-		log.Errorf("Error getting shards in old state: %s", err)
-		return err
+	checkFunc := func(ctx context.Context, ts *types.TipSet) (done bool, more bool, err error) {
+		return false, true, nil
 	}
-	// Get genesis and consensus from shard
-	sh, err := getShard(ctx, store, newSt, shid)
-	if err != nil {
-		log.Errorf("Error getting shards in new state: %s", err)
-		return err
+
+	changeHandler := func(oldTs, newTs *types.TipSet, states events.StateChange, curH abi.ChainEpoch) (more bool, err error) {
+		log.Infow("State change detected for SCA in shard", "shardID", id)
+
+		// Trigger the detected change in shards.
+		return s.triggerChange(ctx, api, struct{}{})
+
 	}
-	if in {
-		outDiff[shid.String()] = diffInfo{
-			isMiner:   true,
-			genesis:   sh.Genesis,
-			consensus: sh.Consensus,
-		}
-		// If we are in the list of miners we are also in the
-		// list fo stakers, so we can move on to the next shard.
+
+	revertHandler := func(ctx context.Context, ts *types.TipSet) error {
 		return nil
 	}
 
-	// Check if we are in the list of stakers
-	in, err = s.addrInStakes(ctx, adt.WrapStore(ctx, cst), shid, oldSt, newSt)
-	if err != nil {
-		log.Errorf("Error checking states to see if peer in list of stakers: %s", err)
-		return err
-	}
-	if in {
-		outDiff[shid.String()] = diffInfo{
-			genesis:   sh.Genesis,
-			consensus: sh.Consensus,
-		}
-	}
-	return nil
-}
-
-// Checks if a shard has left or joined the list of shards.
-func newShards(oldM *adt.Map, newM *adt.Map) (map[cid.Cid]struct{}, error) {
-	/*
-		diff := map[cid.Cid]struct{}{}
-			var sh shardactor.Shard
-			// TODO: Can we get the ID from the key instead of having
-			// to load and get from the shard object?
-			err := newM.ForEach(&sh, func(k string) error {
-				diff[sh.ID] = struct{}{}
-				return nil
-			})
-			if err != nil {
-				return nil, err
-			}
-			err = oldM.ForEach(&sh, func(k string) error {
-				delete(diff, sh.ID)
-				return nil
-			})
-			if err != nil {
-				return nil, err
-			}
-		return diff, err
-}
-
-// Check if shard states have changed.
-func changedShards(oldM *adt.Map, newM *adt.Map) (map[cid.Cid]*shardactor.Shard, error) {
-	diff := make(map[cid.Cid]*shardactor.Shard)
-	var sh shardactor.Shard
-
-	err := newM.ForEach(&sh, func(k string) error {
-		diff[sh.ID] = &sh
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	err = oldM.ForEach(&sh, func(k string) error {
-		// If the shard is equal there are no changes.
-		if reflect.DeepEqual(sh.ID, diff[sh.ID]) {
-			delete(diff, sh.ID)
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return diff, err
-}
-
-func (s *ShardingSub) addrInStakes(ctx context.Context, store adt.Store, shID cid.Cid, oldSt, newSt shardactor.ShardState) (bool, error) {
-	oldSh, oldHas, err := oldSt.GetShard(store, shID)
-	if err != nil {
-		return false, err
-	}
-	newSh, newHas, err := newSt.GetShard(store, shID)
-	if err != nil {
-		return false, err
-	}
-	if !newHas {
-		return false, nil
-	}
-
-	wallAddrs, err := s.api.WalletAPI.WalletList(ctx)
-	if err != nil {
-		return false, err
-	}
-	newM, err := stakes(store, newSh)
-	if err != nil {
-		return false, err
-	}
-	for _, addr := range wallAddrs {
-		addr, err := s.api.StateLookupID(ctx, addr, types.EmptyTSK)
+	match := func(oldTs, newTs *types.TipSet) (bool, events.StateChange, error) {
+		oldAct, err := api.StateGetActor(ctx, sca.ShardCoordActorAddr, oldTs.Key())
 		if err != nil {
-			// Disregard errors here. We want to check if the
-			// state changes, if we can't check this, well, we keep going!
-			continue
+			return false, nil, err
 		}
-		if oldHas {
-			oldM, err := stakes(store, oldSh)
-			if err != nil {
-				return false, err
-			}
-			_, has, err := shardactor.GetMinerState(newM, addr)
-			if err != nil {
-				return false, err
-			}
-			_, oldhas, err := shardactor.GetMinerState(oldM, addr)
-			if err != nil {
-				return false, err
-			}
-			// If we are in the new state but not in the previous one.
-			if has && !oldhas {
-				return true, nil
-			}
-		} else {
-			_, has, err := shardactor.GetMinerState(newM, addr)
-			if err != nil {
-				return false, err
-			}
-			if has {
-				return true, nil
-			}
-		}
-	}
-	return false, nil
-}
-
-func getShard(ctx context.Context, store adt.Store, st shardactor.ShardState, shid cid.Cid) (*shardactor.Shard, error) {
-	sh, has, err := st.GetShard(store, shid)
-	if err != nil {
-		return nil, err
-	}
-	if !has {
-		return nil, xerrors.New("no shard with specified shardID")
-	}
-	return sh, nil
-}
-
-func (s *ShardingSub) isMiner(ctx context.Context, store adt.Store, shID cid.Cid, oldSt, newSt shardactor.ShardState) (bool, error) {
-	oldSh, oldHas, err := oldSt.GetShard(store, shID)
-	if err != nil {
-		return false, err
-	}
-	newSh, newHas, err := newSt.GetShard(store, shID)
-	if err != nil {
-		return false, err
-	}
-	if !newHas {
-		return false, nil
-	}
-
-	wallAddrs, err := s.api.WalletAPI.WalletList(ctx)
-	if err != nil {
-		return false, err
-	}
-	newMineL := newSh.Miners
-	for _, addr := range wallAddrs {
-		addr, err := s.api.StateLookupID(ctx, addr, types.EmptyTSK)
+		newAct, err := api.StateGetActor(ctx, sca.ShardCoordActorAddr, newTs.Key())
 		if err != nil {
-			// Disregard errors here. We want to check if the
-			// state changes, if we can't check this, well, we keep going!
-			continue
+			return false, nil, err
 		}
-		if oldHas {
-			oldMineL := oldSh.Miners
-			has := containsAddr(addr, newMineL)
-			oldhas := containsAddr(addr, oldMineL)
-			// If we are in the new state but not in the previous one.
-			if has && !oldhas {
-				return true, nil
-			}
-		} else {
-			has := containsAddr(addr, newMineL)
-			if has {
-				return true, nil
-			}
+
+		var oldSt, newSt sca.SCAState
+
+		bs := blockstore.NewAPIBlockstore(api)
+		cst := cbor.NewCborStore(bs)
+		if err := cst.Get(ctx, oldAct.Head, &oldSt); err != nil {
+			return false, nil, err
 		}
+		if err := cst.Get(ctx, newAct.Head, &newSt); err != nil {
+			return false, nil, err
+		}
+
+		// If there was some change in the state, for now, trigger change function.
+		if !reflect.DeepEqual(newSt, oldSt) {
+			return true, nil, nil
+		}
+
+		return false, nil, nil
+
 	}
-	return false, nil
-}
 
-func containsAddr(addr address.Address, ls []address.Address) bool {
-	for _, a := range ls {
-		if a == addr {
-			return true
-		}
+	err := evs.StateChanged(checkFunc, changeHandler, revertHandler, 5, 76587687658765876, match)
+	if err != nil {
+		return
 	}
-	return false
 }
 
-// wraps a shard map.
-func shards(s adt.Store, st shardactor.ShardState) (*adt.Map, error) {
-	return adt.AsMap(s, st.Shards, builtin.DefaultHamtBitwidth)
+func (s *ShardingSub) triggerChange(ctx context.Context, api *SubnetAPI, diff struct{}) (more bool, err error) {
+	log.Warnw("No logic implemented yet when SCA changes are detected", "shardID", api.NetworkName)
+	// TODO: This will be populated when checkpointing and cross-shard transactions come.
+	return true, nil
 }
-
-// wraps a stake map.
-func stakes(s adt.Store, sh *shardactor.Shard) (*adt.Map, error) {
-	return adt.AsMap(s, sh.Stake, builtin.DefaultHamtBitwidth)
-}
-*/

@@ -3,7 +3,6 @@ package sharding
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/filecoin-project/go-address"
@@ -271,159 +270,18 @@ func (s *ShardingSub) startShard(ctx context.Context, id naming.SubnetID,
 		log.Errorw("Events couldn't be initialized for shard", "shardID", id, "err", err)
 		return err
 	}
-	go s.listenShardEvents(ctx, sh)
-	log.Infow("Listening to shard events in shard", "shardID", id)
-
-	/* TODO: Determine when to start mining in a chain. This may be an
-	independent command
-		// If is miner start mining in shard.
-		if info.isMiner {
-			sh.mine(ctx)
-		}
-	*/
+	go s.listenSCAEvents(ctx, sh)
+	log.Infow("Listening to SCA events in subnet", "shardID", id)
 
 	log.Infow("Successfully spawned shard", "shardID", id)
 
 	return nil
 }
 
-func (s *ShardingSub) listenShardEvents(ctx context.Context, sh *Shard) {
-	api := s.api
-	evs := s.events
-	id := naming.Root
-
-	// If shard is nil, we are listening from the root chain.
-	if sh != nil {
-		id = sh.ID
-		api = sh.api
-		evs = sh.events
-	}
-
-	checkFunc := func(ctx context.Context, ts *types.TipSet) (done bool, more bool, err error) {
-		return false, true, nil
-	}
-
-	changeHandler := func(oldTs, newTs *types.TipSet, states events.StateChange, curH abi.ChainEpoch) (more bool, err error) {
-		log.Infow("State change detected for shard actor in shard", "shardID", id)
-
-		// Add the new shard to the struct.
-		shardMap, ok := states.(map[string]diffInfo)
-		if !ok {
-			log.Error("Error casting diff structure")
-			return true, err
-		}
-
-		// Trigger the detected change in shards.
-		return s.triggerChange(ctx, api, shardMap)
-
-	}
-
-	revertHandler := func(ctx context.Context, ts *types.TipSet) error {
-		return nil
-	}
-
-	match := func(oldTs, newTs *types.TipSet) (bool, events.StateChange, error) {
-		/*
-				oldAct, err := api.StateGetActor(ctx, shardactor.ShardActorAddr, oldTs.Key())
-				if err != nil {
-					return false, nil, err
-				}
-				newAct, err := api.StateGetActor(ctx, shardactor.ShardActorAddr, newTs.Key())
-				if err != nil {
-					return false, nil, err
-				}
-
-			var oldSt, newSt shardactor.ShardState
-
-			bs := blockstore.NewAPIBlockstore(api)
-			cst := cbor.NewCborStore(bs)
-			if err := cst.Get(ctx, oldAct.Head, &oldSt); err != nil {
-				return false, nil, err
-			}
-			if err := cst.Get(ctx, newAct.Head, &newSt); err != nil {
-				return false, nil, err
-			}
-
-			// If no changes in the state return false.
-			if reflect.DeepEqual(newSt, oldSt) {
-				return false, nil, nil
-			}
-
-			/*
-				outDiff := make(map[string]diffInfo)
-				// Start running state checks to build diff.
-				// Check first if there are new shards.
-				if err := s.checkNewShard(ctx, outDiff, cst, oldSt, newSt); err != nil {
-					log.Errorw("error in checkNewShard", "err", err)
-					return false, nil, err
-				}
-				// Check if state in existing shards has changed.
-				if err := s.checkShardChange(ctx, outDiff, cst, oldSt, newSt); err != nil {
-					log.Errorw("error in checkShardChange", "err", err)
-					return false, nil, err
-				}
-
-				if len(outDiff) > 0 {
-					return true, outDiff, nil
-				}
-		*/
-
-		return false, nil, nil
-
-	}
-
-	err := evs.StateChanged(checkFunc, changeHandler, revertHandler, 5, 76587687658765876, match)
-	if err != nil {
-		return
-	}
-}
-
-func (s *ShardingSub) triggerChange(ctx context.Context, api *SubnetAPI, shardMap map[string]diffInfo) (more bool, err error) {
-	/*
-		s.lk.Lock()
-		defer s.lk.Unlock()
-		// For each new shard detected
-		for k, diff := range shardMap {
-			// If the shard has not been removed.
-			if !diff.isRm {
-				log.Infow("Change event triggered for shard", "shardID", k)
-				_, ok := s.shards[k]
-				// If we are not already subscribed to the shard.
-				if !ok {
-					// Create shard with id from parentAPI
-					err := s.startShard(ctx, k, api, diff)
-					if err != nil {
-						log.Errorw("Error creating new shard", "shardID", k, "err", err)
-						return true, err
-					}
-				} else {
-					// If diff says we can start mining and we are not mining
-					if mining := s.shards[k].isMining(); !mining && shardMap[k].isMiner {
-						s.shards[k].mine(ctx)
-					}
-					// TODO: We currently don't support taking part of the stake
-					// from the shard, if we eventually do so, we'll also need
-					// to check if we've been removed from the list of miners
-					// in which case we'll need to stop mining here.
-				}
-			} else {
-				log.Infow("Leave event triggered for shard", "shardID", k)
-				// Stop all processes for shard.
-				err := s.shards[k].Close(ctx)
-				if err != nil {
-					log.Errorw("error closing shard", "shardID", k, "err", err)
-					return true, err
-				}
-				// Remove from shard registry.
-				delete(s.shards, k)
-				return false, nil
-			}
-		}
-	*/
-	return true, nil
-}
 func (s *ShardingSub) Start(ctx context.Context) {
-	s.listenShardEvents(ctx, nil)
+	// Start listening to events in the SCA contract from root right away.
+	// Every peer in the hierarchy needs to be aware of these events.
+	s.listenSCAEvents(ctx, nil)
 }
 
 func (s *ShardingSub) Close(ctx context.Context) error {
@@ -460,7 +318,6 @@ func (s *ShardingSub) AddShard(
 	// for the subnet.
 	parentAPI := s.getAPI(parent)
 	if parentAPI == nil {
-
 		return address.Undef, xerrors.Errorf("not syncing with parent network")
 	}
 	// Populate constructor parameters for subnet actor
@@ -503,7 +360,6 @@ func (s *ShardingSub) AddShard(
 		return address.Undef, aerr
 	}
 
-	fmt.Printf("Return: %x\n", mw.Receipt.Return)
 	r := &init_.ExecReturn{}
 	if err := r.UnmarshalCBOR(bytes.NewReader(mw.Receipt.Return)); err != nil {
 		return address.Undef, err
@@ -591,7 +447,7 @@ func (s *ShardingSub) JoinShard(
 	// See if we are already syncing with that chain. If this
 	// is the case we don't have to do much after the stake has been added.
 	if s.getAPI(id) != nil {
-		log.Infow("Already joined subnet %v. Adding more stake to shard", id)
+		log.Infow("Already joined subnet %v. Adding more stake to shard", "subnetID", id)
 		return smsg.Cid(), nil
 	}
 
@@ -601,7 +457,7 @@ func (s *ShardingSub) JoinShard(
 	if err != nil {
 		return cid.Undef, nil
 	}
-	err = s.startShard(ctx, id, parentAPI, st.Consensus, st.Genesis)
+	err = s.startShard(s.ctx, id, parentAPI, st.Consensus, st.Genesis)
 
 	return smsg.Cid(), nil
 }
