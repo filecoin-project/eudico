@@ -10,13 +10,12 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/system"
-	"github.com/filecoin-project/lotus/chain/consensus/actors/shard"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	param "github.com/filecoin-project/lotus/chain/consensus/params"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/gen/slashfilter"
-	"github.com/filecoin-project/lotus/chain/sharding"
 	adt0 "github.com/filecoin-project/specs-actors/actors/util/adt"
-	"github.com/google/uuid"
 	"github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
 	"github.com/urfave/cli/v2"
@@ -54,10 +53,6 @@ var tpowCmd = &cli.Command{
 			// use of the delegated consensus.
 			node.Override(new(stmgr.Executor), tspow.TipSetExecutor()), //todo
 			node.Override(new(stmgr.UpgradeSchedule), tspow.DefaultUpgradeSchedule()),
-
-			// Start sharding sub to listent to shard events
-			node.Override(new(*sharding.ShardingSub), sharding.NewShardSub),
-			node.Override(StartShardingSubKey, sharding.BuildShardingSub),
 		)),
 	},
 }
@@ -93,7 +88,7 @@ var tpowGenesisCmd = &cli.Command{
 			return err
 		}
 
-		if err := shard.WriteGenesis("eudico-"+uuid.New().String(), shard.PoW, address.Undef, vreg, rem, uint64(time.Now().Unix()), f); err != nil {
+		if err := subnet.WriteGenesis(hierarchical.RootSubnet, subnet.PoW, address.Undef, vreg, rem, uint64(time.Now().Unix()), f); err != nil {
 			return xerrors.Errorf("write genesis car: %w", err)
 		}
 

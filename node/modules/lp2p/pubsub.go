@@ -330,7 +330,7 @@ func GossipSub(in GossipIn) (service *pubsub.PubSub, err error) {
 
 	options = append(options, pubsub.WithPeerGater(pgParams))
 
-	/* TODO: Find a way to allow pubsub topics for shards.
+	/* TODO: Find a way to allow pubsub topics for subnets.
 	This may need something to start allowing topics with a specific
 	prefix.
 		allowTopics := []string{

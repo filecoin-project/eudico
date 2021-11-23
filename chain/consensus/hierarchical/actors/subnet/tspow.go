@@ -1,4 +1,4 @@
-package shard
+package subnet
 
 import (
 	"context"
@@ -110,13 +110,13 @@ func makePoWGenesisBlock(ctx context.Context, bs bstore.Blockstore, template gen
 	}, nil
 }
 
-func powGenTemplate(shardID string, vreg, rem address.Address, seq uint64) (*genesis.Template, error) {
+func powGenTemplate(subnetID string, vreg, rem address.Address, seq uint64) (*genesis.Template, error) {
 
 	return &genesis.Template{
 		NetworkVersion: networkVersion,
 		Accounts:       []genesis.Actor{},
 		Miners:         nil,
-		NetworkName:    shardID,
+		NetworkName:    subnetID,
 		Timestamp:      seq,
 
 		VerifregRootKey: genesis.Actor{

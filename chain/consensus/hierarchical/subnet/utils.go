@@ -1,11 +1,11 @@
-package sharding
+package subnet
 
 import (
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/beacon"
 	"github.com/filecoin-project/lotus/chain/consensus"
-	"github.com/filecoin-project/lotus/chain/consensus/actors/shard"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
@@ -13,37 +13,37 @@ import (
 	"golang.org/x/xerrors"
 )
 
-func tipSetExecutor(consensus shard.ConsensusType) (stmgr.Executor, error) {
+func tipSetExecutor(consensus subnet.ConsensusType) (stmgr.Executor, error) {
 	switch consensus {
-	case shard.Delegated:
+	case subnet.Delegated:
 		return delegcns.TipSetExecutor(), nil
-	case shard.PoW:
+	case subnet.PoW:
 		return tspow.TipSetExecutor(), nil
 	default:
 		return nil, xerrors.New("consensus type not suported")
 	}
 }
 
-func weight(consensus shard.ConsensusType) (store.WeightFunc, error) {
+func weight(consensus subnet.ConsensusType) (store.WeightFunc, error) {
 	switch consensus {
-	case shard.Delegated:
+	case subnet.Delegated:
 		return delegcns.Weight, nil
-	case shard.PoW:
+	case subnet.PoW:
 		return tspow.Weight, nil
 	default:
 		return nil, xerrors.New("consensus type not suported")
 	}
 }
 
-func newConsensus(consensus shard.ConsensusType,
+func newConsensus(consensus subnet.ConsensusType,
 	sm *stmgr.StateManager, beacon beacon.Schedule,
 	verifier ffiwrapper.Verifier,
 	genesis chain.Genesis) (consensus.Consensus, error) {
 
 	switch consensus {
-	case shard.Delegated:
+	case subnet.Delegated:
 		return delegcns.NewDelegatedConsensus(sm, beacon, verifier, genesis), nil
-	case shard.PoW:
+	case subnet.PoW:
 		return tspow.NewTSPoWConsensus(sm, beacon, verifier, genesis), nil
 	default:
 		return nil, xerrors.New("consensus type not suported")

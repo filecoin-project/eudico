@@ -1,4 +1,4 @@
-package sharding
+package subnet
 
 import (
 	"bytes"
@@ -12,8 +12,9 @@ import (
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/consensus"
-	"github.com/filecoin-project/lotus/chain/consensus/actors/shard"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/messagepool"
@@ -22,7 +23,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/sub"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/lib/peermgr"
-	"github.com/filecoin-project/lotus/node/impl"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/ipld/go-car"
 	"github.com/libp2p/go-libp2p-core/host"
@@ -33,46 +33,44 @@ import (
 	"golang.org/x/xerrors"
 )
 
-// Shard object abstracting all sharding processes and objects.
-type Shard struct {
+// Subnet object abstracting all subneting processes and objects.
+type Subnet struct {
 	host host.Host
-	// ShardID
-	ID string
-	// network name for shard
-	netName string
-	// Pubsub subcription for shard.
+	// SubnetID
+	ID hierarchical.SubnetID
+	// Pubsub subcription for subnet.
 	// sub *pubsub.Subscription
 	// Metadata datastore.
 	ds dtypes.MetadataDS
 	// Exposed blockstore
 	// NOTE: We currently use the same blockstore for
-	// everything in shards, this will need to be fixed.
+	// everything in subnets, this will need to be fixed.
 	bs blockstore.Blockstore
 	// State manager
 	sm *stmgr.StateManager
 	// chain
 	ch *store.ChainStore
 	// Consensus type
-	consType shard.ConsensusType
-	// Consensus of the shard
+	consType subnet.ConsensusType
+	// Consensus of the subnet
 	cons consensus.Consensus
-	// Mempool for the shard.
+	// Mempool for the subnet.
 	mpool *messagepool.MessagePool
-	// Syncer for the shard chain
+	// Syncer for the subnet chain
 	syncer *chain.Syncer
-	// Node server to register shard servers
+	// Node server to register subnet servers
 	nodeServer api.FullNodeServer
 
-	// Events for shard chain
+	// Events for subnet chain
 	events *events.Events
-	api    *impl.FullNodeAPI
+	api    *API
 
 	// Pubsub router from the root chain.
 	pubsub *pubsub.PubSub
 	// Reusing peermanager from root chain.
 	pmgr peermgr.MaybePeerMgr
 
-	// Shard context
+	// Subnet context
 	ctx       context.Context
 	ctxCancel context.CancelFunc
 
@@ -85,7 +83,7 @@ type Shard struct {
 }
 
 // LoadGenesis from serialized genesis bootstrap
-func (sh *Shard) LoadGenesis(genBytes []byte) (chain.Genesis, error) {
+func (sh *Subnet) LoadGenesis(genBytes []byte) (chain.Genesis, error) {
 	c, err := car.LoadCar(sh.bs, bytes.NewReader(genBytes))
 	if err != nil {
 		return nil, xerrors.Errorf("loading genesis car file failed: %w", err)
@@ -105,15 +103,15 @@ func (sh *Shard) LoadGenesis(genBytes []byte) (chain.Genesis, error) {
 
 	err = sh.ch.SetGenesis(h)
 	if err != nil {
-		log.Errorw("Error setting genesis for shard", "err", err)
+		log.Errorw("Error setting genesis for subnet", "err", err)
 		return nil, err
 	}
 	//LoadGenesis to pass it
 	return chain.LoadGenesis(sh.sm)
 }
 
-func (sh *Shard) HandleIncomingMessages(ctx context.Context, bootstrapper dtypes.Bootstrapper) error {
-	nn := dtypes.NetworkName(sh.netName)
+func (sh *Subnet) HandleIncomingMessages(ctx context.Context, bootstrapper dtypes.Bootstrapper) error {
+	nn := dtypes.NetworkName(sh.ID.String())
 	v := sub.NewMessageValidator(sh.host.ID(), sh.mpool)
 
 	if err := sh.pubsub.RegisterTopicValidator(build.MessagesTopic(nn), v.Validate); err != nil {
@@ -127,7 +125,7 @@ func (sh *Shard) HandleIncomingMessages(ctx context.Context, bootstrapper dtypes
 		if err != nil {
 			// TODO: We should maybe remove the panic from
 			// here and return an error if we don't sync. I guess
-			// we can afford an error in a shard sync
+			// we can afford an error in a subnet sync
 			panic(err)
 		}
 
@@ -144,17 +142,18 @@ func (sh *Shard) HandleIncomingMessages(ctx context.Context, bootstrapper dtypes
 	return nil
 }
 
-// Close the shard
+// Close the subnet
 //
 // Stop all processes and remove all handlers.
-func (sh *Shard) Close(ctx context.Context) error {
-	log.Infow("Closing shard", "shardID", sh.ID)
+func (sh *Subnet) Close(ctx context.Context) error {
+	log.Infow("Closing subnet", "subnetID", sh.ID)
+	err0 := sh.stopMining(ctx)
 	// Remove hello and exchange handlers to stop accepting requests from peers.
-	sh.host.RemoveStreamHandler(protocol.ID(BlockSyncProtoPrefix + sh.netName))
-	sh.host.RemoveStreamHandler(protocol.ID(HelloProtoPrefix + sh.netName))
-	// Remove pubsub topic validators for the shard.
-	err1 := sh.pubsub.UnregisterTopicValidator(build.BlocksTopic(dtypes.NetworkName(sh.netName)))
-	err2 := sh.pubsub.UnregisterTopicValidator(build.MessagesTopic(dtypes.NetworkName(sh.netName)))
+	sh.host.RemoveStreamHandler(protocol.ID(BlockSyncProtoPrefix + sh.ID.String()))
+	sh.host.RemoveStreamHandler(protocol.ID(HelloProtoPrefix + sh.ID.String()))
+	// Remove pubsub topic validators for the subnet.
+	err1 := sh.pubsub.UnregisterTopicValidator(build.BlocksTopic(dtypes.NetworkName(sh.ID.String())))
+	err2 := sh.pubsub.UnregisterTopicValidator(build.MessagesTopic(dtypes.NetworkName(sh.ID.String())))
 	// Close chainstore
 	err3 := sh.ch.Close()
 	// Stop state manager
@@ -165,14 +164,15 @@ func (sh *Shard) Close(ctx context.Context) error {
 	err5 := sh.mpool.Close()
 
 	// TODO: Do we need to do something else to fully close the
-	// shard. We'll need to revisit this.
+	// subnet. We'll need to revisit this.
 	// Check: https://github.com/filecoin-project/eudico/issues/38
 	// TODO: We should maybe check also if it is worth removing the
-	// chainstore for the shard from the datastore (as it is no longer
-	// needed).
+	// chainstore for the subnet from the datastore (as it is no longer
+	// needed). See: https://github.com/filecoin-project/eudico/issues/79
 	sh.ctxCancel()
 
 	return multierr.Combine(
+		err0,
 		err1,
 		err2,
 		err3,
@@ -217,8 +217,8 @@ func waitForSync(stmgr *stmgr.StateManager, epochs int, subscribe func()) {
 	})
 }
 
-func (sh *Shard) HandleIncomingBlocks(ctx context.Context, bserv dtypes.ChainBlockService) error {
-	nn := dtypes.NetworkName(sh.netName)
+func (sh *Subnet) HandleIncomingBlocks(ctx context.Context, bserv dtypes.ChainBlockService) error {
+	nn := dtypes.NetworkName(sh.ID.String())
 	v := sub.NewBlockValidator(
 		sh.host.ID(), sh.ch, sh.cons,
 		func(p peer.ID) {
@@ -241,30 +241,30 @@ func (sh *Shard) HandleIncomingBlocks(ctx context.Context, bserv dtypes.ChainBlo
 	return nil
 }
 
-// Checks if we are mining in a shard.
-func (sh *Shard) isMining() bool {
+// Checks if we are mining in a subnet.
+func (sh *Subnet) isMining() bool {
 	sh.minlk.Lock()
 	defer sh.minlk.Unlock()
 	return sh.miningCtx != nil
 }
 
-func (sh *Shard) mine(ctx context.Context) error {
+func (sh *Subnet) mine(ctx context.Context) error {
 	if sh.miningCtx != nil {
-		log.Warnw("already mining in shard", "shardID", sh.ID)
+		log.Warnw("already mining in subnet", "subnetID", sh.ID)
 		return nil
 	}
-	// TODO: As-is a node will keep mining in a shard until the node process
+	// TODO: As-is a node will keep mining in a subnet until the node process
 	// is completely stopped. In the next iteration we need to figure out
-	// how to manage contexts for when a shard is killed or a node moves into
-	// another shard. (see next function)
+	// how to manage contexts for when a subnet is killed or a node moves into
+	// another subnet. (see next function)
 	// Mining in the root chain is an independent process.
 	// TODO: We should check if these processes throw an error
 	switch sh.consType {
-	case shard.Delegated:
+	case subnet.Delegated:
 		// Assigning mining context.
 		sh.miningCtx, sh.miningCncl = context.WithCancel(ctx)
 		go delegcns.Mine(sh.miningCtx, sh.api)
-	case shard.PoW:
+	case subnet.PoW:
 		miner, err := sh.getWallet(ctx)
 		if err != nil {
 			log.Errorw("no valid identity found for PoW mining", "err", err)
@@ -275,24 +275,26 @@ func (sh *Shard) mine(ctx context.Context) error {
 	default:
 		return xerrors.New("consensus type not suported")
 	}
-	log.Infow("Started mining in shard", "shardID", sh.ID, "consensus", sh.consType)
+	log.Infow("Started mining in subnet", "subnetID", sh.ID, "consensus", sh.consType)
 	return nil
 }
 
-func (sh *Shard) stopMining(ctx context.Context) {
+func (sh *Subnet) stopMining(ctx context.Context) error {
 	sh.minlk.Lock()
 	defer sh.minlk.Unlock()
 	if sh.miningCncl != nil {
-		log.Infow("Stop mining in shard", "shardID", sh.ID)
+		log.Infow("Stop mining in subnet", "subnetID", sh.ID)
 		sh.miningCncl()
+		return nil
 	}
+	return xerrors.Errorf("Currently not mining in subnet")
 }
 
 // Get an identity from the peer's wallet.
 // First check if a default identity has been set and
 // if not take the first from the list.
 // NOTE: We should probably make this configurable.
-func (sh *Shard) getWallet(ctx context.Context) (address.Address, error) {
+func (sh *Subnet) getWallet(ctx context.Context) (address.Address, error) {
 	addr, err := sh.api.WalletDefaultAddress(ctx)
 	// If no defualt wallet set
 	if err != nil || addr == address.Undef {

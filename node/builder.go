@@ -120,6 +120,8 @@ const (
 
 	SetApiEndpointKey
 
+	StartSubnetMgrKey
+
 	_nInvokes // keep this last
 )
 

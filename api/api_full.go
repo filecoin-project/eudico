@@ -61,6 +61,7 @@ const LookbackNoLimit = abi.ChainEpoch(-1)
 type FullNode interface {
 	Common
 	Net
+	HierarchicalCns
 
 	// MethodGroup: Chain
 	// The Chain method group contains methods for interacting with the

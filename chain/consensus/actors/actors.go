@@ -5,11 +5,10 @@ import (
 	mh "github.com/multiformats/go-multihash"
 )
 
-//go:generate go run ./gen
-
 var (
-	SplitActorCodeID cid.Cid
-	ShardActorCodeID cid.Cid
+	SplitActorCodeID       cid.Cid
+	SubnetCoordActorCodeID cid.Cid
+	SubnetActorCodeID      cid.Cid
 )
 
 var builtinActors map[cid.Cid]*actorInfo
@@ -23,9 +22,9 @@ func init() {
 	builtinActors = make(map[cid.Cid]*actorInfo)
 
 	for id, info := range map[*cid.Cid]*actorInfo{ //nolint:nomaprange
-		// TODO: Find better names.
-		&SplitActorCodeID: {name: "deleg/0/split"},
-		&ShardActorCodeID: {name: "deleg/0/shards"},
+		&SplitActorCodeID:       {name: "example/0/split"},
+		&SubnetCoordActorCodeID: {name: "hierarchical/0/sca"},
+		&SubnetActorCodeID:      {name: "hierarchical/0/subnet"},
 	} {
 		c, err := builder.Sum([]byte(info.name))
 		if err != nil {

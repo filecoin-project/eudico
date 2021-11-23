@@ -1,4 +1,4 @@
-package sharding
+package subnet
 
 import (
 	"context"
@@ -20,42 +20,42 @@ import (
 )
 
 const (
-	// BlockSyncProtoPrefix for shard block syn protocol
+	// BlockSyncProtoPrefix for subnet block syn protocol
 	BlockSyncProtoPrefix = "/fil/sync/blk/0.0.1/"
-	// HelloProtoPrefix for shard block hello protocol
+	// HelloProtoPrefix for subnet block hello protocol
 	HelloProtoPrefix = "/fil/hello/1.0.0/"
 	// epochDiff determines the differences in epochs between
 	// exchanges wit the peer for which we update their view
 	// the chain. Peers may restart and run new hello handshakes
-	// with the shard already created.
+	// with the subnet already created.
 	epochDiff = 200
 )
 
-// helloService wraps information for hello service in shards
+// helloService wraps information for hello service in subnets
 type helloService struct {
 	svc *hello.Service
 	// FIXME: We should probably garbage collect this map
 	// periodically to prevent from growing indefinitely
-	// with peers that no longer part of the shard.
+	// with peers that no longer part of the subnet.
 	peers map[peer.ID]abi.ChainEpoch
 	lk    *keymutex.KeyMutex
 }
 
-// Creates a new hello service for the shard
-func (sh *Shard) newHelloService() {
-	pid := protocol.ID(HelloProtoPrefix + sh.netName)
+// Creates a new hello service for the subnet
+func (sh *Subnet) newHelloService() {
+	pid := protocol.ID(HelloProtoPrefix + sh.ID.String())
 	sh.hello = &helloService{
-		// NOTE: We added a NewShardHelloService to leverage the standard code for send hello.
+		// NOTE: We added a NewSubnetHelloService to leverage the standard code for send hello.
 		// I don't think we added complexity there, but if not bring all the required code here
-		svc:   hello.NewShardHelloService(sh.host, sh.ch, sh.syncer, sh.cons, sh.pmgr, pid),
+		svc:   hello.NewSubnetHelloService(sh.host, sh.ch, sh.syncer, sh.cons, sh.pmgr, pid),
 		peers: make(map[peer.ID]abi.ChainEpoch),
 		lk:    keymutex.New(0),
 	}
-	log.Infow("Setting up hello protocol/service for shard with protocolID", "protocolID", pid)
-	sh.host.SetStreamHandler(protocol.ID(HelloProtoPrefix+sh.netName), sh.handleHelloStream)
+	log.Infow("Setting up hello protocol/service for subnet with protocolID", "protocolID", pid)
+	sh.host.SetStreamHandler(protocol.ID(HelloProtoPrefix+sh.ID.String()), sh.handleHelloStream)
 }
 
-func (sh *Shard) helloBack(p peer.ID, epoch abi.ChainEpoch) {
+func (sh *Subnet) helloBack(p peer.ID, epoch abi.ChainEpoch) {
 	sh.hello.lk.Lock(p.String())
 	defer sh.hello.lk.Unlock(p.String())
 	prev, ok := sh.hello.peers[p]
@@ -72,24 +72,24 @@ func (sh *Shard) helloBack(p peer.ID, epoch abi.ChainEpoch) {
 }
 
 // exchangeServer listening to sync requests from other peers sycners.
-// Required to allow others to get in sync with the shard chain.
-func (sh *Shard) exchangeServer() {
+// Required to allow others to get in sync with the subnet chain.
+func (sh *Subnet) exchangeServer() {
 	srv := exchange.NewServer(sh.ch)
-	sh.host.SetStreamHandler(protocol.ID(BlockSyncProtoPrefix+sh.netName), srv.HandleStream)
-	log.Infow("Listening to exchange server with protocolID", "protocolID", BlockSyncProtoPrefix+sh.netName)
+	sh.host.SetStreamHandler(protocol.ID(BlockSyncProtoPrefix+sh.ID.String()), srv.HandleStream)
+	log.Infow("Listening to exchange server with protocolID", "protocolID", BlockSyncProtoPrefix+sh.ID.String())
 }
 
-// create a new exchange client for the shard chain.
-func (sh *Shard) exchangeClient(ctx context.Context) exchange.Client {
-	log.Infow("Set up exchange client for shard with protocolID", "protocolID", BlockSyncProtoPrefix+sh.netName)
-	return exchange.NewShardClient(ctx, sh.host, sh.pmgr, BlockSyncProtoPrefix+sh.netName)
+// create a new exchange client for the subnet chain.
+func (sh *Subnet) exchangeClient(ctx context.Context) exchange.Client {
+	log.Infow("Set up exchange client for subnet with protocolID", "protocolID", BlockSyncProtoPrefix+sh.ID.String())
+	return exchange.NewSubnetClient(ctx, sh.host, sh.pmgr, BlockSyncProtoPrefix+sh.ID.String())
 }
 
 // RunHello service. This methos is an adaptation of the one used
 // for the root time in module/services.
-func (sh *Shard) runHello(ctx context.Context) error {
+func (sh *Subnet) runHello(ctx context.Context) error {
 	h := sh.host
-	// Create hello service and register handler for shard
+	// Create hello service and register handler for subnet
 	sh.newHelloService()
 
 	// Subscribe to new identifications with other peers
@@ -108,7 +108,7 @@ func (sh *Shard) runHello(ctx context.Context) error {
 	}()
 
 	// If we are running the service for the first time, perform an
-	// initial hello handshake for this shard to sync the chain.
+	// initial hello handshake for this subnet to sync the chain.
 	conns := h.Network().Conns()
 	for _, conn := range conns {
 		// We do this synchronously to get the head before starting
@@ -120,11 +120,11 @@ func (sh *Shard) runHello(ctx context.Context) error {
 	return nil
 }
 
-// Send hello message to a peer updating with the state of our shard chain.
+// Send hello message to a peer updating with the state of our subnet chain.
 // It directly uses the same message format than the root's chain hello protocol.
-func (sh *Shard) sendHello(ctx context.Context, svc *hello.Service, p peer.ID) {
+func (sh *Subnet) sendHello(ctx context.Context, svc *hello.Service, p peer.ID) {
 	h := sh.host
-	pid := protocol.ID(HelloProtoPrefix + sh.netName)
+	pid := protocol.ID(HelloProtoPrefix + sh.ID.String())
 	log.Debugw("Saying hello to peer", "peerID", p)
 	if err := svc.SayHello(ctx, p); err != nil {
 		protos, _ := h.Peerstore().GetProtocols(p)
@@ -146,12 +146,12 @@ func protosContains(protos []string, search string) bool {
 	return false
 }
 
-// Handle hello stream for shards. It is slightly different
+// Handle hello stream for subnets. It is slightly different
 // from the one used in the root chain.
 // Instead of running a sync'ed hello RTT, we listen to hello messages
 // and according to the other end's chainEpoch we determine if we need
 // to update their view of the chain or not.
-func (sh *Shard) handleHelloStream(s inet.Stream) {
+func (sh *Subnet) handleHelloStream(s inet.Stream) {
 	var hmsg hello.HelloMessage
 	if err := cborutil.ReadCborRPC(s, &hmsg); err != nil {
 		log.Errorw("failed to read hello message, disconnecting", "error", err)
@@ -166,7 +166,7 @@ func (sh *Shard) handleHelloStream(s inet.Stream) {
 		"hash", hmsg.GenesisHash)
 
 	// If we don't have the same genesis abort the exchange. We are not able to sync
-	// We may not even be in the same shard and running the same chain.
+	// We may not even be in the same subnet and running the same chain.
 	if hmsg.GenesisHash != sh.syncer.Genesis.Cids()[0] {
 		log.Errorf("other peer has different genesis! (rcv: %s, mine: %s)", hmsg.GenesisHash, sh.syncer.Genesis.Cids()[0])
 		_ = s.Conn().Close()
@@ -187,11 +187,11 @@ func (sh *Shard) handleHelloStream(s inet.Stream) {
 		}
 	}()
 
-	// If it's been a while since we interacted with the peer in the shard,
+	// If it's been a while since we interacted with the peer in the subnet,
 	// send a hello message to update their view of the chain.
 	sh.helloBack(s.Conn().RemotePeer(), hmsg.HeaviestTipSetHeight)
 
-	// FIXME: I don't think this check is necessary for shards, we proactively respond with
+	// FIXME: I don't think this check is necessary for subnets, we proactively respond with
 	// helloBack.
 	protos, err := sh.host.Peerstore().GetProtocols(s.Conn().RemotePeer())
 	if err != nil {
@@ -217,7 +217,7 @@ func (sh *Shard) handleHelloStream(s inet.Stream) {
 	// If the tipset is over 0, start syncing.
 	// NOTE: Check if it is worth syncing even when our chain is not in 0.
 	// We may be far behind and is worth notifying our syncer.
-	// What if we join a shard again for which we kept the state?
+	// What if we join a subnet again for which we kept the state?
 	if ts.TipSet().Height() > 0 {
 		sh.host.ConnManager().TagPeer(s.Conn().RemotePeer(), "fcpeer", 10)
 

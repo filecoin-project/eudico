@@ -16,6 +16,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/beacon"
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/consensus/filcns"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	"github.com/filecoin-project/lotus/chain/exchange"
 	"github.com/filecoin-project/lotus/chain/gen/slashfilter"
 	"github.com/filecoin-project/lotus/chain/market"
@@ -133,6 +134,11 @@ var ChainNode = Options(
 	Override(HandleMigrateClientFundsKey, modules.HandleMigrateClientFunds),
 
 	Override(new(*full.GasPriceCache), full.NewGasPriceCache),
+
+	// Subneting
+	// Start sharding sub to listent to shard events
+	Override(new(*subnet.SubnetMgr), subnet.NewSubnetMgr),
+	Override(StartSubnetMgrKey, subnet.BuildSubnetMgr),
 
 	// Lite node API
 	ApplyIf(isLiteNode,

@@ -64,8 +64,8 @@ func newPeerTracker(lc fx.Lifecycle, h host.Host, pmgr *peermgr.PeerMgr) *bsPeer
 	return bsPt
 }
 
-// newShardPeerTracker creates a peer tracker to handle sync of a shard chiain
-func newShardPeerTracker(ctx context.Context, h host.Host, pmgr *peermgr.PeerMgr) *bsPeerTracker {
+// newSubnetPeerTracker creates a peer tracker to handle sync of a subnet chiain
+func newSubnetPeerTracker(ctx context.Context, h host.Host, pmgr *peermgr.PeerMgr) *bsPeerTracker {
 	bsPt := &bsPeerTracker{
 		peers: make(map[peer.ID]*peerStats),
 		pmgr:  pmgr,

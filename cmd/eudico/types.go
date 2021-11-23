@@ -1,5 +1,6 @@
 package main
 
-import "github.com/filecoin-project/lotus/node"
-
-var StartShardingSubKey = node.AddInvoke()
+// TODO: Remove this
+// import "github.com/filecoin-project/lotus/node"
+//
+// var StartSubnetMgrKey = node.AddInvoke()

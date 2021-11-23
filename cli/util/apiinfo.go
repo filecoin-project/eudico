@@ -37,7 +37,7 @@ func ParseApiInfo(s string) APIInfo {
 	}
 }
 
-func (a APIInfo) DialArgsShard(shard, version string) (string, error) {
+func (a APIInfo) DialArgsSubnet(subnet, version string) (string, error) {
 	ma, err := multiaddr.NewMultiaddr(a.Addr)
 	if err == nil {
 		_, addr, err := manet.DialArgs(ma)
@@ -46,8 +46,8 @@ func (a APIInfo) DialArgsShard(shard, version string) (string, error) {
 		}
 
 		p := path.Join("/rpc/", version)
-		if shard != "" {
-			p = path.Join("/shard/", shard, "/rpc/", version)
+		if subnet != "" {
+			p = path.Join("/subnet/", subnet, "/rpc/", version)
 		}
 
 		return "ws://" + addr + p, nil
@@ -61,7 +61,7 @@ func (a APIInfo) DialArgsShard(shard, version string) (string, error) {
 }
 
 func (a APIInfo) DialArgs(version string) (string, error) {
-	return a.DialArgsShard("", version)
+	return a.DialArgsSubnet("", version)
 }
 
 func (a APIInfo) Host() (string, error) {

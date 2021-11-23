@@ -1,4 +1,4 @@
-package shard
+package subnet
 
 import (
 	"context"
@@ -108,7 +108,7 @@ func makeDelegatedGenesisBlock(ctx context.Context, bs bstore.Blockstore, templa
 	}, nil
 }
 
-func delegatedGenTemplate(shardID string, miner, vreg, rem address.Address, seq uint64) (*genesis.Template, error) {
+func delegatedGenTemplate(subnetID string, miner, vreg, rem address.Address, seq uint64) (*genesis.Template, error) {
 
 	return &genesis.Template{
 		NetworkVersion: networkVersion,
@@ -118,9 +118,9 @@ func delegatedGenTemplate(shardID string, miner, vreg, rem address.Address, seq 
 			Meta:    json.RawMessage(`{"Owner":"` + miner.String() + `"}`),
 		}},
 		Miners:      nil,
-		NetworkName: shardID,
+		NetworkName: subnetID,
 		// NOTE: We can't use a Timestamp for this
-		// because then the genesis generation in the shard
+		// because then the genesis generation in the subnet
 		// is non-deterministic. We use a swquence number for now.
 		// Timestamp:   uint64(time.Now().Unix()),
 		Timestamp: seq,

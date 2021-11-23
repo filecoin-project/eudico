@@ -106,7 +106,11 @@ func canExec(callerCodeID cid.Cid, execCodeID cid.Cid) bool {
 			return true
 		}
 		return false
-	case builtin.PaymentChannelActorCodeID, builtin.MultisigActorCodeID, actor.SplitActorCodeID:
+	// List of actors user-deployable actors.
+	case builtin.PaymentChannelActorCodeID,
+		builtin.MultisigActorCodeID,
+		actor.SplitActorCodeID,
+		actor.SubnetActorCodeID:
 		return true
 	default:
 		return false

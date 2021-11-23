@@ -23,7 +23,7 @@ import (
 var eudCmds = []*cli.Command{
 	lcli.WithCategory("daemon", delegatedCmd),
 	lcli.WithCategory("daemon", tpowCmd),
-	lcli.WithCategory("sharding", shardingCmds),
+	lcli.WithCategory("subnet", subnetCmds),
 }
 
 var log = logging.Logger("eudico")
@@ -87,7 +87,8 @@ func main() {
 				Usage: "if true, will ignore pre-send checks",
 			},
 			&cli.StringFlag{
-				Name: "shard",
+				Name:  "subnet-api",
+				Usage: "set to point to the API of a specific subnet",
 			},
 			cliutil.FlagVeryVerbose,
 		},
