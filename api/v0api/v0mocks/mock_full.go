@@ -22,6 +22,7 @@ import (
 	api "github.com/filecoin-project/lotus/api"
 	apitypes "github.com/filecoin-project/lotus/api/types"
 	miner "github.com/filecoin-project/lotus/chain/actors/builtin/miner"
+	hierarchical "github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	types "github.com/filecoin-project/lotus/chain/types"
 	alerting "github.com/filecoin-project/lotus/journal/alerting"
 	marketevents "github.com/filecoin-project/lotus/markets/loggers"
@@ -59,6 +60,21 @@ func NewMockFullNode(ctrl *gomock.Controller) *MockFullNode {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockFullNode) EXPECT() *MockFullNodeMockRecorder {
 	return m.recorder
+}
+
+// AddSubnet mocks base method.
+func (m *MockFullNode) AddSubnet(arg0 context.Context, arg1 address.Address, arg2 hierarchical.SubnetID, arg3 string, arg4 uint64, arg5 big.Int, arg6 address.Address) (address.Address, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddSubnet", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
+	ret0, _ := ret[0].(address.Address)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddSubnet indicates an expected call of AddSubnet.
+func (mr *MockFullNodeMockRecorder) AddSubnet(arg0, arg1, arg2, arg3, arg4, arg5, arg6 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddSubnet", reflect.TypeOf((*MockFullNode)(nil).AddSubnet), arg0, arg1, arg2, arg3, arg4, arg5, arg6)
 }
 
 // AuthNew mocks base method.
@@ -951,6 +967,51 @@ func (mr *MockFullNodeMockRecorder) ID(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ID", reflect.TypeOf((*MockFullNode)(nil).ID), arg0)
 }
 
+// JoinSubnet mocks base method.
+func (m *MockFullNode) JoinSubnet(arg0 context.Context, arg1 address.Address, arg2 big.Int, arg3 hierarchical.SubnetID) (cid.Cid, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "JoinSubnet", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(cid.Cid)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// JoinSubnet indicates an expected call of JoinSubnet.
+func (mr *MockFullNodeMockRecorder) JoinSubnet(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "JoinSubnet", reflect.TypeOf((*MockFullNode)(nil).JoinSubnet), arg0, arg1, arg2, arg3)
+}
+
+// KillSubnet mocks base method.
+func (m *MockFullNode) KillSubnet(arg0 context.Context, arg1 address.Address, arg2 hierarchical.SubnetID) (cid.Cid, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "KillSubnet", arg0, arg1, arg2)
+	ret0, _ := ret[0].(cid.Cid)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// KillSubnet indicates an expected call of KillSubnet.
+func (mr *MockFullNodeMockRecorder) KillSubnet(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "KillSubnet", reflect.TypeOf((*MockFullNode)(nil).KillSubnet), arg0, arg1, arg2)
+}
+
+// LeaveSubnet mocks base method.
+func (m *MockFullNode) LeaveSubnet(arg0 context.Context, arg1 address.Address, arg2 hierarchical.SubnetID) (cid.Cid, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LeaveSubnet", arg0, arg1, arg2)
+	ret0, _ := ret[0].(cid.Cid)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LeaveSubnet indicates an expected call of LeaveSubnet.
+func (mr *MockFullNodeMockRecorder) LeaveSubnet(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LeaveSubnet", reflect.TypeOf((*MockFullNode)(nil).LeaveSubnet), arg0, arg1, arg2)
+}
+
 // LogAlerts mocks base method.
 func (m *MockFullNode) LogAlerts(arg0 context.Context) ([]alerting.Alert, error) {
 	m.ctrl.T.Helper()
@@ -1067,6 +1128,20 @@ func (m *MockFullNode) MarketWithdraw(arg0 context.Context, arg1, arg2 address.A
 func (mr *MockFullNodeMockRecorder) MarketWithdraw(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarketWithdraw", reflect.TypeOf((*MockFullNode)(nil).MarketWithdraw), arg0, arg1, arg2, arg3)
+}
+
+// MineSubnet mocks base method.
+func (m *MockFullNode) MineSubnet(arg0 context.Context, arg1 address.Address, arg2 hierarchical.SubnetID, arg3 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MineSubnet", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// MineSubnet indicates an expected call of MineSubnet.
+func (mr *MockFullNodeMockRecorder) MineSubnet(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MineSubnet", reflect.TypeOf((*MockFullNode)(nil).MineSubnet), arg0, arg1, arg2, arg3)
 }
 
 // MinerCreateBlock mocks base method.

@@ -4,8 +4,8 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors"
 	initactor "github.com/filecoin-project/lotus/chain/consensus/actors/init"
 	"github.com/filecoin-project/lotus/chain/consensus/actors/split"
-	"github.com/filecoin-project/lotus/chain/sharding/actors/sca"
-	"github.com/filecoin-project/lotus/chain/sharding/actors/shard"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	"github.com/filecoin-project/lotus/chain/vm"
 	exported6 "github.com/filecoin-project/specs-actors/v6/actors/builtin/exported"
 )
@@ -18,8 +18,8 @@ func NewActorRegistry() *vm.ActorRegistry {
 	inv.Register(nil, initactor.InitActor{}) // use our custom init actor
 
 	inv.Register(nil, split.SplitActor{})
-	inv.Register(nil, shard.ShardActor{})
-	inv.Register(nil, sca.ShardCoordActor{})
+	inv.Register(nil, subnet.SubnetActor{})
+	inv.Register(nil, sca.SubnetCoordActor{})
 
 	return inv
 }

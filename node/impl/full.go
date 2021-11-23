@@ -13,10 +13,10 @@ import (
 	"github.com/filecoin-project/lotus/node/impl/client"
 	"github.com/filecoin-project/lotus/node/impl/common"
 	"github.com/filecoin-project/lotus/node/impl/full"
+	"github.com/filecoin-project/lotus/node/impl/hierarchical"
 	"github.com/filecoin-project/lotus/node/impl/market"
 	"github.com/filecoin-project/lotus/node/impl/net"
 	"github.com/filecoin-project/lotus/node/impl/paych"
-	"github.com/filecoin-project/lotus/node/impl/sharding"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/modules/lp2p"
 )
@@ -38,7 +38,7 @@ type FullNodeAPI struct {
 	full.SyncAPI
 	full.BeaconAPI
 
-	sharding.ShardingAPI
+	hierarchical.HierarchicalAPI
 
 	DS          dtypes.MetadataDS
 	NetworkName dtypes.NetworkName

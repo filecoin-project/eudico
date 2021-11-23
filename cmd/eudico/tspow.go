@@ -10,11 +10,11 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/system"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	param "github.com/filecoin-project/lotus/chain/consensus/params"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/gen/slashfilter"
-	"github.com/filecoin-project/lotus/chain/sharding/actors/naming"
-	"github.com/filecoin-project/lotus/chain/sharding/actors/shard"
 	adt0 "github.com/filecoin-project/specs-actors/actors/util/adt"
 	"github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
@@ -88,7 +88,7 @@ var tpowGenesisCmd = &cli.Command{
 			return err
 		}
 
-		if err := shard.WriteGenesis(naming.Root, shard.PoW, address.Undef, vreg, rem, uint64(time.Now().Unix()), f); err != nil {
+		if err := subnet.WriteGenesis(hierarchical.RootSubnet, subnet.PoW, address.Undef, vreg, rem, uint64(time.Now().Unix()), f); err != nil {
 			return xerrors.Errorf("write genesis car: %w", err)
 		}
 

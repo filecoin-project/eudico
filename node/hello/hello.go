@@ -73,7 +73,7 @@ func NewHelloService(h host.Host, cs *store.ChainStore, syncer *chain.Syncer, co
 }
 
 // HelloService using a protocolID for the protocol handler
-func NewShardHelloService(h host.Host, cs *store.ChainStore, syncer *chain.Syncer, cons consensus.Consensus, pmgr peermgr.MaybePeerMgr, protocolID protocol.ID) *Service {
+func NewSubnetHelloService(h host.Host, cs *store.ChainStore, syncer *chain.Syncer, cons consensus.Consensus, pmgr peermgr.MaybePeerMgr, protocolID protocol.ID) *Service {
 	if pmgr.Mgr == nil {
 		log.Warn("running without peer manager")
 	}
@@ -85,7 +85,7 @@ func NewShardHelloService(h host.Host, cs *store.ChainStore, syncer *chain.Synce
 		syncer: syncer,
 		cons:   cons,
 		pmgr:   pmgr.Mgr,
-		// Pointing to protocolID for shard.
+		// Pointing to protocolID for subnet.
 		protocolID: protocolID,
 	}
 }

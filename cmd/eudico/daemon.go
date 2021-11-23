@@ -18,7 +18,7 @@ import (
 	"github.com/filecoin-project/go-jsonrpc"
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
-	"github.com/filecoin-project/lotus/chain/sharding"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/lib/peermgr"
@@ -273,11 +273,11 @@ func daemonCmd(overrides node.Option) *cli.Command {
 			}
 
 			globalMux := mux.NewRouter()
-			shardMux := mux.NewRouter()
-			globalMux.NewRoute().PathPrefix("/shard/").Handler(shardMux)
+			subnetMux := mux.NewRouter()
+			globalMux.NewRoute().PathPrefix("/subnet/").Handler(subnetMux)
 
 			serveNamedApi := func(p string, iapi api.FullNode) error {
-				pp := path.Join("/shard/", p+"/")
+				pp := path.Join("/subnet/", p+"/")
 
 				var h http.Handler
 				// If this is a full node API
@@ -290,18 +290,18 @@ func daemonCmd(overrides node.Option) *cli.Command {
 					}
 				} else {
 					// If not instantiate a subnet api
-					api, ok := iapi.(*sharding.SubnetAPI)
+					api, ok := iapi.(*subnet.API)
 					if !ok {
 						return xerrors.Errorf("Couldn't instantiate new subnet API. Something went wrong: %s", err)
 					}
 					// Instantiate the full node handler.
-					h, err = sharding.FullNodeHandler(pp, api, true, serverOptions...)
+					h, err = subnet.FullNodeHandler(pp, api, true, serverOptions...)
 					if err != nil {
 						return fmt.Errorf("failed to instantiate rpc handler: %s", err)
 					}
 				}
 				fmt.Println("[*] serve new subnet API", pp)
-				shardMux.NewRoute().PathPrefix(pp).Handler(h)
+				subnetMux.NewRoute().PathPrefix(pp).Handler(h)
 				return nil
 			}
 

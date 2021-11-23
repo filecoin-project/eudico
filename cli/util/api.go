@@ -184,9 +184,9 @@ func GetRawAPI(ctx *cli.Context, t repo.RepoType, version string) (string, http.
 		return "", nil, xerrors.Errorf("could not get API info for %s: %w", t, err)
 	}
 
-	shard := ctx.String("shard")
+	subnet := ctx.String("subnet-api")
 
-	addr, err := ainfo.DialArgsShard(shard, version)
+	addr, err := ainfo.DialArgsSubnet(subnet, version)
 	if err != nil {
 		return "", nil, xerrors.Errorf("could not get DialArgs: %w", err)
 	}

@@ -34,7 +34,7 @@ type FullNodeStruct struct {
 
 	NetStruct
 
-	ShardingStruct
+	HierarchicalCnsStruct
 
 	Internal struct {
 		BeaconGetEntry func(p0 context.Context, p1 abi.ChainEpoch) (*types.BeaconEntry, error) `perm:"read"`
@@ -402,7 +402,7 @@ type FullNodeStub struct {
 
 	NetStub
 
-	ShardingStub
+	HierarchicalCnsStub
 }
 
 type GatewayStruct struct {

@@ -21,7 +21,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/paych"
-	"github.com/filecoin-project/lotus/chain/sharding/actors/naming"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/extern/sector-storage/fsutil"
 	"github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
@@ -102,7 +102,7 @@ type FullNodeStruct struct {
 
 	NetStruct
 
-	ShardingStruct
+	HierarchicalCnsStruct
 
 	Internal struct {
 		BeaconGetEntry func(p0 context.Context, p1 abi.ChainEpoch) (*types.BeaconEntry, error) `perm:"read"`
@@ -476,7 +476,7 @@ type FullNodeStub struct {
 
 	NetStub
 
-	ShardingStub
+	HierarchicalCnsStub
 }
 
 type GatewayStruct struct {
@@ -552,6 +552,23 @@ type GatewayStruct struct {
 type GatewayStub struct {
 }
 
+type HierarchicalCnsStruct struct {
+	Internal struct {
+		AddSubnet func(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 address.Address) (address.Address, error) `perm:"write"`
+
+		JoinSubnet func(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 hierarchical.SubnetID) (cid.Cid, error) `perm:"write"`
+
+		KillSubnet func(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID) (cid.Cid, error) `perm:"write"`
+
+		LeaveSubnet func(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID) (cid.Cid, error) `perm:"write"`
+
+		MineSubnet func(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 bool) error `perm:"write"`
+	}
+}
+
+type HierarchicalCnsStub struct {
+}
+
 type NetStruct struct {
 	Internal struct {
 		ID func(p0 context.Context) (peer.ID, error) `perm:"read"`
@@ -591,23 +608,6 @@ type NetStruct struct {
 }
 
 type NetStub struct {
-}
-
-type ShardingStruct struct {
-	Internal struct {
-		AddShard func(p0 context.Context, p1 address.Address, p2 naming.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 address.Address) (address.Address, error) `perm:"write"`
-
-		JoinShard func(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 naming.SubnetID) (cid.Cid, error) `perm:"write"`
-
-		Kill func(p0 context.Context, p1 address.Address, p2 naming.SubnetID) (cid.Cid, error) `perm:"write"`
-
-		Leave func(p0 context.Context, p1 address.Address, p2 naming.SubnetID) (cid.Cid, error) `perm:"write"`
-
-		Mine func(p0 context.Context, p1 address.Address, p2 naming.SubnetID, p3 bool) error `perm:"write"`
-	}
-}
-
-type ShardingStub struct {
 }
 
 type SignableStruct struct {
@@ -3404,6 +3404,61 @@ func (s *GatewayStub) WalletBalance(p0 context.Context, p1 address.Address) (typ
 	return *new(types.BigInt), ErrNotSupported
 }
 
+func (s *HierarchicalCnsStruct) AddSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 address.Address) (address.Address, error) {
+	if s.Internal.AddSubnet == nil {
+		return *new(address.Address), ErrNotSupported
+	}
+	return s.Internal.AddSubnet(p0, p1, p2, p3, p4, p5, p6)
+}
+
+func (s *HierarchicalCnsStub) AddSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 address.Address) (address.Address, error) {
+	return *new(address.Address), ErrNotSupported
+}
+
+func (s *HierarchicalCnsStruct) JoinSubnet(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 hierarchical.SubnetID) (cid.Cid, error) {
+	if s.Internal.JoinSubnet == nil {
+		return *new(cid.Cid), ErrNotSupported
+	}
+	return s.Internal.JoinSubnet(p0, p1, p2, p3)
+}
+
+func (s *HierarchicalCnsStub) JoinSubnet(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 hierarchical.SubnetID) (cid.Cid, error) {
+	return *new(cid.Cid), ErrNotSupported
+}
+
+func (s *HierarchicalCnsStruct) KillSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID) (cid.Cid, error) {
+	if s.Internal.KillSubnet == nil {
+		return *new(cid.Cid), ErrNotSupported
+	}
+	return s.Internal.KillSubnet(p0, p1, p2)
+}
+
+func (s *HierarchicalCnsStub) KillSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID) (cid.Cid, error) {
+	return *new(cid.Cid), ErrNotSupported
+}
+
+func (s *HierarchicalCnsStruct) LeaveSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID) (cid.Cid, error) {
+	if s.Internal.LeaveSubnet == nil {
+		return *new(cid.Cid), ErrNotSupported
+	}
+	return s.Internal.LeaveSubnet(p0, p1, p2)
+}
+
+func (s *HierarchicalCnsStub) LeaveSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID) (cid.Cid, error) {
+	return *new(cid.Cid), ErrNotSupported
+}
+
+func (s *HierarchicalCnsStruct) MineSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 bool) error {
+	if s.Internal.MineSubnet == nil {
+		return ErrNotSupported
+	}
+	return s.Internal.MineSubnet(p0, p1, p2, p3)
+}
+
+func (s *HierarchicalCnsStub) MineSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 bool) error {
+	return ErrNotSupported
+}
+
 func (s *NetStruct) ID(p0 context.Context) (peer.ID, error) {
 	if s.Internal.ID == nil {
 		return *new(peer.ID), ErrNotSupported
@@ -3589,61 +3644,6 @@ func (s *NetStruct) NetPubsubScores(p0 context.Context) ([]PubsubScore, error) {
 
 func (s *NetStub) NetPubsubScores(p0 context.Context) ([]PubsubScore, error) {
 	return *new([]PubsubScore), ErrNotSupported
-}
-
-func (s *ShardingStruct) AddShard(p0 context.Context, p1 address.Address, p2 naming.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 address.Address) (address.Address, error) {
-	if s.Internal.AddShard == nil {
-		return *new(address.Address), ErrNotSupported
-	}
-	return s.Internal.AddShard(p0, p1, p2, p3, p4, p5, p6)
-}
-
-func (s *ShardingStub) AddShard(p0 context.Context, p1 address.Address, p2 naming.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 address.Address) (address.Address, error) {
-	return *new(address.Address), ErrNotSupported
-}
-
-func (s *ShardingStruct) JoinShard(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 naming.SubnetID) (cid.Cid, error) {
-	if s.Internal.JoinShard == nil {
-		return *new(cid.Cid), ErrNotSupported
-	}
-	return s.Internal.JoinShard(p0, p1, p2, p3)
-}
-
-func (s *ShardingStub) JoinShard(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 naming.SubnetID) (cid.Cid, error) {
-	return *new(cid.Cid), ErrNotSupported
-}
-
-func (s *ShardingStruct) Kill(p0 context.Context, p1 address.Address, p2 naming.SubnetID) (cid.Cid, error) {
-	if s.Internal.Kill == nil {
-		return *new(cid.Cid), ErrNotSupported
-	}
-	return s.Internal.Kill(p0, p1, p2)
-}
-
-func (s *ShardingStub) Kill(p0 context.Context, p1 address.Address, p2 naming.SubnetID) (cid.Cid, error) {
-	return *new(cid.Cid), ErrNotSupported
-}
-
-func (s *ShardingStruct) Leave(p0 context.Context, p1 address.Address, p2 naming.SubnetID) (cid.Cid, error) {
-	if s.Internal.Leave == nil {
-		return *new(cid.Cid), ErrNotSupported
-	}
-	return s.Internal.Leave(p0, p1, p2)
-}
-
-func (s *ShardingStub) Leave(p0 context.Context, p1 address.Address, p2 naming.SubnetID) (cid.Cid, error) {
-	return *new(cid.Cid), ErrNotSupported
-}
-
-func (s *ShardingStruct) Mine(p0 context.Context, p1 address.Address, p2 naming.SubnetID, p3 bool) error {
-	if s.Internal.Mine == nil {
-		return ErrNotSupported
-	}
-	return s.Internal.Mine(p0, p1, p2, p3)
-}
-
-func (s *ShardingStub) Mine(p0 context.Context, p1 address.Address, p2 naming.SubnetID, p3 bool) error {
-	return ErrNotSupported
 }
 
 func (s *SignableStruct) Sign(p0 context.Context, p1 SignFunc) error {
@@ -5092,8 +5092,8 @@ var _ Common = new(CommonStruct)
 var _ CommonNet = new(CommonNetStruct)
 var _ FullNode = new(FullNodeStruct)
 var _ Gateway = new(GatewayStruct)
+var _ HierarchicalCns = new(HierarchicalCnsStruct)
 var _ Net = new(NetStruct)
-var _ Sharding = new(ShardingStruct)
 var _ Signable = new(SignableStruct)
 var _ StorageMiner = new(StorageMinerStruct)
 var _ Wallet = new(WalletStruct)

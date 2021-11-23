@@ -12,8 +12,8 @@ import (
 
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
-	"github.com/filecoin-project/lotus/chain/sharding/actors/naming"
-	"github.com/filecoin-project/lotus/chain/sharding/actors/shard"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	lcli "github.com/filecoin-project/lotus/cli"
@@ -73,7 +73,7 @@ var delegatedGenesisCmd = &cli.Command{
 			return err
 		}
 
-		if err := shard.WriteGenesis(naming.Root, shard.Delegated, miner, vreg, rem, uint64(time.Now().Unix()), f); err != nil {
+		if err := subnet.WriteGenesis(hierarchical.RootSubnet, subnet.Delegated, miner, vreg, rem, uint64(time.Now().Unix()), f); err != nil {
 			return xerrors.Errorf("write genesis car: %w", err)
 		}
 

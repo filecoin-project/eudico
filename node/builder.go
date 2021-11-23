@@ -120,7 +120,7 @@ const (
 
 	SetApiEndpointKey
 
-	StartShardingSubKey
+	StartSubnetMgrKey
 
 	_nInvokes // keep this last
 )

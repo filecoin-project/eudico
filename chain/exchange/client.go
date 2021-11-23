@@ -52,12 +52,12 @@ func NewClient(lc fx.Lifecycle, host host.Host, pmgr peermgr.MaybePeerMgr) Clien
 	}
 }
 
-// NewShardClient creates a new libp2p-based exchange. Client that uses the libp2p
-// ChainExhange protocol as the fetching mechanism to sync a shard chain.
-func NewShardClient(ctx context.Context, host host.Host, pmgr peermgr.MaybePeerMgr, protocolID string) Client {
+// NewSubnetClient creates a new libp2p-based exchange. Client that uses the libp2p
+// ChainExhange protocol as the fetching mechanism to sync a subnet chain.
+func NewSubnetClient(ctx context.Context, host host.Host, pmgr peermgr.MaybePeerMgr, protocolID string) Client {
 	return &client{
 		host:        host,
-		peerTracker: newShardPeerTracker(ctx, host, pmgr.Mgr),
+		peerTracker: newSubnetPeerTracker(ctx, host, pmgr.Mgr),
 		protocolIDs: []string{protocolID},
 	}
 }
@@ -423,7 +423,7 @@ func (c *client) sendRequestToPeer(ctx context.Context, peer peer.ID, req *Reque
 			peer, []string{BlockSyncProtocolID, ChainExchangeProtocolID})
 	}
 
-	// Check that peer supports standard and shard protocols.
+	// Check that peer supports standard and subnet protocols.
 	// NOTE: This may need to be revisited, we are being extremely verbose.
 	// I think it is enough to check if the other end supports c.protocolIDs.
 	if len(supported) > 0 && (supported[0] != BlockSyncProtocolID &&
