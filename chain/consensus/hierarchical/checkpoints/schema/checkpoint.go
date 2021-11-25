@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/ipfs/go-cid"
 	ipld "github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
@@ -46,6 +47,7 @@ type MsgTreeList struct{}
 
 // CheckData is the data included in a Checkpoint.
 type CheckData struct {
+	Source         string
 	TipSet         []byte
 	Epoch          int
 	PrevCheckpoint cid.Cid
@@ -86,6 +88,7 @@ func initCheckpointSchema() schema.Type {
 	))
 	ts.Accumulate(schema.SpawnStruct("CheckData",
 		[]schema.StructField{
+			schema.SpawnStructField("Source", "String", false, false),
 			schema.SpawnStructField("TipSet", "Bytes", false, false),
 			schema.SpawnStructField("Epoch", "Int", false, false),
 			schema.SpawnStructField("PrevCheckpoint", "Link", false, false),
@@ -127,11 +130,12 @@ func noStoreLinkSystem() ipld.LinkSystem {
 //
 // This is the template returned by the SCA actor for the miners to include
 // the corresponding information and sign before commitment.
-func NewRawCheckpoint(epoch abi.ChainEpoch, prev cid.Cid,
-	xmsgs *MsgTreeList) *Checkpoint {
+func NewRawCheckpoint(source hierarchical.SubnetID,
+	epoch abi.ChainEpoch, prev cid.Cid, xmsgs *MsgTreeList) *Checkpoint {
 
 	return &Checkpoint{
 		Data: CheckData{
+			Source:         source.String(),
 			Epoch:          int(epoch),
 			PrevCheckpoint: prev,
 			XShardMsg:      xmsgs,

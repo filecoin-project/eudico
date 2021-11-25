@@ -9,7 +9,6 @@ import (
 	"github.com/filecoin-project/go-state-types/cbor"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
-	initactor "github.com/filecoin-project/lotus/chain/consensus/actors/init"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
@@ -31,12 +30,13 @@ var SubnetCoordActorAddr = func() address.Address {
 }()
 
 var Methods = struct {
-	Constructor  abi.MethodNum
-	Register     abi.MethodNum
-	AddStake     abi.MethodNum
-	ReleaseStake abi.MethodNum
-	Kill         abi.MethodNum
-}{builtin0.MethodConstructor, 2, 3, 4, 5}
+	Constructor   abi.MethodNum
+	Register      abi.MethodNum
+	AddStake      abi.MethodNum
+	ReleaseStake  abi.MethodNum
+	Kill          abi.MethodNum
+	RawCheckpoint abi.MethodNum
+}{builtin0.MethodConstructor, 2, 3, 4, 5, 6}
 
 type FundParams struct {
 	Value abi.TokenAmount
@@ -54,6 +54,7 @@ func (a SubnetCoordActor) Exports() []interface{} {
 		3:                         a.AddStake,
 		4:                         a.ReleaseStake,
 		5:                         a.Kill,
+		6:                         a.RawCheckpoint,
 		// -1:                         a.Fund,
 		// -1:                         a.Release,
 		// -1:                         a.Checkpoint,
@@ -74,9 +75,14 @@ func (a SubnetCoordActor) State() cbor.Er {
 	return new(SCAState)
 }
 
-func (a SubnetCoordActor) Constructor(rt runtime.Runtime, params *initactor.ConstructorParams) *abi.EmptyValue {
+type ConstructorParams struct {
+	NetworkName      string
+	CheckpointPeriod uint64
+}
+
+func (a SubnetCoordActor) Constructor(rt runtime.Runtime, params ConstructorParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
-	st, err := ConstructSCAState(adt.AsStore(rt), hierarchical.SubnetID(params.NetworkName))
+	st, err := ConstructSCAState(adt.AsStore(rt), params)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
 	rt.StateCreate(st)
 	return nil
@@ -209,6 +215,31 @@ func (a SubnetCoordActor) ReleaseStake(rt runtime.Runtime, params *FundParams) *
 		rt.Abortf(exitcode.ErrIllegalState, "failed sending released stake to subnet actor")
 	}
 
+	return nil
+}
+
+// RawCheckpoint
+//
+// XXX
+func (a SubnetCoordActor) RawCheckpoint(rt runtime.Runtime, params *FundParams) *abi.EmptyValue {
+	// Check current epoch
+	// Get the child checkpoints for the previous period.
+	// Include them in the template and return.
+	return nil
+}
+
+// Checkpoint
+//
+// XXX
+func (a SubnetCoordActor) Checkpoint(rt runtime.Runtime, params *FundParams) *abi.EmptyValue {
+	// Only subnet actors are allowed to send a checkpoint.
+	rt.ValidateImmediateCallerType(actor.SubnetActorCodeID)
+	// Store checkpoint for the current epoch.
+	// Make some verifications that the previous one is the connected to the current one
+	// and maybe that its epoch is the right one according to the period.
+	// If there is already a checkpoint for that subnet do not accepet it.
+	// We could probably even check if it is the same CID to allow disputed,
+	// but lets leave that for the future.
 	return nil
 }
 

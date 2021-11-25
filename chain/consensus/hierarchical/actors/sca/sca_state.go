@@ -40,6 +40,10 @@ type SCAState struct {
 	MinStake abi.TokenAmount
 	// List of subnets
 	Subnets cid.Cid // HAMT[cid.Cid]Subnet
+	// Checkpoint period in number of epochs
+	CheckPeriod uint64
+	// Checkpoints committed in SCA
+	Checkpoints cid.Cid // HAMT[epoch]Checkpoint
 }
 
 type Subnet struct {
@@ -57,21 +61,28 @@ type Subnet struct {
 	Status Status
 }
 
-func ConstructSCAState(store adt.Store, networkName hierarchical.SubnetID) (*SCAState, error) {
+func ConstructSCAState(store adt.Store, params ConstructorParams) (*SCAState, error) {
 	emptySubnetsMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}
-	networkCid, err := networkName.Cid()
+	emptyCheckpointsMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create empty map: %w", err)
+	}
+	nn := hierarchical.SubnetID(params.NetworkName)
+	networkCid, err := nn.Cid()
 	if err != nil {
 		panic(err)
 	}
 	return &SCAState{
 		Network:      networkCid,
-		NetworkName:  networkName,
+		NetworkName:  nn,
 		TotalSubnets: 0,
 		MinStake:     MinSubnetStake,
 		Subnets:      emptySubnetsMapCid,
+		CheckPeriod:  params.CheckpointPeriod,
+		Checkpoints:  emptyCheckpointsMapCid,
 	}, nil
 }
 

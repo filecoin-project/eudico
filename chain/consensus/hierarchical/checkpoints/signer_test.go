@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	checkpoint "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/utils"
@@ -28,7 +29,7 @@ func TestSimpleSigner(t *testing.T) {
 
 	c1, _ := cb.Sum([]byte("a"))
 	epoch := abi.ChainEpoch(1000)
-	ch := schema.NewRawCheckpoint(epoch, c1, nil)
+	ch := schema.NewRawCheckpoint(hierarchical.RootSubnet, epoch, c1, nil)
 
 	// Add child checkpoints
 	ch.AddChildChecks(utils.GenRandChildChecks(3))
