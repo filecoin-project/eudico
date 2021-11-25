@@ -10,6 +10,8 @@ import (
 	"github.com/filecoin-project/go-state-types/exitcode"
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/types"
 	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
@@ -30,13 +32,14 @@ var SubnetCoordActorAddr = func() address.Address {
 }()
 
 var Methods = struct {
-	Constructor   abi.MethodNum
-	Register      abi.MethodNum
-	AddStake      abi.MethodNum
-	ReleaseStake  abi.MethodNum
-	Kill          abi.MethodNum
-	RawCheckpoint abi.MethodNum
-}{builtin0.MethodConstructor, 2, 3, 4, 5, 6}
+	Constructor           abi.MethodNum
+	Register              abi.MethodNum
+	AddStake              abi.MethodNum
+	ReleaseStake          abi.MethodNum
+	Kill                  abi.MethodNum
+	RawCheckpoint         abi.MethodNum
+	CommitChildCheckpoint abi.MethodNum
+}{builtin0.MethodConstructor, 2, 3, 4, 5, 6, 7}
 
 type FundParams struct {
 	Value abi.TokenAmount
@@ -55,6 +58,7 @@ func (a SubnetCoordActor) Exports() []interface{} {
 		4:                         a.ReleaseStake,
 		5:                         a.Kill,
 		6:                         a.RawCheckpoint,
+		7:                         a.CommitChildCheckpoint,
 		// -1:                         a.Fund,
 		// -1:                         a.Release,
 		// -1:                         a.Checkpoint,
@@ -221,19 +225,39 @@ func (a SubnetCoordActor) ReleaseStake(rt runtime.Runtime, params *FundParams) *
 // RawCheckpoint
 //
 // XXX
-func (a SubnetCoordActor) RawCheckpoint(rt runtime.Runtime, params *FundParams) *abi.EmptyValue {
-	// Check current epoch
-	// Get the child checkpoints for the previous period.
-	// Include them in the template and return.
+func (a SubnetCoordActor) RawCheckpoint(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
+	// Anyone can request a Checkpoint template.
+	rt.ValidateImmediateCallerAcceptAny()
+	// Get current state
+	var st SCAState
+	rt.StateReadonly(&st)
+
+	// Return the frozen checkpoint that is ready to sign.
+
 	return nil
+}
+
+type CheckpointParams struct {
+	Checkpoint schema.Checkpoint
 }
 
 // Checkpoint
 //
 // XXX
-func (a SubnetCoordActor) Checkpoint(rt runtime.Runtime, params *FundParams) *abi.EmptyValue {
-	// Only subnet actors are allowed to send a checkpoint.
+func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *CheckpointParams) *abi.EmptyValue {
+	// Only subnet actors are allowed to commit a chekcpoint after their
+	// verification and aggregation.
 	rt.ValidateImmediateCallerType(actor.SubnetActorCodeID)
+
+	var st SCAState
+	rt.StateTransaction(&st, func() {
+		// Check the source of the checkpoint.
+
+		// Get the checkpoint fo rthe current window.
+
+		// Check that the previous checkpoint is correct.
+
+	})
 	// Store checkpoint for the current epoch.
 	// Make some verifications that the previous one is the connected to the current one
 	// and maybe that its epoch is the right one according to the period.
@@ -316,4 +340,21 @@ func (sh *Subnet) flushSubnet(rt runtime.Runtime, st *SCAState) {
 	// Flush subnets
 	st.Subnets, err = subnets.Root()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush subnets")
+}
+
+// currWindowCheckpoint gets the template of the checkpoint being
+// populated in the current window.
+//
+// If it hasn't been instantiated, a template is created. From there on,
+// the template is populated with every new xShard transaction and
+// child checkpoint, until the windows passes that the template is frozen
+// and is ready for miners to populate the rest and sign it.
+func (st *SCAState) currWindowCheckpoint(rt runtime.Runtime) *schema.Checkpoint {
+	chEpoch := types.WindowEpoch(rt.CurrEpoch(), st.CheckPeriod)
+	ch, found, err := st.GetCheckpoint(adt.AsStore(rt), chEpoch)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get checkpoint template for epoch")
+	if !found {
+		ch = schema.NewRawCheckpoint(st.NetworkName, chEpoch)
+	}
+	return ch
 }

@@ -4,10 +4,20 @@ import (
 	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
 	cid "github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
+)
+
+const (
+	// DefualtCheckpointPeriod defines 1000 epochs
+	// as the default checkpoint period for a subnet.
+	DefaultCheckpointPeriod = abi.ChainEpoch(1000)
+
+	// MinCheckpointPeriod allowed for subnets
+	MinCheckpointPeriod = abi.ChainEpoch(10)
 )
 
 var (
@@ -40,10 +50,13 @@ type SCAState struct {
 	MinStake abi.TokenAmount
 	// List of subnets
 	Subnets cid.Cid // HAMT[cid.Cid]Subnet
+
 	// Checkpoint period in number of epochs
-	CheckPeriod uint64
+	CheckPeriod abi.ChainEpoch
 	// Checkpoints committed in SCA
 	Checkpoints cid.Cid // HAMT[epoch]Checkpoint
+	// PrevCheckMap map with previous checkpoints for childs
+	PrevCheckMap cid.Cid // HAMT[subnetID]cid
 }
 
 type Subnet struct {
@@ -70,29 +83,40 @@ func ConstructSCAState(store adt.Store, params ConstructorParams) (*SCAState, er
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}
+	emptyPrevMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create empty map: %w", err)
+	}
 	nn := hierarchical.SubnetID(params.NetworkName)
 	networkCid, err := nn.Cid()
 	if err != nil {
 		panic(err)
 	}
+	// Don't allow really small checkpoint periods for now.
+	period := abi.ChainEpoch(params.CheckpointPeriod)
+	if period < MinCheckpointPeriod {
+		period = DefaultCheckpointPeriod
+	}
+
 	return &SCAState{
 		Network:      networkCid,
 		NetworkName:  nn,
 		TotalSubnets: 0,
 		MinStake:     MinSubnetStake,
 		Subnets:      emptySubnetsMapCid,
-		CheckPeriod:  params.CheckpointPeriod,
+		CheckPeriod:  period,
 		Checkpoints:  emptyCheckpointsMapCid,
+		PrevCheckMap: emptyPrevMapCid,
 	}, nil
 }
 
 // GetSubnet gets a subnet from the actor state.
 func (st *SCAState) GetSubnet(s adt.Store, id cid.Cid) (*Subnet, bool, error) {
-	claims, err := adt.AsMap(s, st.Subnets, builtin.DefaultHamtBitwidth)
+	subnets, err := adt.AsMap(s, st.Subnets, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, false, xerrors.Errorf("failed to load subnets: %w", err)
 	}
-	return getSubnet(claims, id)
+	return getSubnet(subnets, id)
 }
 
 func getSubnet(subnets *adt.Map, id cid.Cid) (*Subnet, bool, error) {
@@ -100,6 +124,27 @@ func getSubnet(subnets *adt.Map, id cid.Cid) (*Subnet, bool, error) {
 	found, err := subnets.Get(abi.CidKey(id), &out)
 	if err != nil {
 		return nil, false, xerrors.Errorf("failed to get subnet with id %v: %w", id, err)
+	}
+	if !found {
+		return nil, false, nil
+	}
+	return &out, true, nil
+}
+
+// GetCheckpoint gets a checkpoint from its index
+func (st *SCAState) GetCheckpoint(s adt.Store, epoch abi.ChainEpoch) (*schema.Checkpoint, bool, error) {
+	checkpoints, err := adt.AsMap(s, st.Checkpoints, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return nil, false, xerrors.Errorf("failed to load subnets: %w", err)
+	}
+	return getCheckpoint(checkpoints, epoch)
+}
+
+func getCheckpoint(subnets *adt.Map, epoch abi.ChainEpoch) (*schema.Checkpoint, bool, error) {
+	var out schema.Checkpoint
+	found, err := subnets.Get(abi.UIntKey(uint64(epoch)), &out)
+	if err != nil {
+		return nil, false, xerrors.Errorf("failed to get checkpoint for epoch %v: %w", epoch, err)
 	}
 	if !found {
 		return nil, false, nil

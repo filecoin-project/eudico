@@ -29,10 +29,11 @@ func TestSimpleSigner(t *testing.T) {
 
 	c1, _ := cb.Sum([]byte("a"))
 	epoch := abi.ChainEpoch(1000)
-	ch := schema.NewRawCheckpoint(hierarchical.RootSubnet, epoch, c1, nil)
+	ch := schema.NewRawCheckpoint(hierarchical.RootSubnet, epoch)
+	ch.SetPrevious(c1)
 
 	// Add child checkpoints
-	ch.AddChildChecks(utils.GenRandChildChecks(3))
+	ch.AddListChilds(utils.GenRandChildChecks(3))
 
 	// Sign
 	err = ver.Sign(ctx, w, addr, ch)

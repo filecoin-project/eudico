@@ -130,20 +130,21 @@ func noStoreLinkSystem() ipld.LinkSystem {
 //
 // This is the template returned by the SCA actor for the miners to include
 // the corresponding information and sign before commitment.
-func NewRawCheckpoint(source hierarchical.SubnetID,
-	epoch abi.ChainEpoch, prev cid.Cid, xmsgs *MsgTreeList) *Checkpoint {
-
+func NewRawCheckpoint(source hierarchical.SubnetID, epoch abi.ChainEpoch) *Checkpoint {
 	return &Checkpoint{
 		Data: CheckData{
-			Source:         source.String(),
-			Epoch:          int(epoch),
-			PrevCheckpoint: prev,
-			XShardMsg:      xmsgs,
+			Source: source.String(),
+			Epoch:  int(epoch),
 		},
 	}
 
 }
 
+func (c *Checkpoint) SetPrevious(cid cid.Cid) {
+	c.Data.PrevCheckpoint = cid
+}
+
+/*
 // MarshalCBOR the checkpoint
 func (c *Checkpoint) MarshalCBOR() ([]byte, error) {
 	node := bindnode.Wrap(c, CheckpointSchema)
@@ -170,6 +171,33 @@ func (c *Checkpoint) UnmarshalCBOR(b []byte) error {
 	ch, ok := n.(*Checkpoint)
 	if !ok {
 		return xerrors.Errorf("Unmarshalled node not of type Checkpoint")
+	}
+	*c = *ch
+	return nil
+}
+*/
+
+func (c *Checkpoint) MarshalCBOR(w io.Writer) error {
+	node := bindnode.Wrap(c, CheckpointSchema)
+	nodeRepr := node.Representation()
+	err := dagcbor.Encode(nodeRepr, w)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Checkpoint) UnmarshalCBOR(r io.Reader) error {
+	nb := bindnode.Prototype(c, CheckpointSchema).NewBuilder()
+	err := dagcbor.Decode(nb, r)
+	if err != nil {
+		return err
+	}
+	n := bindnode.Unwrap(nb.Build())
+
+	ch, ok := n.(*Checkpoint)
+	if !ok {
+		return xerrors.Errorf("Unmarshalled node not of type CheckData")
 	}
 	*c = *ch
 	return nil
@@ -205,15 +233,33 @@ func (c *Checkpoint) Cid() (cid.Cid, error) {
 	return lnk.(cidlink.Link).Cid, nil
 }
 
-// AddChildChecks adds a list of child checkpoints into the checkpoint.
-func (c *Checkpoint) AddChildChecks(childs []ChildCheck) {
+// AddListChilds adds a list of child checkpoints into the checkpoint.
+//
+// The overwrite flag is set in AddChild so if a checkpoint for the
+// source is encountered, the previous checkpoint is overwritten.
+func (c *Checkpoint) AddListChilds(childs []ChildCheck) {
 	for _, ch := range childs {
-		ind := c.hasChild(ch)
-		if ind >= 0 {
-			c.Data.Childs[ind] = ch
-		}
-		c.Data.Childs = append(c.Data.Childs, ch)
+		c.AddChild(ch, true)
 	}
+}
+
+// AddChild adds a single child to the checkpoint
+//
+// If the overwrite flag is set, when adding a checkpoint
+// for an existing source, the checkpoint is overwritten.
+// When the flag is not set, adding a checkpoint for an
+// already existing source throws an error.
+func (c *Checkpoint) AddChild(ch ChildCheck, overwrite bool) error {
+	ind := c.hasChild(ch)
+	if ind >= 0 {
+		if overwrite {
+			c.Data.Childs[ind] = ch
+			return nil
+		}
+		return xerrors.New("there is already a checkpoint for that source")
+	}
+	c.Data.Childs = append(c.Data.Childs, ch)
+	return nil
 }
 
 func (c *Checkpoint) hasChild(child ChildCheck) int {

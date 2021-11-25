@@ -18,18 +18,20 @@ import (
 func TestMarshalCheckpoint(t *testing.T) {
 	c1, _ := schema.Linkproto.Sum([]byte("a"))
 	epoch := abi.ChainEpoch(1000)
-	ch := schema.NewRawCheckpoint(hierarchical.RootSubnet, epoch, c1, nil)
+	ch := schema.NewRawCheckpoint(hierarchical.RootSubnet, epoch)
+	ch.SetPrevious(c1)
 
 	// Add child checkpoints
-	ch.AddChildChecks(utils.GenRandChildChecks(3))
+	ch.AddListChilds(utils.GenRandChildChecks(3))
 
 	// Marshal
-	b, err := ch.MarshalCBOR()
+	var buf bytes.Buffer
+	err := ch.MarshalCBOR(&buf)
 	require.NoError(t, err)
 
 	// Unmarshal and check equal
 	ch2 := &schema.Checkpoint{}
-	err = ch2.UnmarshalCBOR(b)
+	err = ch2.UnmarshalCBOR(&buf)
 	require.NoError(t, err)
 	eq, err := ch.Equals(ch2)
 	require.NoError(t, err)
@@ -38,7 +40,8 @@ func TestMarshalCheckpoint(t *testing.T) {
 	// Check that Equals works.
 	c1, _ = schema.Linkproto.Sum([]byte("b"))
 	epoch = abi.ChainEpoch(1001)
-	ch = schema.NewRawCheckpoint(hierarchical.RootSubnet, epoch, c1, nil)
+	ch = schema.NewRawCheckpoint(hierarchical.RootSubnet, epoch)
+	ch.SetPrevious(c1)
 	eq, err = ch.Equals(ch2)
 	require.NoError(t, err)
 	require.False(t, eq)
