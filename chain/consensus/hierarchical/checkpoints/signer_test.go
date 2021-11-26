@@ -33,7 +33,7 @@ func TestSimpleSigner(t *testing.T) {
 	ch.SetPrevious(c1)
 
 	// Add child checkpoints
-	ch.AddListChilds(utils.GenRandChildChecks(3))
+	ch.AddListChilds(utils.GenRandChecks(3))
 
 	// Sign
 	err = ver.Sign(ctx, w, addr, ch)

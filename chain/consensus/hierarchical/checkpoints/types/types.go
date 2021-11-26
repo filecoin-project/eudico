@@ -1,6 +1,8 @@
 package types
 
-import "github.com/filecoin-project/go-state-types/abi"
+import (
+	"github.com/filecoin-project/go-state-types/abi"
+)
 
 type EnvelopeType uint64
 
@@ -16,7 +18,7 @@ const (
 // current window.
 func CheckpointEpoch(epoch abi.ChainEpoch, period abi.ChainEpoch) abi.ChainEpoch {
 	ind := epoch / period
-	return abi.ChainEpoch(period * (ind - 1))
+	return abi.ChainEpoch(period * ind)
 }
 
 // WindowEpoch returns the epoch of the active checkpoint window
@@ -25,5 +27,5 @@ func CheckpointEpoch(epoch abi.ChainEpoch, period abi.ChainEpoch) abi.ChainEpoch
 // to be assigned.
 func WindowEpoch(epoch abi.ChainEpoch, period abi.ChainEpoch) abi.ChainEpoch {
 	ind := epoch / period
-	return abi.ChainEpoch(period * ind)
+	return abi.ChainEpoch(period * (ind + 1))
 }

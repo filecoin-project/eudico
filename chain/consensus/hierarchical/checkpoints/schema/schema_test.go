@@ -22,7 +22,7 @@ func TestMarshalCheckpoint(t *testing.T) {
 	ch.SetPrevious(c1)
 
 	// Add child checkpoints
-	ch.AddListChilds(utils.GenRandChildChecks(3))
+	ch.AddListChilds(utils.GenRandChecks(3))
 
 	// Marshal
 	var buf bytes.Buffer
@@ -37,6 +37,18 @@ func TestMarshalCheckpoint(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, eq)
 
+	// Same for marshal binary
+	b, err := ch.MarshalBinary()
+	require.NoError(t, err)
+
+	// Unmarshal and check equal
+	ch2 = &schema.Checkpoint{}
+	err = ch2.UnmarshalBinary(b)
+	require.NoError(t, err)
+	eq, err = ch.Equals(ch2)
+	require.NoError(t, err)
+	require.True(t, eq)
+
 	// Check that Equals works.
 	c1, _ = schema.Linkproto.Sum([]byte("b"))
 	epoch = abi.ChainEpoch(1001)
@@ -46,6 +58,40 @@ func TestMarshalCheckpoint(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, eq)
 
+}
+
+func TestMarshalEmptyPrevious(t *testing.T) {
+	epoch := abi.ChainEpoch(1000)
+	ch := schema.NewRawCheckpoint(hierarchical.RootSubnet, epoch)
+	require.Equal(t, ch.Data.PrevCheckpoint, schema.NoPreviousCheck)
+
+	// Add child checkpoints
+	ch.AddListChilds(utils.GenRandChecks(3))
+
+	// Marshal
+	var buf bytes.Buffer
+	err := ch.MarshalCBOR(&buf)
+	require.NoError(t, err)
+
+	// Unmarshal and check equal
+	ch2 := &schema.Checkpoint{}
+	err = ch2.UnmarshalCBOR(&buf)
+	require.NoError(t, err)
+	eq, err := ch.Equals(ch2)
+	require.NoError(t, err)
+	require.True(t, eq)
+
+	// Same for marshal binary
+	b, err := ch.MarshalBinary()
+	require.NoError(t, err)
+
+	// Unmarshal and check equal
+	ch2 = &schema.Checkpoint{}
+	err = ch2.UnmarshalBinary(b)
+	require.NoError(t, err)
+	eq, err = ch.Equals(ch2)
+	require.NoError(t, err)
+	require.True(t, eq)
 }
 
 func TestSignature(t *testing.T) {

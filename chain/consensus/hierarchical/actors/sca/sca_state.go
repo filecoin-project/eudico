@@ -3,9 +3,13 @@ package sca
 import (
 	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-state-types/exitcode"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/types"
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
 	cid "github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
@@ -55,8 +59,9 @@ type SCAState struct {
 	CheckPeriod abi.ChainEpoch
 	// Checkpoints committed in SCA
 	Checkpoints cid.Cid // HAMT[epoch]Checkpoint
-	// PrevCheckMap map with previous checkpoints for childs
-	PrevCheckMap cid.Cid // HAMT[subnetID]cid
+	// ChildPrevCheckMap map with previous checkpoints for childs
+	// This is used for convenience.
+	ChildPrevCheckMap cid.Cid // HAMT[subnetID]Checkpoint
 }
 
 type Subnet struct {
@@ -74,7 +79,7 @@ type Subnet struct {
 	Status Status
 }
 
-func ConstructSCAState(store adt.Store, params ConstructorParams) (*SCAState, error) {
+func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, error) {
 	emptySubnetsMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
@@ -99,14 +104,14 @@ func ConstructSCAState(store adt.Store, params ConstructorParams) (*SCAState, er
 	}
 
 	return &SCAState{
-		Network:      networkCid,
-		NetworkName:  nn,
-		TotalSubnets: 0,
-		MinStake:     MinSubnetStake,
-		Subnets:      emptySubnetsMapCid,
-		CheckPeriod:  period,
-		Checkpoints:  emptyCheckpointsMapCid,
-		PrevCheckMap: emptyPrevMapCid,
+		Network:           networkCid,
+		NetworkName:       nn,
+		TotalSubnets:      0,
+		MinStake:          MinSubnetStake,
+		Subnets:           emptySubnetsMapCid,
+		CheckPeriod:       period,
+		Checkpoints:       emptyCheckpointsMapCid,
+		ChildPrevCheckMap: emptyPrevMapCid,
 	}, nil
 }
 
@@ -131,18 +136,82 @@ func getSubnet(subnets *adt.Map, id cid.Cid) (*Subnet, bool, error) {
 	return &out, true, nil
 }
 
+// addStake adds new funds to the stake of the subnet.
+//
+// This function also accepts negative values to substract, and checks
+// if the funds are enough for the subnet to be active.
+func (sh *Subnet) addStake(rt runtime.Runtime, st *SCAState, value abi.TokenAmount) {
+	// Add stake to the subnet
+	sh.Stake = big.Add(sh.Stake, value)
+
+	// Check if subnet has still stake to be active
+	if sh.Stake.LessThan(st.MinStake) {
+		sh.Status = Inactive
+	}
+
+	// Flush subnet into subnetMap
+	sh.flushSubnet(rt, st)
+
+}
+
+func (sh *Subnet) flushSubnet(rt runtime.Runtime, st *SCAState) {
+	// Update subnet in the list of subnets.
+	subnets, err := adt.AsMap(adt.AsStore(rt), st.Subnets, builtin.DefaultHamtBitwidth)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state for subnets")
+	err = subnets.Put(abi.CidKey(sh.Cid), sh)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put new subnet in subnet map")
+	// Flush subnets
+	st.Subnets, err = subnets.Root()
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush subnets")
+}
+
+// currWindowCheckpoint gets the template of the checkpoint being
+// populated in the current window.
+//
+// If it hasn't been instantiated, a template is created. From there on,
+// the template is populated with every new xShard transaction and
+// child checkpoint, until the windows passes that the template is frozen
+// and is ready for miners to populate the rest and sign it.
+func (st *SCAState) currWindowCheckpoint(rt runtime.Runtime) *schema.Checkpoint {
+	chEpoch := types.WindowEpoch(rt.CurrEpoch(), st.CheckPeriod)
+	ch, found, err := st.GetCheckpoint(adt.AsStore(rt), chEpoch)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get checkpoint template for epoch")
+	if !found {
+		ch = schema.NewRawCheckpoint(st.NetworkName, chEpoch)
+	}
+	return ch
+}
+
+// rawCheckpoint gets the template of the checkpoint in
+// the signing window.
+//
+// It returns the checkpoint that is ready to be signed
+// and already includes all the checkpoints and xshard messages
+// to include in it. Miners need to populate the prevCheckpoint
+// and tipset of this template and sign ot.
+func (st *SCAState) rawCheckpoint(rt runtime.Runtime) *schema.Checkpoint {
+	chEpoch := types.CheckpointEpoch(rt.CurrEpoch(), st.CheckPeriod)
+	ch, found, err := st.GetCheckpoint(adt.AsStore(rt), chEpoch)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get checkpoint template for epoch")
+	// If nothing has been populated yet return an empty window.
+	if !found {
+		ch = schema.NewRawCheckpoint(st.NetworkName, chEpoch)
+	}
+	return ch
+}
+
 // GetCheckpoint gets a checkpoint from its index
 func (st *SCAState) GetCheckpoint(s adt.Store, epoch abi.ChainEpoch) (*schema.Checkpoint, bool, error) {
 	checkpoints, err := adt.AsMap(s, st.Checkpoints, builtin.DefaultHamtBitwidth)
 	if err != nil {
-		return nil, false, xerrors.Errorf("failed to load subnets: %w", err)
+		return nil, false, xerrors.Errorf("failed to load checkpoint: %w", err)
 	}
 	return getCheckpoint(checkpoints, epoch)
 }
 
-func getCheckpoint(subnets *adt.Map, epoch abi.ChainEpoch) (*schema.Checkpoint, bool, error) {
+func getCheckpoint(checkpoints *adt.Map, epoch abi.ChainEpoch) (*schema.Checkpoint, bool, error) {
 	var out schema.Checkpoint
-	found, err := subnets.Get(abi.UIntKey(uint64(epoch)), &out)
+	found, err := checkpoints.Get(abi.UIntKey(uint64(epoch)), &out)
 	if err != nil {
 		return nil, false, xerrors.Errorf("failed to get checkpoint for epoch %v: %w", epoch, err)
 	}
@@ -150,6 +219,49 @@ func getCheckpoint(subnets *adt.Map, epoch abi.ChainEpoch) (*schema.Checkpoint, 
 		return nil, false, nil
 	}
 	return &out, true, nil
+}
+
+func (st *SCAState) flushCheckpoint(rt runtime.Runtime, ch *schema.Checkpoint) {
+	// Update subnet in the list of checkpoints.
+	checks, err := adt.AsMap(adt.AsStore(rt), st.Checkpoints, builtin.DefaultHamtBitwidth)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state for checkpoints")
+	err = checks.Put(abi.UIntKey(uint64(ch.Data.Epoch)), ch)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put checkpoint in map")
+	// Flush checkpoints
+	st.Checkpoints, err = checks.Root()
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush checkpoints")
+}
+
+// GetChildPrevCheckpoint gets the previous checkpoint for a child subnet
+func (st *SCAState) GetChildPrevCheckpoint(s adt.Store, source hierarchical.SubnetID) (*schema.Checkpoint, bool, error) {
+	prevChecks, err := adt.AsMap(s, st.Checkpoints, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return nil, false, xerrors.Errorf("failed to load previous checkpoints: %w", err)
+	}
+	return getChildPrevCheckpoint(prevChecks, source)
+}
+
+func getChildPrevCheckpoint(checks *adt.Map, source hierarchical.SubnetID) (*schema.Checkpoint, bool, error) {
+	var out schema.Checkpoint
+	found, err := checks.Get(source, &out)
+	if err != nil {
+		return nil, false, xerrors.Errorf("failed to get previous checkpoint for source %v: %w", source, err)
+	}
+	if !found {
+		return nil, false, nil
+	}
+	return &out, true, nil
+}
+
+func (st *SCAState) flushPrevCheckpoint(rt runtime.Runtime, ch *schema.Checkpoint) {
+	// Update subnet in the list of checkpoints.
+	checks, err := adt.AsMap(adt.AsStore(rt), st.ChildPrevCheckMap, builtin.DefaultHamtBitwidth)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state for checkpoints")
+	err = checks.Put(hierarchical.SubnetID(ch.Data.Source), ch)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put checkpoint in map")
+	// Flush checkpoints
+	st.ChildPrevCheckMap, err = checks.Root()
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush checkpoints")
 }
 
 // Get subnet from its subnet actor address.

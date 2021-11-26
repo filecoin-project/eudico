@@ -64,6 +64,7 @@ type ConstructParams struct {
 	Consensus     ConsensusType   // Consensus for subnet.
 	MinMinerStake abi.TokenAmount // MinStake to give miner rights
 	DelegMiner    address.Address // Miner in delegated consensus
+	CheckPeriod   abi.ChainEpoch  // Checkpointing period.
 }
 
 func (a SubnetActor) Constructor(rt runtime.Runtime, params *ConstructParams) *abi.EmptyValue {
@@ -98,7 +99,8 @@ func (st *SubnetState) initGenesis(rt runtime.Runtime, params *ConstructParams) 
 
 	// Getting actor ID from recceiver.
 	netName := hierarchical.NewSubnetID(hierarchical.SubnetID(params.NetworkName), rt.Receiver())
-	err = WriteGenesis(netName, st.Consensus, params.DelegMiner, vreg, rem, rt.ValueReceived().Uint64(), buf)
+	err = WriteGenesis(netName, st.Consensus, params.DelegMiner, vreg, rem,
+		params.CheckPeriod, rt.ValueReceived().Uint64(), buf)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed genesis")
 	st.Genesis = buf.Bytes()
 }

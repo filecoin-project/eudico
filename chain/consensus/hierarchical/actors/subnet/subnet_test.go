@@ -282,6 +282,7 @@ func (h *shActorHarness) constructAndVerify(t *testing.T, rt *mock.Runtime) {
 			Consensus:     actor.PoW,
 			MinMinerStake: actor.MinMinerStake,
 			DelegMiner:    tutil.NewIDAddr(t, 101),
+			CheckPeriod:   abi.ChainEpoch(100),
 		})
 	assert.Nil(h.t, ret)
 	rt.Verify()
@@ -296,6 +297,7 @@ func (h *shActorHarness) constructAndVerify(t *testing.T, rt *mock.Runtime) {
 	assert.Equal(h.t, st.Consensus, actor.PoW)
 	assert.Equal(h.t, st.MinMinerStake, actor.MinMinerStake)
 	assert.Equal(h.t, st.Status, actor.Instantiated)
+	assert.Equal(h.t, st.CheckPeriod, abi.ChainEpoch(100))
 	// Verify that the genesis for the subnet has been generated.
 	// TODO: Consider making some test verifications over genesis.
 	assert.NotEqual(h.t, len(st.Genesis), 0)

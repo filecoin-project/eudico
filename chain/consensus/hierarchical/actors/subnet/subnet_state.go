@@ -63,7 +63,8 @@ type SubnetState struct {
 	Status Status
 	// Genesis bootstrap for the subnet. This is created
 	// when the subnet is generated.
-	Genesis []byte
+	Genesis     []byte
+	CheckPeriod abi.ChainEpoch
 }
 
 func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetState, error) {
@@ -92,6 +93,7 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 		Miners:        make([]address.Address, 0),
 		Stake:         emptyStakeCid,
 		Status:        Instantiated,
+		CheckPeriod:   params.CheckPeriod,
 	}, nil
 }
 

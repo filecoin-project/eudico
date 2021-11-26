@@ -20,8 +20,8 @@ import (
 	xerrors "golang.org/x/xerrors"
 )
 
-func makePoWGenesisBlock(ctx context.Context, bs bstore.Blockstore, template genesis.Template) (*genesis2.GenesisBootstrap, error) {
-	st, _, err := MakeInitialStateTree(ctx, bs, template)
+func makePoWGenesisBlock(ctx context.Context, bs bstore.Blockstore, template genesis.Template, checkPeriod abi.ChainEpoch) (*genesis2.GenesisBootstrap, error) {
+	st, _, err := MakeInitialStateTree(ctx, bs, template, checkPeriod)
 	if err != nil {
 		return nil, xerrors.Errorf("make initial state tree failed: %w", err)
 	}

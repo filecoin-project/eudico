@@ -3,16 +3,20 @@ package utils
 import (
 	"strconv"
 
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 )
 
-func GenRandChildChecks(num int) []schema.ChildCheck {
-	l := make([]schema.ChildCheck, 0)
+func GenRandChecks(num int) []*schema.Checkpoint {
+	l := make([]*schema.Checkpoint, 0)
 	for i := 0; i < num; i++ {
 		s := strconv.FormatInt(int64(i), 10)
 		c, _ := schema.Linkproto.Sum([]byte(s))
-		l = append(l,
-			schema.ChildCheck{Source: s, Check: c})
+		ch := schema.NewRawCheckpoint(hierarchical.SubnetID(s), abi.ChainEpoch(i))
+		ch.SetPrevious(c)
+		l = append(l, ch)
+
 	}
 	return l
 }

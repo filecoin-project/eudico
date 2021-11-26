@@ -11,6 +11,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/system"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	param "github.com/filecoin-project/lotus/chain/consensus/params"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
@@ -88,7 +89,9 @@ var tpowGenesisCmd = &cli.Command{
 			return err
 		}
 
-		if err := subnet.WriteGenesis(hierarchical.RootSubnet, subnet.PoW, address.Undef, vreg, rem, uint64(time.Now().Unix()), f); err != nil {
+		// TODO: Make configurable
+		checkPeriod := sca.DefaultCheckpointPeriod
+		if err := subnet.WriteGenesis(hierarchical.RootSubnet, subnet.PoW, address.Undef, vreg, rem, checkPeriod, uint64(time.Now().Unix()), f); err != nil {
 			return xerrors.Errorf("write genesis car: %w", err)
 		}
 

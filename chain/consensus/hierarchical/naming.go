@@ -4,6 +4,7 @@ import (
 	"path"
 
 	address "github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 	cid "github.com/ipfs/go-cid"
 	mh "github.com/multiformats/go-multihash"
 )
@@ -56,5 +57,13 @@ func (id SubnetID) Actor() (address.Address, error) {
 
 // String returns the id in string form
 func (id SubnetID) String() string {
+	return string(id)
+}
+
+// Implement keyer interface so it can be used as a
+// key for maps
+var _ abi.Keyer = SubnetID("")
+
+func (id SubnetID) Key() string {
 	return string(id)
 }

@@ -6,32 +6,43 @@ import (
 
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	ltypes "github.com/filecoin-project/lotus/chain/types"
 	"github.com/ipfs/go-cid"
 	ipld "github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
+	"github.com/ipld/go-ipld-prime/codec/dagjson"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/ipld/go-ipld-prime/node/bindnode"
 	"github.com/ipld/go-ipld-prime/schema"
-	"github.com/multiformats/go-multicodec"
 	"golang.org/x/xerrors"
 )
 
 // Linkproto is the default link prototype used for Checkpoints
-// TODO: We may need to change it to accommodate hash algorithms, and
-// codecs used throughout Filecoin.
+// It uses the default CidBuilder for Filecoin (see abi)
 var Linkproto = cidlink.LinkPrototype{
 	Prefix: cid.Prefix{
 		Version:  1,
-		Codec:    uint64(multicodec.DagCbor),
-		MhType:   uint64(multicodec.Sha2_256),
+		Codec:    abi.CidBuilder.GetCodec(),
+		MhType:   abi.HashFunction,
 		MhLength: 16,
 	},
 }
 
-var CheckpointSchema schema.Type
+var (
+	CheckpointSchema schema.Type
+	// NoPreviousCheck is a work-around to avoid undefined CIDs,
+	// that results in unexpected errors when marshalling.
+	// This needs a fix in go-ipld-prime::bindnode
+	NoPreviousCheck cid.Cid
+)
 
 func init() {
 	CheckpointSchema = initCheckpointSchema()
+	var err error
+	NoPreviousCheck, err = abi.CidBuilder.Sum([]byte("nil"))
+	if err != nil {
+		panic(err)
+	}
 }
 
 // ChildCheck
@@ -48,7 +59,7 @@ type MsgTreeList struct{}
 // CheckData is the data included in a Checkpoint.
 type CheckData struct {
 	Source         string
-	TipSet         []byte
+	TipSet         []byte // NOTE: For simplicity we add TipSetKey. We could include full TipSet
 	Epoch          int
 	PrevCheckpoint cid.Cid
 	Childs         []ChildCheck
@@ -133,8 +144,9 @@ func noStoreLinkSystem() ipld.LinkSystem {
 func NewRawCheckpoint(source hierarchical.SubnetID, epoch abi.ChainEpoch) *Checkpoint {
 	return &Checkpoint{
 		Data: CheckData{
-			Source: source.String(),
-			Epoch:  int(epoch),
+			Source:         source.String(),
+			Epoch:          int(epoch),
+			PrevCheckpoint: NoPreviousCheck,
 		},
 	}
 
@@ -144,13 +156,15 @@ func (c *Checkpoint) SetPrevious(cid cid.Cid) {
 	c.Data.PrevCheckpoint = cid
 }
 
-/*
-// MarshalCBOR the checkpoint
-func (c *Checkpoint) MarshalCBOR() ([]byte, error) {
+func (c *Checkpoint) SetTipsetKey(ts ltypes.TipSetKey) {
+	c.Data.TipSet = ts.Bytes()
+}
+
+func (c *Checkpoint) MarshalBinary() ([]byte, error) {
 	node := bindnode.Wrap(c, CheckpointSchema)
 	nodeRepr := node.Representation()
 	var buf bytes.Buffer
-	err := dagcbor.Encode(nodeRepr, &buf)
+	err := dagjson.Encode(nodeRepr, &buf)
 	if err != nil {
 		return nil, err
 	}
@@ -158,11 +172,12 @@ func (c *Checkpoint) MarshalCBOR() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// UnmarshalCBOR the checkpoint
-// TODO: Consider accepting io.Reader as input
-func (c *Checkpoint) UnmarshalCBOR(b []byte) error {
+func (c *Checkpoint) UnmarshalBinary(b []byte) error {
+	// TODO: This could fix the need of NoPrevCheckpoint but it hasn't been implemented yet.
+	// This returns `panic: TODO: schema.StructRepresentation_Map`
+	// nb := bindnode.Prototype(c, CheckpointSchema).Representation().NewBuilder()
 	nb := bindnode.Prototype(c, CheckpointSchema).NewBuilder()
-	err := dagcbor.Decode(nb, bytes.NewReader(b))
+	err := dagjson.Decode(nb, bytes.NewReader(b))
 	if err != nil {
 		return err
 	}
@@ -175,7 +190,6 @@ func (c *Checkpoint) UnmarshalCBOR(b []byte) error {
 	*c = *ch
 	return nil
 }
-*/
 
 func (c *Checkpoint) MarshalCBOR(w io.Writer) error {
 	node := bindnode.Wrap(c, CheckpointSchema)
@@ -237,7 +251,7 @@ func (c *Checkpoint) Cid() (cid.Cid, error) {
 //
 // The overwrite flag is set in AddChild so if a checkpoint for the
 // source is encountered, the previous checkpoint is overwritten.
-func (c *Checkpoint) AddListChilds(childs []ChildCheck) {
+func (c *Checkpoint) AddListChilds(childs []*Checkpoint) {
 	for _, ch := range childs {
 		c.AddChild(ch, true)
 	}
@@ -249,24 +263,41 @@ func (c *Checkpoint) AddListChilds(childs []ChildCheck) {
 // for an existing source, the checkpoint is overwritten.
 // When the flag is not set, adding a checkpoint for an
 // already existing source throws an error.
-func (c *Checkpoint) AddChild(ch ChildCheck, overwrite bool) error {
-	ind := c.hasChild(ch)
+func (c *Checkpoint) AddChild(ch *Checkpoint, overwrite bool) error {
+	cid, err := ch.Cid()
+	if err != nil {
+		return err
+	}
+	chcc := ChildCheck{ch.Data.Source, cid}
+	ind := c.hasChild(chcc)
 	if ind >= 0 {
 		if overwrite {
-			c.Data.Childs[ind] = ch
+			c.Data.Childs[ind] = chcc
 			return nil
 		}
 		return xerrors.New("there is already a checkpoint for that source")
 	}
-	c.Data.Childs = append(c.Data.Childs, ch)
+	c.Data.Childs = append(c.Data.Childs, chcc)
 	return nil
 }
 
 func (c *Checkpoint) hasChild(child ChildCheck) int {
+	return c.HasChild(hierarchical.SubnetID(child.Source))
+}
+
+func (c *Checkpoint) HasChild(source hierarchical.SubnetID) int {
 	for i, ch := range c.Data.Childs {
-		if ch.Source == child.Source {
+		if ch.Source == source.String() {
 			return i
 		}
 	}
 	return -1
+}
+
+func (c *Checkpoint) LenChilds() int {
+	return len(c.Data.Childs)
+}
+
+func (c *Checkpoint) Epoch() abi.ChainEpoch {
+	return abi.ChainEpoch(c.Data.Epoch)
 }

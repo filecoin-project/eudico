@@ -11,7 +11,6 @@ import (
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/types"
 	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
@@ -84,7 +83,7 @@ type ConstructorParams struct {
 	CheckpointPeriod uint64
 }
 
-func (a SubnetCoordActor) Constructor(rt runtime.Runtime, params ConstructorParams) *abi.EmptyValue {
+func (a SubnetCoordActor) Constructor(rt runtime.Runtime, params *ConstructorParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
 	st, err := ConstructSCAState(adt.AsStore(rt), params)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
@@ -222,54 +221,117 @@ func (a SubnetCoordActor) ReleaseStake(rt runtime.Runtime, params *FundParams) *
 	return nil
 }
 
-// RawCheckpoint
+// RawCheckpoint returns a template for the checkpoint in the current signing window.
 //
-// XXX
-func (a SubnetCoordActor) RawCheckpoint(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
+// The SCA populates child checkpoints and cross-shard transactions that have been submitted
+// and returns the template where miners need to set the previous checkpoints and tipsetKey
+// for the epoch and sign.
+func (a SubnetCoordActor) RawCheckpoint(rt runtime.Runtime, _ *abi.EmptyValue) *CheckpointParams {
 	// Anyone can request a Checkpoint template.
 	rt.ValidateImmediateCallerAcceptAny()
-	// Get current state
 	var st SCAState
 	rt.StateReadonly(&st)
+	if rt.CurrEpoch() < st.CheckPeriod {
+		rt.Abortf(exitcode.ErrIllegalState, "no signing window for the first period")
+	}
+	ch := *st.rawCheckpoint(rt)
+	b, err := ch.MarshalBinary()
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error marshalling checkpoint for return")
 
-	// Return the frozen checkpoint that is ready to sign.
-
-	return nil
+	return &CheckpointParams{b}
 }
 
+// CheckpointParams handles in/out communication of checkpoints
+// To accommodate arbitrary schemas (and even if it introduces and overhead)
+// is easier to transmit a marshalled version of the checkpoint.
+// NOTE: Consider in the future if there is a better approach.
 type CheckpointParams struct {
-	Checkpoint schema.Checkpoint
+	Checkpoint []byte
 }
 
-// Checkpoint
+// CommitChildCheckpoint accepts a checkpoint from a subnet for commitment.
 //
-// XXX
+// The subnet is responsible for running all the deep verifications about the checkpoint,
+// the SCA is only able to enforce some basic verifications.
 func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *CheckpointParams) *abi.EmptyValue {
-	// Only subnet actors are allowed to commit a chekcpoint after their
+	// Only subnet actors are allowed to commit a checkpoint after their
 	// verification and aggregation.
 	rt.ValidateImmediateCallerType(actor.SubnetActorCodeID)
+	commit := &schema.Checkpoint{}
+	err := commit.UnmarshalBinary(params.Checkpoint)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "error unmarshalling checkpoint in params")
+	subnetActorAddr := rt.Caller()
 
+	// Check the source of the checkpoint.
+	source, err := hierarchical.SubnetID(commit.Data.Source).Actor()
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "error getting checkpoint source")
+	if source != subnetActorAddr {
+		rt.Abortf(exitcode.ErrIllegalArgument, "checkpoint committed doesn't belong to source subnet")
+	}
+
+	// TODO: We could optionally check here if the checkpoint includes a valid signature. I don't
+	// think this makes sense as in its current implementation the subnet actor receives an
+	// independent signature for each miner and counts the number of "votes" for the checkpoint.
 	var st SCAState
 	rt.StateTransaction(&st, func() {
-		// Check the source of the checkpoint.
+		// Check that the subnet is registered and active
+		shid := hierarchical.NewSubnetID(st.NetworkName, subnetActorAddr)
+		shcid, err := shid.Cid()
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed computing CID from subnetID")
+		// Check if the subnet for the actor exists
+		sh, has, err := st.GetSubnet(adt.AsStore(rt), shcid)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching subnet state")
+		if !has {
+			rt.Abortf(exitcode.ErrIllegalArgument, "subnet for for actor hasn't been registered yet")
+		}
+		// Check that it is active. Only active shards can commit checkpoints.
+		if sh.Status != Active {
+			rt.Abortf(exitcode.ErrIllegalState, "can't commit a checkpoint for a subnet that is not active")
+		}
 
-		// Get the checkpoint fo rthe current window.
+		// Verify that the submitted checkpoint has higher epoch and is
+		// consistent with previous checkpoint before committing.
+		prevCom, found, err := st.GetChildPrevCheckpoint(adt.AsStore(rt), hierarchical.SubnetID(commit.Data.Source))
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching previous child checkpoint from state")
+		if !found {
+			// If no previous checkpoint for child chain, it means this is the first one
+			// and we can add it without additional verifications.
+			ch := st.currWindowCheckpoint(rt)
+			// Overwrite is set to false. If there is already a child for the source
+			// we throw an error
+			err := ch.AddChild(commit, false)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "child already has committed a checkpoint this epoch")
+			st.flushCheckpoint(rt, ch)
+			// Update previous checkpoint for child.
+			st.flushPrevCheckpoint(rt, commit)
+			return
+		}
 
-		// Check that the previous checkpoint is correct.
-
+		// Get the checkpoint for the current window.
+		ch := st.currWindowCheckpoint(rt)
+		// Check that the previous Cid is consistent with the committed one.
+		prevCid, err := prevCom.Cid()
+		if prevCid != commit.Data.PrevCheckpoint {
+			rt.Abortf(exitcode.ErrIllegalArgument, "new checkpoint not consistent with previous one")
+		}
+		// Check that the epoch is consisted.
+		if prevCom.Data.Epoch >= commit.Data.Epoch {
+			rt.Abortf(exitcode.ErrIllegalArgument, "new checkpoint being committed belongs to the past")
+		}
+		// Checks passed, we can add the child.
+		// Overwrite is set to false. If there is already a child for the source
+		// we throw an error
+		err = ch.AddChild(commit, false)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "child already has committed a checkpoint this epoch")
+		st.flushCheckpoint(rt, ch)
+		// Update previous checkpoint for child.
+		st.flushPrevCheckpoint(rt, commit)
 	})
-	// Store checkpoint for the current epoch.
-	// Make some verifications that the previous one is the connected to the current one
-	// and maybe that its epoch is the right one according to the period.
-	// If there is already a checkpoint for that subnet do not accepet it.
-	// We could probably even check if it is the same CID to allow disputed,
-	// but lets leave that for the future.
+
 	return nil
 }
 
-// Kill
-//
-// Unregisters a subnet from the hierarchical consensus
+// Kill unregisters a subnet from the hierarchical consensus
 func (a SubnetCoordActor) Kill(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	// Can only be called by an actor implementing the subnet actor interface.
 	rt.ValidateImmediateCallerType(actor.SubnetActorCodeID)
@@ -311,50 +373,4 @@ func (a SubnetCoordActor) Kill(rt runtime.Runtime, _ *abi.EmptyValue) *abi.Empty
 	}
 
 	return nil
-}
-
-// addStake adds new funds to the stake of the subnet.
-//
-// This function also accepts negative values to substract, and checks
-// if the funds are enough for the subnet to be active.
-func (sh *Subnet) addStake(rt runtime.Runtime, st *SCAState, value abi.TokenAmount) {
-	// Add stake to the subnet
-	sh.Stake = big.Add(sh.Stake, value)
-
-	// Check if subnet has still stake to be active
-	if sh.Stake.LessThan(st.MinStake) {
-		sh.Status = Inactive
-	}
-
-	// Flush subnet into subnetMap
-	sh.flushSubnet(rt, st)
-
-}
-
-func (sh *Subnet) flushSubnet(rt runtime.Runtime, st *SCAState) {
-	// Update subnet in the list of subnets.
-	subnets, err := adt.AsMap(adt.AsStore(rt), st.Subnets, builtin.DefaultHamtBitwidth)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state for subnets")
-	err = subnets.Put(abi.CidKey(sh.Cid), sh)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put new subnet in subnet map")
-	// Flush subnets
-	st.Subnets, err = subnets.Root()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush subnets")
-}
-
-// currWindowCheckpoint gets the template of the checkpoint being
-// populated in the current window.
-//
-// If it hasn't been instantiated, a template is created. From there on,
-// the template is populated with every new xShard transaction and
-// child checkpoint, until the windows passes that the template is frozen
-// and is ready for miners to populate the rest and sign it.
-func (st *SCAState) currWindowCheckpoint(rt runtime.Runtime) *schema.Checkpoint {
-	chEpoch := types.WindowEpoch(rt.CurrEpoch(), st.CheckPeriod)
-	ch, found, err := st.GetCheckpoint(adt.AsStore(rt), chEpoch)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get checkpoint template for epoch")
-	if !found {
-		ch = schema.NewRawCheckpoint(st.NetworkName, chEpoch)
-	}
-	return ch
 }
