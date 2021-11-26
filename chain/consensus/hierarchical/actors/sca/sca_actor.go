@@ -60,8 +60,6 @@ func (a SubnetCoordActor) Exports() []interface{} {
 		7:                         a.CommitChildCheckpoint,
 		// -1:                         a.Fund,
 		// -1:                         a.Release,
-		// -1:                         a.Checkpoint,
-		// -1:                         a.RawCheckpoint,
 		// -1:                         a.XSubnetTx,
 	}
 }
@@ -106,7 +104,6 @@ func (a SubnetCoordActor) Register(rt runtime.Runtime, _ *abi.EmptyValue) *AddSu
 	rt.StateTransaction(&st, func() {
 		var err error
 		shid = hierarchical.NewSubnetID(st.NetworkName, SubnetActorAddr)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed computing CID from subnetID")
 		// Check if the subnet with that ID already exists
 		if _, has, _ := st.GetSubnet(adt.AsStore(rt), shid); has {
 			rt.Abortf(exitcode.ErrIllegalArgument, "can't register a subnet that has been already registered")
@@ -125,18 +122,19 @@ func (a SubnetCoordActor) Register(rt runtime.Runtime, _ *abi.EmptyValue) *AddSu
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create empty funds balance table")
 
 		sh := &Subnet{
-			ID:       shid,
-			ParentID: st.NetworkName,
-			Stake:    value,
-			Funds:    emptyFundBalances,
-			Status:   status,
+			ID:             shid,
+			ParentID:       st.NetworkName,
+			Stake:          value,
+			Funds:          emptyFundBalances,
+			Status:         status,
+			PrevCheckpoint: *schema.EmptyCheckpoint,
 		}
 
 		// Increase the number of child subnets for the current network.
 		st.TotalSubnets++
 
 		// Flush subnet into subnetMap
-		sh.flushSubnet(rt, &st)
+		st.flushSubnet(rt, sh)
 	})
 
 	return &AddSubnetReturn{ID: shid.String()}
@@ -286,9 +284,9 @@ func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *Chec
 
 		// Verify that the submitted checkpoint has higher epoch and is
 		// consistent with previous checkpoint before committing.
-		prevCom, found, err := st.GetChildPrevCheckpoint(adt.AsStore(rt), hierarchical.SubnetID(commit.Data.Source))
+		prevCom := sh.PrevCheckpoint
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching previous child checkpoint from state")
-		if !found {
+		if empty, _ := prevCom.IsEmpty(); empty {
 			// If no previous checkpoint for child chain, it means this is the first one
 			// and we can add it without additional verifications.
 			ch := st.currWindowCheckpoint(rt)
@@ -298,20 +296,22 @@ func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *Chec
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "child already has committed a checkpoint this epoch")
 			st.flushCheckpoint(rt, ch)
 			// Update previous checkpoint for child.
-			st.flushPrevCheckpoint(rt, commit)
+			sh.PrevCheckpoint = *commit
+			st.flushSubnet(rt, sh)
 			return
 		}
 
 		// Get the checkpoint for the current window.
 		ch := st.currWindowCheckpoint(rt)
+		// Check that the epoch is consistent.
+		if prevCom.Data.Epoch > commit.Data.Epoch {
+			rt.Abortf(exitcode.ErrIllegalArgument, "new checkpoint being committed belongs to the past")
+		}
+
 		// Check that the previous Cid is consistent with the committed one.
 		prevCid, err := prevCom.Cid()
 		if prevCid != commit.Data.PrevCheckpoint {
 			rt.Abortf(exitcode.ErrIllegalArgument, "new checkpoint not consistent with previous one")
-		}
-		// Check that the epoch is consisted.
-		if prevCom.Data.Epoch >= commit.Data.Epoch {
-			rt.Abortf(exitcode.ErrIllegalArgument, "new checkpoint being committed belongs to the past")
 		}
 		// Checks passed, we can add the child.
 		// Overwrite is set to false. If there is already a child for the source
@@ -320,7 +320,8 @@ func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *Chec
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "child already has committed a checkpoint this epoch")
 		st.flushCheckpoint(rt, ch)
 		// Update previous checkpoint for child.
-		st.flushPrevCheckpoint(rt, commit)
+		sh.PrevCheckpoint = *commit
+		st.flushSubnet(rt, sh)
 	})
 
 	return nil

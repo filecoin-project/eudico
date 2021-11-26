@@ -34,6 +34,9 @@ var (
 	// that results in unexpected errors when marshalling.
 	// This needs a fix in go-ipld-prime::bindnode
 	NoPreviousCheck cid.Cid
+
+	// EmptyCheckpoint is an empty checkpoint that can be Marshalled
+	EmptyCheckpoint *Checkpoint
 )
 
 func init() {
@@ -42,6 +45,14 @@ func init() {
 	NoPreviousCheck, err = abi.CidBuilder.Sum([]byte("nil"))
 	if err != nil {
 		panic(err)
+	}
+
+	EmptyCheckpoint = &Checkpoint{
+		Data: CheckData{
+			Source:         "",
+			Epoch:          0,
+			PrevCheckpoint: NoPreviousCheck,
+		},
 	}
 }
 
@@ -152,6 +163,10 @@ func NewRawCheckpoint(source hierarchical.SubnetID, epoch abi.ChainEpoch) *Check
 
 }
 
+func (c *Checkpoint) IsEmpty() (bool, error) {
+	return c.Equals(EmptyCheckpoint)
+}
+
 func (c *Checkpoint) SetPrevious(cid cid.Cid) {
 	c.Data.PrevCheckpoint = cid
 }
@@ -168,7 +183,6 @@ func (c *Checkpoint) MarshalBinary() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	// TODO: Consider returning io.Writer
 	return buf.Bytes(), nil
 }
 

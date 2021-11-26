@@ -169,7 +169,7 @@ func (t *CheckpointParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufSCAState = []byte{135}
+var lengthBufSCAState = []byte{134}
 
 func (t *SCAState) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -228,12 +228,6 @@ func (t *SCAState) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("failed to write cid field t.Checkpoints: %w", err)
 	}
 
-	// t.ChildPrevCheckMap (cid.Cid) (struct)
-
-	if err := cbg.WriteCidBuf(scratch, w, t.ChildPrevCheckMap); err != nil {
-		return xerrors.Errorf("failed to write cid field t.ChildPrevCheckMap: %w", err)
-	}
-
 	return nil
 }
 
@@ -251,7 +245,7 @@ func (t *SCAState) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 7 {
+	if extra != 6 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -337,22 +331,10 @@ func (t *SCAState) UnmarshalCBOR(r io.Reader) error {
 		t.Checkpoints = c
 
 	}
-	// t.ChildPrevCheckMap (cid.Cid) (struct)
-
-	{
-
-		c, err := cbg.ReadCid(br)
-		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.ChildPrevCheckMap: %w", err)
-		}
-
-		t.ChildPrevCheckMap = c
-
-	}
 	return nil
 }
 
-var lengthBufSubnet = []byte{133}
+var lengthBufSubnet = []byte{134}
 
 func (t *Subnet) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -406,6 +388,10 @@ func (t *Subnet) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
+	// t.PrevCheckpoint (schema.Checkpoint) (struct)
+	if err := t.PrevCheckpoint.MarshalCBOR(w); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -423,7 +409,7 @@ func (t *Subnet) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 5 {
+	if extra != 6 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -480,6 +466,15 @@ func (t *Subnet) UnmarshalCBOR(r io.Reader) error {
 			return fmt.Errorf("wrong type for uint64 field")
 		}
 		t.Status = Status(extra)
+
+	}
+	// t.PrevCheckpoint (schema.Checkpoint) (struct)
+
+	{
+
+		if err := t.PrevCheckpoint.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.PrevCheckpoint: %w", err)
+		}
 
 	}
 	return nil

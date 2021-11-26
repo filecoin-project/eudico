@@ -57,9 +57,6 @@ type SCAState struct {
 	CheckPeriod abi.ChainEpoch
 	// Checkpoints committed in SCA
 	Checkpoints cid.Cid // HAMT[epoch]Checkpoint
-	// ChildPrevCheckMap map with previous checkpoints for childs
-	// This is used for convenience.
-	ChildPrevCheckMap cid.Cid // HAMT[subnetID]Checkpoint
 }
 
 type Subnet struct {
@@ -71,8 +68,9 @@ type Subnet struct {
 	// when the subnet is killed.
 	// NOTE: We may want to keep track of this in the future.
 	// Stake      cid.Cid // BalanceTable with locked stake.
-	Funds  cid.Cid // BalanceTable with funds from addresses that entered the subnet.
-	Status Status
+	Funds          cid.Cid // BalanceTable with funds from addresses that entered the subnet.
+	Status         Status
+	PrevCheckpoint schema.Checkpoint
 }
 
 func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, error) {
@@ -84,10 +82,6 @@ func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, e
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}
-	emptyPrevMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
-	if err != nil {
-		return nil, xerrors.Errorf("failed to create empty map: %w", err)
-	}
 	nn := hierarchical.SubnetID(params.NetworkName)
 	// Don't allow really small checkpoint periods for now.
 	period := abi.ChainEpoch(params.CheckpointPeriod)
@@ -96,13 +90,12 @@ func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, e
 	}
 
 	return &SCAState{
-		NetworkName:       nn,
-		TotalSubnets:      0,
-		MinStake:          MinSubnetStake,
-		Subnets:           emptySubnetsMapCid,
-		CheckPeriod:       period,
-		Checkpoints:       emptyCheckpointsMapCid,
-		ChildPrevCheckMap: emptyPrevMapCid,
+		NetworkName:  nn,
+		TotalSubnets: 0,
+		MinStake:     MinSubnetStake,
+		Subnets:      emptySubnetsMapCid,
+		CheckPeriod:  period,
+		Checkpoints:  emptyCheckpointsMapCid,
 	}, nil
 }
 
@@ -141,11 +134,11 @@ func (sh *Subnet) addStake(rt runtime.Runtime, st *SCAState, value abi.TokenAmou
 	}
 
 	// Flush subnet into subnetMap
-	sh.flushSubnet(rt, st)
+	st.flushSubnet(rt, sh)
 
 }
 
-func (sh *Subnet) flushSubnet(rt runtime.Runtime, st *SCAState) {
+func (st *SCAState) flushSubnet(rt runtime.Runtime, sh *Subnet) {
 	// Update subnet in the list of subnets.
 	subnets, err := adt.AsMap(adt.AsStore(rt), st.Subnets, builtin.DefaultHamtBitwidth)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state for subnets")
@@ -220,38 +213,6 @@ func (st *SCAState) flushCheckpoint(rt runtime.Runtime, ch *schema.Checkpoint) {
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put checkpoint in map")
 	// Flush checkpoints
 	st.Checkpoints, err = checks.Root()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush checkpoints")
-}
-
-// GetChildPrevCheckpoint gets the previous checkpoint for a child subnet
-func (st *SCAState) GetChildPrevCheckpoint(s adt.Store, source hierarchical.SubnetID) (*schema.Checkpoint, bool, error) {
-	prevChecks, err := adt.AsMap(s, st.Checkpoints, builtin.DefaultHamtBitwidth)
-	if err != nil {
-		return nil, false, xerrors.Errorf("failed to load previous checkpoints: %w", err)
-	}
-	return getChildPrevCheckpoint(prevChecks, source)
-}
-
-func getChildPrevCheckpoint(checks *adt.Map, source hierarchical.SubnetID) (*schema.Checkpoint, bool, error) {
-	var out schema.Checkpoint
-	found, err := checks.Get(source, &out)
-	if err != nil {
-		return nil, false, xerrors.Errorf("failed to get previous checkpoint for source %v: %w", source, err)
-	}
-	if !found {
-		return nil, false, nil
-	}
-	return &out, true, nil
-}
-
-func (st *SCAState) flushPrevCheckpoint(rt runtime.Runtime, ch *schema.Checkpoint) {
-	// Update subnet in the list of checkpoints.
-	checks, err := adt.AsMap(adt.AsStore(rt), st.ChildPrevCheckMap, builtin.DefaultHamtBitwidth)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state for checkpoints")
-	err = checks.Put(hierarchical.SubnetID(ch.Data.Source), ch)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put checkpoint in map")
-	// Flush checkpoints
-	st.ChildPrevCheckMap, err = checks.Root()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush checkpoints")
 }
 

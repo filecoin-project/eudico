@@ -355,7 +355,7 @@ func TestCheckpoints(t *testing.T) {
 	ch = newCheckpoint(nn1, epoch+9)
 	b, err = ch.MarshalBinary()
 	require.NoError(t, err)
-	rt.ExpectAbort(exitcode.ErrIllegalState, func() {
+	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
 		rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
 	})
 
@@ -570,16 +570,11 @@ func (h *shActorHarness) getSubnet(rt *mock.Runtime, id hierarchical.SubnetID) (
 }
 
 func (h *shActorHarness) getPrevChildCheckpoint(rt *mock.Runtime, source hierarchical.SubnetID) (*schema.Checkpoint, bool) {
-	var st actor.SCAState
-	rt.GetState(&st)
-
-	subnets, err := adt.AsMap(adt.AsStore(rt), st.ChildPrevCheckMap, builtin.DefaultHamtBitwidth)
-	require.NoError(h.t, err)
-	var out schema.Checkpoint
-	found, err := subnets.Get(source, &out)
-	require.NoError(h.t, err)
-
-	return &out, found
+	sh, found := h.getSubnet(rt, source)
+	if !found {
+		return nil, false
+	}
+	return &sh.PrevCheckpoint, true
 }
 
 func currWindowCheckpoint(rt *mock.Runtime, epoch abi.ChainEpoch) *schema.Checkpoint {
