@@ -56,10 +56,9 @@ func TestRegister(t *testing.T) {
 	ret := rt.Call(h.SubnetCoordActor.Register, nil)
 	res, ok := ret.(*actor.AddSubnetReturn)
 	require.True(t, ok)
-	shid, err := hierarchical.SubnetID("/root/f0101").Cid()
-	require.NoError(t, err)
+	shid := hierarchical.SubnetID("/root/f0101")
 	// Verify the return value is correct.
-	require.Equal(t, res.Cid, shid)
+	require.Equal(t, res.ID, shid.String())
 	rt.Verify()
 	require.Equal(t, getState(rt).TotalSubnets, uint64(1))
 
@@ -105,10 +104,9 @@ func TestRegister(t *testing.T) {
 	ret = rt.Call(h.SubnetCoordActor.Register, nil)
 	res, ok = ret.(*actor.AddSubnetReturn)
 	require.True(t, ok)
-	shid, err = hierarchical.SubnetID("/root/f0102").Cid()
-	require.NoError(t, err)
+	shid = hierarchical.SubnetID("/root/f0102")
 	// Verify the return value is correct.
-	require.Equal(t, res.Cid, shid)
+	require.Equal(t, res.ID, shid.String())
 	rt.Verify()
 	require.Equal(t, getState(rt).TotalSubnets, uint64(2))
 	// Verify instantiated subnet
@@ -160,7 +158,7 @@ func TestAddStake(t *testing.T) {
 	// Only subnet actors can call.
 	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
 	rt.Call(h.SubnetCoordActor.AddStake, nil)
-	sh, found := h.getSubnet(rt, res.Cid)
+	sh, found := h.getSubnet(rt, hierarchical.SubnetID(res.ID))
 	require.True(h.t, found)
 	require.Equal(t, sh.Stake, big.Add(value, value))
 	require.Equal(t, sh.Status, actor.Active)
@@ -215,7 +213,7 @@ func TestReleaseStake(t *testing.T) {
 	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
 	rt.ExpectSend(SubnetActorAddr, builtin.MethodSend, nil, releaseVal, nil, exitcode.Ok)
 	rt.Call(h.SubnetCoordActor.ReleaseStake, params)
-	sh, found := h.getSubnet(rt, res.Cid)
+	sh, found := h.getSubnet(rt, hierarchical.SubnetID(res.ID))
 	require.True(h.t, found)
 	require.Equal(t, sh.Stake, big.Sub(value, releaseVal))
 	require.Equal(t, sh.Status, actor.Active)
@@ -229,7 +227,7 @@ func TestReleaseStake(t *testing.T) {
 	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
 	rt.ExpectSend(SubnetActorAddr, builtin.MethodSend, nil, releaseVal, nil, exitcode.Ok)
 	rt.Call(h.SubnetCoordActor.ReleaseStake, params)
-	sh, found = h.getSubnet(rt, res.Cid)
+	sh, found = h.getSubnet(rt, hierarchical.SubnetID(res.ID))
 	require.True(h.t, found)
 	require.Equal(t, sh.Stake, big.Sub(currStake, releaseVal))
 	require.Equal(t, sh.Status, actor.Inactive)
@@ -289,10 +287,9 @@ func TestCheckpoints(t *testing.T) {
 	ret := rt.Call(h.SubnetCoordActor.Register, nil)
 	res, ok := ret.(*actor.AddSubnetReturn)
 	require.True(t, ok)
-	shid, err := hierarchical.SubnetID("/root/f0101").Cid()
-	require.NoError(t, err)
+	shid := hierarchical.SubnetID("/root/f0101")
 	// Verify the return value is correct.
-	require.Equal(t, res.Cid, shid)
+	require.Equal(t, res.ID, shid.String())
 	rt.Verify()
 	require.Equal(t, getState(rt).TotalSubnets, uint64(1))
 	// Verify instantiated subnet
@@ -314,10 +311,9 @@ func TestCheckpoints(t *testing.T) {
 	ret = rt.Call(h.SubnetCoordActor.Register, nil)
 	res, ok = ret.(*actor.AddSubnetReturn)
 	require.True(t, ok)
-	shid, err = hierarchical.SubnetID("/root/f0102").Cid()
-	require.NoError(t, err)
+	shid = hierarchical.SubnetID("/root/f0102")
 	// Verify the return value is correct.
-	require.Equal(t, res.Cid, shid)
+	require.Equal(t, res.ID, shid.String())
 	rt.Verify()
 	require.Equal(t, getState(rt).TotalSubnets, uint64(2))
 	// Verify instantiated subnet
@@ -448,10 +444,9 @@ func TestCheckpointInactive(t *testing.T) {
 	ret := rt.Call(h.SubnetCoordActor.Register, nil)
 	res, ok := ret.(*actor.AddSubnetReturn)
 	require.True(t, ok)
-	shid, err := hierarchical.SubnetID("/root/f0101").Cid()
-	require.NoError(t, err)
+	shid := hierarchical.SubnetID("/root/f0101")
 	// Verify the return value is correct.
-	require.Equal(t, res.Cid, shid)
+	require.Equal(t, res.ID, shid.String())
 	rt.Verify()
 	require.Equal(t, getState(rt).TotalSubnets, uint64(1))
 	// Verify instantiated subnet
@@ -471,7 +466,7 @@ func TestCheckpointInactive(t *testing.T) {
 	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
 	rt.ExpectSend(SubnetActorAddr, builtin.MethodSend, nil, releaseVal, nil, exitcode.Ok)
 	rt.Call(h.SubnetCoordActor.ReleaseStake, params)
-	sh, found = h.getSubnet(rt, res.Cid)
+	sh, found = h.getSubnet(rt, shid)
 	require.True(h.t, found)
 	require.Equal(t, sh.Status, actor.Inactive)
 
@@ -515,7 +510,7 @@ func TestKill(t *testing.T) {
 	rt.ExpectSend(SubnetActorAddr, builtin.MethodSend, nil, value, nil, exitcode.Ok)
 	rt.Call(h.SubnetCoordActor.Kill, nil)
 	// The subnet has been removed.
-	_, found := h.getSubnet(rt, res.Cid)
+	_, found := h.getSubnet(rt, hierarchical.SubnetID(res.ID))
 	require.False(h.t, found)
 }
 
@@ -542,9 +537,6 @@ func (h *shActorHarness) constructAndVerify(rt *mock.Runtime) {
 	rt.GetState(&st)
 	assert.Equal(h.t, actor.MinSubnetStake, st.MinStake)
 	shid := hierarchical.RootSubnet
-	shcid, err := shid.Cid()
-	require.NoError(h.t, err)
-	assert.Equal(h.t, st.Network, shcid)
 	assert.Equal(h.t, st.NetworkName, shid)
 	assert.Equal(h.t, st.CheckPeriod, abi.ChainEpoch(100))
 	verifyEmptyMap(h.t, rt, st.Subnets)
@@ -564,14 +556,14 @@ func getState(rt *mock.Runtime) *actor.SCAState {
 	return &st
 }
 
-func (h *shActorHarness) getSubnet(rt *mock.Runtime, id cid.Cid) (*actor.Subnet, bool) {
+func (h *shActorHarness) getSubnet(rt *mock.Runtime, id hierarchical.SubnetID) (*actor.Subnet, bool) {
 	var st actor.SCAState
 	rt.GetState(&st)
 
 	subnets, err := adt.AsMap(adt.AsStore(rt), st.Subnets, builtin.DefaultHamtBitwidth)
 	require.NoError(h.t, err)
 	var out actor.Subnet
-	found, err := subnets.Get(abi.CidKey(id), &out)
+	found, err := subnets.Get(id, &out)
 	require.NoError(h.t, err)
 
 	return &out, found

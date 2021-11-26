@@ -44,8 +44,6 @@ const (
 
 // SCAState represents the state of the Subnet Coordinator Actor
 type SCAState struct {
-	// CID of the current network
-	Network cid.Cid
 	// ID of the current network
 	NetworkName hierarchical.SubnetID
 	// Total subnets below this one.
@@ -65,9 +63,7 @@ type SCAState struct {
 }
 
 type Subnet struct {
-	Cid      cid.Cid               // Cid of the subnet ID
 	ID       hierarchical.SubnetID // human-readable name of the subnet ID (path in the hierarchy)
-	Parent   cid.Cid
 	ParentID hierarchical.SubnetID
 	Stake    abi.TokenAmount
 	// The SCA doesn't keep track of the stake from miners, just locks the funds.
@@ -93,10 +89,6 @@ func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, e
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}
 	nn := hierarchical.SubnetID(params.NetworkName)
-	networkCid, err := nn.Cid()
-	if err != nil {
-		panic(err)
-	}
 	// Don't allow really small checkpoint periods for now.
 	period := abi.ChainEpoch(params.CheckpointPeriod)
 	if period < MinCheckpointPeriod {
@@ -104,7 +96,6 @@ func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, e
 	}
 
 	return &SCAState{
-		Network:           networkCid,
 		NetworkName:       nn,
 		TotalSubnets:      0,
 		MinStake:          MinSubnetStake,
@@ -116,7 +107,7 @@ func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, e
 }
 
 // GetSubnet gets a subnet from the actor state.
-func (st *SCAState) GetSubnet(s adt.Store, id cid.Cid) (*Subnet, bool, error) {
+func (st *SCAState) GetSubnet(s adt.Store, id hierarchical.SubnetID) (*Subnet, bool, error) {
 	subnets, err := adt.AsMap(s, st.Subnets, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, false, xerrors.Errorf("failed to load subnets: %w", err)
@@ -124,9 +115,9 @@ func (st *SCAState) GetSubnet(s adt.Store, id cid.Cid) (*Subnet, bool, error) {
 	return getSubnet(subnets, id)
 }
 
-func getSubnet(subnets *adt.Map, id cid.Cid) (*Subnet, bool, error) {
+func getSubnet(subnets *adt.Map, id hierarchical.SubnetID) (*Subnet, bool, error) {
 	var out Subnet
-	found, err := subnets.Get(abi.CidKey(id), &out)
+	found, err := subnets.Get(id, &out)
 	if err != nil {
 		return nil, false, xerrors.Errorf("failed to get subnet with id %v: %w", id, err)
 	}
@@ -158,7 +149,7 @@ func (sh *Subnet) flushSubnet(rt runtime.Runtime, st *SCAState) {
 	// Update subnet in the list of subnets.
 	subnets, err := adt.AsMap(adt.AsStore(rt), st.Subnets, builtin.DefaultHamtBitwidth)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state for subnets")
-	err = subnets.Put(abi.CidKey(sh.Cid), sh)
+	err = subnets.Put(sh.ID, sh)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put new subnet in subnet map")
 	// Flush subnets
 	st.Subnets, err = subnets.Root()
@@ -267,11 +258,7 @@ func (st *SCAState) flushPrevCheckpoint(rt runtime.Runtime, ch *schema.Checkpoin
 // Get subnet from its subnet actor address.
 func (st *SCAState) getSubnetFromActorAddr(s adt.Store, addr address.Address) (*Subnet, bool, error) {
 	shid := hierarchical.NewSubnetID(st.NetworkName, addr)
-	shcid, err := shid.Cid()
-	if err != nil {
-		return nil, false, err
-	}
-	return st.GetSubnet(s, shcid)
+	return st.GetSubnet(s, shid)
 }
 
 func ListSubnets(s adt.Store, st SCAState) ([]Subnet, error) {

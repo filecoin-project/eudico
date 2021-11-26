@@ -45,7 +45,7 @@ type FundParams struct {
 }
 
 type AddSubnetReturn struct {
-	Cid cid.Cid
+	ID string
 }
 type SubnetCoordActor struct{}
 
@@ -102,14 +102,13 @@ func (a SubnetCoordActor) Register(rt runtime.Runtime, _ *abi.EmptyValue) *AddSu
 	SubnetActorAddr := rt.Caller()
 
 	var st SCAState
-	var shcid cid.Cid
+	var shid hierarchical.SubnetID
 	rt.StateTransaction(&st, func() {
 		var err error
-		shid := hierarchical.NewSubnetID(st.NetworkName, SubnetActorAddr)
-		shcid, err = shid.Cid()
+		shid = hierarchical.NewSubnetID(st.NetworkName, SubnetActorAddr)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed computing CID from subnetID")
 		// Check if the subnet with that ID already exists
-		if _, has, _ := st.GetSubnet(adt.AsStore(rt), shcid); has {
+		if _, has, _ := st.GetSubnet(adt.AsStore(rt), shid); has {
 			rt.Abortf(exitcode.ErrIllegalArgument, "can't register a subnet that has been already registered")
 		}
 		// Check if the transaction has enough funds to register the subnet.
@@ -126,9 +125,7 @@ func (a SubnetCoordActor) Register(rt runtime.Runtime, _ *abi.EmptyValue) *AddSu
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create empty funds balance table")
 
 		sh := &Subnet{
-			Cid:      shcid,
 			ID:       shid,
-			Parent:   st.Network,
 			ParentID: st.NetworkName,
 			Stake:    value,
 			Funds:    emptyFundBalances,
@@ -142,7 +139,7 @@ func (a SubnetCoordActor) Register(rt runtime.Runtime, _ *abi.EmptyValue) *AddSu
 		sh.flushSubnet(rt, &st)
 	})
 
-	return &AddSubnetReturn{Cid: shcid}
+	return &AddSubnetReturn{ID: shid.String()}
 }
 
 // AddStake
@@ -276,10 +273,8 @@ func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *Chec
 	rt.StateTransaction(&st, func() {
 		// Check that the subnet is registered and active
 		shid := hierarchical.NewSubnetID(st.NetworkName, subnetActorAddr)
-		shcid, err := shid.Cid()
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed computing CID from subnetID")
 		// Check if the subnet for the actor exists
-		sh, has, err := st.GetSubnet(adt.AsStore(rt), shcid)
+		sh, has, err := st.GetSubnet(adt.AsStore(rt), shid)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching subnet state")
 		if !has {
 			rt.Abortf(exitcode.ErrIllegalArgument, "subnet for for actor hasn't been registered yet")
@@ -342,10 +337,9 @@ func (a SubnetCoordActor) Kill(rt runtime.Runtime, _ *abi.EmptyValue) *abi.Empty
 	rt.StateTransaction(&st, func() {
 		var has bool
 		shid := hierarchical.NewSubnetID(st.NetworkName, SubnetActorAddr)
-		shcid, err := shid.Cid()
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed computing CID from subnetID")
 		// Check if the subnet for the actor exists
-		sh, has, err = st.GetSubnet(adt.AsStore(rt), shcid)
+		var err error
+		sh, has, err = st.GetSubnet(adt.AsStore(rt), shid)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching subnet state")
 		if !has {
 			rt.Abortf(exitcode.ErrIllegalArgument, "subnet for for actor hasn't been registered yet")
@@ -359,7 +353,7 @@ func (a SubnetCoordActor) Kill(rt runtime.Runtime, _ *abi.EmptyValue) *abi.Empty
 		// Remove subnet from subnet registry.
 		subnets, err := adt.AsMap(adt.AsStore(rt), st.Subnets, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state for subnets")
-		err = subnets.Delete(abi.CidKey(shcid))
+		err = subnets.Delete(shid)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to remove miner stake in stake map")
 		// Flush stakes adding miner stake.
 		st.Subnets, err = subnets.Root()

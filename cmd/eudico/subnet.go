@@ -71,7 +71,7 @@ var listSubnetsCmd = &cli.Command{
 			if sh.Status != 0 {
 				status = "Inactive"
 			}
-			fmt.Printf("%s (%s): status=%v, stake=%v\n", sh.Cid, sh.ID, status, types.FIL(sh.Stake))
+			fmt.Printf("%s: status=%v, stake=%v\n", sh.ID, status, types.FIL(sh.Stake))
 		}
 
 		return nil

@@ -169,7 +169,7 @@ func (t *CheckpointParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufSCAState = []byte{136}
+var lengthBufSCAState = []byte{135}
 
 func (t *SCAState) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -181,12 +181,6 @@ func (t *SCAState) MarshalCBOR(w io.Writer) error {
 	}
 
 	scratch := make([]byte, 9)
-
-	// t.Network (cid.Cid) (struct)
-
-	if err := cbg.WriteCidBuf(scratch, w, t.Network); err != nil {
-		return xerrors.Errorf("failed to write cid field t.Network: %w", err)
-	}
 
 	// t.NetworkName (hierarchical.SubnetID) (string)
 	if len(t.NetworkName) > cbg.MaxLength {
@@ -257,22 +251,10 @@ func (t *SCAState) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 8 {
+	if extra != 7 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.Network (cid.Cid) (struct)
-
-	{
-
-		c, err := cbg.ReadCid(br)
-		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.Network: %w", err)
-		}
-
-		t.Network = c
-
-	}
 	// t.NetworkName (hierarchical.SubnetID) (string)
 
 	{
@@ -370,7 +352,7 @@ func (t *SCAState) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufSubnet = []byte{135}
+var lengthBufSubnet = []byte{133}
 
 func (t *Subnet) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -383,12 +365,6 @@ func (t *Subnet) MarshalCBOR(w io.Writer) error {
 
 	scratch := make([]byte, 9)
 
-	// t.Cid (cid.Cid) (struct)
-
-	if err := cbg.WriteCidBuf(scratch, w, t.Cid); err != nil {
-		return xerrors.Errorf("failed to write cid field t.Cid: %w", err)
-	}
-
 	// t.ID (hierarchical.SubnetID) (string)
 	if len(t.ID) > cbg.MaxLength {
 		return xerrors.Errorf("Value in field t.ID was too long")
@@ -399,12 +375,6 @@ func (t *Subnet) MarshalCBOR(w io.Writer) error {
 	}
 	if _, err := io.WriteString(w, string(t.ID)); err != nil {
 		return err
-	}
-
-	// t.Parent (cid.Cid) (struct)
-
-	if err := cbg.WriteCidBuf(scratch, w, t.Parent); err != nil {
-		return xerrors.Errorf("failed to write cid field t.Parent: %w", err)
 	}
 
 	// t.ParentID (hierarchical.SubnetID) (string)
@@ -453,22 +423,10 @@ func (t *Subnet) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 7 {
+	if extra != 5 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.Cid (cid.Cid) (struct)
-
-	{
-
-		c, err := cbg.ReadCid(br)
-		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.Cid: %w", err)
-		}
-
-		t.Cid = c
-
-	}
 	// t.ID (hierarchical.SubnetID) (string)
 
 	{
@@ -478,18 +436,6 @@ func (t *Subnet) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		t.ID = hierarchical.SubnetID(sval)
-	}
-	// t.Parent (cid.Cid) (struct)
-
-	{
-
-		c, err := cbg.ReadCid(br)
-		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.Parent: %w", err)
-		}
-
-		t.Parent = c
-
 	}
 	// t.ParentID (hierarchical.SubnetID) (string)
 
@@ -600,12 +546,17 @@ func (t *AddSubnetReturn) MarshalCBOR(w io.Writer) error {
 
 	scratch := make([]byte, 9)
 
-	// t.Cid (cid.Cid) (struct)
-
-	if err := cbg.WriteCidBuf(scratch, w, t.Cid); err != nil {
-		return xerrors.Errorf("failed to write cid field t.Cid: %w", err)
+	// t.ID (string) (string)
+	if len(t.ID) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.ID was too long")
 	}
 
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.ID))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.ID)); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -627,17 +578,15 @@ func (t *AddSubnetReturn) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.Cid (cid.Cid) (struct)
+	// t.ID (string) (string)
 
 	{
-
-		c, err := cbg.ReadCid(br)
+		sval, err := cbg.ReadStringBuf(br, scratch)
 		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.Cid: %w", err)
+			return err
 		}
 
-		t.Cid = c
-
+		t.ID = string(sval)
 	}
 	return nil
 }
