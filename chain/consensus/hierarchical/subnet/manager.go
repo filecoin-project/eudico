@@ -153,7 +153,7 @@ func NewSubnetMgr(
 	return s, nil
 }
 
-func (s *SubnetMgr) startSubnet(ctx context.Context, id hierarchical.SubnetID,
+func (s *SubnetMgr) startSubnet(id hierarchical.SubnetID,
 	parentAPI *API, consensus subnet.ConsensusType,
 	genesis []byte) error {
 	var err error
@@ -422,7 +422,7 @@ func (s *SubnetMgr) JoinSubnet(
 	if err != nil {
 		return cid.Undef, nil
 	}
-	err = s.startSubnet(s.ctx, id, parentAPI, st.Consensus, st.Genesis)
+	err = s.startSubnet(id, parentAPI, st.Consensus, st.Genesis)
 
 	return smsg.Cid(), nil
 }

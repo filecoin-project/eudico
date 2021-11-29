@@ -14,11 +14,6 @@ import (
 
 var CheckpointMsgType = api.MsgMeta{Type: "checkpoint"}
 
-const (
-	checkSignCodec  = "/fil/hierarchical/checkpoint"
-	checkSignDomain = "fil"
-)
-
 // Signer implements the logic to sign and verify a checkpoint.
 //
 // Each subnet may choose to implement their own signature and

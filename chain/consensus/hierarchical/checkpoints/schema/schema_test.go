@@ -63,7 +63,8 @@ func TestMarshalCheckpoint(t *testing.T) {
 func TestMarshalEmptyPrevious(t *testing.T) {
 	epoch := abi.ChainEpoch(1000)
 	ch := schema.NewRawCheckpoint(hierarchical.RootSubnet, epoch)
-	require.Equal(t, ch.Data.PrevCheckpoint, schema.NoPreviousCheck)
+	pr, _ := ch.PreviousCheck()
+	require.Equal(t, pr, schema.NoPreviousCheck)
 
 	// Add child checkpoints
 	ch.AddListChilds(utils.GenRandChecks(3))
