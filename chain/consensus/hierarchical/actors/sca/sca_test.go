@@ -355,7 +355,7 @@ func TestCheckpoints(t *testing.T) {
 	ch = newCheckpoint(nn1, epoch+9)
 	b, err = ch.MarshalBinary()
 	require.NoError(t, err)
-	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
+	rt.ExpectAbort(exitcode.ErrIllegalState, func() {
 		rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
 	})
 
@@ -402,7 +402,6 @@ func TestCheckpoints(t *testing.T) {
 	eq, err = prevCh.Equals(ch)
 	require.NoError(t, err)
 	require.True(t, eq)
-
 	t.Log("raw checkpoint in next period includes childs")
 	epoch = abi.ChainEpoch(120)
 	rt.SetCaller(addr, builtin.AccountActorCodeID)
@@ -417,7 +416,9 @@ func TestCheckpoints(t *testing.T) {
 	require.Equal(t, raw.Data.Epoch, 100)
 	require.GreaterOrEqual(t, raw.HasChild(nn2), 0)
 	require.Equal(t, raw.LenChilds(), 2)
-	require.Equal(t, raw.Data.PrevCheckpoint, schema.NoPreviousCheck)
+	pr, err := raw.PreviousCheck()
+	require.NoError(t, err)
+	require.Equal(t, pr, schema.NoPreviousCheck)
 
 	t.Log("trying to commit wrong checkpoint (wrong subnet/wrong epoch/wrong prev")
 	// TODO: We need to populate this with more tests for different conditions.

@@ -38,8 +38,6 @@ type Subnet struct {
 	host host.Host
 	// SubnetID
 	ID hierarchical.SubnetID
-	// Pubsub subcription for subnet.
-	// sub *pubsub.Subscription
 	// Metadata datastore.
 	ds dtypes.MetadataDS
 	// Exposed blockstore
@@ -147,7 +145,8 @@ func (sh *Subnet) HandleIncomingMessages(ctx context.Context, bootstrapper dtype
 // Stop all processes and remove all handlers.
 func (sh *Subnet) Close(ctx context.Context) error {
 	log.Infow("Closing subnet", "subnetID", sh.ID)
-	err0 := sh.stopMining(ctx)
+	sh.stopMining(ctx)
+
 	// Remove hello and exchange handlers to stop accepting requests from peers.
 	sh.host.RemoveStreamHandler(protocol.ID(BlockSyncProtoPrefix + sh.ID.String()))
 	sh.host.RemoveStreamHandler(protocol.ID(HelloProtoPrefix + sh.ID.String()))
@@ -172,7 +171,6 @@ func (sh *Subnet) Close(ctx context.Context) error {
 	sh.ctxCancel()
 
 	return multierr.Combine(
-		err0,
 		err1,
 		err2,
 		err3,

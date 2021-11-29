@@ -281,15 +281,22 @@ func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *Chec
 		if sh.Status != Active {
 			rt.Abortf(exitcode.ErrIllegalState, "can't commit a checkpoint for a subnet that is not active")
 		}
+		// Get the checkpoint for the current window.
+		ch := st.currWindowCheckpoint(rt)
+
+		// Check if a check for the source has already been committed in the
+		// currWindow checkpoint.
+		if ch.HasChild(shid) >= 0 {
+			rt.Abortf(exitcode.ErrIllegalState, "checkpoint has already committed a checkpoint this epoch")
+		}
 
 		// Verify that the submitted checkpoint has higher epoch and is
 		// consistent with previous checkpoint before committing.
 		prevCom := sh.PrevCheckpoint
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching previous child checkpoint from state")
+		// If no previous checkpoint for child chain, it means this is the first one
+		// and we can add it without additional verifications.
 		if empty, _ := prevCom.IsEmpty(); empty {
-			// If no previous checkpoint for child chain, it means this is the first one
-			// and we can add it without additional verifications.
-			ch := st.currWindowCheckpoint(rt)
 			// Overwrite is set to false. If there is already a child for the source
 			// we throw an error
 			err := ch.AddChild(commit, false)
@@ -301,8 +308,6 @@ func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *Chec
 			return
 		}
 
-		// Get the checkpoint for the current window.
-		ch := st.currWindowCheckpoint(rt)
 		// Check that the epoch is consistent.
 		if prevCom.Data.Epoch > commit.Data.Epoch {
 			rt.Abortf(exitcode.ErrIllegalArgument, "new checkpoint being committed belongs to the past")
@@ -310,9 +315,11 @@ func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *Chec
 
 		// Check that the previous Cid is consistent with the committed one.
 		prevCid, err := prevCom.Cid()
-		if prevCid != commit.Data.PrevCheckpoint {
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error computing checkpoint's Cid")
+		if pr, _ := commit.PreviousCheck(); prevCid != pr {
 			rt.Abortf(exitcode.ErrIllegalArgument, "new checkpoint not consistent with previous one")
 		}
+
 		// Checks passed, we can add the child.
 		// Overwrite is set to false. If there is already a child for the source
 		// we throw an error

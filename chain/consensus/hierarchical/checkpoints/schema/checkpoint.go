@@ -42,16 +42,16 @@ var (
 func init() {
 	CheckpointSchema = initCheckpointSchema()
 	var err error
-	NoPreviousCheck, err = abi.CidBuilder.Sum([]byte("nil"))
+	NoPreviousCheck, err = Linkproto.Sum([]byte("nil"))
 	if err != nil {
 		panic(err)
 	}
 
 	EmptyCheckpoint = &Checkpoint{
 		Data: CheckData{
-			Source:         "",
-			Epoch:          0,
-			PrevCheckpoint: NoPreviousCheck,
+			Source:       "",
+			Epoch:        0,
+			PrevCheckCid: NoPreviousCheck.Bytes(),
 		},
 	}
 }
@@ -69,12 +69,13 @@ type MsgTreeList struct{}
 
 // CheckData is the data included in a Checkpoint.
 type CheckData struct {
-	Source         string
-	TipSet         []byte // NOTE: For simplicity we add TipSetKey. We could include full TipSet
-	Epoch          int
-	PrevCheckpoint cid.Cid
-	Childs         []ChildCheck
-	XShardMsg      *MsgTreeList
+	Source       string
+	TipSet       []byte // NOTE: For simplicity we add TipSetKey. We could include full TipSet
+	Epoch        int
+	PrevCheckCid []byte // NOTE: To prevent the VM from interpreting it as a CID from the state
+	// tree, we store the Cid for PrevCheckpoint as bytes
+	Childs    []ChildCheck
+	XShardMsg *MsgTreeList
 }
 
 // Checkpoint data structure
@@ -113,7 +114,7 @@ func initCheckpointSchema() schema.Type {
 			schema.SpawnStructField("Source", "String", false, false),
 			schema.SpawnStructField("TipSet", "Bytes", false, false),
 			schema.SpawnStructField("Epoch", "Int", false, false),
-			schema.SpawnStructField("PrevCheckpoint", "Link", false, false),
+			schema.SpawnStructField("PrevCheckCid", "Bytes", false, false),
 			schema.SpawnStructField("Childs", "List_ChildCheck", false, false),
 			schema.SpawnStructField("XShardMsg", "MsgTreeList", false, true),
 		},
@@ -155,9 +156,9 @@ func noStoreLinkSystem() ipld.LinkSystem {
 func NewRawCheckpoint(source hierarchical.SubnetID, epoch abi.ChainEpoch) *Checkpoint {
 	return &Checkpoint{
 		Data: CheckData{
-			Source:         source.String(),
-			Epoch:          int(epoch),
-			PrevCheckpoint: NoPreviousCheck,
+			Source:       source.String(),
+			Epoch:        int(epoch),
+			PrevCheckCid: NoPreviousCheck.Bytes(),
 		},
 	}
 
@@ -168,7 +169,12 @@ func (c *Checkpoint) IsEmpty() (bool, error) {
 }
 
 func (c *Checkpoint) SetPrevious(cid cid.Cid) {
-	c.Data.PrevCheckpoint = cid
+	c.Data.PrevCheckCid = cid.Bytes()
+}
+
+func (c *Checkpoint) PreviousCheck() (cid.Cid, error) {
+	_, cid, err := cid.CidFromBytes(c.Data.PrevCheckCid)
+	return cid, err
 }
 
 func (c *Checkpoint) SetTipsetKey(ts ltypes.TipSetKey) {
