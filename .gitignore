@@ -51,3 +51,7 @@ scratchpad
 
 gen.gen
 *.key
+data/*/*
+!data/*/keystore/
+!data/*/config.toml
+!data/*/token

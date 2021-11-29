@@ -82,12 +82,6 @@ func Mine(ctx context.Context, api v1api.FullNode) error {
 
 			log.Info("delegated mined a block! ", bh.Cid(), " msgs ", len(msgs))
 
-			// ZONDAX TODO
-			// Activate checkpointing every 5 blocks
-			if base.Height()%5 == 0 {
-				log.Info("Check point time")
-			}
-
 		case <-ctx.Done():
 			return nil
 		}
