@@ -338,7 +338,7 @@ func TestCheckpoints(t *testing.T) {
 	windowCh := currWindowCheckpoint(rt, epoch)
 	require.Equal(t, windowCh.Data.Epoch, 100)
 	// Check that child was added.
-	require.GreaterOrEqual(t, windowCh.HasChild(nn1), 0)
+	require.GreaterOrEqual(t, windowCh.HasChildSource(nn1), 0)
 	// Check previous checkpoint added
 	prevCh, found := h.getPrevChildCheckpoint(rt, nn1)
 	require.True(t, found)
@@ -352,12 +352,35 @@ func TestCheckpoints(t *testing.T) {
 	// Only subnet actors can call.
 	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
 	rt.SetEpoch(epoch)
-	ch = newCheckpoint(nn1, epoch+9)
-	b, err = ch.MarshalBinary()
 	require.NoError(t, err)
-	rt.ExpectAbort(exitcode.ErrIllegalState, func() {
+	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
 		rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
 	})
+
+	t.Log("appending child checkpoint for same source")
+	epoch = abi.ChainEpoch(12)
+	prevcid, err := ch.Cid()
+	require.NoError(t, err)
+	rt.SetCaller(SubnetActorAddr, actors.SubnetActorCodeID)
+	// Only subnet actors can call.
+	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
+	rt.SetEpoch(epoch)
+	ch = newCheckpoint(nn1, epoch+10)
+	ch.SetPrevious(prevcid)
+	b, err = ch.MarshalBinary()
+	require.NoError(t, err)
+	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+	windowCh = currWindowCheckpoint(rt, epoch)
+	require.Equal(t, windowCh.Data.Epoch, 100)
+	// Check that child was appended for subnet.
+	require.GreaterOrEqual(t, windowCh.HasChildSource(nn1), 0)
+	require.Equal(t, len(windowCh.GetSourceChilds(nn1).Checks), 2)
+	// Check previous checkpoint added
+	prevCh, found = h.getPrevChildCheckpoint(rt, nn1)
+	require.True(t, found)
+	eq, err = prevCh.Equals(ch)
+	require.NoError(t, err)
+	require.True(t, eq)
 
 	t.Log("trying to commit from wrong subnet")
 	epoch = abi.ChainEpoch(12)
@@ -366,6 +389,19 @@ func TestCheckpoints(t *testing.T) {
 	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
 	rt.SetEpoch(epoch)
 	ch = newCheckpoint(nn2, epoch+9)
+	b, err = ch.MarshalBinary()
+	require.NoError(t, err)
+	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
+		rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+	})
+
+	t.Log("trying to commit a checkpoint from the past")
+	epoch = abi.ChainEpoch(11)
+	rt.SetCaller(SubnetActorAddr, actors.SubnetActorCodeID)
+	// Only subnet actors can call.
+	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
+	rt.SetEpoch(epoch)
+	ch = newCheckpoint(nn1, epoch)
 	b, err = ch.MarshalBinary()
 	require.NoError(t, err)
 	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
@@ -393,7 +429,7 @@ func TestCheckpoints(t *testing.T) {
 	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
 	windowCh = currWindowCheckpoint(rt, epoch)
 	// Check that child was added.
-	require.GreaterOrEqual(t, windowCh.HasChild(nn2), 0)
+	require.GreaterOrEqual(t, windowCh.HasChildSource(nn2), 0)
 	// Check that there are two childs.
 	require.Equal(t, windowCh.LenChilds(), 2)
 	// Check previous checkpoint added
@@ -414,7 +450,7 @@ func TestCheckpoints(t *testing.T) {
 	err = raw.UnmarshalBinary(chret.Checkpoint)
 	require.NoError(t, err)
 	require.Equal(t, raw.Data.Epoch, 100)
-	require.GreaterOrEqual(t, raw.HasChild(nn2), 0)
+	require.GreaterOrEqual(t, raw.HasChildSource(nn2), 0)
 	require.Equal(t, raw.LenChilds(), 2)
 	pr, err := raw.PreviousCheck()
 	require.NoError(t, err)

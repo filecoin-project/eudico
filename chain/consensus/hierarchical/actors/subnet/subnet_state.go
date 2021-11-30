@@ -93,12 +93,17 @@ type CheckVotes struct {
 func (st SubnetState) majorityVote(wch *CheckVotes) bool {
 	return float32(len(wch.Miners))/float32(len(st.Miners)) >= SignatureThreshold
 }
+
 func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetState, error) {
 	emptyStakeCid, err := adt.StoreEmptyMap(store, adt.BalanceTableBitwidth)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create stakes balance table: %w", err)
 	}
 	emptyCheckpointsMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create empty map: %w", err)
+	}
+	emptyWindowChecks, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}
@@ -112,7 +117,7 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 
 	parentID := hierarchical.SubnetID(params.NetworkName)
 
-	st := &SubnetState{
+	return &SubnetState{
 		ParentID:      parentID,
 		Consensus:     params.Consensus,
 		MinMinerStake: params.MinMinerStake,
@@ -121,20 +126,9 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 		Status:        Instantiated,
 		CheckPeriod:   params.CheckPeriod,
 		Checkpoints:   emptyCheckpointsMapCid,
-	}
+		WindowChecks:  emptyWindowChecks,
+	}, nil
 
-	err = st.emptyWindowChecks(store)
-	if err != nil {
-		return nil, err
-	}
-
-	return st, nil
-}
-
-func (st *SubnetState) emptyWindowChecks(store adt.Store) error {
-	var err error
-	st.WindowChecks, err = adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
-	return err
 }
 
 // windowCheckpoint returns the checkpoint for the current signing window (if any).
@@ -144,9 +138,8 @@ func (st *SubnetState) epochCheckpoint(rt runtime.Runtime) (*schema.Checkpoint, 
 }
 
 // prevCheckCid returns the Cid of the previously committed checkpoint
-func (st *SubnetState) prevCheckCid(rt runtime.Runtime) (cid.Cid, error) {
-	chEpoch := types.CheckpointEpoch(rt.CurrEpoch(), st.CheckPeriod)
-	ep := chEpoch - st.CheckPeriod
+func (st *SubnetState) prevCheckCid(rt runtime.Runtime, epoch abi.ChainEpoch) (cid.Cid, error) {
+	ep := epoch - st.CheckPeriod
 	// If we are in the first period.
 	if ep < 0 {
 		return schema.NoPreviousCheck, nil
@@ -194,6 +187,7 @@ func (st *SubnetState) flushCheckpoint(rt runtime.Runtime, ch *schema.Checkpoint
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush checkpoints")
 }
 
+// GetWindowChecks with the list of uncommitted checkpoints.
 func (st *SubnetState) GetWindowChecks(s adt.Store, checkCid cid.Cid) (*CheckVotes, bool, error) {
 	checks, err := adt.AsMap(s, st.WindowChecks, builtin.DefaultHamtBitwidth)
 	if err != nil {
@@ -209,6 +203,19 @@ func (st *SubnetState) GetWindowChecks(s adt.Store, checkCid cid.Cid) (*CheckVot
 		return nil, false, nil
 	}
 	return &out, true, nil
+}
+
+func (st *SubnetState) rmChecks(s adt.Store, checkCid cid.Cid) error {
+	checks, err := adt.AsMap(s, st.WindowChecks, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return xerrors.Errorf("failed to load windowCheck: %w", err)
+	}
+
+	if err := checks.Delete(abi.CidKey(checkCid)); err != nil {
+		return err
+	}
+	st.WindowChecks, err = checks.Root()
+	return err
 }
 
 func (st *SubnetState) flushWindowChecks(rt runtime.Runtime, checkCid cid.Cid, w *CheckVotes) {

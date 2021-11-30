@@ -15,7 +15,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	checkpoint "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/types"
 	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
@@ -228,12 +227,12 @@ func (st *SubnetState) verifyCheck(rt runtime.Runtime, ch *schema.Checkpoint) ad
 	}
 
 	// Check that the epoch is correct.
-	if ep := types.CheckpointEpoch(rt.CurrEpoch(), st.CheckPeriod); ep != ch.Epoch() {
+	if ch.Epoch()%st.CheckPeriod != 0 {
 		rt.Abortf(exitcode.ErrIllegalArgument, "epoch in checkpoint doesn't correspond with signing window")
 	}
 
 	// Check that the previous checkpoint is correct.
-	prevCom, err := st.prevCheckCid(rt)
+	prevCom, err := st.prevCheckCid(rt, ch.Epoch())
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching Cid for previous check")
 	if prev, _ := ch.PreviousCheck(); prevCom != prev {
 		rt.Abortf(exitcode.ErrIllegalArgument, "previous checkpoint not consistent with previous check committed")
@@ -275,7 +274,7 @@ func (a SubnetActor) SubmitCheckpoint(rt runtime.Runtime, params *sca.Checkpoint
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error computing Cid for checkpoint")
 		// Get windowChecks for submitted checkpoint
 		wch, found, err := st.GetWindowChecks(adt.AsStore(rt), c)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error computing Cid for checkpoint")
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "get list of uncommitted checks")
 		if !found {
 			wch = &CheckVotes{make([]address.Address, 0)}
 		}
@@ -295,8 +294,9 @@ func (a SubnetActor) SubmitCheckpoint(rt runtime.Runtime, params *sca.Checkpoint
 			// so this is OK for now.
 			st.flushCheckpoint(rt, submit)
 
-			// Empty current window votes.
-			st.emptyWindowChecks(adt.AsStore(rt))
+			// Remove windowChecks, the checkpoint has been committed
+			err := st.rmChecks(adt.AsStore(rt), c)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error removing windowChecks")
 			return
 		}
 

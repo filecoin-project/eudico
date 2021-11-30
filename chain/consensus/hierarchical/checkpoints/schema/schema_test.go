@@ -23,6 +23,7 @@ func TestMarshalCheckpoint(t *testing.T) {
 
 	// Add child checkpoints
 	ch.AddListChilds(utils.GenRandChecks(3))
+	require.Equal(t, len(ch.GetChilds()), 3)
 
 	// Marshal
 	var buf bytes.Buffer

@@ -59,7 +59,7 @@ func init() {
 // ChildCheck
 type ChildCheck struct {
 	Source string
-	Check  cid.Cid
+	Checks []cid.Cid
 }
 
 // MsgTreeList is the list of trees with cross-shard messages
@@ -101,7 +101,7 @@ func initCheckpointSchema() schema.Type {
 	ts.Accumulate(schema.SpawnStruct("ChildCheck",
 		[]schema.StructField{
 			schema.SpawnStructField("Source", "String", false, false),
-			schema.SpawnStructField("Check", "Link", false, false),
+			schema.SpawnStructField("Checks", "List_Link", false, false),
 		},
 		schema.SpawnStructRepresentationMap(map[string]string{}),
 	))
@@ -281,39 +281,42 @@ func (c *Checkpoint) Cid() (cid.Cid, error) {
 // source is encountered, the previous checkpoint is overwritten.
 func (c *Checkpoint) AddListChilds(childs []*Checkpoint) {
 	for _, ch := range childs {
-		c.AddChild(ch, true)
+		c.AddChild(ch)
 	}
 }
 
 // AddChild adds a single child to the checkpoint
 //
-// If the overwrite flag is set, when adding a checkpoint
-// for an existing source, the checkpoint is overwritten.
-// When the flag is not set, adding a checkpoint for an
-// already existing source throws an error.
-func (c *Checkpoint) AddChild(ch *Checkpoint, overwrite bool) error {
-	cid, err := ch.Cid()
+// If a child with the same Cid or the same epoch already
+// exists, nothing is added.
+func (c *Checkpoint) AddChild(ch *Checkpoint) error {
+	chcid, err := ch.Cid()
 	if err != nil {
 		return err
 	}
-	chcc := ChildCheck{ch.Data.Source, cid}
-	ind := c.hasChild(chcc)
+	ind := c.HasChildSource(ch.Source())
 	if ind >= 0 {
-		if overwrite {
-			c.Data.Childs[ind] = chcc
-			return nil
+		if ci := c.Data.Childs[ind].hasCheck(chcid); ci >= 0 {
+			return xerrors.Errorf("source already has a checkpoint with that Cid")
 		}
-		return xerrors.New("there is already a checkpoint for that source")
+		c.Data.Childs[ind].Checks = append(c.Data.Childs[ind].Checks, chcid)
+		return nil
 	}
+	chcc := ChildCheck{ch.Data.Source, []cid.Cid{chcid}}
 	c.Data.Childs = append(c.Data.Childs, chcc)
 	return nil
 }
 
-func (c *Checkpoint) hasChild(child ChildCheck) int {
-	return c.HasChild(hierarchical.SubnetID(child.Source))
+func (c *ChildCheck) hasCheck(cid cid.Cid) int {
+	for i, ch := range c.Checks {
+		if ch == cid {
+			return i
+		}
+	}
+	return -1
 }
 
-func (c *Checkpoint) HasChild(source hierarchical.SubnetID) int {
+func (c *Checkpoint) HasChildSource(source hierarchical.SubnetID) int {
 	for i, ch := range c.Data.Childs {
 		if ch.Source == source.String() {
 			return i
@@ -324,6 +327,15 @@ func (c *Checkpoint) HasChild(source hierarchical.SubnetID) int {
 
 func (c *Checkpoint) LenChilds() int {
 	return len(c.Data.Childs)
+}
+
+func (c *Checkpoint) GetSourceChilds(source hierarchical.SubnetID) *ChildCheck {
+	i := c.HasChildSource(source)
+	return &c.GetChilds()[i]
+}
+
+func (c *Checkpoint) GetChilds() []ChildCheck {
+	return c.Data.Childs
 }
 
 func (c *Checkpoint) Epoch() abi.ChainEpoch {

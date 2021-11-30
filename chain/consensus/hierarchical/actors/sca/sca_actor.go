@@ -284,12 +284,6 @@ func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *Chec
 		// Get the checkpoint for the current window.
 		ch := st.currWindowCheckpoint(rt)
 
-		// Check if a check for the source has already been committed in the
-		// currWindow checkpoint.
-		if ch.HasChild(shid) >= 0 {
-			rt.Abortf(exitcode.ErrIllegalState, "checkpoint has already committed a checkpoint this epoch")
-		}
-
 		// Verify that the submitted checkpoint has higher epoch and is
 		// consistent with previous checkpoint before committing.
 		prevCom := sh.PrevCheckpoint
@@ -297,9 +291,8 @@ func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *Chec
 		// If no previous checkpoint for child chain, it means this is the first one
 		// and we can add it without additional verifications.
 		if empty, _ := prevCom.IsEmpty(); empty {
-			// Overwrite is set to false. If there is already a child for the source
-			// we throw an error
-			err := ch.AddChild(commit, false)
+			// Append the new checkpoint to the list of childs.
+			err := ch.AddChild(commit)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "child already has committed a checkpoint this epoch")
 			st.flushCheckpoint(rt, ch)
 			// Update previous checkpoint for child.
@@ -320,10 +313,8 @@ func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *Chec
 			rt.Abortf(exitcode.ErrIllegalArgument, "new checkpoint not consistent with previous one")
 		}
 
-		// Checks passed, we can add the child.
-		// Overwrite is set to false. If there is already a child for the source
-		// we throw an error
-		err = ch.AddChild(commit, false)
+		// Checks passed, we can append the child.
+		err = ch.AddChild(commit)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "child already has committed a checkpoint this epoch")
 		st.flushCheckpoint(rt, ch)
 		// Update previous checkpoint for child.
