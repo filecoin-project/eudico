@@ -10,6 +10,7 @@ import (
 
 	"github.com/Zondax/multi-party-sig/pkg/party"
 	"github.com/Zondax/multi-party-sig/pkg/protocol"
+	"github.com/Zondax/multi-party-sig/pkg/taproot"
 	"github.com/Zondax/multi-party-sig/protocols/frost"
 	"github.com/Zondax/multi-party-sig/protocols/frost/keygen"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -255,6 +256,9 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, data []byte) {
 	ids := c.formIDSlice(idsStrings)
 	taprootAddress := PubkeyToTapprootAddress(c.pubkey)
 
+	pubkeyShort := GenCheckpointPublicKeyTaproot(c.config.PublicKey, data)
+	newTaprootAddress := PubkeyToTapprootAddress(pubkeyShort)
+
 	if c.ptxid == "" {
 		taprootScript := GetTaprootScript(c.pubkey)
 		success := AddTaprootScriptToWallet(taprootScript)
@@ -271,34 +275,33 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, data []byte) {
 		fmt.Println("Found precedent txid:", c.ptxid)
 	}
 
-	//if idsStrings[0] == c.host.ID().String() {
 	{
-		// The first participant create the message to sign
-		payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": 0, \"sequence\": 4294967295}], [{\"" + taprootAddress + "\": \"50\"}, {\"data\": \"636964\"}]]}"
+		payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"gettxout\", \"params\": [\"" + c.ptxid + "\", 0]}"
 		result := jsonRPC(payload)
+		if result == nil {
+			panic("cant retrieve previous transaction")
+		}
+		taprootTxOut := result["result"].(map[string]interface{})
+		newValue := taprootTxOut["value"].(float64) - FEE
+
+		scriptPubkey := taprootTxOut["scriptPubKey"].(map[string]interface{})
+		scriptPubkeyBytes, _ := hex.DecodeString(scriptPubkey["hex"].(string))
+
+		payload = "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": 0, \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.2f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
+		result = jsonRPC(payload)
 		if result == nil {
 			panic("cant create new transaction")
 		}
 
 		rawTransaction := result["result"].(string)
 
-		payload = "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"gettxout\", \"params\": [\"" + c.ptxid + "\", 0]}"
-
-		result = jsonRPC(payload)
-		if result == nil {
-			panic("cant retrieve previous transaction")
-		}
-		taprootTxOut := result["result"].(map[string]interface{})
-		scriptPubkey := taprootTxOut["scriptPubKey"].(map[string]interface{})
-		scriptPubkeyBytes, _ := hex.DecodeString(scriptPubkey["hex"].(string))
-
-		var buf [8]byte
-		binary.LittleEndian.PutUint64(buf[:], uint64(taprootTxOut["value"].(float64)*100000000))
-
 		tx, err := hex.DecodeString(rawTransaction)
 		if err != nil {
 			panic(err)
 		}
+
+		var buf [8]byte
+		binary.LittleEndian.PutUint64(buf[:], uint64(taprootTxOut["value"].(float64)*100000000))
 		utxo := append(buf[:], []byte{34}...)
 		utxo = append(utxo, scriptPubkeyBytes...)
 
@@ -324,6 +327,33 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, data []byte) {
 			log.Fatal("Not working neither")
 		}
 		fmt.Println("Result :", r)
+
+		// if signing is a success we register the new value
+		merkleRoot := HashMerkleRoot(c.config.PublicKey, data)
+		c.tweakedValue = HashTweakedValue(c.config.PublicKey, merkleRoot)
+		c.pubkey = pubkeyShort
+
+		if idsStrings[0] == c.host.ID().String() {
+			// Only first one broadcast the transaction ?
+			// Actually all participants can broadcast the transcation. It will be the same everywhere.
+			rawtx := PrepareWitnessRawTransaction(rawTransaction, r.(taproot.Signature))
+
+			payload = "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendrawtransaction\", \"params\": [\"" + rawtx + "\"]}"
+			result = jsonRPC(payload)
+			if result["error"] != nil {
+				fmt.Println(result)
+				panic("failed to broadcast transaction")
+			}
+
+			fmt.Println(result)
+
+			/* Need to keep this to build next one */
+			newtxid := result["result"].(string)
+
+			fmt.Println("New Txid:", newtxid)
+			c.ptxid = newtxid
+		}
+
 	}
 
 }

@@ -38,6 +38,9 @@ func TaprootSignatureHash(tx []byte, utxo []byte, hash_type byte) ([]byte, error
 		return nil, errors.New("only support SIGHASH_DEFAULT (0x00)")
 	}
 
+	fmt.Println(hex.EncodeToString(tx))
+	fmt.Println(hex.EncodeToString(utxo))
+
 	var ss []byte
 
 	ext_flag := 0x00
@@ -195,7 +198,6 @@ func WalletGetTxidFromAddress(taprootAddress string) (string, error) {
 	list := result["result"].([]interface{})
 	for _, item := range list {
 		item_map := item.(map[string]interface{})
-		fmt.Println(item_map)
 		if item_map["address"] == taprootAddress {
 			txid := item_map["txid"].(string)
 			return txid, nil
@@ -208,6 +210,13 @@ func BitcoindPing() bool {
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"ping\", \"params\": []}"
 	result := jsonRPC(payload)
 	return result != nil
+}
+
+func PrepareWitnessRawTransaction(rawtx string, sig []byte) string {
+	wtx := rawtx[:4*2] + "00" + "01" + rawtx[4*2:len(rawtx)-4*2] + "01" + "40" + hex.EncodeToString(sig) + rawtx[len(rawtx)-4*2:]
+	fmt.Println("Raw transaction signed :", wtx)
+
+	return wtx
 }
 
 func jsonRPC(payload string) map[string]interface{} {
