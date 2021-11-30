@@ -172,13 +172,21 @@ func (c *Checkpoint) SetPrevious(cid cid.Cid) {
 	c.Data.PrevCheckCid = cid.Bytes()
 }
 
+func (c *Checkpoint) SetTipsetKey(ts ltypes.TipSetKey) {
+	c.Data.TipSet = ts.Bytes()
+}
+
+func (c *Checkpoint) SetEpoch(ep abi.ChainEpoch) {
+	c.Data.Epoch = int(ep)
+}
+
 func (c *Checkpoint) PreviousCheck() (cid.Cid, error) {
 	_, cid, err := cid.CidFromBytes(c.Data.PrevCheckCid)
 	return cid, err
 }
 
-func (c *Checkpoint) SetTipsetKey(ts ltypes.TipSetKey) {
-	c.Data.TipSet = ts.Bytes()
+func (c *Checkpoint) Source() hierarchical.SubnetID {
+	return hierarchical.SubnetID(c.Data.Source)
 }
 
 func (c *Checkpoint) MarshalBinary() ([]byte, error) {

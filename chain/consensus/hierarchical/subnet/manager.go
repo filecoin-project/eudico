@@ -423,6 +423,9 @@ func (s *SubnetMgr) JoinSubnet(
 		return cid.Undef, nil
 	}
 	err = s.startSubnet(id, parentAPI, st.Consensus, st.Genesis)
+	if err != nil {
+		return cid.Undef, err
+	}
 
 	return smsg.Cid(), nil
 }

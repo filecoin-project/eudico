@@ -21,7 +21,7 @@ var _ = cid.Undef
 var _ = math.E
 var _ = sort.Sort
 
-var lengthBufSubnetState = []byte{139}
+var lengthBufSubnetState = []byte{140}
 
 func (t *SubnetState) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -44,12 +44,6 @@ func (t *SubnetState) MarshalCBOR(w io.Writer) error {
 	}
 	if _, err := io.WriteString(w, string(t.Name)); err != nil {
 		return err
-	}
-
-	// t.ParentCid (cid.Cid) (struct)
-
-	if err := cbg.WriteCidBuf(scratch, w, t.ParentCid); err != nil {
-		return xerrors.Errorf("failed to write cid field t.ParentCid: %w", err)
 	}
 
 	// t.ParentID (hierarchical.SubnetID) (string)
@@ -129,6 +123,19 @@ func (t *SubnetState) MarshalCBOR(w io.Writer) error {
 			return err
 		}
 	}
+
+	// t.Checkpoints (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.Checkpoints); err != nil {
+		return xerrors.Errorf("failed to write cid field t.Checkpoints: %w", err)
+	}
+
+	// t.WindowChecks (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.WindowChecks); err != nil {
+		return xerrors.Errorf("failed to write cid field t.WindowChecks: %w", err)
+	}
+
 	return nil
 }
 
@@ -146,7 +153,7 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 11 {
+	if extra != 12 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -159,18 +166,6 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		t.Name = string(sval)
-	}
-	// t.ParentCid (cid.Cid) (struct)
-
-	{
-
-		c, err := cbg.ReadCid(br)
-		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.ParentCid: %w", err)
-		}
-
-		t.ParentCid = c
-
 	}
 	// t.ParentID (hierarchical.SubnetID) (string)
 
@@ -314,6 +309,30 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		t.CheckPeriod = abi.ChainEpoch(extraI)
+	}
+	// t.Checkpoints (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.Checkpoints: %w", err)
+		}
+
+		t.Checkpoints = c
+
+	}
+	// t.WindowChecks (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.WindowChecks: %w", err)
+		}
+
+		t.WindowChecks = c
+
 	}
 	return nil
 }
@@ -479,5 +498,84 @@ func (t *ConstructParams) UnmarshalCBOR(r io.Reader) error {
 
 		t.CheckPeriod = abi.ChainEpoch(extraI)
 	}
+	return nil
+}
+
+var lengthBufCheckVotes = []byte{129}
+
+func (t *CheckVotes) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufCheckVotes); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.Miners ([]address.Address) (slice)
+	if len(t.Miners) > cbg.MaxLength {
+		return xerrors.Errorf("Slice value in field t.Miners was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajArray, uint64(len(t.Miners))); err != nil {
+		return err
+	}
+	for _, v := range t.Miners {
+		if err := v.MarshalCBOR(w); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (t *CheckVotes) UnmarshalCBOR(r io.Reader) error {
+	*t = CheckVotes{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 1 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.Miners ([]address.Address) (slice)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+
+	if extra > cbg.MaxLength {
+		return fmt.Errorf("t.Miners: array too large (%d)", extra)
+	}
+
+	if maj != cbg.MajArray {
+		return fmt.Errorf("expected cbor array")
+	}
+
+	if extra > 0 {
+		t.Miners = make([]address.Address, extra)
+	}
+
+	for i := 0; i < int(extra); i++ {
+
+		var v address.Address
+		if err := v.UnmarshalCBOR(br); err != nil {
+			return err
+		}
+
+		t.Miners[i] = v
+	}
+
 	return nil
 }
