@@ -21,6 +21,7 @@ var SingleSignEnvSchema schema.Type
 
 type SingleSignEnvelope struct {
 	Address   string
+	IDAddress string
 	Signature []byte
 }
 
@@ -39,6 +40,7 @@ func initSingleSignEnvSchema() schema.Type {
 	ts.Accumulate(schema.SpawnStruct("SingleSignEnvelope",
 		[]schema.StructField{
 			schema.SpawnStructField("Address", "String", false, false),
+			schema.SpawnStructField("IDAddress", "String", false, false),
 			schema.SpawnStructField("Signature", "Bytes", false, false),
 		},
 		schema.SpawnStructRepresentationMap(map[string]string{}),
@@ -47,8 +49,8 @@ func initSingleSignEnvSchema() schema.Type {
 	return ts.TypeByName("SingleSignEnvelope")
 }
 
-func NewSingleSignEnvelope(addr address.Address, sig []byte) *SingleSignEnvelope {
-	return &SingleSignEnvelope{addr.String(), sig}
+func NewSingleSignEnvelope(addr address.Address, idAddr address.Address, sig []byte) *SingleSignEnvelope {
+	return &SingleSignEnvelope{addr.String(), idAddr.String(), sig}
 }
 
 func (s *SingleSignEnvelope) Type() types.EnvelopeType {

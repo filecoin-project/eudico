@@ -16,9 +16,11 @@ import (
 )
 
 const (
-	// DefualtCheckpointPeriod defines 1000 epochs
+	// DefaultCheckpointPeriod defines 10 epochs
 	// as the default checkpoint period for a subnet.
-	DefaultCheckpointPeriod = abi.ChainEpoch(1000)
+	// This may be too short, but at this point it comes pretty handy
+	// for testing purpose.
+	DefaultCheckpointPeriod = abi.ChainEpoch(10)
 
 	// MinCheckpointPeriod allowed for subnets
 	MinCheckpointPeriod = abi.ChainEpoch(10)
@@ -174,14 +176,27 @@ func (st *SCAState) currWindowCheckpoint(rt runtime.Runtime) *schema.Checkpoint 
 // to include in it. Miners need to populate the prevCheckpoint
 // and tipset of this template and sign ot.
 func (st *SCAState) rawCheckpoint(rt runtime.Runtime) *schema.Checkpoint {
-	chEpoch := types.CheckpointEpoch(rt.CurrEpoch(), st.CheckPeriod)
-	ch, found, err := st.GetCheckpoint(adt.AsStore(rt), chEpoch)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get checkpoint template for epoch")
-	// If nothing has been populated yet return an empty window.
+	ch, err := RawCheckpoint(st, adt.AsStore(rt), rt.CurrEpoch())
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get raw checkpoint template for epoch")
+	return ch
+}
+
+// RawCheckpoint gets the template of the checkpoint in
+// the signing window for an epoch
+func RawCheckpoint(st *SCAState, store adt.Store, epoch abi.ChainEpoch) (*schema.Checkpoint, error) {
+	if epoch < 0 {
+		return nil, xerrors.Errorf("epoch can't be negative")
+	}
+	chEpoch := types.CheckpointEpoch(epoch, st.CheckPeriod)
+	ch, found, err := st.GetCheckpoint(store, chEpoch)
+	if err != nil {
+		return nil, err
+	}
+	// If nothing has been populated yet return an empty checkpoint.
 	if !found {
 		ch = schema.NewRawCheckpoint(st.NetworkName, chEpoch)
 	}
-	return ch
+	return ch, nil
 }
 
 // GetCheckpoint gets a checkpoint from its index

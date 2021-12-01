@@ -2,6 +2,7 @@ package checkpoint
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/crypto"
@@ -21,8 +22,13 @@ var CheckpointMsgType = api.MsgMeta{Type: "checkpoint"}
 // for checkpoints. A subnet shard looking to implement their own
 // verifier will need to implement this interface with the desired logic.
 type Signer interface {
-	Sign(ctx context.Context, w api.Wallet, addr address.Address, c *schema.Checkpoint) error
-	Verify(c *schema.Checkpoint) (address.Address, error)
+	Sign(ctx context.Context, w api.Wallet, addr address.Address, c *schema.Checkpoint, opts ...SigningOpts) error
+	Verify(c *schema.Checkpoint) (*AddrInfo, error)
+}
+
+type AddrInfo struct {
+	Addr   address.Address
+	IDAddr address.Address
 }
 
 var _ Signer = SingleSigner{}
@@ -35,7 +41,45 @@ func NewSingleSigner() SingleSigner {
 	return SingleSigner{}
 }
 
-func (v SingleSigner) Sign(ctx context.Context, w api.Wallet, addr address.Address, c *schema.Checkpoint) error {
+// signingOpts are additional options for the signature
+type signingOpts struct {
+	idAddr address.Address
+}
+
+// apply applies the given options to this config
+func (c *signingOpts) apply(opts ...SigningOpts) error {
+	for i, opt := range opts {
+		if err := opt(c); err != nil {
+			return fmt.Errorf("signing option %d failed: %s", i, err)
+		}
+	}
+	return nil
+}
+
+// IDAddr to include in signature envelope
+func IDAddr(id address.Address) SigningOpts {
+	return func(c *signingOpts) error {
+		if id.Protocol() != address.ID {
+			return xerrors.Errorf("IDAddress not of type address")
+		}
+		c.idAddr = id
+		return nil
+	}
+}
+
+type SigningOpts func(*signingOpts) error
+
+func (v SingleSigner) Sign(ctx context.Context, w api.Wallet, addr address.Address, c *schema.Checkpoint, opts ...SigningOpts) error {
+	// Check if it is a pkey and not an ID.
+	if addr.Protocol() != address.SECP256K1 {
+		return xerrors.Errorf("must be secp address")
+	}
+
+	var cfg signingOpts
+	if err := cfg.apply(opts...); err != nil {
+		return err
+	}
+
 	// Get CID of checkpoint
 	cid, err := c.Cid()
 	if err != nil {
@@ -51,7 +95,7 @@ func (v SingleSigner) Sign(ctx context.Context, w api.Wallet, addr address.Addre
 		return err
 	}
 	// Package it inside an envelope and the signature of the checkpoint
-	sig, err := schema.NewSignature(schema.NewSingleSignEnvelope(addr, rawSig), types.SingleSignature)
+	sig, err := schema.NewSignature(schema.NewSingleSignEnvelope(addr, cfg.idAddr, rawSig), types.SingleSignature)
 	if err != nil {
 		return err
 	}
@@ -60,43 +104,51 @@ func (v SingleSigner) Sign(ctx context.Context, w api.Wallet, addr address.Addre
 	return err
 }
 
-func (v SingleSigner) Verify(c *schema.Checkpoint) (address.Address, error) {
+func (v SingleSigner) Verify(c *schema.Checkpoint) (*AddrInfo, error) {
 	// Collect envelope from signature in checkpoint.
 	sig := schema.Signature{}
 	err := sig.UnmarshalBinary(c.Signature)
 	if err != nil {
-		return address.Undef, err
+		return nil, err
 	}
 	// Check if the envelope has the right type.
 	if sig.SignatureID != types.SingleSignature {
-		return address.Undef, xerrors.Errorf("wrong signer. Envelope is not of SingleSignType.")
+		return nil, xerrors.Errorf("wrong signer. Envelope is not of SingleSignType.")
 	}
+
 	// Unmarshal the envelope.
 	e := schema.SingleSignEnvelope{}
 	err = e.UnmarshalCBOR(sig.Sig)
 	if err != nil {
-		return address.Undef, err
+		return nil, err
 	}
 	// Get Cid of checkpoint to check signature.
 	cid, err := c.Cid()
 	if err != nil {
-		return address.Undef, err
+		return nil, err
 	}
 	// Gather raw signature from envelope
 	checkSig := &crypto.Signature{}
 	err = checkSig.UnmarshalBinary(e.Signature)
 	if err != nil {
-		return address.Undef, err
+		return nil, err
 	}
 	// Get address
 	addr, err := address.NewFromString(e.Address)
 	if err != nil {
-		return address.Undef, err
+		return nil, err
+	}
+	idAddr := address.Undef
+	if e.IDAddress != "" {
+		idAddr, err = address.NewFromString(e.IDAddress)
+		if err != nil {
+			return nil, err
+		}
 	}
 	// Verify signature
 	err = sigs.Verify(checkSig, addr, cid.Hash())
 	if err != nil {
-		return address.Undef, err
+		return nil, err
 	}
-	return addr, nil
+	return &AddrInfo{addr, idAddr}, nil
 }

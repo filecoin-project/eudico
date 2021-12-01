@@ -12,6 +12,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/utils"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/wallet"
+	tutil "github.com/filecoin-project/specs-actors/v6/support/testing"
 	"github.com/stretchr/testify/require"
 )
 
@@ -102,9 +103,10 @@ func TestSignature(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	idaddr := tutil.NewIDAddr(t, 103)
 	addr, err := w.WalletNew(ctx, types.KTSecp256k1)
 	require.NoError(t, err)
-	env := &schema.SingleSignEnvelope{addr.String(), []byte("test")}
+	env := &schema.SingleSignEnvelope{addr.String(), idaddr.String(), []byte("test")}
 	sig, err := schema.NewSignature(env, checkTypes.SingleSignature)
 	require.NoError(t, err)
 	b, err := sig.MarshalBinary()

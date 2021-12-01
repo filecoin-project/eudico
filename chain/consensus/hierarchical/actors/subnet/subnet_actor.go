@@ -4,6 +4,7 @@ package subnet
 
 import (
 	"bytes"
+	"fmt"
 
 	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -232,7 +233,7 @@ func (st *SubnetState) verifyCheck(rt runtime.Runtime, ch *schema.Checkpoint) ad
 	}
 
 	// Check that the previous checkpoint is correct.
-	prevCom, err := st.prevCheckCid(rt, ch.Epoch())
+	prevCom, err := st.PrevCheckCid(adt.AsStore(rt), ch.Epoch())
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching Cid for previous check")
 	if prev, _ := ch.PreviousCheck(); prevCom != prev {
 		rt.Abortf(exitcode.ErrIllegalArgument, "previous checkpoint not consistent with previous check committed")
@@ -244,12 +245,33 @@ func (st *SubnetState) verifyCheck(rt runtime.Runtime, ch *schema.Checkpoint) ad
 	sigAddr, err := ver.Verify(ch)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed to verify signature for submitted checkpoint")
 
+	/*
+		// Check that the ID address included in signature belongs to the pkey specified.
+		resolved, ok := rt.ResolveAddress(sigAddr.Addr)
+		if !ok {
+			rt.Abortf(exitcode.ErrIllegalArgument, "unable to resolve address %v", sigAddr.Addr)
+		}
+	*/
+
+	addr := sigAddr.Addr
+	if sigAddr.IDAddr != address.Undef {
+		resolved, ok := rt.ResolveAddress(sigAddr.Addr)
+		if !ok {
+			rt.Abortf(exitcode.ErrIllegalArgument, "unable to resolve address %v", sigAddr.Addr)
+		}
+		if resolved != sigAddr.IDAddr {
+			rt.Abortf(exitcode.ErrIllegalArgument, "inconsistent pkey addr and ID addr in signature")
+		}
+		addr = sigAddr.IDAddr
+	}
+
 	// Only miners are allowed to submit checkpoints.
-	if !st.IsMiner(sigAddr) {
+	fmt.Println(">>>>>>", addr, st.Miners)
+	if !st.IsMiner(addr) {
 		rt.Abortf(exitcode.ErrIllegalArgument, "checkpoint not signed by a miner")
 	}
 
-	return sigAddr
+	return addr
 
 }
 
@@ -280,7 +302,7 @@ func (a SubnetActor) SubmitCheckpoint(rt runtime.Runtime, params *sca.Checkpoint
 		}
 
 		// Check if miner already submitted this checkpoint.
-		if hasMiner(signAddr, wch.Miners) {
+		if HasMiner(signAddr, wch.Miners) {
 			rt.Abortf(exitcode.ErrIllegalArgument, "miner already submitted a vote for this checkpoint")
 		}
 
@@ -295,8 +317,12 @@ func (a SubnetActor) SubmitCheckpoint(rt runtime.Runtime, params *sca.Checkpoint
 			st.flushCheckpoint(rt, submit)
 
 			// Remove windowChecks, the checkpoint has been committed
-			err := st.rmChecks(adt.AsStore(rt), c)
-			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error removing windowChecks")
+			// (do this only if they were found before, if not we don't have
+			// windowChecks yet)
+			if found {
+				err := st.rmChecks(adt.AsStore(rt), c)
+				builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error removing windowChecks")
+			}
 			return
 		}
 

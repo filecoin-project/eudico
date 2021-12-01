@@ -6,6 +6,7 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/types"
 	"github.com/filecoin-project/specs-actors/v3/actors/builtin"
@@ -108,6 +109,12 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}
 
+	// Don't allow really small checkpoint periods for now.
+	period := abi.ChainEpoch(params.CheckPeriod)
+	if period < sca.MinCheckpointPeriod {
+		period = sca.DefaultCheckpointPeriod
+	}
+
 	/* Initialize AMT of miners.
 	emptyArr, err := adt.MakeEmptyArray(adt.AsStore(rt), LaneStatesAmtBitwidth)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create empty array")
@@ -124,7 +131,7 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 		Miners:        make([]address.Address, 0),
 		Stake:         emptyStakeCid,
 		Status:        Instantiated,
-		CheckPeriod:   params.CheckPeriod,
+		CheckPeriod:   period,
 		Checkpoints:   emptyCheckpointsMapCid,
 		WindowChecks:  emptyWindowChecks,
 	}, nil
@@ -137,14 +144,14 @@ func (st *SubnetState) epochCheckpoint(rt runtime.Runtime) (*schema.Checkpoint, 
 	return st.GetCheckpoint(adt.AsStore(rt), chEpoch)
 }
 
-// prevCheckCid returns the Cid of the previously committed checkpoint
-func (st *SubnetState) prevCheckCid(rt runtime.Runtime, epoch abi.ChainEpoch) (cid.Cid, error) {
+// PrevCheckCid returns the Cid of the previously committed checkpoint
+func (st *SubnetState) PrevCheckCid(store adt.Store, epoch abi.ChainEpoch) (cid.Cid, error) {
 	ep := epoch - st.CheckPeriod
 	// If we are in the first period.
 	if ep < 0 {
 		return schema.NoPreviousCheck, nil
 	}
-	ch, found, err := st.GetCheckpoint(adt.AsStore(rt), ep)
+	ch, found, err := st.GetCheckpoint(store, ep)
 	if err != nil {
 		return cid.Undef, err
 	}
@@ -229,10 +236,10 @@ func (st *SubnetState) flushWindowChecks(rt runtime.Runtime, checkCid cid.Cid, w
 }
 
 func (st *SubnetState) IsMiner(addr address.Address) bool {
-	return hasMiner(addr, st.Miners)
+	return HasMiner(addr, st.Miners)
 }
 
-func hasMiner(addr address.Address, miners []address.Address) bool {
+func HasMiner(addr address.Address, miners []address.Address) bool {
 	for _, a := range miners {
 		if a == addr {
 			return true

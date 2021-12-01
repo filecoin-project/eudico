@@ -431,6 +431,12 @@ func TestCheckpoints(t *testing.T) {
 	require.False(t, found)
 }
 
+func TestZeroCheckPeriod(t *testing.T) {
+	h := newHarness(t)
+	rt := getRuntime(t)
+	h.constructAndVerifyZeroCheck(t, rt)
+}
+
 type shActorHarness struct {
 	actor.SubnetActor
 	t *testing.T
@@ -473,6 +479,26 @@ func (h *shActorHarness) constructAndVerify(t *testing.T, rt *mock.Runtime) {
 	verifyEmptyMap(h.t, rt, st.WindowChecks)
 }
 
+// Check what happens if we set a checkpoint equal to zero.
+// We should be assigning the defualt period.
+func (h *shActorHarness) constructAndVerifyZeroCheck(t *testing.T, rt *mock.Runtime) {
+	rt.ExpectValidateCallerType(builtin.InitActorCodeID)
+	ret := rt.Call(h.SubnetActor.Constructor,
+		&actor.ConstructParams{
+			NetworkName:   hierarchical.RootSubnet.String(),
+			Name:          "myTestSubnet",
+			Consensus:     actor.PoW,
+			MinMinerStake: actor.MinMinerStake,
+			DelegMiner:    tutil.NewIDAddr(t, 101),
+		})
+	assert.Nil(h.t, ret)
+	rt.Verify()
+
+	var st actor.SubnetState
+
+	rt.GetState(&st)
+	assert.Equal(h.t, st.CheckPeriod, sca.DefaultCheckpointPeriod)
+}
 func verifyEmptyMap(t testing.TB, rt *mock.Runtime, cid cid.Cid) {
 	mapChecked, err := adt.AsMap(adt.AsStore(rt), cid, builtin.DefaultHamtBitwidth)
 	assert.NoError(t, err)

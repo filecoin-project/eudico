@@ -36,9 +36,8 @@ var Methods = struct {
 	AddStake              abi.MethodNum
 	ReleaseStake          abi.MethodNum
 	Kill                  abi.MethodNum
-	RawCheckpoint         abi.MethodNum
 	CommitChildCheckpoint abi.MethodNum
-}{builtin0.MethodConstructor, 2, 3, 4, 5, 6, 7}
+}{builtin0.MethodConstructor, 2, 3, 4, 5, 6}
 
 type FundParams struct {
 	Value abi.TokenAmount
@@ -56,8 +55,7 @@ func (a SubnetCoordActor) Exports() []interface{} {
 		3:                         a.AddStake,
 		4:                         a.ReleaseStake,
 		5:                         a.Kill,
-		6:                         a.RawCheckpoint,
-		7:                         a.CommitChildCheckpoint,
+		6:                         a.CommitChildCheckpoint,
 		// -1:                         a.Fund,
 		// -1:                         a.Release,
 		// -1:                         a.XSubnetTx,
@@ -214,26 +212,6 @@ func (a SubnetCoordActor) ReleaseStake(rt runtime.Runtime, params *FundParams) *
 	}
 
 	return nil
-}
-
-// RawCheckpoint returns a template for the checkpoint in the current signing window.
-//
-// The SCA populates child checkpoints and cross-shard transactions that have been submitted
-// and returns the template where miners need to set the previous checkpoints and tipsetKey
-// for the epoch and sign.
-func (a SubnetCoordActor) RawCheckpoint(rt runtime.Runtime, _ *abi.EmptyValue) *CheckpointParams {
-	// Anyone can request a Checkpoint template.
-	rt.ValidateImmediateCallerAcceptAny()
-	var st SCAState
-	rt.StateReadonly(&st)
-	if rt.CurrEpoch() < st.CheckPeriod {
-		rt.Abortf(exitcode.ErrIllegalState, "no signing window for the first period")
-	}
-	ch := *st.rawCheckpoint(rt)
-	b, err := ch.MarshalBinary()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error marshalling checkpoint for return")
-
-	return &CheckpointParams{b}
 }
 
 // CheckpointParams handles in/out communication of checkpoints

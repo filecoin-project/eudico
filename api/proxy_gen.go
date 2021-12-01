@@ -554,7 +554,7 @@ type GatewayStub struct {
 
 type HierarchicalCnsStruct struct {
 	Internal struct {
-		AddSubnet func(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 address.Address) (address.Address, error) `perm:"write"`
+		AddSubnet func(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 address.Address) (address.Address, error) `perm:"write"`
 
 		JoinSubnet func(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 hierarchical.SubnetID) (cid.Cid, error) `perm:"write"`
 
@@ -3404,14 +3404,14 @@ func (s *GatewayStub) WalletBalance(p0 context.Context, p1 address.Address) (typ
 	return *new(types.BigInt), ErrNotSupported
 }
 
-func (s *HierarchicalCnsStruct) AddSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 address.Address) (address.Address, error) {
+func (s *HierarchicalCnsStruct) AddSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 address.Address) (address.Address, error) {
 	if s.Internal.AddSubnet == nil {
 		return *new(address.Address), ErrNotSupported
 	}
-	return s.Internal.AddSubnet(p0, p1, p2, p3, p4, p5, p6)
+	return s.Internal.AddSubnet(p0, p1, p2, p3, p4, p5, p6, p7)
 }
 
-func (s *HierarchicalCnsStub) AddSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 address.Address) (address.Address, error) {
+func (s *HierarchicalCnsStub) AddSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 address.Address) (address.Address, error) {
 	return *new(address.Address), ErrNotSupported
 }
 
