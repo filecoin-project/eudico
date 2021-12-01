@@ -29,6 +29,7 @@ var subnetCmds = &cli.Command{
 		mineCmd,
 		leaveCmd,
 		killCmd,
+		checkpointCmds,
 	},
 }
 

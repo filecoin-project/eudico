@@ -22,6 +22,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/paych"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/extern/sector-storage/fsutil"
 	"github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
@@ -561,6 +562,8 @@ type HierarchicalCnsStruct struct {
 		KillSubnet func(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID) (cid.Cid, error) `perm:"write"`
 
 		LeaveSubnet func(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID) (cid.Cid, error) `perm:"write"`
+
+		ListCheckpoints func(p0 context.Context, p1 hierarchical.SubnetID, p2 int) ([]*schema.Checkpoint, error) `perm:"read"`
 
 		MineSubnet func(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 bool) error `perm:"write"`
 	}
@@ -3446,6 +3449,17 @@ func (s *HierarchicalCnsStruct) LeaveSubnet(p0 context.Context, p1 address.Addre
 
 func (s *HierarchicalCnsStub) LeaveSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID) (cid.Cid, error) {
 	return *new(cid.Cid), ErrNotSupported
+}
+
+func (s *HierarchicalCnsStruct) ListCheckpoints(p0 context.Context, p1 hierarchical.SubnetID, p2 int) ([]*schema.Checkpoint, error) {
+	if s.Internal.ListCheckpoints == nil {
+		return *new([]*schema.Checkpoint), ErrNotSupported
+	}
+	return s.Internal.ListCheckpoints(p0, p1, p2)
+}
+
+func (s *HierarchicalCnsStub) ListCheckpoints(p0 context.Context, p1 hierarchical.SubnetID, p2 int) ([]*schema.Checkpoint, error) {
+	return *new([]*schema.Checkpoint), ErrNotSupported
 }
 
 func (s *HierarchicalCnsStruct) MineSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 bool) error {

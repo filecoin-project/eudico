@@ -65,6 +65,8 @@ func WriteGenesis(netName hierarchical.SubnetID, consensus ConsensusType, miner,
 		if err != nil {
 			return xerrors.Errorf("error making genesis delegated block: %w", err)
 		}
+	default:
+		return xerrors.Errorf("consensus type not supported. Not writing genesis")
 
 	}
 	offl := offline.Exchange(bs)

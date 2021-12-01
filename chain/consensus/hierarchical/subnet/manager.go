@@ -18,6 +18,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
+	ctypes "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/types"
 	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/messagepool"
 	"github.com/filecoin-project/lotus/chain/stmgr"
@@ -37,11 +38,13 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/helpers"
 	"github.com/filecoin-project/specs-actors/actors/builtin"
 	init_ "github.com/filecoin-project/specs-actors/actors/builtin/init"
+	"github.com/filecoin-project/specs-actors/actors/util/adt"
 	"github.com/ipfs/go-blockservice"
 	"github.com/ipfs/go-cid"
 	ds "github.com/ipfs/go-datastore"
 	nsds "github.com/ipfs/go-datastore/namespace"
 	offline "github.com/ipfs/go-ipfs-exchange-offline"
+	cbor "github.com/ipfs/go-ipld-cbor"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p-core/host"
 	peer "github.com/libp2p/go-libp2p-core/peer"
@@ -631,8 +634,65 @@ func (s *SubnetMgr) SubmitSignedCheckpoint(
 		}
 	*/
 
-	log.Infow("Success signing checkpoint in subnet", "subnetID", id, "message", msg)
+	chcid, _ := ch.Cid()
+	log.Infow("Success signing checkpoint in subnet", "subnetID", id, "message", msg, "cid", chcid)
 	return smsg.Cid(), nil
+}
+
+func (s *SubnetMgr) ListCheckpoints(
+	ctx context.Context, id hierarchical.SubnetID, num int) ([]*schema.Checkpoint, error) {
+
+	// TODO: Think a bit deeper the locking strategy for subnets.
+	s.lk.RLock()
+	defer s.lk.RUnlock()
+
+	// Get actor from subnet ID
+	subnetActAddr, err := id.Actor()
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the api for the parent network hosting the subnet actor
+	// for the subnet.
+	parentAPI, err := s.getParentAPI(id)
+	if err != nil {
+		return nil, err
+	}
+
+	subAPI := s.getAPI(id)
+	if subAPI == nil {
+		xerrors.Errorf("Not listening to subnet")
+	}
+
+	subnetAct, err := parentAPI.StateGetActor(ctx, subnetActAddr, types.EmptyTSK)
+	if err != nil {
+		return nil, err
+	}
+
+	var snst subnet.SubnetState
+	pbs := blockstore.NewAPIBlockstore(parentAPI)
+	pcst := cbor.NewCborStore(pbs)
+	if err := pcst.Get(ctx, subnetAct.Head, &snst); err != nil {
+		return nil, err
+	}
+	pstore := adt.WrapStore(ctx, pcst)
+	out := make([]*schema.Checkpoint, 0)
+	ts := subAPI.ChainAPI.Chain.GetHeaviestTipSet()
+	currEpoch := ts.Height()
+	for i := 0; i < num; i++ {
+		signWindow := ctypes.CheckpointEpoch(abi.ChainEpoch(int(currEpoch)-i*int(snst.CheckPeriod)), snst.CheckPeriod)
+		if signWindow < 0 {
+			break
+		}
+		ch, found, err := snst.GetCheckpoint(pstore, signWindow)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			out = append(out, ch)
+		}
+	}
+	return out, nil
 }
 
 func (s *SubnetMgr) getAPI(n hierarchical.SubnetID) *API {

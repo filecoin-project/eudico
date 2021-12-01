@@ -1,6 +1,8 @@
 package subnet
 
 import (
+	"fmt"
+
 	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
@@ -147,6 +149,7 @@ func (st *SubnetState) epochCheckpoint(rt runtime.Runtime) (*schema.Checkpoint, 
 // PrevCheckCid returns the Cid of the previously committed checkpoint
 func (st *SubnetState) PrevCheckCid(store adt.Store, epoch abi.ChainEpoch) (cid.Cid, error) {
 	ep := epoch - st.CheckPeriod
+	fmt.Println("Previous checkpoint epoch, cid", ep)
 	// If we are in the first period.
 	if ep < 0 {
 		return schema.NoPreviousCheck, nil
@@ -159,6 +162,8 @@ func (st *SubnetState) PrevCheckCid(store adt.Store, epoch abi.ChainEpoch) (cid.
 		// TODO: We could optionally return an error here.
 		return schema.NoPreviousCheck, nil
 	}
+	fmt.Println(">>>>> CID????")
+	fmt.Println(ch.Cid())
 	return ch.Cid()
 }
 

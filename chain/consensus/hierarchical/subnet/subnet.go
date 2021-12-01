@@ -78,6 +78,10 @@ type Subnet struct {
 	minlk      sync.Mutex
 	miningCtx  context.Context
 	miningCncl context.CancelFunc
+
+	// Checkpointing signing state
+	checklk      sync.RWMutex
+	singingState *signingState
 }
 
 // LoadGenesis from serialized genesis bootstrap

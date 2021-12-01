@@ -7,6 +7,7 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	"github.com/ipfs/go-cid"
 	"go.uber.org/fx"
@@ -48,4 +49,9 @@ func (a *HierarchicalAPI) LeaveSubnet(ctx context.Context, wallet address.Addres
 func (a *HierarchicalAPI) KillSubnet(ctx context.Context, wallet address.Address,
 	id hierarchical.SubnetID) (cid.Cid, error) {
 	return a.Sub.KillSubnet(ctx, wallet, id)
+}
+
+func (a *HierarchicalAPI) ListCheckpoints(ctx context.Context,
+	id hierarchical.SubnetID, num int) ([]*schema.Checkpoint, error) {
+	return a.Sub.ListCheckpoints(ctx, id, num)
 }

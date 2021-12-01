@@ -19,6 +19,8 @@ import (
 	cbor "github.com/ipfs/go-ipld-cbor"
 )
 
+const finalityThreshold = 5
+
 type diffInfo struct {
 	checkToSign *signInfo
 }
@@ -27,6 +29,48 @@ type signInfo struct {
 	checkpoint *schema.Checkpoint
 	addr       address.Address
 	idAddr     address.Address
+}
+
+type signingState struct {
+	wait      abi.ChainEpoch
+	currEpoch abi.ChainEpoch
+	signed    bool
+}
+
+func (sh *Subnet) resetSigState(epoch abi.ChainEpoch) {
+	sh.checklk.Lock()
+	defer sh.checklk.Unlock()
+	sh.singingState = &signingState{currEpoch: epoch}
+}
+
+func (sh *Subnet) sigWaitTick() {
+	sh.checklk.Lock()
+	defer sh.checklk.Unlock()
+	sh.singingState.wait++
+}
+
+func (sh *Subnet) signed() {
+	sh.checklk.Lock()
+	defer sh.checklk.Unlock()
+	sh.singingState.signed = true
+}
+
+func (sh *Subnet) hasSigned() bool {
+	sh.checklk.RLock()
+	defer sh.checklk.RUnlock()
+	return sh.singingState.signed
+}
+
+func (sh *Subnet) sigWaitReached() bool {
+	sh.checklk.RLock()
+	defer sh.checklk.RUnlock()
+	return sh.singingState.wait >= finalityThreshold
+}
+
+func (sh *Subnet) sigWindow() abi.ChainEpoch {
+	sh.checklk.RLock()
+	defer sh.checklk.RUnlock()
+	return sh.singingState.currEpoch
 }
 
 // listenSubnetEvents is the routine responsible for listening to events
@@ -43,6 +87,7 @@ func (s *SubnetMgr) listenSubnetEvents(ctx context.Context, sh *Subnet) {
 		root = false
 		id = sh.ID
 		evs = sh.events
+		sh.resetSigState(abi.ChainEpoch(0))
 	}
 
 	checkFunc := func(ctx context.Context, ts *types.TipSet) (done bool, more bool, err error) {
@@ -84,7 +129,7 @@ func (s *SubnetMgr) listenSubnetEvents(ctx context.Context, sh *Subnet) {
 
 	}
 
-	err := evs.StateChanged(checkFunc, changeHandler, revertHandler, 5, 76587687658765876, match)
+	err := evs.StateChanged(checkFunc, changeHandler, revertHandler, finalityThreshold, 76587687658765876, match)
 	if err != nil {
 		return
 	}
@@ -93,6 +138,7 @@ func (s *SubnetMgr) listenSubnetEvents(ctx context.Context, sh *Subnet) {
 func (s *SubnetMgr) matchCheckpointSignature(ctx context.Context, sh *Subnet, newTs *types.TipSet, diff *diffInfo) (bool, error) {
 	// Get the epoch for the current tipset.
 	subnetEpoch := newTs.Height()
+
 	// Get the state of the corresponding subnet actor in the parent chain
 	// Get actor from subnet ID
 	subnetActAddr, err := sh.ID.Actor()
@@ -116,16 +162,19 @@ func (s *SubnetMgr) matchCheckpointSignature(ctx context.Context, sh *Subnet, ne
 	pbs := blockstore.NewAPIBlockstore(parentAPI)
 	pcst := cbor.NewCborStore(pbs)
 	if err := pcst.Get(ctx, subnetAct.Head, &snst); err != nil {
-		fmt.Println(">>>>> Error geting subnetState", err)
 		return false, err
 	}
 	pstore := adt.WrapStore(ctx, pcst)
 
 	// Check if no checkpoint committed for this window
 	signWindow := ctypes.CheckpointEpoch(subnetEpoch, snst.CheckPeriod)
+
+	// Reset state if we have changed signing windows
+	if signWindow != sh.sigWindow() {
+		sh.resetSigState(signWindow)
+	}
 	_, found, err := snst.GetCheckpoint(pstore, signWindow)
 	if err != nil {
-		fmt.Println(">>>>> Error geting checkpoint", err)
 		return false, err
 	}
 	if found {
@@ -137,25 +186,23 @@ func (s *SubnetMgr) matchCheckpointSignature(ctx context.Context, sh *Subnet, ne
 	// Get raw checkpoint for this window from SCA of subnet
 	scaAct, err := sh.api.StateGetActor(ctx, sca.SubnetCoordActorAddr, types.EmptyTSK)
 	if err != nil {
-		fmt.Println(">>>>> Error SCA actor", err)
 		return false, err
 	}
 	var scast sca.SCAState
 	bs := blockstore.NewAPIBlockstore(sh.api)
 	cst := cbor.NewCborStore(bs)
 	if err := cst.Get(ctx, scaAct.Head, &scast); err != nil {
-		fmt.Println(">>>>> Error SCA actor for head", err)
 		return false, err
 	}
 	store := adt.WrapStore(ctx, cst)
-	ch, err := sca.RawCheckpoint(&scast, store, subnetEpoch)
+	ch, err := sca.RawCheckpoint(&scast, store, signWindow)
 	if err != nil {
-		fmt.Println(">>>>> Error getting raw checkpoint", err)
+		log.Errorw("Error getting raw checkpoint", "err", err)
 		return false, err
 	}
 	// Populate checkpoint data
 	if err := sh.populateCheckpoint(ctx, pstore, &snst, ch); err != nil {
-		fmt.Println(">>>>> Error populating checkpoint", err)
+		log.Errorw("Error populating checkpoint template", "err", err)
 		return false, err
 	}
 
@@ -189,8 +236,14 @@ func (s *SubnetMgr) matchCheckpointSignature(ctx context.Context, sh *Subnet, ne
 		if snst.IsMiner(addr) {
 			// If no windowChecks found, or we haven't sent a vote yet
 			if !found || !subnet.HasMiner(addr, votes.Miners) {
-				diff.checkToSign = &signInfo{ch, waddr, addr}
-				return true, nil
+				sh.sigWaitTick()
+				// If wait reached, the tipset is final and we can sign.
+				if sh.sigWaitReached() && !sh.hasSigned() {
+					diff.checkToSign = &signInfo{ch, waddr, addr}
+					// Notify that this epoch for subnet has been marked for signing.
+					sh.signed()
+					return true, nil
+				}
 			}
 		}
 
@@ -234,7 +287,6 @@ func (sh *Subnet) populateCheckpoint(ctx context.Context, store adt.Store, st *s
 func (s *SubnetMgr) triggerChange(ctx context.Context, sh *Subnet, diff *diffInfo) (more bool, err error) {
 	// If there's a checkpoint to sign.
 	if diff.checkToSign != nil {
-		fmt.Println(">>>>>>>>>>>>", diff.checkToSign.checkpoint.Epoch())
 		err := s.signCheckpoint(ctx, sh, diff.checkToSign)
 		if err != nil {
 			log.Errorw("Error signing checkpoint for subnet", "subnetID", sh.ID, "err", err)
@@ -246,7 +298,7 @@ func (s *SubnetMgr) triggerChange(ctx context.Context, sh *Subnet, diff *diffInf
 }
 
 func (s *SubnetMgr) signCheckpoint(ctx context.Context, sh *Subnet, info *signInfo) error {
-	log.Infow("Signing checkpoint for subnet", "subnetID", info.checkpoint.Source)
+	log.Infow("Signing checkpoint for subnet", "subnetID", info.checkpoint.Source().String())
 	// Using simple signature to sign checkpoint using the subnet wallet.
 	ver := checkpoint.NewSingleSigner()
 	err := ver.Sign(ctx, sh.api.WalletAPI.Wallet, info.addr, info.checkpoint,

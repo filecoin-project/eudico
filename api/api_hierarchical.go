@@ -6,6 +6,7 @@ import (
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/ipfs/go-cid"
 )
 
@@ -16,4 +17,5 @@ type HierarchicalCns interface {
 	MineSubnet(ctx context.Context, wallet address.Address, id hierarchical.SubnetID, stop bool) error                        // perm:write
 	LeaveSubnet(ctx context.Context, wallet address.Address, id hierarchical.SubnetID) (cid.Cid, error)                       // perm:write
 	KillSubnet(ctx context.Context, wallet address.Address, id hierarchical.SubnetID) (cid.Cid, error)                        // perm:write
+	ListCheckpoints(ctx context.Context, id hierarchical.SubnetID, num int) ([]*schema.Checkpoint, error)                     // perm:read
 }

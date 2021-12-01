@@ -236,6 +236,7 @@ func (st *SubnetState) verifyCheck(rt runtime.Runtime, ch *schema.Checkpoint) ad
 	prevCom, err := st.PrevCheckCid(adt.AsStore(rt), ch.Epoch())
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching Cid for previous check")
 	if prev, _ := ch.PreviousCheck(); prevCom != prev {
+		fmt.Println(">>>> PREVIOUS CHECKS", prevCom, prev)
 		rt.Abortf(exitcode.ErrIllegalArgument, "previous checkpoint not consistent with previous check committed")
 	}
 
@@ -266,7 +267,6 @@ func (st *SubnetState) verifyCheck(rt runtime.Runtime, ch *schema.Checkpoint) ad
 	}
 
 	// Only miners are allowed to submit checkpoints.
-	fmt.Println(">>>>>>", addr, st.Miners)
 	if !st.IsMiner(addr) {
 		rt.Abortf(exitcode.ErrIllegalArgument, "checkpoint not signed by a miner")
 	}

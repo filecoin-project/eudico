@@ -23,6 +23,7 @@ import (
 	apitypes "github.com/filecoin-project/lotus/api/types"
 	miner "github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	hierarchical "github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	schema "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	types "github.com/filecoin-project/lotus/chain/types"
 	alerting "github.com/filecoin-project/lotus/journal/alerting"
 	marketevents "github.com/filecoin-project/lotus/markets/loggers"
@@ -1010,6 +1011,21 @@ func (m *MockFullNode) LeaveSubnet(arg0 context.Context, arg1 address.Address, a
 func (mr *MockFullNodeMockRecorder) LeaveSubnet(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LeaveSubnet", reflect.TypeOf((*MockFullNode)(nil).LeaveSubnet), arg0, arg1, arg2)
+}
+
+// ListCheckpoints mocks base method.
+func (m *MockFullNode) ListCheckpoints(arg0 context.Context, arg1 hierarchical.SubnetID, arg2 int) ([]*schema.Checkpoint, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListCheckpoints", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]*schema.Checkpoint)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListCheckpoints indicates an expected call of ListCheckpoints.
+func (mr *MockFullNodeMockRecorder) ListCheckpoints(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListCheckpoints", reflect.TypeOf((*MockFullNode)(nil).ListCheckpoints), arg0, arg1, arg2)
 }
 
 // LogAlerts mocks base method.

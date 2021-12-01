@@ -59,7 +59,13 @@ func init() {
 // ChildCheck
 type ChildCheck struct {
 	Source string
-	Checks []cid.Cid
+	// NOTE: Same problem as below, checks is
+	// []cid.Cid, but we are hiding it behind a bunch
+	// of bytes to prevent the VM from trying to fetch the
+	// cid from the state tree. We still want to use IPLD
+	// for now. We may be able to remove this problem
+	// if we use cbor-gen directly.
+	Checks [][]byte //NOTE:
 }
 
 // MsgTreeList is the list of trees with cross-shard messages
@@ -69,13 +75,16 @@ type MsgTreeList struct{}
 
 // CheckData is the data included in a Checkpoint.
 type CheckData struct {
-	Source       string
-	TipSet       []byte // NOTE: For simplicity we add TipSetKey. We could include full TipSet
-	Epoch        int
-	PrevCheckCid []byte // NOTE: To prevent the VM from interpreting it as a CID from the state
-	// tree, we store the Cid for PrevCheckpoint as bytes
-	Childs    []ChildCheck
-	XShardMsg *MsgTreeList
+	Source string
+	TipSet []byte // NOTE: For simplicity we add TipSetKey. We could include full TipSet
+	Epoch  int
+	// NOTE: Under these bytes there's a cid.Cid. The reason for doing this is
+	// to prevent the VM from interpreting it as a CID from the state
+	// tree trying to fetch it and failing because it can't find anything, so we
+	// are "hiding" them behing a byte type
+	PrevCheckCid []byte
+	Childs       []ChildCheck
+	XShardMsg    *MsgTreeList
 }
 
 // Checkpoint data structure
@@ -101,7 +110,7 @@ func initCheckpointSchema() schema.Type {
 	ts.Accumulate(schema.SpawnStruct("ChildCheck",
 		[]schema.StructField{
 			schema.SpawnStructField("Source", "String", false, false),
-			schema.SpawnStructField("Checks", "List_Link", false, false),
+			schema.SpawnStructField("Checks", "List_Bytes", false, false),
 		},
 		schema.SpawnStructRepresentationMap(map[string]string{}),
 	))
@@ -129,6 +138,7 @@ func initCheckpointSchema() schema.Type {
 	))
 	ts.Accumulate(schema.SpawnList("List_String", "String", false))
 	ts.Accumulate(schema.SpawnList("List_Link", "Link", false))
+	ts.Accumulate(schema.SpawnList("List_Bytes", "Bytes", false))
 	ts.Accumulate(schema.SpawnList("List_ChildCheck", "ChildCheck", false))
 
 	return ts.TypeByName("Checkpoint")
@@ -299,17 +309,17 @@ func (c *Checkpoint) AddChild(ch *Checkpoint) error {
 		if ci := c.Data.Childs[ind].hasCheck(chcid); ci >= 0 {
 			return xerrors.Errorf("source already has a checkpoint with that Cid")
 		}
-		c.Data.Childs[ind].Checks = append(c.Data.Childs[ind].Checks, chcid)
+		c.Data.Childs[ind].Checks = append(c.Data.Childs[ind].Checks, chcid.Bytes())
 		return nil
 	}
-	chcc := ChildCheck{ch.Data.Source, []cid.Cid{chcid}}
+	chcc := ChildCheck{ch.Data.Source, [][]byte{chcid.Bytes()}}
 	c.Data.Childs = append(c.Data.Childs, chcc)
 	return nil
 }
 
 func (c *ChildCheck) hasCheck(cid cid.Cid) int {
 	for i, ch := range c.Checks {
-		if ch == cid {
+		if bytes.Equal(ch, cid.Bytes()) {
 			return i
 		}
 	}
