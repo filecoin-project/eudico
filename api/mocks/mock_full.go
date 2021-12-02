@@ -3052,6 +3052,21 @@ func (mr *MockFullNodeMockRecorder) SyncValidateTipset(arg0, arg1 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncValidateTipset", reflect.TypeOf((*MockFullNode)(nil).SyncValidateTipset), arg0, arg1)
 }
 
+// ValidateCheckpoint mocks base method.
+func (m *MockFullNode) ValidateCheckpoint(arg0 context.Context, arg1 hierarchical.SubnetID, arg2 abi.ChainEpoch) (*schema.Checkpoint, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ValidateCheckpoint", arg0, arg1, arg2)
+	ret0, _ := ret[0].(*schema.Checkpoint)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ValidateCheckpoint indicates an expected call of ValidateCheckpoint.
+func (mr *MockFullNodeMockRecorder) ValidateCheckpoint(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateCheckpoint", reflect.TypeOf((*MockFullNode)(nil).ValidateCheckpoint), arg0, arg1, arg2)
+}
+
 // Version mocks base method.
 func (m *MockFullNode) Version(arg0 context.Context) (api.APIVersion, error) {
 	m.ctrl.T.Helper()

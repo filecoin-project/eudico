@@ -626,14 +626,6 @@ func (s *SubnetMgr) SubmitSignedCheckpoint(
 
 	msg := smsg.Cid()
 
-	/*
-		// Wait state message.
-		_, aerr = parentAPI.StateWaitMsg(ctx, msg, build.MessageConfidence, api.LookbackNoLimit, true)
-		if aerr != nil {
-			return cid.Undef, aerr
-		}
-	*/
-
 	chcid, _ := ch.Cid()
 	log.Infow("Success signing checkpoint in subnet", "subnetID", id, "message", msg, "cid", chcid)
 	return smsg.Cid(), nil
@@ -680,7 +672,8 @@ func (s *SubnetMgr) ListCheckpoints(
 	ts := subAPI.ChainAPI.Chain.GetHeaviestTipSet()
 	currEpoch := ts.Height()
 	for i := 0; i < num; i++ {
-		signWindow := ctypes.CheckpointEpoch(abi.ChainEpoch(int(currEpoch)-i*int(snst.CheckPeriod)), snst.CheckPeriod)
+		signWindow := ctypes.CheckpointEpoch(currEpoch, snst.CheckPeriod)
+		signWindow = abi.ChainEpoch(int(signWindow) - i*int(snst.CheckPeriod))
 		if signWindow < 0 {
 			break
 		}
@@ -693,6 +686,87 @@ func (s *SubnetMgr) ListCheckpoints(
 		}
 	}
 	return out, nil
+}
+
+func (s *SubnetMgr) ValidateCheckpoint(
+	ctx context.Context, id hierarchical.SubnetID, epoch abi.ChainEpoch) (*schema.Checkpoint, error) {
+
+	// TODO: Think a bit deeper the locking strategy for subnets.
+	s.lk.RLock()
+	defer s.lk.RUnlock()
+
+	// Get actor from subnet ID
+	subnetActAddr, err := id.Actor()
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the api for the parent network hosting the subnet actor
+	// for the subnet.
+	parentAPI, err := s.getParentAPI(id)
+	if err != nil {
+		return nil, err
+	}
+
+	subAPI := s.getAPI(id)
+	if subAPI == nil {
+		xerrors.Errorf("Not listening to subnet")
+	}
+
+	subnetAct, err := parentAPI.StateGetActor(ctx, subnetActAddr, types.EmptyTSK)
+	if err != nil {
+		return nil, err
+	}
+
+	var snst subnet.SubnetState
+	pbs := blockstore.NewAPIBlockstore(parentAPI)
+	pcst := cbor.NewCborStore(pbs)
+	if err := pcst.Get(ctx, subnetAct.Head, &snst); err != nil {
+		return nil, err
+	}
+	pstore := adt.WrapStore(ctx, pcst)
+	ts := subAPI.ChainAPI.Chain.GetHeaviestTipSet()
+
+	// If epoch < 0 we are singalling that we want to verify the
+	// checkpoint for the latest epoch submitted.
+	if epoch < 0 {
+		currEpoch := ts.Height()
+		epoch = ctypes.CheckpointEpoch(currEpoch-snst.CheckPeriod, snst.CheckPeriod)
+	}
+
+	ch, found, err := snst.GetCheckpoint(pstore, epoch)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, xerrors.Errorf("no checkpoint committed in epoch: %s", epoch)
+	}
+	prevCid, err := snst.PrevCheckCid(pstore, epoch)
+	if err != nil {
+		return nil, err
+	}
+
+	if pchc, _ := ch.PreviousCheck(); prevCid != pchc {
+		return ch, xerrors.Errorf("verification failed, previous checkpoints not equal: %s, %s", prevCid, pchc)
+	}
+
+	if ch.Epoch() != epoch {
+		return ch, xerrors.Errorf("verification failed, wrong epoch: %s, %s", ch.Epoch(), epoch)
+	}
+
+	subts, err := subAPI.ChainGetTipSetByHeight(ctx, epoch, types.EmptyTSK)
+	if err != nil {
+		return nil, err
+	}
+	if !ch.EqualTipSet(subts.Key()) {
+		chtsk, _ := ch.TipSet()
+		return ch, xerrors.Errorf("verification failed, checkpoint includes wrong tipSets : %s, %s", ts.Key(), chtsk)
+	}
+
+	// TODO: Verify that the checkpoint has been committed in the corresponding SCA as a sanity check.
+	// TODO: Verify that committed childs are correct
+	// TODO: Any other verification?
+	return ch, nil
 }
 
 func (s *SubnetMgr) getAPI(n hierarchical.SubnetID) *API {

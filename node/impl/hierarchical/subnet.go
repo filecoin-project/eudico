@@ -55,3 +55,8 @@ func (a *HierarchicalAPI) ListCheckpoints(ctx context.Context,
 	id hierarchical.SubnetID, num int) ([]*schema.Checkpoint, error) {
 	return a.Sub.ListCheckpoints(ctx, id, num)
 }
+
+func (a *HierarchicalAPI) ValidateCheckpoint(ctx context.Context,
+	id hierarchical.SubnetID, epoch abi.ChainEpoch) (*schema.Checkpoint, error) {
+	return a.Sub.ValidateCheckpoint(ctx, id, epoch)
+}

@@ -6,6 +6,7 @@ import (
 
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/types"
 	ltypes "github.com/filecoin-project/lotus/chain/types"
 	"github.com/ipfs/go-cid"
 	ipld "github.com/ipld/go-ipld-prime"
@@ -350,6 +351,14 @@ func (c *Checkpoint) GetChilds() []ChildCheck {
 
 func (c *Checkpoint) Epoch() abi.ChainEpoch {
 	return abi.ChainEpoch(c.Data.Epoch)
+}
+
+func (c *Checkpoint) TipSet() (types.TipSetKey, error) {
+	return types.TipSetKeyFromBytes(c.Data.TipSet)
+}
+
+func (c *Checkpoint) EqualTipSet(tsk types.TipSetKey) bool {
+	return bytes.Equal(tsk.Bytes(), c.Data.TipSet)
 }
 
 func ByteSliceToCidList(l [][]byte) ([]cid.Cid, error) {

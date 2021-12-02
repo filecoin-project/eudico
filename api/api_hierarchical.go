@@ -18,4 +18,5 @@ type HierarchicalCns interface {
 	LeaveSubnet(ctx context.Context, wallet address.Address, id hierarchical.SubnetID) (cid.Cid, error)                       // perm:write
 	KillSubnet(ctx context.Context, wallet address.Address, id hierarchical.SubnetID) (cid.Cid, error)                        // perm:write
 	ListCheckpoints(ctx context.Context, id hierarchical.SubnetID, num int) ([]*schema.Checkpoint, error)                     // perm:read
+	ValidateCheckpoint(ctx context.Context, id hierarchical.SubnetID, epoch abi.ChainEpoch) (*schema.Checkpoint, error)       // perm:read
 }
