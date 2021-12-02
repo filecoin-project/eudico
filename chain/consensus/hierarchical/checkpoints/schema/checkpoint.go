@@ -351,3 +351,15 @@ func (c *Checkpoint) GetChilds() []ChildCheck {
 func (c *Checkpoint) Epoch() abi.ChainEpoch {
 	return abi.ChainEpoch(c.Data.Epoch)
 }
+
+func ByteSliceToCidList(l [][]byte) ([]cid.Cid, error) {
+	out := make([]cid.Cid, len(l))
+	for i, x := range l {
+		_, c, err := cid.CidFromBytes(x)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = c
+	}
+	return out, nil
+}

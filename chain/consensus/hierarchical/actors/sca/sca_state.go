@@ -158,13 +158,21 @@ func (st *SCAState) flushSubnet(rt runtime.Runtime, sh *Subnet) {
 // the template is populated with every new xShard transaction and
 // child checkpoint, until the windows passes that the template is frozen
 // and is ready for miners to populate the rest and sign it.
-func (st *SCAState) currWindowCheckpoint(rt runtime.Runtime) *schema.Checkpoint {
-	chEpoch := types.WindowEpoch(rt.CurrEpoch(), st.CheckPeriod)
-	ch, found, err := st.GetCheckpoint(adt.AsStore(rt), chEpoch)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get checkpoint template for epoch")
+func (st *SCAState) CurrWindowCheckpoint(store adt.Store, epoch abi.ChainEpoch) (*schema.Checkpoint, error) {
+	chEpoch := types.WindowEpoch(epoch, st.CheckPeriod)
+	ch, found, err := st.GetCheckpoint(store, chEpoch)
+	if err != nil {
+		return nil, err
+	}
 	if !found {
 		ch = schema.NewRawCheckpoint(st.NetworkName, chEpoch)
 	}
+	return ch, nil
+}
+
+func (st *SCAState) currWindowCheckpoint(rt runtime.Runtime) *schema.Checkpoint {
+	ch, err := st.CurrWindowCheckpoint(adt.AsStore(rt), rt.CurrEpoch())
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get checkpoint template for epoch")
 	return ch
 }
 
