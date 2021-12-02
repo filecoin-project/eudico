@@ -612,15 +612,18 @@ func (s *SubnetMgr) SubmitSignedCheckpoint(
 	if err != nil {
 		return cid.Undef, xerrors.Errorf("failed serializing init actor params: %s", err)
 	}
+
 	// Get the parent and the actor to know where to send the message.
 	smsg, aerr := parentAPI.MpoolPushMessage(ctx, &types.Message{
-		To:     SubnetActor,
-		From:   wallet,
-		Value:  abi.NewTokenAmount(0),
-		Method: subnet.Methods.SubmitCheckpoint,
-		Params: serparams,
+		To:       SubnetActor,
+		From:     wallet,
+		Value:    abi.NewTokenAmount(0),
+		Method:   subnet.Methods.SubmitCheckpoint,
+		Params:   serparams,
+		GasLimit: 1_000_000_000, // NOTE: Adding high gas limit to ensure that the message is accepted.
 	}, nil)
 	if aerr != nil {
+		log.Errorf("Error MpoolPushMessage: %s", aerr)
 		return cid.Undef, aerr
 	}
 
