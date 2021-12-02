@@ -90,7 +90,7 @@ var validateCheckpoints = &cli.Command{
 			subnet = cctx.String("subnet")
 		}
 
-		ch, err := api.VerifyCheckpoint(ctx, hierarchical.SubnetID(subnet), abi.ChainEpoch(cctx.Int("epoch")))
+		ch, err := api.ValidateCheckpoint(ctx, hierarchical.SubnetID(subnet), abi.ChainEpoch(cctx.Int("epoch")))
 		if err != nil {
 			fmt.Println("Verified KO!")
 			return err
