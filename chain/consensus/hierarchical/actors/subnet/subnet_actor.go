@@ -4,7 +4,6 @@ package subnet
 
 import (
 	"bytes"
-	"fmt"
 
 	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -236,7 +235,6 @@ func (st *SubnetState) verifyCheck(rt runtime.Runtime, ch *schema.Checkpoint) ad
 	prevCom, err := st.PrevCheckCid(adt.AsStore(rt), ch.Epoch())
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching Cid for previous check")
 	if prev, _ := ch.PreviousCheck(); prevCom != prev {
-		fmt.Println(">>>> PREVIOUS CHECKS", prevCom, prev)
 		rt.Abortf(exitcode.ErrIllegalArgument, "previous checkpoint not consistent with previous check committed")
 	}
 
@@ -308,7 +306,8 @@ func (a SubnetActor) SubmitCheckpoint(rt runtime.Runtime, params *sca.Checkpoint
 
 		// Add miners vote
 		wch.Miners = append(wch.Miners, signAddr)
-		majority = st.majorityVote(wch)
+		majority, err = st.majorityVote(rt, wch)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching miner stakes")
 		if majority {
 
 			// Update checkpoint in SubnetState
@@ -402,6 +401,15 @@ func (st *SubnetState) mutateState(rt runtime.Runtime) {
 		break
 	}
 }
+
+func (st *SubnetState) GetStake(store adt.Store, miner address.Address) (big.Int, error) {
+	stakes, err := adt.AsBalanceTable(store, st.Stake)
+	if err != nil {
+		return big.Zero(), err
+	}
+	return stakes.Get(miner)
+}
+
 func (st *SubnetState) addStake(rt runtime.Runtime, sourceAddr address.Address, value abi.TokenAmount) {
 	// NOTE: There's currently no minimum stake required. Any stake is accepted even
 	// if a peer is not granted mining rights. According to the final design we may

@@ -1,7 +1,7 @@
 package subnet
 
 import (
-	"fmt"
+	mbig "math/big"
 
 	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -16,13 +16,6 @@ import (
 	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
 	cid "github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
-)
-
-const (
-	// SignatureThreshold that determines the number of votes from
-	// total number of miners expected to propagate a checkpoint to
-	// SCA
-	SignatureThreshold = float32(0.66)
 )
 
 var (
@@ -40,6 +33,11 @@ var (
 	// We'll need to decide what to do with the leftover stake, if to
 	// burn it or keep it until the subnet is full killed.
 	LeavingFeeCoeff = big.NewInt(1)
+
+	// SignatureThreshold that determines the number of votes from
+	// total number of miners expected to propagate a checkpoint to
+	// SCA
+	SignatureThreshold = mbig.NewFloat(0.66)
 )
 
 // ConsensusType for subnet
@@ -93,8 +91,19 @@ type CheckVotes struct {
 	Miners []address.Address
 }
 
-func (st SubnetState) majorityVote(wch *CheckVotes) bool {
-	return float32(len(wch.Miners))/float32(len(st.Miners)) >= SignatureThreshold
+func (st SubnetState) majorityVote(rt runtime.Runtime, wch *CheckVotes) (bool, error) {
+	sum := big.Zero()
+	for _, m := range wch.Miners {
+		stake, err := st.GetStake(adt.AsStore(rt), m)
+		if err != nil {
+			return false, err
+		}
+		sum = big.Sum(sum, stake)
+	}
+	fsum := new(mbig.Float).SetInt(sum.Int)
+	fTotal := new(mbig.Float).SetInt(st.TotalStake.Int)
+	div := new(mbig.Float).Quo(fsum, fTotal)
+	return div.Cmp(SignatureThreshold) >= 0, nil
 }
 
 func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetState, error) {
@@ -149,7 +158,6 @@ func (st *SubnetState) epochCheckpoint(rt runtime.Runtime) (*schema.Checkpoint, 
 // PrevCheckCid returns the Cid of the previously committed checkpoint
 func (st *SubnetState) PrevCheckCid(store adt.Store, epoch abi.ChainEpoch) (cid.Cid, error) {
 	ep := epoch - st.CheckPeriod
-	fmt.Println("Previous checkpoint epoch, cid", ep)
 	// If we are in the first period.
 	if ep < 0 {
 		return schema.NoPreviousCheck, nil
@@ -162,8 +170,6 @@ func (st *SubnetState) PrevCheckCid(store adt.Store, epoch abi.ChainEpoch) (cid.
 		// TODO: We could optionally return an error here.
 		return schema.NoPreviousCheck, nil
 	}
-	fmt.Println(">>>>> CID????")
-	fmt.Println(ch.Cid())
 	return ch.Cid()
 }
 

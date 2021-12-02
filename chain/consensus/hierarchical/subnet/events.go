@@ -2,7 +2,6 @@ package subnet
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -214,7 +213,6 @@ func (s *SubnetMgr) matchCheckpointSignature(ctx context.Context, sh *Subnet, ne
 	// Check if there are votes for this checkpoint
 	votes, found, err := snst.GetWindowChecks(store, chcid)
 	if err != nil {
-		fmt.Println(">>>>> Error getting window checks", err)
 		return false, err
 	}
 
