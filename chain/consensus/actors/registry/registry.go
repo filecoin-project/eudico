@@ -3,6 +3,7 @@ package registry
 import (
 	"github.com/filecoin-project/lotus/chain/actors"
 	initactor "github.com/filecoin-project/lotus/chain/consensus/actors/init"
+	"github.com/filecoin-project/lotus/chain/consensus/actors/mpower"
 	"github.com/filecoin-project/lotus/chain/consensus/actors/split"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
@@ -20,6 +21,7 @@ func NewActorRegistry() *vm.ActorRegistry {
 	inv.Register(nil, split.SplitActor{})
 	inv.Register(nil, subnet.SubnetActor{})
 	inv.Register(nil, sca.SubnetCoordActor{})
+	inv.Register(nil, mpower.Actor{})
 
 	return inv
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin/reward"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/system"
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
+	"github.com/filecoin-project/lotus/chain/consensus/actors/mpower"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/gen"
@@ -118,6 +119,15 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 	}
 	if err := state.SetActor(init_.Address, initact); err != nil {
 		return nil, nil, xerrors.Errorf("set init actor: %w", err)
+	}
+
+	// Create empty power actor
+	spact, err := SetupStoragePowerActor(ctx, bs, av)
+	if err != nil {
+		return nil, nil, xerrors.Errorf("setup storage power actor: %w", err)
+	}
+	if err := state.SetActor(mpower.PowerActorAddr, spact); err != nil {
+		return nil, nil, xerrors.Errorf("set storage power actor: %w", err)
 	}
 
 	// Setup sca actor
@@ -242,6 +252,27 @@ func SetupSubnetActor(ctx context.Context, bs bstore.Blockstore, networkName str
 		Code:    actor.SubnetCoordActorCodeID,
 		Balance: big.Zero(),
 		Head:    statecid,
+	}
+
+	return act, nil
+}
+
+func SetupStoragePowerActor(ctx context.Context, bs bstore.Blockstore, av actors.Version) (*types.Actor, error) {
+	cst := cbor.NewCborStore(bs)
+	pst, err := mpower.ConstructState(adt.WrapStore(ctx, cbor.NewCborStore(bs)))
+	if err != nil {
+		return nil, err
+	}
+
+	statecid, err := cst.Put(ctx, pst)
+	if err != nil {
+		return nil, err
+	}
+
+	act := &types.Actor{
+		Code:    actor.MpowerActorCodeID,
+		Head:    statecid,
+		Balance: big.Zero(),
 	}
 
 	return act, nil

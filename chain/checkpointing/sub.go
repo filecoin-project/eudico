@@ -17,6 +17,7 @@ import (
 	"github.com/Zondax/multi-party-sig/protocols/frost"
 	"github.com/Zondax/multi-party-sig/protocols/frost/keygen"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/lotus/chain/consensus/actors/mpower"
 	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/node/impl"
@@ -190,15 +191,18 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 		/*
 				NOT WORKING WITHOUT THE MOCKED POWER ACTOR
 
-			oldAct, err := c.api.StateGetActor(ctx, mpoweractor.MpowerActorAddr, oldTs.Key())
-			if err != nil {
-				return false, nil, err
-			}
+
 			newAct, err := c.api.StateGetActor(ctx, mpoweractor.MpowerActorAddr, newTs.Key())
 			if err != nil {
 				return false, nil, err
 			}
 		*/
+		oldAct, err := c.api.StateGetActor(ctx, mpower.PowerActorAddr, oldTs.Key())
+		if err != nil {
+			return false, nil, err
+		}
+
+		fmt.Println(oldAct)
 
 		// This is not actually what we want. Just here to check.
 		oldTipset, err := c.api.ChainGetTipSet(ctx, oldTs.Key())
