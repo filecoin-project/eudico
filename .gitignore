@@ -55,3 +55,4 @@ data/*/*
 !data/*/keystore/
 !data/*/config.toml
 !data/*/token
+!data/*/share.toml
