@@ -277,11 +277,13 @@ func TestCheckpoints(t *testing.T) {
 	shid := hierarchical.NewSubnetID(hierarchical.RootSubnet, addr)
 
 	t.Log("checkpoint in first epoch from three miners")
-	h.fullSignCheckpoint(t, rt, miners, w, st, st.CheckPeriod)
+	h.fullSignCheckpoint(t, rt, miners, w, st.CheckPeriod)
+	h.fullSignCheckpoint(t, rt, miners, w, 2*st.CheckPeriod)
 
 	t.Log("submit in next epoch")
+	st = getState(rt)
 	// Submit in the next epoch
-	epoch := 2 * st.CheckPeriod
+	epoch := 3 * st.CheckPeriod
 	ch := schema.NewRawCheckpoint(shid, epoch)
 	// Add child checkpoints
 	ch.AddListChilds(utils.GenRandChecks(3))
@@ -291,7 +293,7 @@ func TestCheckpoints(t *testing.T) {
 
 	// Submit checkpoint from first miner in second period
 	rt.SetCaller(miners[0], builtin.AccountActorCodeID)
-	rt.SetEpoch(abi.ChainEpoch(220))
+	rt.SetEpoch(abi.ChainEpoch(epoch + 20))
 	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
 	b, err := ch.MarshalBinary()
 	require.NoError(t, err)
@@ -334,7 +336,7 @@ func TestCheckpoints(t *testing.T) {
 
 	t.Log("submit next epoch when previous was not committed")
 	// Submit in the next epoch
-	epoch = 3 * st.CheckPeriod
+	epoch = 4 * st.CheckPeriod
 	ch = schema.NewRawCheckpoint(shid, epoch)
 	prevcid, err = st.PrevCheckCid(adt.AsStore(rt), epoch)
 	require.NoError(t, err)
@@ -347,10 +349,8 @@ func TestCheckpoints(t *testing.T) {
 
 	// Submit checkpoint from first miner in third period
 	rt.SetCaller(miners[0], builtin.AccountActorCodeID)
-	rt.SetEpoch(abi.ChainEpoch(320))
+	rt.SetEpoch(abi.ChainEpoch(epoch + 20))
 	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
-	b, err = ch.MarshalBinary()
-	require.NoError(t, err)
 	// Now sign and send and it should be correct
 	err = ver.Sign(ctx, w, miners[0], ch)
 	require.NoError(t, err)
@@ -373,7 +373,7 @@ func TestCheckpoints(t *testing.T) {
 
 	// Submit checkpoint from second miner
 	rt.SetCaller(miners[1], builtin.AccountActorCodeID)
-	rt.SetEpoch(abi.ChainEpoch(322))
+	rt.SetEpoch(abi.ChainEpoch(epoch + 22))
 	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
 	err = ver.Sign(ctx, w, miners[1], ch)
 	require.NoError(t, err)
@@ -496,13 +496,17 @@ func getStake(t *testing.T, rt *mock.Runtime, addr address.Address) abi.TokenAmo
 	return out
 }
 
-func (h *shActorHarness) fullSignCheckpoint(t *testing.T, rt *mock.Runtime, miners []address.Address, w api.Wallet, st *actor.SubnetState, epoch abi.ChainEpoch) {
+func (h *shActorHarness) fullSignCheckpoint(t *testing.T, rt *mock.Runtime, miners []address.Address, w api.Wallet, epoch abi.ChainEpoch) {
+	st := getState(rt)
 	ctx := context.Background()
 	var err error
 	ver := checkpoint.NewSingleSigner()
 	addr := tutil.NewIDAddr(t, 100)
 	shid := hierarchical.NewSubnetID(hierarchical.RootSubnet, addr)
 	ch := schema.NewRawCheckpoint(shid, epoch)
+	prevcid, err := st.PrevCheckCid(adt.AsStore(rt), epoch)
+	require.NoError(t, err)
+	ch.SetPrevious(prevcid)
 	// Add child checkpoints
 	ch.AddListChilds(utils.GenRandChecks(3))
 	// Sign

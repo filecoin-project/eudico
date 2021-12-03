@@ -1,6 +1,7 @@
 package subnet
 
 import (
+	"fmt"
 	mbig "math/big"
 
 	address "github.com/filecoin-project/go-address"
@@ -165,6 +166,7 @@ func (st *SubnetState) PrevCheckCid(store adt.Store, epoch abi.ChainEpoch) (cid.
 		if err != nil {
 			return cid.Undef, err
 		}
+		fmt.Println(">>>>> Epoch", ep, found)
 		if found {
 			return ch.Cid()
 		}

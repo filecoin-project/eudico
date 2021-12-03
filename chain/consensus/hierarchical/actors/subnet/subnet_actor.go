@@ -235,6 +235,9 @@ func (st *SubnetState) verifyCheck(rt runtime.Runtime, ch *schema.Checkpoint) ad
 	// Check that the previous checkpoint is correct.
 	prevCom, err := st.PrevCheckCid(adt.AsStore(rt), ch.Epoch())
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching Cid for previous check")
+	fmt.Println("===!!! PrevCheckCid")
+	fmt.Println(ch.PreviousCheck())
+	fmt.Println(prevCom)
 	if prev, _ := ch.PreviousCheck(); prevCom != prev {
 		rt.Abortf(exitcode.ErrIllegalArgument, "previous checkpoint not consistent with previous check committed")
 	}
