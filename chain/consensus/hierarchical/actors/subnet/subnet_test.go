@@ -276,7 +276,7 @@ func TestCheckpoints(t *testing.T) {
 	addr := tutil.NewIDAddr(t, 100)
 	shid := hierarchical.NewSubnetID(hierarchical.RootSubnet, addr)
 
-	t.Log("checkpoint in first epoch from three miners")
+	t.Log("checkpoint in first and second epoch from three miners")
 	h.fullSignCheckpoint(t, rt, miners, w, st.CheckPeriod)
 	h.fullSignCheckpoint(t, rt, miners, w, 2*st.CheckPeriod)
 
@@ -389,7 +389,6 @@ func TestCheckpoints(t *testing.T) {
 	_, found, err = st.GetWindowChecks(adt.AsStore(rt), chcid)
 	require.NoError(t, err)
 	require.False(t, found)
-	// WindowChecks cleaned
 	ch, found, err = st.GetCheckpoint(adt.AsStore(rt), epoch)
 	require.NoError(t, err)
 	require.True(t, found)

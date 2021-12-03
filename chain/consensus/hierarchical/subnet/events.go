@@ -2,7 +2,6 @@ package subnet
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -317,7 +316,6 @@ func (sh *Subnet) populateCheckpoint(ctx context.Context, store adt.Store, st *s
 	if err != nil {
 		return err
 	}
-	fmt.Println("====xxx PrevCid being set", prevCid)
 	ch.SetPrevious(prevCid)
 
 	// Set tipsetKeys for the epoch.

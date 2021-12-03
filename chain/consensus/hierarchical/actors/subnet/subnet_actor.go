@@ -4,7 +4,6 @@ package subnet
 
 import (
 	"bytes"
-	"fmt"
 
 	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -235,9 +234,6 @@ func (st *SubnetState) verifyCheck(rt runtime.Runtime, ch *schema.Checkpoint) ad
 	// Check that the previous checkpoint is correct.
 	prevCom, err := st.PrevCheckCid(adt.AsStore(rt), ch.Epoch())
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching Cid for previous check")
-	fmt.Println("===!!! PrevCheckCid")
-	fmt.Println(ch.PreviousCheck())
-	fmt.Println(prevCom)
 	if prev, _ := ch.PreviousCheck(); prevCom != prev {
 		rt.Abortf(exitcode.ErrIllegalArgument, "previous checkpoint not consistent with previous check committed")
 	}
@@ -337,10 +333,6 @@ func (a SubnetActor) SubmitCheckpoint(rt runtime.Runtime, params *sca.Checkpoint
 	// If we reached amjority propagate the commitment to SCA
 	if majority {
 		// If the checkpoint is correct we can reuse params and avoid having to marshal it again.
-		fmt.Println("===================== SUBMITTED")
-		fmt.Println(submit.Cid())
-		fmt.Println("===================== PREVIOUS")
-		fmt.Println(submit.PreviousCheck())
 		code := rt.Send(sca.SubnetCoordActorAddr, sca.Methods.CommitChildCheckpoint, params, big.Zero(), &builtin.Discard{})
 		if !code.IsSuccess() {
 			rt.Abortf(exitcode.ErrIllegalState, "failed committing checkpoint in SCA")

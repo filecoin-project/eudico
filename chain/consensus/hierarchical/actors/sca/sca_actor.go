@@ -3,8 +3,6 @@ package sca
 //go:generate go run ./gen/gen.go
 
 import (
-	"fmt"
-
 	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
@@ -277,8 +275,6 @@ func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *Chec
 			st.flushCheckpoint(rt, ch)
 			// Update previous checkpoint for child.
 			sh.PrevCheckpoint = *commit
-			fmt.Println("===================== COMMITTED")
-			fmt.Println(sh.PrevCheckpoint.Cid())
 			st.flushSubnet(rt, sh)
 			return
 		}
@@ -292,7 +288,6 @@ func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *Chec
 		prevCid, err := prevCom.Cid()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error computing checkpoint's Cid")
 		if pr, _ := commit.PreviousCheck(); prevCid != pr {
-			fmt.Println("Previous:", prevCid, "committed", pr)
 			rt.Abortf(exitcode.ErrIllegalArgument, "new checkpoint not consistent with previous one")
 		}
 
@@ -301,8 +296,6 @@ func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *Chec
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "child already has committed a checkpoint this epoch")
 		st.flushCheckpoint(rt, ch)
 		// Update previous checkpoint for child.
-		fmt.Println("===================== COMMITTED")
-		fmt.Println(sh.PrevCheckpoint.Cid())
 		sh.PrevCheckpoint = *commit
 		st.flushSubnet(rt, sh)
 	})
