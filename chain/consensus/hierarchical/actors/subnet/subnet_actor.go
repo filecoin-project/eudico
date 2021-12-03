@@ -4,6 +4,7 @@ package subnet
 
 import (
 	"bytes"
+	"fmt"
 
 	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -333,6 +334,10 @@ func (a SubnetActor) SubmitCheckpoint(rt runtime.Runtime, params *sca.Checkpoint
 	// If we reached amjority propagate the commitment to SCA
 	if majority {
 		// If the checkpoint is correct we can reuse params and avoid having to marshal it again.
+		fmt.Println("===================== SUBMITTED")
+		fmt.Println(submit.Cid())
+		fmt.Println("===================== PREVIOUS")
+		fmt.Println(submit.PreviousCheck())
 		code := rt.Send(sca.SubnetCoordActorAddr, sca.Methods.CommitChildCheckpoint, params, big.Zero(), &builtin.Discard{})
 		if !code.IsSuccess() {
 			rt.Abortf(exitcode.ErrIllegalState, "failed committing checkpoint in SCA")

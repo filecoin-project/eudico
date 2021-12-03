@@ -158,19 +158,20 @@ func (st *SubnetState) epochCheckpoint(rt runtime.Runtime) (*schema.Checkpoint, 
 // PrevCheckCid returns the Cid of the previously committed checkpoint
 func (st *SubnetState) PrevCheckCid(store adt.Store, epoch abi.ChainEpoch) (cid.Cid, error) {
 	ep := epoch - st.CheckPeriod
-	// If we are in the first period.
-	if ep < 0 {
-		return schema.NoPreviousCheck, nil
+	// From epoch back if we found a previous checkpoint
+	// committed we return its CID
+	for ep > 0 {
+		ch, found, err := st.GetCheckpoint(store, ep)
+		if err != nil {
+			return cid.Undef, err
+		}
+		if found {
+			return ch.Cid()
+		}
+		ep = ep - st.CheckPeriod
 	}
-	ch, found, err := st.GetCheckpoint(store, ep)
-	if err != nil {
-		return cid.Undef, err
-	}
-	if !found {
-		// TODO: We could optionally return an error here.
-		return schema.NoPreviousCheck, nil
-	}
-	return ch.Cid()
+	// If nothing is found return NoPreviousCheckCommit
+	return schema.NoPreviousCheck, nil
 }
 
 // GetCheckpoint gets a checkpoint from its index

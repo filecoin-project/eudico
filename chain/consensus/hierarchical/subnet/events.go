@@ -237,11 +237,10 @@ func (s *SubnetMgr) matchCheckpointSignature(ctx context.Context, sh *Subnet, ne
 	if found {
 		log.Infow("Checkpoint for epoch already committed", "epoch", signWindow)
 		return false, nil
-
 	}
 
 	// Get raw checkpoint for this window from SCA of subnet
-	scaAct, err := sh.api.StateGetActor(ctx, sca.SubnetCoordActorAddr, types.EmptyTSK)
+	scaAct, err := sh.api.StateGetActor(ctx, sca.SubnetCoordActorAddr, newTs.Key())
 	if err != nil {
 		return false, err
 	}
@@ -269,7 +268,7 @@ func (s *SubnetMgr) matchCheckpointSignature(ctx context.Context, sh *Subnet, ne
 	}
 
 	// Check if there are votes for this checkpoint
-	votes, found, err := snst.GetWindowChecks(store, chcid)
+	votes, found, err := snst.GetWindowChecks(pstore, chcid)
 	if err != nil {
 		return false, err
 	}

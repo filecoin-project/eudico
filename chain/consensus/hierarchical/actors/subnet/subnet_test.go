@@ -8,6 +8,7 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
+	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	actor "github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
@@ -271,24 +272,53 @@ func TestCheckpoints(t *testing.T) {
 	require.Equal(t, len(st.Miners), 3)
 	require.Equal(t, st.Status, actor.Active)
 
-	t.Log("checkpoint in first epoch from three miners")
 	ver := checkpoint.NewSingleSigner()
-	epoch := st.CheckPeriod
 	addr := tutil.NewIDAddr(t, 100)
 	shid := hierarchical.NewSubnetID(hierarchical.RootSubnet, addr)
+
+	t.Log("checkpoint in first epoch from three miners")
+	h.fullSignCheckpoint(t, rt, miners, w, st, st.CheckPeriod)
+
+	t.Log("submit in next epoch")
+	// Submit in the next epoch
+	epoch := 2 * st.CheckPeriod
 	ch := schema.NewRawCheckpoint(shid, epoch)
 	// Add child checkpoints
 	ch.AddListChilds(utils.GenRandChecks(3))
 	// Sign
 	err = ver.Sign(ctx, w, miners[0], ch)
 	require.NoError(t, err)
-	// Submit checkpoint from first miner
+
+	// Submit checkpoint from first miner in second period
 	rt.SetCaller(miners[0], builtin.AccountActorCodeID)
-	rt.SetEpoch(abi.ChainEpoch(120))
+	rt.SetEpoch(abi.ChainEpoch(220))
 	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
 	b, err := ch.MarshalBinary()
 	require.NoError(t, err)
+	// The previous checkpoint fails
 	params := &sca.CheckpointParams{Checkpoint: b}
+	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
+		rt.Call(h.SubnetActor.SubmitCheckpoint, params)
+	})
+	// Set the right previous checkpoint and send
+	// without re-signing so it will fail
+	prevcid, err := st.PrevCheckCid(adt.AsStore(rt), epoch)
+	require.NoError(t, err)
+	ch.SetPrevious(prevcid)
+	b, err = ch.MarshalBinary()
+	require.NoError(t, err)
+	params = &sca.CheckpointParams{Checkpoint: b}
+	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
+	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
+		rt.Call(h.SubnetActor.SubmitCheckpoint, params)
+	})
+	// Now sign and send and it should be correct
+	err = ver.Sign(ctx, w, miners[0], ch)
+	require.NoError(t, err)
+	b, err = ch.MarshalBinary()
+	require.NoError(t, err)
+	params = &sca.CheckpointParams{Checkpoint: b}
+	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
 	rt.Call(h.SubnetActor.SubmitCheckpoint, params)
 	st = getState(rt)
 	chcid, err := ch.Cid()
@@ -302,46 +332,48 @@ func TestCheckpoints(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, found)
 
-	// Can't send checkpoint for the same miner twice
-	rt.SetCaller(miners[0], builtin.AccountActorCodeID)
-	rt.SetEpoch(abi.ChainEpoch(121))
-	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
-	params = &sca.CheckpointParams{Checkpoint: b}
-	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
-		rt.Call(h.SubnetActor.SubmitCheckpoint, params)
-	})
-
-	// Check if the epoch is wrong.
-	chbad := schema.NewRawCheckpoint(shid, epoch+1)
-	b, err = chbad.MarshalBinary()
+	t.Log("submit next epoch when previous was not committed")
+	// Submit in the next epoch
+	epoch = 3 * st.CheckPeriod
+	ch = schema.NewRawCheckpoint(shid, epoch)
+	prevcid, err = st.PrevCheckCid(adt.AsStore(rt), epoch)
 	require.NoError(t, err)
-	params = &sca.CheckpointParams{Checkpoint: b}
+	ch.SetPrevious(prevcid)
+	// Add child checkpoints
+	ch.AddListChilds(utils.GenRandChecks(3))
+	// Sign
 	err = ver.Sign(ctx, w, miners[0], ch)
 	require.NoError(t, err)
-	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
-	params = &sca.CheckpointParams{Checkpoint: b}
-	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
-		rt.Call(h.SubnetActor.SubmitCheckpoint, params)
-	})
 
-	// Check if the miner is wrong.
-	nonminer, err := w.WalletNew(ctx, types.KTSecp256k1)
-	require.NoError(t, err)
-	rt.SetCaller(nonminer, builtin.AccountActorCodeID)
-	rt.SetEpoch(abi.ChainEpoch(122))
+	// Submit checkpoint from first miner in third period
+	rt.SetCaller(miners[0], builtin.AccountActorCodeID)
+	rt.SetEpoch(abi.ChainEpoch(320))
 	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
-	err = ver.Sign(ctx, w, nonminer, ch)
+	b, err = ch.MarshalBinary()
+	require.NoError(t, err)
+	// Now sign and send and it should be correct
+	err = ver.Sign(ctx, w, miners[0], ch)
 	require.NoError(t, err)
 	b, err = ch.MarshalBinary()
 	require.NoError(t, err)
 	params = &sca.CheckpointParams{Checkpoint: b}
-	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
-		rt.Call(h.SubnetActor.SubmitCheckpoint, params)
-	})
+	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
+	rt.Call(h.SubnetActor.SubmitCheckpoint, params)
+	st = getState(rt)
+	chcid, err = ch.Cid()
+	require.NoError(t, err)
+	wch, found, err = st.GetWindowChecks(adt.AsStore(rt), chcid)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, len(wch.Miners), 1)
+	// No checkpoint committed for that epoch
+	_, found, err = st.GetCheckpoint(adt.AsStore(rt), epoch)
+	require.NoError(t, err)
+	require.False(t, found)
 
 	// Submit checkpoint from second miner
 	rt.SetCaller(miners[1], builtin.AccountActorCodeID)
-	rt.SetEpoch(abi.ChainEpoch(122))
+	rt.SetEpoch(abi.ChainEpoch(322))
 	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
 	err = ver.Sign(ctx, w, miners[1], ch)
 	require.NoError(t, err)
@@ -364,71 +396,6 @@ func TestCheckpoints(t *testing.T) {
 	comcid, err := ch.Cid()
 	require.NoError(t, err)
 	require.Equal(t, comcid, chcid)
-
-	// Submit checkpoint for third miner does nothing.
-	// The checkpoint for that epoch has already been committed.
-	rt.SetCaller(miners[2], builtin.AccountActorCodeID)
-	rt.SetEpoch(abi.ChainEpoch(123))
-	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
-	err = ver.Sign(ctx, w, miners[2], ch)
-	require.NoError(t, err)
-	b, err = ch.MarshalBinary()
-	require.NoError(t, err)
-	params = &sca.CheckpointParams{Checkpoint: b}
-	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
-		rt.Call(h.SubnetActor.SubmitCheckpoint, params)
-	})
-
-	t.Log("submit in next epoch")
-	// Submit in the next epoch
-	epoch = 2 * st.CheckPeriod
-	ch = schema.NewRawCheckpoint(shid, epoch)
-	// Add child checkpoints
-	ch.AddListChilds(utils.GenRandChecks(3))
-	// Sign
-	err = ver.Sign(ctx, w, miners[0], ch)
-	require.NoError(t, err)
-
-	// Submit checkpoint from first miner in second period
-	rt.SetCaller(miners[0], builtin.AccountActorCodeID)
-	rt.SetEpoch(abi.ChainEpoch(220))
-	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
-	b, err = ch.MarshalBinary()
-	require.NoError(t, err)
-	// The previous checkpoint fails
-	params = &sca.CheckpointParams{Checkpoint: b}
-	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
-		rt.Call(h.SubnetActor.SubmitCheckpoint, params)
-	})
-	// Set the right previous checkpoint and send
-	// without re-signing so it will fail
-	ch.SetPrevious(chcid)
-	b, err = ch.MarshalBinary()
-	require.NoError(t, err)
-	params = &sca.CheckpointParams{Checkpoint: b}
-	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
-	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
-		rt.Call(h.SubnetActor.SubmitCheckpoint, params)
-	})
-	// Now sign and send and it should be correct
-	err = ver.Sign(ctx, w, miners[0], ch)
-	require.NoError(t, err)
-	b, err = ch.MarshalBinary()
-	require.NoError(t, err)
-	params = &sca.CheckpointParams{Checkpoint: b}
-	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
-	rt.Call(h.SubnetActor.SubmitCheckpoint, params)
-	st = getState(rt)
-	chcid, err = ch.Cid()
-	require.NoError(t, err)
-	wch, found, err = st.GetWindowChecks(adt.AsStore(rt), chcid)
-	require.NoError(t, err)
-	require.True(t, found)
-	require.Equal(t, len(wch.Miners), 1)
-	// No checkpoint committed for that epoch
-	_, found, err = st.GetCheckpoint(adt.AsStore(rt), epoch)
-	require.NoError(t, err)
-	require.False(t, found)
 }
 
 func TestZeroCheckPeriod(t *testing.T) {
@@ -527,4 +494,100 @@ func getStake(t *testing.T, rt *mock.Runtime, addr address.Address) abi.TokenAmo
 	out, err := stakes.Get(addr)
 	require.NoError(t, err)
 	return out
+}
+
+func (h *shActorHarness) fullSignCheckpoint(t *testing.T, rt *mock.Runtime, miners []address.Address, w api.Wallet, st *actor.SubnetState, epoch abi.ChainEpoch) {
+	ctx := context.Background()
+	var err error
+	ver := checkpoint.NewSingleSigner()
+	addr := tutil.NewIDAddr(t, 100)
+	shid := hierarchical.NewSubnetID(hierarchical.RootSubnet, addr)
+	ch := schema.NewRawCheckpoint(shid, epoch)
+	// Add child checkpoints
+	ch.AddListChilds(utils.GenRandChecks(3))
+	// Sign
+	err = ver.Sign(ctx, w, miners[0], ch)
+	require.NoError(t, err)
+	// Submit checkpoint from first miner
+	rt.SetCaller(miners[0], builtin.AccountActorCodeID)
+	rt.SetEpoch(abi.ChainEpoch(epoch + 20))
+	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
+	b, err := ch.MarshalBinary()
+	require.NoError(t, err)
+	params := &sca.CheckpointParams{Checkpoint: b}
+	rt.Call(h.SubnetActor.SubmitCheckpoint, params)
+	st = getState(rt)
+	chcid, err := ch.Cid()
+	require.NoError(t, err)
+	wch, found, err := st.GetWindowChecks(adt.AsStore(rt), chcid)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, len(wch.Miners), 1)
+	// No checkpoint committed for that epoch
+	_, found, err = st.GetCheckpoint(adt.AsStore(rt), epoch)
+	require.NoError(t, err)
+	require.False(t, found)
+
+	// Can't send checkpoint for the same miner twice
+	rt.SetCaller(miners[0], builtin.AccountActorCodeID)
+	rt.SetEpoch(abi.ChainEpoch(epoch + 21))
+	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
+	params = &sca.CheckpointParams{Checkpoint: b}
+	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
+		rt.Call(h.SubnetActor.SubmitCheckpoint, params)
+	})
+
+	// Check if the epoch is wrong.
+	chbad := schema.NewRawCheckpoint(shid, epoch+1)
+	b, err = chbad.MarshalBinary()
+	require.NoError(t, err)
+	params = &sca.CheckpointParams{Checkpoint: b}
+	err = ver.Sign(ctx, w, miners[0], ch)
+	require.NoError(t, err)
+	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
+	params = &sca.CheckpointParams{Checkpoint: b}
+	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
+		rt.Call(h.SubnetActor.SubmitCheckpoint, params)
+	})
+
+	// Check if the miner is wrong.
+	nonminer, err := w.WalletNew(ctx, types.KTSecp256k1)
+	require.NoError(t, err)
+	rt.SetCaller(nonminer, builtin.AccountActorCodeID)
+	rt.SetEpoch(abi.ChainEpoch(epoch + 22))
+	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
+	err = ver.Sign(ctx, w, nonminer, ch)
+	require.NoError(t, err)
+	b, err = ch.MarshalBinary()
+	require.NoError(t, err)
+	params = &sca.CheckpointParams{Checkpoint: b}
+	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
+		rt.Call(h.SubnetActor.SubmitCheckpoint, params)
+	})
+
+	// Submit checkpoint from second miner
+	rt.SetCaller(miners[1], builtin.AccountActorCodeID)
+	rt.SetEpoch(abi.ChainEpoch(epoch + 22))
+	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
+	err = ver.Sign(ctx, w, miners[1], ch)
+	require.NoError(t, err)
+	b, err = ch.MarshalBinary()
+	require.NoError(t, err)
+	params = &sca.CheckpointParams{Checkpoint: b}
+	rt.ExpectSend(sca.SubnetCoordActorAddr, sca.Methods.CommitChildCheckpoint, params, big.Zero(), nil, exitcode.Ok)
+	rt.Call(h.SubnetActor.SubmitCheckpoint, params)
+	st = getState(rt)
+	chcid, err = ch.Cid()
+	require.NoError(t, err)
+	// WindowChecks cleaned
+	_, found, err = st.GetWindowChecks(adt.AsStore(rt), chcid)
+	require.NoError(t, err)
+	require.False(t, found)
+	// WindowChecks cleaned
+	ch, found, err = st.GetCheckpoint(adt.AsStore(rt), epoch)
+	require.NoError(t, err)
+	require.True(t, found)
+	comcid, err := ch.Cid()
+	require.NoError(t, err)
+	require.Equal(t, comcid, chcid)
 }
