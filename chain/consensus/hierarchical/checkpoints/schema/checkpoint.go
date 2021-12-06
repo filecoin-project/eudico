@@ -19,6 +19,12 @@ import (
 
 // Linkproto is the default link prototype used for Checkpoints
 // It uses the default CidBuilder for Filecoin (see abi)
+//
+// NOTE: Maybe we should consider using another CID proto
+// for checkpoints so they can be identified uniquely.
+// This may fix the error faced when using Links in the
+// Checkpoint schema. We had to hide checkpoints behind []byte
+// so they're not interpreted as links from the state tree.
 var Linkproto = cidlink.LinkPrototype{
 	Prefix: cid.Prefix{
 		Version:  1,
