@@ -7,7 +7,6 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/types"
-	ltypes "github.com/filecoin-project/lotus/chain/types"
 	"github.com/ipfs/go-cid"
 	ipld "github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
@@ -183,7 +182,7 @@ func (c *Checkpoint) SetPrevious(cid cid.Cid) {
 	c.Data.PrevCheckCid = cid.Bytes()
 }
 
-func (c *Checkpoint) SetTipsetKey(ts ltypes.TipSetKey) {
+func (c *Checkpoint) SetTipsetKey(ts types.TipSetKey) {
 	c.Data.TipSet = ts.Bytes()
 }
 
@@ -287,9 +286,6 @@ func (c *Checkpoint) Cid() (cid.Cid, error) {
 }
 
 // AddListChilds adds a list of child checkpoints into the checkpoint.
-//
-// The overwrite flag is set in AddChild so if a checkpoint for the
-// source is encountered, the previous checkpoint is overwritten.
 func (c *Checkpoint) AddListChilds(childs []*Checkpoint) {
 	for _, ch := range childs {
 		c.AddChild(ch)

@@ -19,19 +19,26 @@ import (
 	cbor "github.com/ipfs/go-ipld-cbor"
 )
 
+// finalityThreshold determines the number of epochs to wait
+// before considering a change "final" and consider signing the
+// checkpoint
 const finalityThreshold = 5
 
+// struct used to propagate detected changes.
 type diffInfo struct {
 	checkToSign *signInfo
 	childChecks map[string][]cid.Cid
 }
 
+// signInfo propagates signing inforamtion.
 type signInfo struct {
 	checkpoint *schema.Checkpoint
 	addr       address.Address
 	idAddr     address.Address
 }
 
+// signingState keeps track of checkpoint signing state
+// for an epoch.
 type signingState struct {
 	wait      abi.ChainEpoch
 	currEpoch abi.ChainEpoch
@@ -152,7 +159,7 @@ func (s *SubnetMgr) matchSCAChildCommit(ctx context.Context, api *API, oldTs, ne
 		return false, err
 	}
 
-	// Even if there is change, if newCheck si zero we are in
+	// Even if there is change, if newCheck is zero we are in
 	// a window change.
 	if oldCheck.LenChilds() > newCheck.LenChilds() {
 		return false, err
@@ -161,7 +168,8 @@ func (s *SubnetMgr) matchSCAChildCommit(ctx context.Context, api *API, oldTs, ne
 	oldChilds := oldCheck.GetChilds()
 	newChilds := newCheck.GetChilds()
 
-	chngChilds := make(map[string][][]byte, 0)
+	// Check changes in child changes
+	chngChilds := make(map[string][][]byte)
 	for _, ch := range newChilds {
 		chngChilds[ch.Source] = ch.Checks
 	}
@@ -193,7 +201,7 @@ func (s *SubnetMgr) matchSCAChildCommit(ctx context.Context, api *API, oldTs, ne
 }
 
 func (s *SubnetMgr) matchCheckpointSignature(ctx context.Context, sh *Subnet, newTs *types.TipSet, diff *diffInfo) (bool, error) {
-	// Get the epoch for the current tipset.
+	// Get the epoch for the current tipset in subnet.
 	subnetEpoch := newTs.Height()
 
 	// Get the state of the corresponding subnet actor in the parent chain

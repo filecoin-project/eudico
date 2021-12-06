@@ -229,8 +229,6 @@ func TestLeaveAndKill(t *testing.T) {
 	require.Equal(t, getStake(t, rt, joiner3), big.Zero())
 	require.Equal(t, st.TotalStake.Abs(), totalStake.Abs())
 
-	// TODO: Check that a miner can't leave twice and get their stake twice.
-	// TODO: Check killing states. Joiner 2 calls kill and then the other guy takes it stake.
 }
 
 func TestCheckpoints(t *testing.T) {
@@ -445,7 +443,7 @@ func (h *shActorHarness) constructAndVerify(t *testing.T, rt *mock.Runtime) {
 	verifyEmptyMap(h.t, rt, st.WindowChecks)
 }
 
-// Check what happens if we set a checkpoint equal to zero.
+// Check what happens if we set a check period equal to zero.
 // We should be assigning the defualt period.
 func (h *shActorHarness) constructAndVerifyZeroCheck(t *testing.T, rt *mock.Runtime) {
 	rt.ExpectValidateCallerType(builtin.InitActorCodeID)

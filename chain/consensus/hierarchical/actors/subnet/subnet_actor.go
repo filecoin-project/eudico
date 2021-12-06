@@ -44,7 +44,6 @@ func (a SubnetActor) Exports() []interface{} {
 		3:                         a.Leave,
 		4:                         a.Kill,
 		5:                         a.SubmitCheckpoint,
-		// Checkpoint - Add a new checkpoint to the subnet.
 	}
 }
 
@@ -264,7 +263,7 @@ func (st *SubnetState) verifyCheck(rt runtime.Runtime, ch *schema.Checkpoint) ad
 		addr = sigAddr.IDAddr
 	}
 
-	// Only miners are allowed to submit checkpoints.
+	// Only miners (i.e. peers with collateral in subnet) are allowed to submit checkpoints.
 	if !st.IsMiner(addr) {
 		rt.Abortf(exitcode.ErrIllegalArgument, "checkpoint not signed by a miner")
 	}
@@ -312,7 +311,8 @@ func (a SubnetActor) SubmitCheckpoint(rt runtime.Runtime, params *sca.Checkpoint
 
 			// Update checkpoint in SubnetState
 			// NOTE: We are including the last signature. It won't be used for verification
-			// so this is OK for now.
+			// so this is OK for now. We could also optionally remove the signature to
+			// save gas.
 			st.flushCheckpoint(rt, submit)
 
 			// Remove windowChecks, the checkpoint has been committed
@@ -321,6 +321,10 @@ func (a SubnetActor) SubmitCheckpoint(rt runtime.Runtime, params *sca.Checkpoint
 			if found {
 				err := st.rmChecks(adt.AsStore(rt), c)
 				builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error removing windowChecks")
+				// TODO: XXX Consider periodically emptying the full votes map to avoid
+				// keeping state for wrong Cids committed in the past. This could be
+				// a DoS vector/source of inefficiency. Use a rotating map scheme to empty every
+				// epoch?
 			}
 			return
 		}

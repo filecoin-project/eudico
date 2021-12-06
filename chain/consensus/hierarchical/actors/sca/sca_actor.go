@@ -46,6 +46,7 @@ type FundParams struct {
 type AddSubnetReturn struct {
 	ID string
 }
+
 type SubnetCoordActor struct{}
 
 func (a SubnetCoordActor) Exports() []interface{} {
@@ -225,7 +226,7 @@ type CheckpointParams struct {
 // CommitChildCheckpoint accepts a checkpoint from a subnet for commitment.
 //
 // The subnet is responsible for running all the deep verifications about the checkpoint,
-// the SCA is only able to enforce some basic verifications.
+// the SCA is only able to enforce some basic consistency verifications.
 func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *CheckpointParams) *abi.EmptyValue {
 	// Only subnet actors are allowed to commit a checkpoint after their
 	// verification and aggregation.
@@ -265,13 +266,13 @@ func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *Chec
 		// Verify that the submitted checkpoint has higher epoch and is
 		// consistent with previous checkpoint before committing.
 		prevCom := sh.PrevCheckpoint
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching previous child checkpoint from state")
+
 		// If no previous checkpoint for child chain, it means this is the first one
 		// and we can add it without additional verifications.
 		if empty, _ := prevCom.IsEmpty(); empty {
 			// Append the new checkpoint to the list of childs.
 			err := ch.AddChild(commit)
-			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "child already has committed a checkpoint this epoch")
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error committing checkpoint to this epoch")
 			st.flushCheckpoint(rt, ch)
 			// Update previous checkpoint for child.
 			sh.PrevCheckpoint = *commit
@@ -293,7 +294,7 @@ func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *Chec
 
 		// Checks passed, we can append the child.
 		err = ch.AddChild(commit)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "child already has committed a checkpoint this epoch")
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error committing checkpoint to this epoch")
 		st.flushCheckpoint(rt, ch)
 		// Update previous checkpoint for child.
 		sh.PrevCheckpoint = *commit

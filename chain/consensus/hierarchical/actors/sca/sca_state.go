@@ -19,7 +19,7 @@ const (
 	// DefaultCheckpointPeriod defines 10 epochs
 	// as the default checkpoint period for a subnet.
 	// This may be too short, but at this point it comes pretty handy
-	// for testing purpose.
+	// for testing purposes.
 	DefaultCheckpointPeriod = abi.ChainEpoch(10)
 
 	// MinCheckpointPeriod allowed for subnets
@@ -70,8 +70,11 @@ type Subnet struct {
 	// when the subnet is killed.
 	// NOTE: We may want to keep track of this in the future.
 	// Stake      cid.Cid // BalanceTable with locked stake.
-	Funds          cid.Cid // BalanceTable with funds from addresses that entered the subnet.
-	Status         Status
+	Funds  cid.Cid // BalanceTable with funds from addresses that entered the subnet.
+	Status Status
+	// NOTE: We could probably save some gas here without affecting the
+	// overall behavior of check committment by just keeping the information
+	// required for verification (prevCheck cid and epoch).
 	PrevCheckpoint schema.Checkpoint
 }
 
@@ -176,21 +179,13 @@ func (st *SCAState) currWindowCheckpoint(rt runtime.Runtime) *schema.Checkpoint 
 	return ch
 }
 
-// rawCheckpoint gets the template of the checkpoint in
-// the signing window.
+// RawCheckpoint gets the template of the checkpoint in
+// the signing window for an epoch
 //
 // It returns the checkpoint that is ready to be signed
 // and already includes all the checkpoints and xshard messages
 // to include in it. Miners need to populate the prevCheckpoint
 // and tipset of this template and sign ot.
-func (st *SCAState) rawCheckpoint(rt runtime.Runtime) *schema.Checkpoint {
-	ch, err := RawCheckpoint(st, adt.AsStore(rt), rt.CurrEpoch())
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get raw checkpoint template for epoch")
-	return ch
-}
-
-// RawCheckpoint gets the template of the checkpoint in
-// the signing window for an epoch
 func RawCheckpoint(st *SCAState, store adt.Store, epoch abi.ChainEpoch) (*schema.Checkpoint, error) {
 	if epoch < 0 {
 		return nil, xerrors.Errorf("epoch can't be negative")
