@@ -7,6 +7,7 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	"github.com/ipfs/go-cid"
 	"go.uber.org/fx"
@@ -24,9 +25,10 @@ func (a *HierarchicalAPI) AddSubnet(
 	ctx context.Context, wallet address.Address,
 	parent hierarchical.SubnetID, name string,
 	consensus uint64, minerStake abi.TokenAmount,
+	checkPeriod abi.ChainEpoch,
 	delegminer address.Address) (address.Address, error) {
 
-	return a.Sub.AddSubnet(ctx, wallet, parent, name, consensus, minerStake, delegminer)
+	return a.Sub.AddSubnet(ctx, wallet, parent, name, consensus, minerStake, checkPeriod, delegminer)
 }
 
 func (a *HierarchicalAPI) JoinSubnet(ctx context.Context, wallet address.Address,
@@ -47,4 +49,14 @@ func (a *HierarchicalAPI) LeaveSubnet(ctx context.Context, wallet address.Addres
 func (a *HierarchicalAPI) KillSubnet(ctx context.Context, wallet address.Address,
 	id hierarchical.SubnetID) (cid.Cid, error) {
 	return a.Sub.KillSubnet(ctx, wallet, id)
+}
+
+func (a *HierarchicalAPI) ListCheckpoints(ctx context.Context,
+	id hierarchical.SubnetID, num int) ([]*schema.Checkpoint, error) {
+	return a.Sub.ListCheckpoints(ctx, id, num)
+}
+
+func (a *HierarchicalAPI) ValidateCheckpoint(ctx context.Context,
+	id hierarchical.SubnetID, epoch abi.ChainEpoch) (*schema.Checkpoint, error) {
+	return a.Sub.ValidateCheckpoint(ctx, id, epoch)
 }

@@ -29,6 +29,7 @@ var subnetCmds = &cli.Command{
 		mineCmd,
 		leaveCmd,
 		killCmd,
+		checkpointCmds,
 	},
 }
 
@@ -71,7 +72,7 @@ var listSubnetsCmd = &cli.Command{
 			if sh.Status != 0 {
 				status = "Inactive"
 			}
-			fmt.Printf("%s (%s): status=%v, stake=%v\n", sh.Cid, sh.ID, status, types.FIL(sh.Stake))
+			fmt.Printf("%s: status=%v, stake=%v\n", sh.ID, status, types.FIL(sh.Stake))
 		}
 
 		return nil
@@ -94,6 +95,10 @@ var addCmd = &cli.Command{
 		&cli.IntFlag{
 			Name:  "consensus",
 			Usage: "specify consensus for the subnet (0=delegated, 1=PoW)",
+		},
+		&cli.IntFlag{
+			Name:  "checkperiod",
+			Usage: "optionally specify checkpointing period for subnet (default = 10epochs)",
 		},
 		&cli.StringFlag{
 			Name:  "name",
@@ -157,7 +162,8 @@ var addCmd = &cli.Command{
 			return lcli.ShowHelp(cctx, fmt.Errorf("no delegated miner for delegated consensus specified"))
 		}
 		minerStake := abi.NewStoragePower(1e8) // TODO: Make this value configurable in a flag/argument
-		actorAddr, err := api.AddSubnet(ctx, addr, parent, name, uint64(consensus), minerStake, delegminer)
+		checkperiod := abi.ChainEpoch(cctx.Int("checkperiod"))
+		actorAddr, err := api.AddSubnet(ctx, addr, parent, name, uint64(consensus), minerStake, checkperiod, delegminer)
 		if err != nil {
 			return err
 		}

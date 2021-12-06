@@ -7,6 +7,7 @@ import (
 	"io"
 
 	address "github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/network"
 	bstore "github.com/filecoin-project/lotus/blockstore"
@@ -38,7 +39,7 @@ const (
 	networkVersion = network.Version14
 )
 
-func WriteGenesis(netName hierarchical.SubnetID, consensus ConsensusType, miner, vreg, rem address.Address, seq uint64, w io.Writer) error {
+func WriteGenesis(netName hierarchical.SubnetID, consensus ConsensusType, miner, vreg, rem address.Address, checkPeriod abi.ChainEpoch, seq uint64, w io.Writer) error {
 	bs := bstore.WrapIDStore(bstore.NewMemorySync())
 
 	var b *genesis2.GenesisBootstrap
@@ -51,7 +52,7 @@ func WriteGenesis(netName hierarchical.SubnetID, consensus ConsensusType, miner,
 		if err != nil {
 			return err
 		}
-		b, err = makeDelegatedGenesisBlock(context.TODO(), bs, *template)
+		b, err = makeDelegatedGenesisBlock(context.TODO(), bs, *template, checkPeriod)
 		if err != nil {
 			return xerrors.Errorf("error making genesis delegated block: %w", err)
 		}
@@ -60,10 +61,12 @@ func WriteGenesis(netName hierarchical.SubnetID, consensus ConsensusType, miner,
 		if err != nil {
 			return err
 		}
-		b, err = makePoWGenesisBlock(context.TODO(), bs, *template)
+		b, err = makePoWGenesisBlock(context.TODO(), bs, *template, checkPeriod)
 		if err != nil {
 			return xerrors.Errorf("error making genesis delegated block: %w", err)
 		}
+	default:
+		return xerrors.Errorf("consensus type not supported. Not writing genesis")
 
 	}
 	offl := offline.Exchange(bs)
@@ -76,7 +79,7 @@ func WriteGenesis(netName hierarchical.SubnetID, consensus ConsensusType, miner,
 	return nil
 }
 
-func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template genesis.Template) (*state.StateTree, map[address.Address]address.Address, error) {
+func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template genesis.Template, checkPeriod abi.ChainEpoch) (*state.StateTree, map[address.Address]address.Address, error) {
 	// Create empty state tree
 
 	cst := cbor.NewCborStore(bs)
@@ -121,7 +124,8 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 	}
 
 	// Setup sca actor
-	scaact, err := SetupSubnetActor(ctx, bs, template.NetworkName)
+	params := &sca.ConstructorParams{template.NetworkName, uint64(checkPeriod)}
+	scaact, err := SetupSCAActor(ctx, bs, params)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -226,9 +230,9 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 	return state, keyIDs, nil
 }
 
-func SetupSubnetActor(ctx context.Context, bs bstore.Blockstore, networkName string) (*types.Actor, error) {
+func SetupSCAActor(ctx context.Context, bs bstore.Blockstore, params *sca.ConstructorParams) (*types.Actor, error) {
 	cst := cbor.NewCborStore(bs)
-	st, err := sca.ConstructSCAState(adt.WrapStore(ctx, cst), hierarchical.SubnetID(networkName))
+	st, err := sca.ConstructSCAState(adt.WrapStore(ctx, cst), params)
 	if err != nil {
 		return nil, err
 	}

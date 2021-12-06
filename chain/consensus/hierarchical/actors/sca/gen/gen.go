@@ -8,6 +8,8 @@ import (
 
 func main() {
 	if err := gen.WriteTupleEncodersToFile("./cbor_gen.go", "sca",
+		actor.ConstructorParams{},
+		actor.CheckpointParams{},
 		actor.SCAState{},
 		actor.Subnet{},
 		actor.FundParams{},

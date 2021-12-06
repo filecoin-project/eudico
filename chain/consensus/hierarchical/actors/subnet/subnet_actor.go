@@ -13,6 +13,8 @@ import (
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
+	checkpoint "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
@@ -28,11 +30,12 @@ var log = logging.Logger("subnet-actor")
 type SubnetActor struct{}
 
 var Methods = struct {
-	Constructor abi.MethodNum
-	Join        abi.MethodNum
-	Leave       abi.MethodNum
-	Kill        abi.MethodNum
-}{builtin0.MethodConstructor, 2, 3, 4}
+	Constructor      abi.MethodNum
+	Join             abi.MethodNum
+	Leave            abi.MethodNum
+	Kill             abi.MethodNum
+	SubmitCheckpoint abi.MethodNum
+}{builtin0.MethodConstructor, 2, 3, 4, 5}
 
 func (a SubnetActor) Exports() []interface{} {
 	return []interface{}{
@@ -40,7 +43,7 @@ func (a SubnetActor) Exports() []interface{} {
 		2:                         a.Join,
 		3:                         a.Leave,
 		4:                         a.Kill,
-		// Checkpoint - Add a new checkpoint to the subnet.
+		5:                         a.SubmitCheckpoint,
 	}
 }
 
@@ -64,6 +67,7 @@ type ConstructParams struct {
 	Consensus     ConsensusType   // Consensus for subnet.
 	MinMinerStake abi.TokenAmount // MinStake to give miner rights
 	DelegMiner    address.Address // Miner in delegated consensus
+	CheckPeriod   abi.ChainEpoch  // Checkpointing period.
 }
 
 func (a SubnetActor) Constructor(rt runtime.Runtime, params *ConstructParams) *abi.EmptyValue {
@@ -75,10 +79,6 @@ func (a SubnetActor) Constructor(rt runtime.Runtime, params *ConstructParams) *a
 
 	rt.StateCreate(st)
 	return nil
-}
-
-func (a SubnetActor) Checkpoint(rt runtime.Runtime, params abi.EmptyValue) abi.EmptyValue {
-	panic("checkpoint not implemented yet")
 }
 
 func (st *SubnetState) initGenesis(rt runtime.Runtime, params *ConstructParams) {
@@ -98,7 +98,8 @@ func (st *SubnetState) initGenesis(rt runtime.Runtime, params *ConstructParams) 
 
 	// Getting actor ID from recceiver.
 	netName := hierarchical.NewSubnetID(hierarchical.SubnetID(params.NetworkName), rt.Receiver())
-	err = WriteGenesis(netName, st.Consensus, params.DelegMiner, vreg, rem, rt.ValueReceived().Uint64(), buf)
+	err = WriteGenesis(netName, st.Consensus, params.DelegMiner, vreg, rem,
+		params.CheckPeriod, rt.ValueReceived().Uint64(), buf)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed genesis")
 	st.Genesis = buf.Bytes()
 }
@@ -206,6 +207,145 @@ func (a SubnetActor) Leave(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValu
 	return nil
 }
 
+// verifyCheck verifies the submitted checkpoint and returns the checkpoint signer if valid.
+func (st *SubnetState) verifyCheck(rt runtime.Runtime, ch *schema.Checkpoint) address.Address {
+	// Check that the subnet is active.
+	if st.Status != Active {
+		rt.Abortf(exitcode.ErrIllegalState, "submitting checkpoints is not allowed while subnet is not active")
+	}
+
+	// Check that the checkpoint for this epoch hasn't been committed yet.
+	if _, found, _ := st.epochCheckpoint(rt); found {
+		rt.Abortf(exitcode.ErrIllegalArgument, "cannot submit checkpoint for epoch that has been committed already")
+	}
+
+	// Check that the source is correct.
+	shid := hierarchical.NewSubnetID(st.ParentID, rt.Receiver())
+	if ch.Source() != shid {
+		rt.Abortf(exitcode.ErrIllegalArgument, "submitting a checkpoint with the wrong source")
+	}
+
+	// Check that the epoch is correct.
+	if ch.Epoch()%st.CheckPeriod != 0 {
+		rt.Abortf(exitcode.ErrIllegalArgument, "epoch in checkpoint doesn't correspond with signing window")
+	}
+
+	// Check that the previous checkpoint is correct.
+	prevCom, err := st.PrevCheckCid(adt.AsStore(rt), ch.Epoch())
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching Cid for previous check")
+	if prev, _ := ch.PreviousCheck(); prevCom != prev {
+		rt.Abortf(exitcode.ErrIllegalArgument, "previous checkpoint not consistent with previous check committed")
+	}
+
+	// Check the signature and get address.
+	// We are using a simple signature verifier, we could optionally use other verifiers.
+	ver := checkpoint.NewSingleSigner()
+	sigAddr, err := ver.Verify(ch)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed to verify signature for submitted checkpoint")
+
+	/*
+		// Check that the ID address included in signature belongs to the pkey specified.
+		resolved, ok := rt.ResolveAddress(sigAddr.Addr)
+		if !ok {
+			rt.Abortf(exitcode.ErrIllegalArgument, "unable to resolve address %v", sigAddr.Addr)
+		}
+	*/
+
+	addr := sigAddr.Addr
+	if sigAddr.IDAddr != address.Undef {
+		resolved, ok := rt.ResolveAddress(sigAddr.Addr)
+		if !ok {
+			rt.Abortf(exitcode.ErrIllegalArgument, "unable to resolve address %v", sigAddr.Addr)
+		}
+		if resolved != sigAddr.IDAddr {
+			rt.Abortf(exitcode.ErrIllegalArgument, "inconsistent pkey addr and ID addr in signature")
+		}
+		addr = sigAddr.IDAddr
+	}
+
+	// Only miners (i.e. peers with collateral in subnet) are allowed to submit checkpoints.
+	if !st.IsMiner(addr) {
+		rt.Abortf(exitcode.ErrIllegalArgument, "checkpoint not signed by a miner")
+	}
+
+	return addr
+
+}
+
+// SubmitCheckpoint accepts signed checkpoint votes for miners.
+//
+// This functions verifies that the checkpoint is valid before
+// propagating it for commitment to the SCA. It expects at least
+// votes from 2/3 of miners with collateral.
+func (a SubnetActor) SubmitCheckpoint(rt runtime.Runtime, params *sca.CheckpointParams) *abi.EmptyValue {
+	// Only account actors can submit signed checkpoints for commitment.
+	rt.ValidateImmediateCallerType(builtin.AccountActorCodeID)
+	submit := &schema.Checkpoint{}
+	err := submit.UnmarshalBinary(params.Checkpoint)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "error unmarshalling checkpoint in params")
+
+	var st SubnetState
+	var majority bool
+	rt.StateTransaction(&st, func() {
+		// Verify checkpoint and get signer
+		signAddr := st.verifyCheck(rt, submit)
+		c, err := submit.Cid()
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error computing Cid for checkpoint")
+		// Get windowChecks for submitted checkpoint
+		wch, found, err := st.GetWindowChecks(adt.AsStore(rt), c)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "get list of uncommitted checks")
+		if !found {
+			wch = &CheckVotes{make([]address.Address, 0)}
+		}
+
+		// Check if miner already submitted this checkpoint.
+		if HasMiner(signAddr, wch.Miners) {
+			rt.Abortf(exitcode.ErrIllegalArgument, "miner already submitted a vote for this checkpoint")
+		}
+
+		// Add miners vote
+		wch.Miners = append(wch.Miners, signAddr)
+		majority, err = st.majorityVote(rt, wch)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching miner stakes")
+		if majority {
+
+			// Update checkpoint in SubnetState
+			// NOTE: We are including the last signature. It won't be used for verification
+			// so this is OK for now. We could also optionally remove the signature to
+			// save gas.
+			st.flushCheckpoint(rt, submit)
+
+			// Remove windowChecks, the checkpoint has been committed
+			// (do this only if they were found before, if not we don't have
+			// windowChecks yet)
+			if found {
+				err := st.rmChecks(adt.AsStore(rt), c)
+				builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error removing windowChecks")
+				// TODO: XXX Consider periodically emptying the full votes map to avoid
+				// keeping state for wrong Cids committed in the past. This could be
+				// a DoS vector/source of inefficiency. Use a rotating map scheme to empty every
+				// epoch?
+			}
+			return
+		}
+
+		// If not flush checkWindow and we're good to go!
+		st.flushWindowChecks(rt, c, wch)
+
+	})
+
+	// If we reached amjority propagate the commitment to SCA
+	if majority {
+		// If the checkpoint is correct we can reuse params and avoid having to marshal it again.
+		code := rt.Send(sca.SubnetCoordActorAddr, sca.Methods.CommitChildCheckpoint, params, big.Zero(), &builtin.Discard{})
+		if !code.IsSuccess() {
+			rt.Abortf(exitcode.ErrIllegalState, "failed committing checkpoint in SCA")
+		}
+	}
+
+	return nil
+}
+
 // Kill is used to signal that the subnet must be terminated.
 //
 // In the current policy any user can terminate the subnet and recover their stake
@@ -265,6 +405,15 @@ func (st *SubnetState) mutateState(rt runtime.Runtime) {
 		break
 	}
 }
+
+func (st *SubnetState) GetStake(store adt.Store, miner address.Address) (big.Int, error) {
+	stakes, err := adt.AsBalanceTable(store, st.Stake)
+	if err != nil {
+		return big.Zero(), err
+	}
+	return stakes.Get(miner)
+}
+
 func (st *SubnetState) addStake(rt runtime.Runtime, sourceAddr address.Address, value abi.TokenAmount) {
 	// NOTE: There's currently no minimum stake required. Any stake is accepted even
 	// if a peer is not granted mining rights. According to the final design we may

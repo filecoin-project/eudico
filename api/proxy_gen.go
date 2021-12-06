@@ -22,6 +22,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/paych"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/extern/sector-storage/fsutil"
 	"github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
@@ -554,7 +555,7 @@ type GatewayStub struct {
 
 type HierarchicalCnsStruct struct {
 	Internal struct {
-		AddSubnet func(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 address.Address) (address.Address, error) `perm:"write"`
+		AddSubnet func(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 address.Address) (address.Address, error) `perm:"write"`
 
 		JoinSubnet func(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 hierarchical.SubnetID) (cid.Cid, error) `perm:"write"`
 
@@ -562,7 +563,11 @@ type HierarchicalCnsStruct struct {
 
 		LeaveSubnet func(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID) (cid.Cid, error) `perm:"write"`
 
+		ListCheckpoints func(p0 context.Context, p1 hierarchical.SubnetID, p2 int) ([]*schema.Checkpoint, error) `perm:"read"`
+
 		MineSubnet func(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 bool) error `perm:"write"`
+
+		ValidateCheckpoint func(p0 context.Context, p1 hierarchical.SubnetID, p2 abi.ChainEpoch) (*schema.Checkpoint, error) `perm:"read"`
 	}
 }
 
@@ -3404,14 +3409,14 @@ func (s *GatewayStub) WalletBalance(p0 context.Context, p1 address.Address) (typ
 	return *new(types.BigInt), ErrNotSupported
 }
 
-func (s *HierarchicalCnsStruct) AddSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 address.Address) (address.Address, error) {
+func (s *HierarchicalCnsStruct) AddSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 address.Address) (address.Address, error) {
 	if s.Internal.AddSubnet == nil {
 		return *new(address.Address), ErrNotSupported
 	}
-	return s.Internal.AddSubnet(p0, p1, p2, p3, p4, p5, p6)
+	return s.Internal.AddSubnet(p0, p1, p2, p3, p4, p5, p6, p7)
 }
 
-func (s *HierarchicalCnsStub) AddSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 address.Address) (address.Address, error) {
+func (s *HierarchicalCnsStub) AddSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 address.Address) (address.Address, error) {
 	return *new(address.Address), ErrNotSupported
 }
 
@@ -3448,6 +3453,17 @@ func (s *HierarchicalCnsStub) LeaveSubnet(p0 context.Context, p1 address.Address
 	return *new(cid.Cid), ErrNotSupported
 }
 
+func (s *HierarchicalCnsStruct) ListCheckpoints(p0 context.Context, p1 hierarchical.SubnetID, p2 int) ([]*schema.Checkpoint, error) {
+	if s.Internal.ListCheckpoints == nil {
+		return *new([]*schema.Checkpoint), ErrNotSupported
+	}
+	return s.Internal.ListCheckpoints(p0, p1, p2)
+}
+
+func (s *HierarchicalCnsStub) ListCheckpoints(p0 context.Context, p1 hierarchical.SubnetID, p2 int) ([]*schema.Checkpoint, error) {
+	return *new([]*schema.Checkpoint), ErrNotSupported
+}
+
 func (s *HierarchicalCnsStruct) MineSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 bool) error {
 	if s.Internal.MineSubnet == nil {
 		return ErrNotSupported
@@ -3457,6 +3473,17 @@ func (s *HierarchicalCnsStruct) MineSubnet(p0 context.Context, p1 address.Addres
 
 func (s *HierarchicalCnsStub) MineSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 bool) error {
 	return ErrNotSupported
+}
+
+func (s *HierarchicalCnsStruct) ValidateCheckpoint(p0 context.Context, p1 hierarchical.SubnetID, p2 abi.ChainEpoch) (*schema.Checkpoint, error) {
+	if s.Internal.ValidateCheckpoint == nil {
+		return nil, ErrNotSupported
+	}
+	return s.Internal.ValidateCheckpoint(p0, p1, p2)
+}
+
+func (s *HierarchicalCnsStub) ValidateCheckpoint(p0 context.Context, p1 hierarchical.SubnetID, p2 abi.ChainEpoch) (*schema.Checkpoint, error) {
+	return nil, ErrNotSupported
 }
 
 func (s *NetStruct) ID(p0 context.Context) (peer.ID, error) {
