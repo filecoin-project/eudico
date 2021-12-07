@@ -188,11 +188,7 @@ func (s *SubnetMgr) startSubnet(id hierarchical.SubnetID,
 	sh.bs = blockstore.FromDatastore(s.ds)
 
 	// Select the right TipSetExecutor for the consensus algorithms chosen.
-	tsExec, err := tipSetExecutor(consensus)
-	if err != nil {
-		log.Errorw("Error getting TipSetExecutor for consensus", "subnetID", id, "err", err)
-		return err
-	}
+	tsExec := TipSetExecutor(sh)
 	weight, err := weight(consensus)
 	if err != nil {
 		log.Errorw("Error getting weight for consensus", "subnetID", id, "err", err)

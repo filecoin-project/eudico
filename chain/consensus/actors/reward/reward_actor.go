@@ -9,6 +9,8 @@ import (
 	"github.com/filecoin-project/go-state-types/cbor"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	rtt "github.com/filecoin-project/go-state-types/rt"
+	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
+	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
 	reward0 "github.com/filecoin-project/specs-actors/actors/builtin/reward"
 	"github.com/ipfs/go-cid"
 
@@ -30,17 +32,26 @@ const PenaltyMultiplier = 3
 
 type Actor struct{}
 
+var Methods = struct {
+	Constructor      abi.MethodNum
+	AwardBlockReward abi.MethodNum
+	ThisEpochReward  abi.MethodNum
+	UpdateNetworkKPI abi.MethodNum
+	ExternalFunding  abi.MethodNum
+}{builtin0.MethodConstructor, 2, 3, 4, 5}
+
 func (a Actor) Exports() []interface{} {
 	return []interface{}{
 		builtin.MethodConstructor: a.Constructor,
 		2:                         a.AwardBlockReward,
 		3:                         a.ThisEpochReward,
 		4:                         a.UpdateNetworkKPI,
+		5:                         a.ExternalFunding,
 	}
 }
 
 func (a Actor) Code() cid.Cid {
-	return builtin.RewardActorCodeID
+	return actor.RewardActorCodeID
 }
 
 func (a Actor) IsSingleton() bool {

@@ -13,17 +13,6 @@ import (
 	"golang.org/x/xerrors"
 )
 
-func tipSetExecutor(consensus subnet.ConsensusType) (stmgr.Executor, error) {
-	switch consensus {
-	case subnet.Delegated:
-		return delegcns.TipSetExecutor(), nil
-	case subnet.PoW:
-		return tspow.TipSetExecutor(), nil
-	default:
-		return nil, xerrors.New("consensus type not suported")
-	}
-}
-
 func weight(consensus subnet.ConsensusType) (store.WeightFunc, error) {
 	switch consensus {
 	case subnet.Delegated:

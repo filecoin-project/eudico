@@ -13,6 +13,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
+	snmgr "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	param "github.com/filecoin-project/lotus/chain/consensus/params"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/gen/slashfilter"
@@ -49,11 +50,8 @@ var tpowCmd = &cli.Command{
 			node.Override(new(consensus.Consensus), tspow.NewTSPoWConsensus),
 			node.Override(new(store.WeightFunc), tspow.Weight),
 			node.Unset(new(*slashfilter.SlashFilter)),
-			// TODO: This doesn't seem to be right, we should implement the right
-			// executor and upgradeSchedule for this consensus, we currently
-			// use of the delegated consensus.
-			node.Override(new(stmgr.Executor), tspow.TipSetExecutor()), //todo
-			node.Override(new(stmgr.UpgradeSchedule), tspow.DefaultUpgradeSchedule()),
+			node.Override(new(stmgr.Executor), snmgr.RootTipSetExecutor()),
+			node.Override(new(stmgr.UpgradeSchedule), snmgr.DefaultUpgradeSchedule()),
 		)),
 	},
 }

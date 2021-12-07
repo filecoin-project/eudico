@@ -1,12 +1,13 @@
-package delegcns
+package subnet
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 
 	"github.com/filecoin-project/go-state-types/network"
-	"github.com/filecoin-project/lotus/chain/actors/builtin/reward"
 	"github.com/filecoin-project/lotus/chain/consensus/actors/registry"
+	"github.com/filecoin-project/lotus/chain/consensus/actors/reward"
 	"github.com/filecoin-project/lotus/chain/rand"
 	"github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
@@ -46,17 +47,26 @@ func DefaultUpgradeSchedule() stmgr.UpgradeSchedule {
 	return us
 }
 
-type tipSetExecutor struct{}
+type tipSetExecutor struct {
+	subnet *Subnet
+}
 
 func (t *tipSetExecutor) NewActorRegistry() *vm.ActorRegistry {
 	return registry.NewActorRegistry()
 }
 
-func TipSetExecutor() stmgr.Executor {
-	return &tipSetExecutor{}
+func TipSetExecutor(sn *Subnet) stmgr.Executor {
+	return &tipSetExecutor{sn}
+}
+
+func RootTipSetExecutor() stmgr.Executor {
+	return &tipSetExecutor{nil}
 }
 
 func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager, parentEpoch abi.ChainEpoch, pstate cid.Cid, bms []store.BlockMessages, epoch abi.ChainEpoch, r vm.Rand, em stmgr.ExecMonitor, baseFee abi.TokenAmount, ts *types.TipSet) (cid.Cid, cid.Cid, error) {
+
+	fmt.Println(">>>>>> TIPSET EXECUTOR SUBNETS", t.subnet)
+
 	done := metrics.Timer(ctx, metrics.VMApplyBlocksTotal)
 	defer done()
 
@@ -138,7 +148,7 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 		}
 
 		rwMsg := &types.Message{
-			From:       reward.Address,
+			From:       reward.RewardActorAddr,
 			To:         b.Miner,
 			Nonce:      uint64(epoch),
 			Value:      types.FromFil(1), // always reward 1 fil
@@ -160,6 +170,7 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 		if ret.ExitCode != 0 {
 			return cid.Undef, cid.Undef, xerrors.Errorf("reward application message failed (exit %d): %s", ret.ExitCode, ret.ActorErr)
 		}
+
 	}
 
 	partDone()
@@ -228,5 +239,68 @@ func (t *tipSetExecutor) ExecuteTipSet(ctx context.Context, sm *stmgr.StateManag
 
 	return t.ApplyBlocks(ctx, sm, parentEpoch, pstate, blkmsgs, blks[0].Height, r, em, baseFee, ts)
 }
+
+/* Execute Fund Message
+func ApplyFundMessage(to address.Address) {
+	// Fund message
+	testAddr, err := address.NewFromString("t1fqcjcfxhe634p25ts53ddvlmncbpvy5gae7pmsi")
+	if err != nil {
+		panic(err)
+	}
+
+		// fundMsg := &types.Message{
+		//         From:       reward.Address,
+		//         To:         testAddr,
+		//         Nonce:      uint64(epoch),
+		//         Value:      types.FromFil(10), // always reward 1 fil
+		//         GasFeeCap:  types.NewInt(0),
+		//         GasPremium: types.NewInt(0),
+		//         GasLimit:   1 << 30,
+		//         Method:     0,
+		// }
+
+	params, err := actors.SerializeParams(&reward.FundingParams{
+		Addr:  testAddr,
+		Value: types.FromFil(10000),
+	})
+	if err != nil {
+		return cid.Undef, cid.Undef, xerrors.Errorf("failed to serialize award params: %w", err)
+	}
+
+	fundMsg := &types.Message{
+		From:       builtin.SystemActorAddr,
+		To:         reward.RewardActorAddr,
+		Nonce:      uint64(epoch),
+		Value:      types.NewInt(0),
+		GasFeeCap:  types.NewInt(0),
+		GasPremium: types.NewInt(0),
+		GasLimit:   1 << 30,
+		Method:     reward.Methods.ExternalFunding,
+		Params:     params,
+	}
+
+	st := vmi.StateTree()
+	toActor, err := st.GetActor(testAddr)
+	fmt.Println(">>>> to actor", toActor, err)
+	if err != nil {
+		fmt.Println(">>>>> CREATE ACCOUNT ACTOR", toActor)
+		fmt.Println(vmi.CreateAccountActor(ctx, fundMsg, testAddr))
+	}
+	ret, actErr := vmi.ApplyImplicitMessage(ctx, fundMsg)
+	if actErr != nil {
+		return cid.Undef, cid.Undef, xerrors.Errorf("failed to apply reward message for miner %s: %w", b.Miner, actErr)
+	}
+	if em != nil {
+		if err := em.MessageApplied(ctx, ts, fundMsg.Cid(), fundMsg, ret, true); err != nil {
+			return cid.Undef, cid.Undef, xerrors.Errorf("callback failed on reward message: %w", err)
+		}
+	}
+
+	if ret.ExitCode != 0 {
+		return cid.Undef, cid.Undef, xerrors.Errorf("reward application message failed (exit %d): %s", ret.ExitCode, ret.ActorErr)
+	}
+	fmt.Println(">>>>>>>>>>> IMPLICIT FUND MESSAGE APPLIED", fundMsg.Cid(), ret)
+}
+*/
 
 var _ stmgr.Executor = &tipSetExecutor{}
