@@ -7,7 +7,6 @@ import (
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
-	"github.com/filecoin-project/go-state-types/exitcode"
 	cid "github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
 
@@ -177,17 +176,15 @@ func (st *State) GetClaim(s adt.Store, a addr.Address) (*Claim, bool, error) {
 }
 
 func (st *State) addToClaim(claims *adt.Map, miner addr.Address, power abi.StoragePower, qapower abi.StoragePower) error {
-	oldClaim, ok, err := getClaim(claims, miner)
-	if err != nil {
-		return fmt.Errorf("failed to get claim: %w", err)
-	}
-	if !ok {
-		return exitcode.ErrNotFound.Wrapf("no claim for actor %v", miner)
-	}
-
 	// TotalBytes always update directly
 	st.TotalQABytesCommitted = big.Add(st.TotalQABytesCommitted, qapower)
 	st.TotalBytesCommitted = big.Add(st.TotalBytesCommitted, power)
+
+	oldClaim := Claim{
+		WindowPoStProofType: 0,
+		RawBytePower:        big.NewInt(0),
+		QualityAdjPower:     big.NewInt(0),
+	}
 
 	newClaim := Claim{
 		WindowPoStProofType: oldClaim.WindowPoStProofType,
@@ -195,39 +192,6 @@ func (st *State) addToClaim(claims *adt.Map, miner addr.Address, power abi.Stora
 		QualityAdjPower:     big.Add(oldClaim.QualityAdjPower, qapower),
 	}
 
-	minPower, err := builtin.ConsensusMinerMinPower(oldClaim.WindowPoStProofType)
-	if err != nil {
-		return fmt.Errorf("could not get consensus miner min power: %w", err)
-	}
-
-	prevBelow := oldClaim.RawBytePower.LessThan(minPower)
-	stillBelow := newClaim.RawBytePower.LessThan(minPower)
-
-	if prevBelow && !stillBelow {
-		// just passed min miner size
-		st.MinerAboveMinPowerCount++
-		st.TotalQualityAdjPower = big.Add(st.TotalQualityAdjPower, newClaim.QualityAdjPower)
-		st.TotalRawBytePower = big.Add(st.TotalRawBytePower, newClaim.RawBytePower)
-	} else if !prevBelow && stillBelow {
-		// just went below min miner size
-		st.MinerAboveMinPowerCount--
-		st.TotalQualityAdjPower = big.Sub(st.TotalQualityAdjPower, oldClaim.QualityAdjPower)
-		st.TotalRawBytePower = big.Sub(st.TotalRawBytePower, oldClaim.RawBytePower)
-	} else if !prevBelow && !stillBelow {
-		// Was above the threshold, still above
-		st.TotalQualityAdjPower = big.Add(st.TotalQualityAdjPower, qapower)
-		st.TotalRawBytePower = big.Add(st.TotalRawBytePower, power)
-	}
-
-	if newClaim.RawBytePower.LessThan(big.Zero()) {
-		return xerrors.Errorf("negative claimed raw byte power: %v", newClaim.RawBytePower)
-	}
-	if newClaim.QualityAdjPower.LessThan(big.Zero()) {
-		return xerrors.Errorf("negative claimed quality adjusted power: %v", newClaim.QualityAdjPower)
-	}
-	if st.MinerAboveMinPowerCount < 0 {
-		return xerrors.Errorf("negative number of miners larger than min: %v", st.MinerAboveMinPowerCount)
-	}
 	return setClaim(claims, miner, &newClaim)
 }
 

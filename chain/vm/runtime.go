@@ -280,7 +280,6 @@ func (rt *Runtime) CreateActor(codeID cid.Cid, addr address.Address) {
 	if aerr != nil {
 		rt.Abortf(aerr.RetCode(), aerr.Error())
 	}
-
 	_, err := rt.state.GetActor(addr)
 	if err == nil {
 		rt.Abortf(exitcode.SysErrorIllegalArgument, "Actor address already exists")

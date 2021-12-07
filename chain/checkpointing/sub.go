@@ -17,11 +17,13 @@ import (
 	"github.com/Zondax/multi-party-sig/protocols/frost"
 	"github.com/Zondax/multi-party-sig/protocols/frost/keygen"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/chain/consensus/actors/mpower"
 	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/node/impl"
 	"github.com/filecoin-project/lotus/node/modules/helpers"
+	cbor "github.com/ipfs/go-ipld-cbor"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p-core/host"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -188,27 +190,29 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 	}
 
 	match := func(oldTs, newTs *types.TipSet) (bool, events.StateChange, error) {
-		/*
-				NOT WORKING WITHOUT THE MOCKED POWER ACTOR
+		newAct, err := c.api.StateGetActor(ctx, mpower.PowerActorAddr, newTs.Key())
+		if err != nil {
+			return false, nil, err
+		}
 
-
-			newAct, err := c.api.StateGetActor(ctx, mpoweractor.MpowerActorAddr, newTs.Key())
-			if err != nil {
-				return false, nil, err
-			}
-		*/
 		oldAct, err := c.api.StateGetActor(ctx, mpower.PowerActorAddr, oldTs.Key())
 		if err != nil {
 			return false, nil, err
 		}
 
-		fmt.Println(oldAct)
+		var oldSt, newSt mpower.State
 
-		// This is not actually what we want. Just here to check.
-		oldTipset, err := c.api.ChainGetTipSet(ctx, oldTs.Key())
-		if err != nil {
+		bs := blockstore.NewAPIBlockstore(c.api)
+		cst := cbor.NewCborStore(bs)
+		if err := cst.Get(ctx, oldAct.Head, &oldSt); err != nil {
 			return false, nil, err
 		}
+		if err := cst.Get(ctx, newAct.Head, &newSt); err != nil {
+			return false, nil, err
+		}
+
+		fmt.Println(oldSt)
+		fmt.Println(newSt)
 
 		// If Power Actors list has changed start DKG
 		if !c.init {
@@ -226,26 +230,26 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 
 		// ZONDAX TODO
 		// Activate checkpointing every 20 blocks
-		fmt.Println("Height:", oldTipset.Height())
-		if oldTipset.Height()%20 == 0 {
+		fmt.Println("Height:", newTs.Height())
+		if newTs.Height()%20 == 0 {
 			fmt.Println("Check point time")
 
 			// Initiation and config should be happening at start
 			if c.init && c.config != nil {
 				fmt.Println("We have a taproot config")
 
-				data := oldTipset.Cids()[0]
+				data := oldTs.Cids()[0]
 
 				c.CreateCheckpoint(ctx, data.Bytes())
 			}
 		}
 
 		// Generating new config every 50 blocks
-		if oldTipset.Height()%50 == 0 {
+		/*if newTs.Height()%50 == 0 {
 			fmt.Println("Generate new config")
 
 			return true, nil, nil
-		}
+		}*/
 
 		return false, nil, nil
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/filecoin-project/go-state-types/cbor"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	rtt "github.com/filecoin-project/go-state-types/rt"
+	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
 	xerrors "golang.org/x/xerrors"
 
 	power0 "github.com/filecoin-project/specs-actors/actors/builtin/power"
@@ -57,7 +58,7 @@ func (a Actor) Exports() []interface{} {
 }
 
 func (a Actor) Code() cid.Cid {
-	return builtin.StoragePowerActorCodeID
+	return actor.MpowerActorCodeID
 }
 
 func (a Actor) IsSingleton() bool {
@@ -113,7 +114,7 @@ type CreateMinerParams struct {
 type CreateMinerReturn = power0.CreateMinerReturn
 
 func (a Actor) CreateMiner(rt Runtime, params *CreateMinerParams) *CreateMinerReturn {
-	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
+	rt.ValidateImmediateCallerAcceptAny()
 
 	ctorParams := MinerConstructorParams{
 		OwnerAddr:           params.Owner,
