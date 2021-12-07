@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 
 	"github.com/BurntSushi/toml"
 	"github.com/Zondax/multi-party-sig/pkg/math/curve"
@@ -72,61 +73,67 @@ func NewCheckpointSub(
 		return nil, err
 	}
 
+	var config *keygen.TaprootConfig
 	// Load configTaproot
-	content, err := os.ReadFile(os.Getenv("EUDICO_PATH") + "/share.toml")
-	if err != nil {
-		return nil, err
-	}
-
-	var configTOML TaprootConfigTOML
-	_, err = toml.Decode(string(content), &configTOML)
-	if err != nil {
-		return nil, err
-	}
-
-	privateSharePath, err := hex.DecodeString(configTOML.PrivateShare)
-	if err != nil {
-		return nil, err
-	}
-
-	publickey, err := hex.DecodeString(configTOML.PublicKey)
-	if err != nil {
-		return nil, err
-	}
-
-	var privateShare curve.Secp256k1Scalar
-	err = privateShare.UnmarshalBinary(privateSharePath)
-	if err != nil {
-		return nil, err
-	}
-
-	verificationShares := make(map[party.ID]*curve.Secp256k1Point)
-
-	fmt.Println(configTOML.VerificationShares)
-
-	for key, vshare := range configTOML.VerificationShares {
-
-		fmt.Println(key)
-		fmt.Println(vshare)
-
-		var p curve.Secp256k1Point
-		pByte, err := hex.DecodeString(vshare.Share)
+	if _, err := os.Stat(os.Getenv("EUDICO_PATH") + "/share.toml"); errors.Is(err, os.ErrNotExist) {
+		// path/to/whatever does not exist
+		fmt.Println("No share file saved")
+	} else {
+		content, err := os.ReadFile(os.Getenv("EUDICO_PATH") + "/share.toml")
 		if err != nil {
 			return nil, err
 		}
-		err = p.UnmarshalBinary(pByte)
+
+		var configTOML TaprootConfigTOML
+		_, err = toml.Decode(string(content), &configTOML)
 		if err != nil {
 			return nil, err
 		}
-		verificationShares[party.ID(key)] = &p
-	}
 
-	config := keygen.TaprootConfig{
-		ID:                 party.ID(host.ID().String()),
-		Threshold:          configTOML.Thershold,
-		PrivateShare:       &privateShare,
-		PublicKey:          publickey,
-		VerificationShares: verificationShares,
+		privateSharePath, err := hex.DecodeString(configTOML.PrivateShare)
+		if err != nil {
+			return nil, err
+		}
+
+		publickey, err := hex.DecodeString(configTOML.PublicKey)
+		if err != nil {
+			return nil, err
+		}
+
+		var privateShare curve.Secp256k1Scalar
+		err = privateShare.UnmarshalBinary(privateSharePath)
+		if err != nil {
+			return nil, err
+		}
+
+		verificationShares := make(map[party.ID]*curve.Secp256k1Point)
+
+		fmt.Println(configTOML.VerificationShares)
+
+		for key, vshare := range configTOML.VerificationShares {
+
+			fmt.Println(key)
+			fmt.Println(vshare)
+
+			var p curve.Secp256k1Point
+			pByte, err := hex.DecodeString(vshare.Share)
+			if err != nil {
+				return nil, err
+			}
+			err = p.UnmarshalBinary(pByte)
+			if err != nil {
+				return nil, err
+			}
+			verificationShares[party.ID(key)] = &p
+		}
+
+		config = &keygen.TaprootConfig{
+			ID:                 party.ID(host.ID().String()),
+			Threshold:          configTOML.Thershold,
+			PrivateShare:       &privateShare,
+			PublicKey:          publickey,
+			VerificationShares: verificationShares,
+		}
 	}
 
 	return &CheckpointingSub{
@@ -138,7 +145,7 @@ func NewCheckpointSub(
 		events:    e,
 		init:      false,
 		ptxid:     "",
-		config:    &config,
+		config:    config,
 		newconfig: nil,
 	}, nil
 }
@@ -165,18 +172,15 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 		f := frost.KeygenTaproot(id, ids, threshold)
 
 		handler, err := protocol.NewMultiHandler(f, []byte{1, 2, 3})
-
-		fmt.Println(handler)
-
 		if err != nil {
 			fmt.Println(err)
-			log.Fatal("Not working")
+			panic(err)
 		}
 		c.LoopHandler(ctx, handler, n)
 		r, err := handler.Result()
 		if err != nil {
 			fmt.Println(err)
-			log.Fatal("Not working neither")
+			panic(err)
 		}
 		fmt.Println("Result :", r)
 
@@ -211,9 +215,6 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 			return false, nil, err
 		}
 
-		fmt.Println(oldSt)
-		fmt.Println(newSt)
-
 		// If Power Actors list has changed start DKG
 		if !c.init {
 			ts, err := c.api.ChainGetTipSetByHeight(ctx, 0, oldTs.Key())
@@ -236,20 +237,28 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 
 			// Initiation and config should be happening at start
 			if c.init && c.config != nil {
-				fmt.Println("We have a taproot config")
 
 				data := oldTs.Cids()[0]
 
-				c.CreateCheckpoint(ctx, data.Bytes())
+				var partyList string = ""
+				for _, partyId := range c.orderParticipantsList() {
+					partyList += partyId + "\n"
+				}
+				hash, err := CreateConfig([]byte(partyList))
+				if err != nil {
+					panic(err)
+				}
+
+				c.CreateCheckpoint(ctx, data.Bytes(), hash)
 			}
 		}
 
-		// Generating new config every 50 blocks
-		/*if newTs.Height()%50 == 0 {
+		// Changes detected so generate new key
+		if oldSt.MinerCount != newSt.MinerCount {
 			fmt.Println("Generate new config")
 
 			return true, nil, nil
-		}*/
+		}
 
 		return false, nil, nil
 	}
@@ -295,9 +304,7 @@ func (c *CheckpointingSub) LoopHandler(ctx context.Context, h protocol.Handler, 
 	}
 }
 
-func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, data []byte) {
-	fmt.Println("Create Checkpoint!!!")
-
+func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte) {
 	idsStrings := c.orderParticipantsList()
 	fmt.Println("Participants list :", idsStrings)
 	fmt.Println("Precedent tx", c.ptxid)
@@ -309,7 +316,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, data []byte) {
 		pubkey = c.newconfig.PublicKey
 	}
 
-	pubkeyShort := GenCheckpointPublicKeyTaproot(pubkey, data)
+	pubkeyShort := GenCheckpointPublicKeyTaproot(pubkey, cp)
 	newTaprootAddress := PubkeyToTapprootAddress(pubkeyShort)
 
 	if c.ptxid == "" {
@@ -329,27 +336,19 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, data []byte) {
 		fmt.Println("Found precedent txid:", c.ptxid)
 	}
 
-	/*payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"gettxout\", \"params\": [\"" + c.ptxid + "\", 0]}"
-	result := jsonRPC(payload)
-	if result == nil {
-		panic("cant retrieve previous transaction")
-	}
-	taprootTxOut := result["result"].(map[string]interface{})
-	newValue := taprootTxOut["value"].(float64) - FEE
-
-	scriptPubkey := taprootTxOut["scriptPubKey"].(map[string]interface{})
-	scriptPubkeyBytes, _ := hex.DecodeString(scriptPubkey["hex"].(string))*/
-
-	value, scriptPubkeyBytes := GetTxOut(c.ptxid, 0)
+	index := 0
+	value, scriptPubkeyBytes := GetTxOut(c.ptxid, index)
 
 	if scriptPubkeyBytes[0] != 0x51 {
 		fmt.Println("Wrong txout")
-		value, scriptPubkeyBytes = GetTxOut(c.ptxid, 1)
+		index = 1
+		value, scriptPubkeyBytes = GetTxOut(c.ptxid, index)
 	}
 	newValue := value - FEE
 
-	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": 0, \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.2f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
+	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.2f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
 	result := jsonRPC(payload)
+	fmt.Println(result)
 	if result == nil {
 		panic("cant create new transaction")
 	}
@@ -385,12 +384,12 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, data []byte) {
 	r, err := handler.Result()
 	if err != nil {
 		fmt.Println(err)
-		log.Fatal("Not working neither")
+		panic(err)
 	}
 	fmt.Println("Result :", r)
 
 	// if signing is a success we register the new value
-	merkleRoot := HashMerkleRoot(pubkey, data)
+	merkleRoot := HashMerkleRoot(pubkey, cp)
 	c.tweakedValue = HashTweakedValue(pubkey, merkleRoot)
 	c.pubkey = pubkeyShort
 	// If new config used
@@ -418,7 +417,6 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, data []byte) {
 		fmt.Println("New Txid:", newtxid)
 		c.ptxid = newtxid
 	}
-
 }
 
 func (c *CheckpointingSub) orderParticipantsList() []string {
@@ -462,8 +460,8 @@ func (c *CheckpointingSub) prefundTaproot() error {
 	return nil
 }
 
-func (c *CheckpointingSub) initiate(data []byte) error {
-	pubkeyShort := GenCheckpointPublicKeyTaproot(c.config.PublicKey, data)
+func (c *CheckpointingSub) initiate(cp []byte) error {
+	pubkeyShort := GenCheckpointPublicKeyTaproot(c.config.PublicKey, cp)
 	c.pubkey = pubkeyShort
 
 	idsStrings := c.orderParticipantsList()
@@ -476,7 +474,7 @@ func (c *CheckpointingSub) initiate(data []byte) error {
 	}
 
 	// Save tweaked value
-	merkleRoot := HashMerkleRoot(c.config.PublicKey, data)
+	merkleRoot := HashMerkleRoot(c.config.PublicKey, cp)
 	c.tweakedValue = HashTweakedValue(c.config.PublicKey, merkleRoot)
 
 	c.init = true

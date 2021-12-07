@@ -25,13 +25,10 @@ func NewNetwork(parties party.IDSlice, sub *pubsub.Subscription, topic *pubsub.T
 }
 
 func (n *Network) Next(ctx context.Context) *protocol.Message {
-	fmt.Println("Waiting for message")
 	msg, err := n.sub.Next(ctx)
 	if err != nil {
 		panic(err)
 	}
-
-	fmt.Println("Message received")
 
 	// Converting a pubsub.Message into a protocol.Message
 	// see https://pkg.go.dev/github.com/libp2p/go-libp2p-pubsub@v0.5.3/pb#Message

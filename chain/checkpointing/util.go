@@ -238,6 +238,7 @@ func ParseUnspentTxOut(utxo []byte) (amount, script []byte) {
 func GetTxOut(txid string, index int) (float64, []byte) {
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"gettxout\", \"params\": [\"" + txid + "\", " + strconv.Itoa(index) + "]}"
 	result := jsonRPC(payload)
+	fmt.Println(result)
 	if result == nil {
 		panic("cant retrieve previous transaction")
 	}
