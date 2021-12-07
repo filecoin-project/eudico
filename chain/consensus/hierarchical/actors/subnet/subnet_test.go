@@ -56,6 +56,7 @@ func TestJoin(t *testing.T) {
 	// Anyone can call
 	rt.ExpectValidateCallerAny()
 	ret := rt.Call(h.SubnetActor.Join, nil)
+	rt.Verify()
 	assert.Nil(h.t, ret)
 	// Check that the subnet is instantiated but not active.
 	st := getState(rt)
@@ -74,6 +75,7 @@ func TestJoin(t *testing.T) {
 	rt.ExpectValidateCallerAny()
 	rt.ExpectSend(sca.SubnetCoordActorAddr, sca.Methods.Register, nil, totalStake, nil, exitcode.Ok)
 	rt.Call(h.SubnetActor.Join, nil)
+	rt.Verify()
 	// Check that we are active
 	st = getState(rt)
 	require.Equal(t, len(st.Miners), 1)
@@ -90,6 +92,7 @@ func TestJoin(t *testing.T) {
 	// Triggers a stake top-up in SCA
 	rt.ExpectSend(sca.SubnetCoordActorAddr, sca.Methods.AddStake, nil, value, nil, exitcode.Ok)
 	rt.Call(h.SubnetActor.Join, nil)
+	rt.Verify()
 	// Check that the subnet is instantiated but not active.
 	st = getState(rt)
 	// If we use delegated consensus we only accept one miner.
@@ -136,6 +139,7 @@ func TestLeaveAndKill(t *testing.T) {
 	rt.ExpectValidateCallerAny()
 	rt.ExpectSend(sca.SubnetCoordActorAddr, sca.Methods.AddStake, nil, value, nil, exitcode.Ok)
 	rt.Call(h.SubnetActor.Join, nil)
+	rt.Verify()
 	// Check that we are active
 	st = getState(rt)
 	require.Equal(t, len(st.Miners), 2)
@@ -152,6 +156,7 @@ func TestLeaveAndKill(t *testing.T) {
 	rt.ExpectValidateCallerAny()
 	rt.ExpectSend(sca.SubnetCoordActorAddr, sca.Methods.AddStake, nil, value, nil, exitcode.Ok)
 	rt.Call(h.SubnetActor.Join, nil)
+	rt.Verify()
 	// Check that we are active
 	st = getState(rt)
 	require.Equal(t, len(st.Miners), 2)
@@ -168,6 +173,7 @@ func TestLeaveAndKill(t *testing.T) {
 	rt.ExpectSend(sca.SubnetCoordActorAddr, sca.Methods.ReleaseStake, &sca.FundParams{Value: minerStake}, big.Zero(), nil, exitcode.Ok)
 	rt.ExpectSend(joiner2, builtin.MethodSend, nil, big.Div(minerStake, actor.LeavingFeeCoeff), nil, exitcode.Ok)
 	rt.Call(h.SubnetActor.Leave, nil)
+	rt.Verify()
 	st = getState(rt)
 	require.Equal(t, st.Status, actor.Active)
 	require.Equal(t, len(st.Miners), 1)
@@ -190,6 +196,7 @@ func TestLeaveAndKill(t *testing.T) {
 	rt.ExpectSend(sca.SubnetCoordActorAddr, sca.Methods.ReleaseStake, &sca.FundParams{Value: minerStake}, big.Zero(), nil, exitcode.Ok)
 	rt.ExpectSend(joiner, builtin.MethodSend, nil, big.Div(minerStake, actor.LeavingFeeCoeff), nil, exitcode.Ok)
 	rt.Call(h.SubnetActor.Leave, nil)
+	rt.Verify()
 	st = getState(rt)
 	require.Equal(t, st.Status, actor.Inactive)
 	require.Equal(t, len(st.Miners), 0)
@@ -209,6 +216,7 @@ func TestLeaveAndKill(t *testing.T) {
 	rt.SetBalance(minerStake)
 	rt.ExpectSend(sca.SubnetCoordActorAddr, sca.Methods.Kill, nil, big.Zero(), nil, exitcode.Ok)
 	rt.Call(h.SubnetActor.Kill, nil)
+	rt.Verify()
 	st = getState(rt)
 	require.Equal(t, st.Status, actor.Terminating)
 
@@ -223,6 +231,7 @@ func TestLeaveAndKill(t *testing.T) {
 	rt.SetBalance(minerStake)
 	rt.ExpectSend(joiner3, builtin.MethodSend, nil, big.Div(minerStake, actor.LeavingFeeCoeff), nil, exitcode.Ok)
 	rt.Call(h.SubnetActor.Leave, nil)
+	rt.Verify()
 	st = getState(rt)
 	require.Equal(t, st.Status, actor.Killed)
 	require.Equal(t, len(st.Miners), 0)
@@ -264,6 +273,7 @@ func TestCheckpoints(t *testing.T) {
 			rt.ExpectSend(sca.SubnetCoordActorAddr, sca.Methods.AddStake, nil, value, nil, exitcode.Ok)
 		}
 		ret := rt.Call(h.SubnetActor.Join, nil)
+		rt.Verify()
 		assert.Nil(h.t, ret)
 	}
 	st := getState(rt)
@@ -320,6 +330,7 @@ func TestCheckpoints(t *testing.T) {
 	params = &sca.CheckpointParams{Checkpoint: b}
 	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
 	rt.Call(h.SubnetActor.SubmitCheckpoint, params)
+	rt.Verify()
 	st = getState(rt)
 	chcid, err := ch.Cid()
 	require.NoError(t, err)
@@ -357,6 +368,7 @@ func TestCheckpoints(t *testing.T) {
 	params = &sca.CheckpointParams{Checkpoint: b}
 	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
 	rt.Call(h.SubnetActor.SubmitCheckpoint, params)
+	rt.Verify()
 	st = getState(rt)
 	chcid, err = ch.Cid()
 	require.NoError(t, err)
@@ -380,6 +392,7 @@ func TestCheckpoints(t *testing.T) {
 	params = &sca.CheckpointParams{Checkpoint: b}
 	rt.ExpectSend(sca.SubnetCoordActorAddr, sca.Methods.CommitChildCheckpoint, params, big.Zero(), nil, exitcode.Ok)
 	rt.Call(h.SubnetActor.SubmitCheckpoint, params)
+	rt.Verify()
 	st = getState(rt)
 	chcid, err = ch.Cid()
 	require.NoError(t, err)

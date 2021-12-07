@@ -37,7 +37,9 @@ var Methods = struct {
 	ReleaseStake          abi.MethodNum
 	Kill                  abi.MethodNum
 	CommitChildCheckpoint abi.MethodNum
-}{builtin0.MethodConstructor, 2, 3, 4, 5, 6}
+	Fund                  abi.MethodNum
+	Release               abi.MethodNum
+}{builtin0.MethodConstructor, 2, 3, 4, 5, 6, 7, 8}
 
 type FundParams struct {
 	Value abi.TokenAmount
@@ -57,8 +59,8 @@ func (a SubnetCoordActor) Exports() []interface{} {
 		4:                         a.ReleaseStake,
 		5:                         a.Kill,
 		6:                         a.CommitChildCheckpoint,
-		// -1:                         a.Fund,
-		// -1:                         a.Release,
+		7:                         a.Fund,
+		8:                         a.Release,
 		// -1:                         a.XSubnetTx,
 	}
 }
@@ -345,4 +347,30 @@ func (a SubnetCoordActor) Kill(rt runtime.Runtime, _ *abi.EmptyValue) *abi.Empty
 	}
 
 	return nil
+}
+
+// Fund XXX
+func (a SubnetCoordActor) Fund(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
+	panic("Fund not implemented yet")
+	// Adds frozen balance to the balance table of frozen balances of the subnet.
+	// This state change needs to be detected by the subnet manager and propagated to
+	// the consensus algorithm of the subnet to perform an implicitMessage
+	// to send the funds.
+}
+
+// Release XXX
+func (a SubnetCoordActor) Release(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
+	panic("Release not implemented")
+	// Burns the funds being released by an address.
+	// It flags in the checkpoint that certains funds need to be returned to the owner
+	// in parent chain.
+
+	// Sample of burning.
+	/*
+		code := rt.Send(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, totalReward, &builtin.Discard{})
+		if !code.IsSuccess() {
+			rt.Log(rtt.ERROR, "failed to send unsent reward to the burnt funds actor, code: %v", code)
+		}
+		panic("Fund not implemented yet")
+	*/
 }

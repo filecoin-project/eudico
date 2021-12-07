@@ -80,6 +80,7 @@ func TestRegister(t *testing.T) {
 	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
 		rt.Call(h.SubnetCoordActor.Register, nil)
 	})
+	rt.Verify()
 
 	t.Log("try registering without staking enough funds")
 	SubnetActorAddr = tutil.NewIDAddr(t, 102)
@@ -93,6 +94,7 @@ func TestRegister(t *testing.T) {
 	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
 		rt.Call(h.SubnetCoordActor.Register, nil)
 	})
+	rt.Verify()
 
 	t.Log("Register second subnet")
 	rt.SetCaller(SubnetActorAddr, actors.SubnetActorCodeID)
@@ -136,6 +138,7 @@ func TestAddStake(t *testing.T) {
 	ret := rt.Call(h.SubnetCoordActor.Register, nil)
 	res, ok := ret.(*actor.AddSubnetReturn)
 	require.True(t, ok)
+	rt.Verify()
 
 	t.Log("add to unregistered subnet")
 	newActorAddr := tutil.NewIDAddr(t, 102)
@@ -150,6 +153,7 @@ func TestAddStake(t *testing.T) {
 	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
 		rt.Call(h.SubnetCoordActor.AddStake, nil)
 	})
+	rt.Verify()
 
 	t.Log("add some stake")
 	rt.SetCaller(SubnetActorAddr, actors.SubnetActorCodeID)
@@ -173,6 +177,7 @@ func TestAddStake(t *testing.T) {
 	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
 		rt.Call(h.SubnetCoordActor.AddStake, nil)
 	})
+	rt.Verify()
 }
 
 func TestReleaseStake(t *testing.T) {
@@ -206,6 +211,7 @@ func TestReleaseStake(t *testing.T) {
 	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
 		rt.Call(h.SubnetCoordActor.ReleaseStake, params)
 	})
+	rt.Verify()
 
 	t.Log("release some stake")
 	rt.SetCaller(SubnetActorAddr, actors.SubnetActorCodeID)
@@ -217,6 +223,7 @@ func TestReleaseStake(t *testing.T) {
 	require.True(h.t, found)
 	require.Equal(t, sh.Stake, big.Sub(value, releaseVal))
 	require.Equal(t, sh.Status, actor.Active)
+	rt.Verify()
 
 	t.Log("release to inactivate")
 	currStake := sh.Stake
@@ -231,6 +238,7 @@ func TestReleaseStake(t *testing.T) {
 	require.True(h.t, found)
 	require.Equal(t, sh.Stake, big.Sub(currStake, releaseVal))
 	require.Equal(t, sh.Status, actor.Inactive)
+	rt.Verify()
 
 	t.Log("not enough funds to release")
 	releaseVal = abi.NewTokenAmount(1e18)
@@ -335,6 +343,7 @@ func TestCheckpoints(t *testing.T) {
 	b, err := ch.MarshalBinary()
 	require.NoError(t, err)
 	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+	rt.Verify()
 	windowCh := currWindowCheckpoint(rt, epoch)
 	require.Equal(t, windowCh.Data.Epoch, 100)
 	// Check that child was added.
@@ -370,6 +379,7 @@ func TestCheckpoints(t *testing.T) {
 	b, err = ch.MarshalBinary()
 	require.NoError(t, err)
 	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+	rt.Verify()
 	windowCh = currWindowCheckpoint(rt, epoch)
 	require.Equal(t, windowCh.Data.Epoch, 100)
 	// Check that child was appended for subnet.
@@ -501,6 +511,7 @@ func TestCheckpointInactive(t *testing.T) {
 	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
 	rt.ExpectSend(SubnetActorAddr, builtin.MethodSend, nil, releaseVal, nil, exitcode.Ok)
 	rt.Call(h.SubnetCoordActor.ReleaseStake, params)
+	rt.Verify()
 	sh, found = h.getSubnet(rt, shid)
 	require.True(h.t, found)
 	require.Equal(t, sh.Status, actor.Inactive)
@@ -544,6 +555,7 @@ func TestKill(t *testing.T) {
 	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
 	rt.ExpectSend(SubnetActorAddr, builtin.MethodSend, nil, value, nil, exitcode.Ok)
 	rt.Call(h.SubnetCoordActor.Kill, nil)
+	rt.Verify()
 	// The subnet has been removed.
 	_, found := h.getSubnet(rt, hierarchical.SubnetID(res.ID))
 	require.False(h.t, found)
