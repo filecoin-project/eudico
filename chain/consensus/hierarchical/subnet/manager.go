@@ -159,7 +159,7 @@ func NewSubnetMgr(
 }
 
 func (s *SubnetMgr) startSubnet(id hierarchical.SubnetID,
-	parentAPI *API, consensus subnet.ConsensusType,
+	parentAPI *API, consensus hierarchical.ConsensusType,
 	genesis []byte) error {
 	var err error
 	// Subnets inherit the context from the SubnetManager.
@@ -326,7 +326,7 @@ func (s *SubnetMgr) AddSubnet(
 		NetworkName:   string(s.api.NetName),
 		MinMinerStake: minerStake,
 		Name:          name,
-		Consensus:     subnet.ConsensusType(consensus),
+		Consensus:     hierarchical.ConsensusType(consensus),
 		DelegMiner:    delegminer,
 		CheckPeriod:   checkPeriod,
 	}

@@ -62,12 +62,12 @@ func (a SubnetActor) State() cbor.Er {
 // ConstructParams specifies the configuration parameters for the
 // subnet actor constructor.
 type ConstructParams struct {
-	NetworkName   string          // Name of the current network.
-	Name          string          // Name for the subnet
-	Consensus     ConsensusType   // Consensus for subnet.
-	MinMinerStake abi.TokenAmount // MinStake to give miner rights
-	DelegMiner    address.Address // Miner in delegated consensus
-	CheckPeriod   abi.ChainEpoch  // Checkpointing period.
+	NetworkName   string                     // Name of the current network.
+	Name          string                     // Name for the subnet
+	Consensus     hierarchical.ConsensusType // Consensus for subnet.
+	MinMinerStake abi.TokenAmount            // MinStake to give miner rights
+	DelegMiner    address.Address            // Miner in delegated consensus
+	CheckPeriod   abi.ChainEpoch             // Checkpointing period.
 }
 
 func (a SubnetActor) Constructor(rt runtime.Runtime, params *ConstructParams) *abi.EmptyValue {
@@ -436,7 +436,7 @@ func (st *SubnetState) addStake(rt runtime.Runtime, sourceAddr address.Address, 
 	if minerStake.GreaterThanEqual(st.MinMinerStake) {
 		// Except for delegated consensus if there is already a miner.
 		// There can only be a single miner in delegated consensus.
-		if st.Consensus != Delegated || len(st.Miners) < 1 {
+		if st.Consensus != hierarchical.Delegated || len(st.Miners) < 1 {
 			st.Miners = append(st.Miners, sourceAddr)
 		}
 	}

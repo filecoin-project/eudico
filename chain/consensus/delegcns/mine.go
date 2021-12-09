@@ -2,6 +2,7 @@ package delegcns
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/ipfs/go-cid"
@@ -55,6 +56,8 @@ func Mine(ctx context.Context, api v1api.FullNode) error {
 				log.Errorw("selecting messages failed", "error", err)
 			}
 
+			// TODO: CrossMessage select from subnet manager.
+
 			bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
 				Miner:            miner,
 				Parents:          base.Key(),
@@ -65,6 +68,18 @@ func Mine(ctx context.Context, api v1api.FullNode) error {
 				Epoch:            base.Height() + 1,
 				Timestamp:        base.MinTimestamp() + build.BlockDelaySecs,
 				WinningPoStProof: nil,
+				CrossMessages: []*types.Message{
+					{
+						To:         miner,
+						From:       miner,
+						Value:      types.NewInt(1),
+						Nonce:      0,
+						GasLimit:   60000000,
+						GasFeeCap:  types.NewInt(100),
+						GasPremium: types.NewInt(1),
+						Params:     make([]byte, 10),
+					},
+				},
 			})
 			if err != nil {
 				log.Errorw("creating block failed", "error", err)
@@ -75,6 +90,7 @@ func Mine(ctx context.Context, api v1api.FullNode) error {
 				Header:        bh.Header,
 				BlsMessages:   bh.BlsMessages,
 				SecpkMessages: bh.SecpkMessages,
+				CrossMessages: bh.CrossMessages,
 			})
 			if err != nil {
 				log.Errorw("submitting block failed", "error", err)
@@ -115,7 +131,7 @@ func (deleg *Delegated) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi
 	var blsMessages []*types.Message
 	var secpkMessages []*types.SignedMessage
 
-	var blsMsgCids, secpkMsgCids []cid.Cid
+	var blsMsgCids, secpkMsgCids, crossMsgCids []cid.Cid
 	var blsSigs []crypto.Signature
 	for _, msg := range bt.Messages {
 		if msg.Signature.Type == crypto.SigTypeBLS {
@@ -140,6 +156,15 @@ func (deleg *Delegated) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi
 		}
 	}
 
+	for _, msg := range bt.CrossMessages {
+		c, err := deleg.sm.ChainStore().PutMessage(msg)
+		if err != nil {
+			return nil, err
+		}
+
+		crossMsgCids = append(crossMsgCids, c)
+	}
+
 	store := deleg.sm.ChainStore().ActorStore(ctx)
 	blsmsgroot, err := consensus.ToMessagesArray(store, blsMsgCids)
 	if err != nil {
@@ -149,15 +174,26 @@ func (deleg *Delegated) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi
 	if err != nil {
 		return nil, xerrors.Errorf("building secpk amt: %w", err)
 	}
+	crossmsgroot, err := consensus.ToMessagesArray(store, crossMsgCids)
+	if err != nil {
+		return nil, xerrors.Errorf("building cross amt: %w", err)
+	}
 
+	// Adding CrossMessages as an additional type of message to avoid changing
+	// the blockHeader structure
 	mmcid, err := store.Put(store.Context(), &types.MsgMeta{
 		BlsMessages:   blsmsgroot,
 		SecpkMessages: secpkmsgroot,
+		CrossMessages: crossmsgroot,
 	})
 	if err != nil {
 		return nil, err
 	}
 	next.Messages = mmcid
+	fmt.Println(">>>> MESSAGE CID IN HEADER CREATED", next.Messages)
+	fmt.Println(">>>> MSG META COMPUTED FOR HEADER", blsmsgroot, secpkmsgroot, crossmsgroot)
+
+	// TODO: Store message array in store to get cid.
 
 	aggSig, err := consensus.AggregateSignatures(blsSigs)
 	if err != nil {
@@ -195,6 +231,7 @@ func (deleg *Delegated) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi
 		Header:        next,
 		BlsMessages:   blsMessages,
 		SecpkMessages: secpkMessages,
+		CrossMessages: bt.CrossMessages,
 	}
 
 	return fullBlock, nil

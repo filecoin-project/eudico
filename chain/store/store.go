@@ -1112,7 +1112,7 @@ func (cs *ChainStore) TryFillTipSet(ts *types.TipSet) (*FullTipSet, error) {
 	var out []*types.FullBlock
 
 	for _, b := range ts.Blocks() {
-		bmsgs, smsgs, err := cs.MessagesForBlock(b)
+		bmsgs, smsgs, crossmsg, err := cs.MessagesForBlock(b)
 		if err != nil {
 			// TODO: check for 'not found' errors, and only return nil if this
 			// is actually a 'not found' error
@@ -1123,6 +1123,7 @@ func (cs *ChainStore) TryFillTipSet(ts *types.TipSet) (*FullTipSet, error) {
 			Header:        b,
 			BlsMessages:   bmsgs,
 			SecpkMessages: smsgs,
+			CrossMessages: crossmsg,
 		}
 
 		out = append(out, fb)

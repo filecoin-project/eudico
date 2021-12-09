@@ -58,7 +58,7 @@ func (t *SubnetState) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.Consensus (subnet.ConsensusType) (uint64)
+	// t.Consensus (hierarchical.ConsensusType) (uint64)
 
 	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.Consensus)); err != nil {
 		return err
@@ -177,7 +177,7 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) error {
 
 		t.ParentID = hierarchical.SubnetID(sval)
 	}
-	// t.Consensus (subnet.ConsensusType) (uint64)
+	// t.Consensus (hierarchical.ConsensusType) (uint64)
 
 	{
 
@@ -188,7 +188,7 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) error {
 		if maj != cbg.MajUnsignedInt {
 			return fmt.Errorf("wrong type for uint64 field")
 		}
-		t.Consensus = ConsensusType(extra)
+		t.Consensus = hierarchical.ConsensusType(extra)
 
 	}
 	// t.MinMinerStake (big.Int) (struct)
@@ -374,7 +374,7 @@ func (t *ConstructParams) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.Consensus (subnet.ConsensusType) (uint64)
+	// t.Consensus (hierarchical.ConsensusType) (uint64)
 
 	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.Consensus)); err != nil {
 		return err
@@ -441,7 +441,7 @@ func (t *ConstructParams) UnmarshalCBOR(r io.Reader) error {
 
 		t.Name = string(sval)
 	}
-	// t.Consensus (subnet.ConsensusType) (uint64)
+	// t.Consensus (hierarchical.ConsensusType) (uint64)
 
 	{
 
@@ -452,7 +452,7 @@ func (t *ConstructParams) UnmarshalCBOR(r io.Reader) error {
 		if maj != cbg.MajUnsignedInt {
 			return fmt.Errorf("wrong type for uint64 field")
 		}
-		t.Consensus = ConsensusType(extra)
+		t.Consensus = hierarchical.ConsensusType(extra)
 
 	}
 	// t.MinMinerStake (big.Int) (struct)

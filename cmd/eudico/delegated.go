@@ -77,7 +77,7 @@ var delegatedGenesisCmd = &cli.Command{
 
 		// TODO: Make configurable
 		checkPeriod := sca.DefaultCheckpointPeriod
-		if err := subnet.WriteGenesis(hierarchical.RootSubnet, subnet.Delegated, miner, vreg, rem, checkPeriod, uint64(time.Now().Unix()), f); err != nil {
+		if err := subnet.WriteGenesis(hierarchical.RootSubnet, hierarchical.Delegated, miner, vreg, rem, checkPeriod, uint64(time.Now().Unix()), f); err != nil {
 			return xerrors.Errorf("write genesis car: %w", err)
 		}
 

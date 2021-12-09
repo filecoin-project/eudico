@@ -74,10 +74,16 @@ func (a *SyncAPI) SyncSubmitBlock(ctx context.Context, blk *types.BlockMsg) erro
 		return xerrors.Errorf("failed to load secpk message: %w", err)
 	}
 
+	crossmsgs, err := a.Syncer.ChainStore().LoadMessagesFromCids(blk.CrossMessages)
+	if err != nil {
+		return xerrors.Errorf("failed to load secpk message: %w", err)
+	}
+
 	fb := &types.FullBlock{
 		Header:        blk.Header,
 		BlsMessages:   bmsgs,
 		SecpkMessages: smsgs,
+		CrossMessages: crossmsgs,
 	}
 
 	if err := a.Syncer.ValidateMsgMeta(fb); err != nil {

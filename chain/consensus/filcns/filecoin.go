@@ -573,9 +573,14 @@ func (filec *FilecoinEC) checkBlockMessages(ctx context.Context, b *types.FullBl
 		return err
 	}
 
+	emptyroot, err := blockadt.MakeEmptyArray(tmpstore).Root()
+	if err != nil {
+		return err
+	}
 	mrcid, err := tmpstore.Put(ctx, &types.MsgMeta{
 		BlsMessages:   bmroot,
 		SecpkMessages: smroot,
+		CrossMessages: emptyroot,
 	})
 	if err != nil {
 		return err
@@ -736,6 +741,10 @@ func (filec *FilecoinEC) validateMsgMeta(ctx context.Context, msg *types.BlockMs
 	store := blockadt.WrapStore(ctx, cbor.NewCborStore(bstore.NewMemory()))
 	bmArr := blockadt.MakeEmptyArray(store)
 	smArr := blockadt.MakeEmptyArray(store)
+	emptyroot, err := blockadt.MakeEmptyArray(store).Root()
+	if err != nil {
+		return err
+	}
 
 	for i, m := range msg.BlsMessages {
 		c := cbg.CborCid(m)
@@ -764,6 +773,8 @@ func (filec *FilecoinEC) validateMsgMeta(ctx context.Context, msg *types.BlockMs
 	mrcid, err := store.Put(store.Context(), &types.MsgMeta{
 		BlsMessages:   bmroot,
 		SecpkMessages: smroot,
+		// NOTE: No support for cross messages in filcns at this moment
+		CrossMessages: emptyroot,
 	})
 
 	if err != nil {

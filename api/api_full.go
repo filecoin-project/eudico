@@ -803,6 +803,7 @@ type MsgGasCost struct {
 type BlockMessages struct {
 	BlsMessages   []*types.Message
 	SecpkMessages []*types.SignedMessage
+	CrossMessages []*types.Message
 
 	Cids []cid.Cid
 }
@@ -1100,6 +1101,7 @@ type BlockTemplate struct {
 	Epoch            abi.ChainEpoch
 	Timestamp        uint64
 	WinningPoStProof []builtin.PoStProof
+	CrossMessages    []*types.Message
 }
 
 type DataSize struct {

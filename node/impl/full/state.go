@@ -544,6 +544,9 @@ func (a *StateAPI) MinerCreateBlock(ctx context.Context, bt *api.BlockTemplate) 
 	for _, msg := range fblk.SecpkMessages {
 		out.SecpkMessages = append(out.SecpkMessages, msg.Cid())
 	}
+	for _, msg := range fblk.CrossMessages {
+		out.CrossMessages = append(out.CrossMessages, msg.Cid())
+	}
 
 	return &out, nil
 }

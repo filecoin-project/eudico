@@ -39,12 +39,12 @@ const (
 	networkVersion = network.Version14
 )
 
-func WriteGenesis(netName hierarchical.SubnetID, consensus ConsensusType, miner, vreg, rem address.Address, checkPeriod abi.ChainEpoch, seq uint64, w io.Writer) error {
+func WriteGenesis(netName hierarchical.SubnetID, consensus hierarchical.ConsensusType, miner, vreg, rem address.Address, checkPeriod abi.ChainEpoch, seq uint64, w io.Writer) error {
 	bs := bstore.WrapIDStore(bstore.NewMemorySync())
 
 	var b *genesis2.GenesisBootstrap
 	switch consensus {
-	case Delegated:
+	case hierarchical.Delegated:
 		if miner == address.Undef {
 			return xerrors.Errorf("no miner specified for delegated consensus")
 		}
@@ -56,7 +56,7 @@ func WriteGenesis(netName hierarchical.SubnetID, consensus ConsensusType, miner,
 		if err != nil {
 			return xerrors.Errorf("error making genesis delegated block: %w", err)
 		}
-	case PoW:
+	case hierarchical.PoW:
 		template, err := powGenTemplate(netName.String(), vreg, rem, seq)
 		if err != nil {
 			return err

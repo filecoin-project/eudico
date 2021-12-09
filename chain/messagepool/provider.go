@@ -104,7 +104,9 @@ func (mpp *mpoolProvider) StateAccountKeyAtFinality(ctx context.Context, addr ad
 }
 
 func (mpp *mpoolProvider) MessagesForBlock(h *types.BlockHeader) ([]*types.Message, []*types.SignedMessage, error) {
-	return mpp.sm.ChainStore().MessagesForBlock(h)
+	// Mpool only handles non-cross messages. Disregard cross-messages in block.
+	b, s, _, err := mpp.sm.ChainStore().MessagesForBlock(h)
+	return b, s, err
 }
 
 func (mpp *mpoolProvider) MessagesForTipset(ts *types.TipSet) ([]types.ChainMsg, error) {

@@ -65,8 +65,6 @@ func RootTipSetExecutor() stmgr.Executor {
 
 func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager, parentEpoch abi.ChainEpoch, pstate cid.Cid, bms []store.BlockMessages, epoch abi.ChainEpoch, r vm.Rand, em stmgr.ExecMonitor, baseFee abi.TokenAmount, ts *types.TipSet) (cid.Cid, cid.Cid, error) {
 
-	fmt.Println(">>>>>> TIPSET EXECUTOR SUBNETS", t.subnet)
-
 	done := metrics.Timer(ctx, metrics.VMApplyBlocksTotal)
 	defer done()
 
@@ -169,6 +167,10 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 
 		if ret.ExitCode != 0 {
 			return cid.Undef, cid.Undef, xerrors.Errorf("reward application message failed (exit %d): %s", ret.ExitCode, ret.ActorErr)
+		}
+
+		for _, crossm := range b.CrossMessages {
+			fmt.Println(">>>>> TODO: Apply cross messages", crossm)
 		}
 
 	}

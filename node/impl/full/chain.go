@@ -111,12 +111,12 @@ func (m *ChainModule) ChainGetBlockMessages(ctx context.Context, msg cid.Cid) (*
 		return nil, err
 	}
 
-	bmsgs, smsgs, err := m.Chain.MessagesForBlock(b)
+	bmsgs, smsgs, crossmsgs, err := m.Chain.MessagesForBlock(b)
 	if err != nil {
 		return nil, err
 	}
 
-	cids := make([]cid.Cid, len(bmsgs)+len(smsgs))
+	cids := make([]cid.Cid, len(bmsgs)+len(smsgs)+len(crossmsgs))
 
 	for i, m := range bmsgs {
 		cids[i] = m.Cid()
@@ -126,9 +126,14 @@ func (m *ChainModule) ChainGetBlockMessages(ctx context.Context, msg cid.Cid) (*
 		cids[i+len(bmsgs)] = m.Cid()
 	}
 
+	for i, m := range crossmsgs {
+		cids[i+len(smsgs)] = m.Cid()
+	}
+
 	return &api.BlockMessages{
 		BlsMessages:   bmsgs,
 		SecpkMessages: smsgs,
+		CrossMessages: crossmsgs,
 		Cids:          cids,
 	}, nil
 }

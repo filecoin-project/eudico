@@ -15,7 +15,7 @@ import (
 	"github.com/filecoin-project/lotus/api/v1api"
 
 	"github.com/filecoin-project/lotus/chain/consensus"
-	param "github.com/filecoin-project/lotus/chain/consensus/params"
+	common "github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
@@ -41,7 +41,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		}
 		base, _ = types.NewTipSet([]*types.BlockHeader{BestWorkBlock(base)})
 
-		expDiff := param.GenesisWorkTarget
+		expDiff := common.GenesisWorkTarget
 		if base.Height()+1 >= MaxDiffLookback {
 			lbr := base.Height() + 1 - DiffLookback(base.Height())
 			lbts, err := api.ChainGetTipSetByHeight(ctx, lbr, base.Key())

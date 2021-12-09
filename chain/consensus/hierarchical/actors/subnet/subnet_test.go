@@ -432,7 +432,7 @@ func (h *shActorHarness) constructAndVerify(t *testing.T, rt *mock.Runtime) {
 		&actor.ConstructParams{
 			NetworkName:   hierarchical.RootSubnet.String(),
 			Name:          "myTestSubnet",
-			Consensus:     actor.PoW,
+			Consensus:     hierarchical.PoW,
 			MinMinerStake: actor.MinMinerStake,
 			DelegMiner:    tutil.NewIDAddr(t, 101),
 			CheckPeriod:   abi.ChainEpoch(100),
@@ -444,7 +444,7 @@ func (h *shActorHarness) constructAndVerify(t *testing.T, rt *mock.Runtime) {
 
 	rt.GetState(&st)
 	assert.Equal(h.t, st.ParentID, hierarchical.RootSubnet)
-	assert.Equal(h.t, st.Consensus, actor.PoW)
+	assert.Equal(h.t, st.Consensus, hierarchical.PoW)
 	assert.Equal(h.t, st.MinMinerStake, actor.MinMinerStake)
 	assert.Equal(h.t, st.Status, actor.Instantiated)
 	assert.Equal(h.t, st.CheckPeriod, abi.ChainEpoch(100))
@@ -464,7 +464,7 @@ func (h *shActorHarness) constructAndVerifyZeroCheck(t *testing.T, rt *mock.Runt
 		&actor.ConstructParams{
 			NetworkName:   hierarchical.RootSubnet.String(),
 			Name:          "myTestSubnet",
-			Consensus:     actor.PoW,
+			Consensus:     hierarchical.PoW,
 			MinMinerStake: actor.MinMinerStake,
 			DelegMiner:    tutil.NewIDAddr(t, 101),
 		})

@@ -586,6 +586,7 @@ func MakeGenesisBlock(ctx context.Context, j journal.Journal, bs bstore.Blocksto
 	mm := &types.MsgMeta{
 		BlsMessages:   emptyroot,
 		SecpkMessages: emptyroot,
+		CrossMessages: emptyroot,
 	}
 	mmb, err := mm.ToStorageBlock()
 	if err != nil {

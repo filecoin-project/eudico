@@ -40,15 +40,6 @@ var (
 	SignatureThreshold = mbig.NewFloat(0.66)
 )
 
-// ConsensusType for subnet
-type ConsensusType uint64
-
-// List of supported/implemented consensus for subnets.
-const (
-	Delegated ConsensusType = iota
-	PoW
-)
-
 // SubnetStatus describes in what state in its lifecycle a subnet is.
 type Status uint64
 
@@ -64,7 +55,7 @@ const (
 type SubnetState struct {
 	Name      string
 	ParentID  hierarchical.SubnetID
-	Consensus ConsensusType
+	Consensus hierarchical.ConsensusType
 	// Minimum stake required by new joiners.
 	MinMinerStake abi.TokenAmount
 	// NOTE: Consider adding miners list as AMT
