@@ -325,7 +325,6 @@ func (syncer *Syncer) ValidateMsgMeta(fblk *types.FullBlock) error {
 		}
 		crosscids = append(crosscids, c)
 	}
-	fmt.Println(">>>> Cross Cids in ValidateMsgMeta", crosscids, fblk.CrossMessages)
 
 	// Compute the root CID of the combined message trie.
 	smroot, err := computeMsgMeta(cst, bcids, scids, crosscids)
@@ -468,7 +467,6 @@ func computeMsgMeta(bs cbor.IpldStore, bmsgCids, smsgCids, crossCids []cid.Cid) 
 		return cid.Undef, err
 	}
 
-	fmt.Println(">>>>> Message meta computed", bmroot, smroot, crossroot)
 	mrcid, err := store.Put(store.Context(), &types.MsgMeta{
 		BlsMessages:   bmroot,
 		SecpkMessages: smroot,

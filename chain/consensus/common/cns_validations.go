@@ -99,14 +99,21 @@ func CheckMsgs(ctx context.Context, store *store.ChainStore, sm *stmgr.StateMana
 
 func BlockSanityChecks(ctype hierarchical.ConsensusType, h *types.BlockHeader) error {
 	// Delegated consensus has no election proof.
-	if ctype == hierarchical.Delegated {
+	switch ctype {
+	case hierarchical.Delegated:
 		if h.ElectionProof != nil {
 			return xerrors.Errorf("block must have nil election proof")
 		}
-	}
-
-	if h.Ticket != nil {
-		return xerrors.Errorf("block must have nil ticket")
+		if h.Ticket != nil {
+			return xerrors.Errorf("block must have nil ticket")
+		}
+	default:
+		// FIXME: We currently support PoW and delegated, thus the
+		// default instead of specifying other consensus. This needs
+		// to change.
+		if h.Ticket == nil {
+			return xerrors.Errorf("block must not have nil ticket")
+		}
 	}
 
 	if h.BlockSig == nil {
@@ -405,7 +412,6 @@ func ValidateMsgMeta(ctx context.Context, msg *types.BlockMsg) error {
 		SecpkMessages: smroot,
 		CrossMessages: crossroot,
 	})
-	fmt.Println(">>>>> Message meta SENT!", bmroot, smroot, crossroot)
 
 	if err != nil {
 		return err

@@ -109,7 +109,7 @@ var tpowMinerCmd = &cli.Command{
 			return xerrors.Errorf("no miner address specified to start mining")
 		}
 
-		log.Infow("Starting mining with miner", miner)
+		log.Infow("Starting mining with miner", "miner", miner)
 		return tspow.Mine(ctx, miner, api)
 	},
 }

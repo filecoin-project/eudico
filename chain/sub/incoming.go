@@ -82,6 +82,12 @@ func HandleIncomingBlocks(ctx context.Context, bsub *pubsub.Subscription, s *cha
 				return
 			}
 
+			crossmsgs, err := FetchMessagesByCids(ctx, ses, blk.CrossMessages)
+			if err != nil {
+				log.Errorf("failed to fetch all cross messages for block received over pubsub: %s; source: %s", err, src)
+				return
+			}
+
 			took := build.Clock.Since(start)
 			log.Debugw("new block over pubsub", "cid", blk.Header.Cid(), "source", msg.GetFrom(), "msgfetch", took)
 			if took > 3*time.Second {
@@ -99,6 +105,7 @@ func HandleIncomingBlocks(ctx context.Context, bsub *pubsub.Subscription, s *cha
 				Header:        blk.Header,
 				BlsMessages:   bmsgs,
 				SecpkMessages: smsgs,
+				CrossMessages: crossmsgs,
 			}) {
 				cmgr.TagPeer(msg.ReceivedFrom, "blkprop", 5)
 			}
