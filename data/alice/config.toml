@@ -183,3 +183,10 @@
     # type: uint64
     # env var: LOTUS_CHAINSTORE_SPLITSTORE_HOTSTOREFULLGCFREQUENCY
     #HotStoreFullGCFrequency = 20
+
+[Checkpoint]
+  Fee = 0.01
+  MinioHost = "127.0.0.1:9000"
+  MinioAccessKeyID = "JLVSCVFWEPJGTFL67Z4C"
+  MinioSecretAccessKey = "4MjUvWBrtzYdJESCBQF+CYWKzhagvUZn2WRqkHnz"
+  MinioBucketName = "eudico"

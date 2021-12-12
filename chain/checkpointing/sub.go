@@ -24,6 +24,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/node/impl"
 	"github.com/filecoin-project/lotus/node/modules/helpers"
+	"github.com/filecoin-project/lotus/node/config"
 	cbor "github.com/ipfs/go-ipld-cbor"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p-core/host"
@@ -56,6 +57,8 @@ type CheckpointingSub struct {
 	ptxid string
 	// Tweaked value
 	tweakedValue []byte
+	// minio config
+	cpconfig *config.Checkpoint
 }
 
 func NewCheckpointSub(
@@ -72,6 +75,14 @@ func NewCheckpointSub(
 	if err != nil {
 		return nil, err
 	}
+
+	var ccfg config.FullNode
+	result, err := config.FromFile(os.Getenv("EUDICO_PATH")+"/config.toml", &ccfg)
+	if err != nil {
+		return nil, err
+	}
+
+	cpconfig := result.(*config.FullNode).Checkpoint
 
 	var config *keygen.TaprootConfig
 	// Load configTaproot
@@ -147,6 +158,7 @@ func NewCheckpointSub(
 		ptxid:     "",
 		config:    config,
 		newconfig: nil,
+		cpconfig:  &cpconfig,
 	}, nil
 }
 
@@ -249,6 +261,12 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 					panic(err)
 				}
 
+				// Push config to S3
+				err = StoreConfig(ctx, c.cpconfig.MinioHost, c.cpconfig.MinioAccessKeyID, c.cpconfig.MinioSecretAccessKey, c.cpconfig.MinioBucketName ,hex.EncodeToString(hash))
+				if err != nil {
+					panic(err)
+				}
+
 				c.CreateCheckpoint(ctx, data.Bytes(), hash)
 			}
 		}
@@ -344,7 +362,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		index = 1
 		value, scriptPubkeyBytes = GetTxOut(c.ptxid, index)
 	}
-	newValue := value - FEE
+	newValue := value - c.cpconfig.Fee
 
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.2f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
 	result := jsonRPC(payload)
@@ -397,6 +415,8 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		c.config = c.newconfig
 		c.newconfig = nil
 	}
+
+	c.ptxid = ""
 
 	if idsStrings[0] == c.host.ID().String() {
 		// Only first one broadcast the transaction ?

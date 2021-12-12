@@ -10,7 +10,7 @@ require (
 	github.com/Gurpartap/async v0.0.0-20180927173644-4f7f499dd9ee
 	github.com/Kubuxu/imtui v0.0.0-20210401140320-41663d68d0fa
 	github.com/StackExchange/wmi v1.2.1 // indirect
-	github.com/Zondax/multi-party-sig v0.6.0-alpha-2021-09-21.0.20211117140501-65990deeb804
+	github.com/Zondax/multi-party-sig v0.6.0-alpha-2021-09-21.0.20211202131736-ca8cb1c7e1a1
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d
 	github.com/alecthomas/jsonschema v0.0.0-20200530073317-71f438968921
 	github.com/btcsuite/btcutil v1.0.3-0.20210929233259-9cdf59f60c51

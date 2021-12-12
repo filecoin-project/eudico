@@ -1,33 +1,41 @@
 package checkpointing
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"os"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
-func StoreConfig() {
+func StoreConfig(ctx context.Context, host, accessKeyId, secretAccessKey, bucketName, hash string) error {
 	// Initialize minio client object.
-	minioClient, err := minio.New(S3_HOST, &minio.Options{
-		Creds:  credentials.NewStaticV4(ACCESS_KEY_ID, SECRET_ACCESS_KEY, ""),
+	minioClient, err := minio.New(host, &minio.Options{
+		Creds:  credentials.NewStaticV4(accessKeyId, secretAccessKey, ""),
 		Secure: false,
 	})
 	if err != nil {
-		panic(err)
+		return err
 	}
 
-	fmt.Println(minioClient)
+	filename := hash+".txt"
+    filePath := "/tmp/"+filename
+    contentType := "text/plain"
+
+	_, err = minioClient.FPutObject(ctx, bucketName, filename, filePath, minio.PutObjectOptions{ContentType: contentType})
+    if err != nil {
+        return err
+    }
+
+	return nil
 }
 
 func CreateConfig(data []byte) ([]byte, error) {
 	hash := sha256.Sum256(data)
 
-	fmt.Println(hex.EncodeToString(hash[:]))
-	err := os.WriteFile("/tmp/"+hex.EncodeToString(hash[:]), data, 0644)
+	err := os.WriteFile("/tmp/"+hex.EncodeToString(hash[:])+".txt", data, 0644)
 	if err != nil {
 		return nil, err
 	}
