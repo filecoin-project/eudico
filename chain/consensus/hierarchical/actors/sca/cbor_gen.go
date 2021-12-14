@@ -334,7 +334,7 @@ func (t *SCAState) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufSubnet = []byte{134}
+var lengthBufSubnet = []byte{137}
 
 func (t *Subnet) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -382,6 +382,23 @@ func (t *Subnet) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("failed to write cid field t.Funds: %w", err)
 	}
 
+	// t.CrossMsgs (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.CrossMsgs); err != nil {
+		return xerrors.Errorf("failed to write cid field t.CrossMsgs: %w", err)
+	}
+
+	// t.Nonce (uint64) (uint64)
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.Nonce)); err != nil {
+		return err
+	}
+
+	// t.CircSupply (big.Int) (struct)
+	if err := t.CircSupply.MarshalCBOR(w); err != nil {
+		return err
+	}
+
 	// t.Status (sca.Status) (uint64)
 
 	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.Status)); err != nil {
@@ -409,7 +426,7 @@ func (t *Subnet) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 6 {
+	if extra != 9 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -452,6 +469,41 @@ func (t *Subnet) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		t.Funds = c
+
+	}
+	// t.CrossMsgs (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.CrossMsgs: %w", err)
+		}
+
+		t.CrossMsgs = c
+
+	}
+	// t.Nonce (uint64) (uint64)
+
+	{
+
+		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+		if maj != cbg.MajUnsignedInt {
+			return fmt.Errorf("wrong type for uint64 field")
+		}
+		t.Nonce = uint64(extra)
+
+	}
+	// t.CircSupply (big.Int) (struct)
+
+	{
+
+		if err := t.CircSupply.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.CircSupply: %w", err)
+		}
 
 	}
 	// t.Status (sca.Status) (uint64)
@@ -528,14 +580,14 @@ func (t *FundParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufAddSubnetReturn = []byte{129}
+var lengthBufSubnetIDParam = []byte{129}
 
-func (t *AddSubnetReturn) MarshalCBOR(w io.Writer) error {
+func (t *SubnetIDParam) MarshalCBOR(w io.Writer) error {
 	if t == nil {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufAddSubnetReturn); err != nil {
+	if _, err := w.Write(lengthBufSubnetIDParam); err != nil {
 		return err
 	}
 
@@ -555,8 +607,8 @@ func (t *AddSubnetReturn) MarshalCBOR(w io.Writer) error {
 	return nil
 }
 
-func (t *AddSubnetReturn) UnmarshalCBOR(r io.Reader) error {
-	*t = AddSubnetReturn{}
+func (t *SubnetIDParam) UnmarshalCBOR(r io.Reader) error {
+	*t = SubnetIDParam{}
 
 	br := cbg.GetPeeker(r)
 	scratch := make([]byte, 8)

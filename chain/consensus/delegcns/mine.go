@@ -71,7 +71,7 @@ func Mine(ctx context.Context, api v1api.FullNode) error {
 						From:       miner,
 						Value:      types.NewInt(1),
 						Nonce:      0,
-						GasLimit:   60000000,
+						GasLimit:   1 << 30,
 						GasFeeCap:  types.NewInt(100),
 						GasPremium: types.NewInt(1),
 						Params:     make([]byte, 10),

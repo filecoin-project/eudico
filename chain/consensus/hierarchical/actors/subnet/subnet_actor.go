@@ -423,11 +423,11 @@ func (st *SubnetState) addStake(rt runtime.Runtime, sourceAddr address.Address, 
 	// Add the amount staked by miner to stake map.
 	err = stakes.Add(sourceAddr, value)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error adding stake to user balance table")
-	// Flust stakes adding miner stake.
+	// Flush stakes adding miner stake.
 	st.Stake, err = stakes.Root()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flust stards")
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush subnet")
 
-	// Add to totalStake in the stard.
+	// Add to totalStake in the subnet.
 	st.TotalStake = big.Add(st.TotalStake, value)
 
 	// Check if the miner has staked enough to be granted mining rights.

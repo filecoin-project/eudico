@@ -13,7 +13,7 @@ func main() {
 		actor.SCAState{},
 		actor.Subnet{},
 		actor.FundParams{},
-		actor.AddSubnetReturn{},
+		actor.SubnetIDParam{},
 	); err != nil {
 		panic(err)
 	}

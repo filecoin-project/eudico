@@ -41,11 +41,7 @@ var Methods = struct {
 	Release               abi.MethodNum
 }{builtin0.MethodConstructor, 2, 3, 4, 5, 6, 7, 8}
 
-type FundParams struct {
-	Value abi.TokenAmount
-}
-
-type AddSubnetReturn struct {
+type SubnetIDParam struct {
 	ID string
 }
 
@@ -95,7 +91,7 @@ func (a SubnetCoordActor) Constructor(rt runtime.Runtime, params *ConstructorPar
 // It registers a new subnet actor to the hierarchical consensus.
 // In order for the registering of a subnet to be successful, the transaction
 // needs to stake at least the minimum stake, if not it'll fail.
-func (a SubnetCoordActor) Register(rt runtime.Runtime, _ *abi.EmptyValue) *AddSubnetReturn {
+func (a SubnetCoordActor) Register(rt runtime.Runtime, _ *abi.EmptyValue) *SubnetIDParam {
 	// Register can only be called by an actor implementing the subnet actor interface.
 	rt.ValidateImmediateCallerType(actor.SubnetActorCodeID)
 	SubnetActorAddr := rt.Caller()
@@ -103,7 +99,6 @@ func (a SubnetCoordActor) Register(rt runtime.Runtime, _ *abi.EmptyValue) *AddSu
 	var st SCAState
 	var shid hierarchical.SubnetID
 	rt.StateTransaction(&st, func() {
-		var err error
 		shid = hierarchical.NewSubnetID(st.NetworkName, SubnetActorAddr)
 		// Check if the subnet with that ID already exists
 		if _, has, _ := st.GetSubnet(adt.AsStore(rt), shid); has {
@@ -115,30 +110,11 @@ func (a SubnetCoordActor) Register(rt runtime.Runtime, _ *abi.EmptyValue) *AddSu
 			rt.Abortf(exitcode.ErrIllegalArgument, "call to register doesn't include enough funds to stake")
 		}
 
-		// We always initialize in instantiated state
-		status := Active
-
-		// Instatiate the subnet state
-		emptyFundBalances, err := adt.StoreEmptyMap(adt.AsStore(rt), adt.BalanceTableBitwidth)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create empty funds balance table")
-
-		sh := &Subnet{
-			ID:             shid,
-			ParentID:       st.NetworkName,
-			Stake:          value,
-			Funds:          emptyFundBalances,
-			Status:         status,
-			PrevCheckpoint: *schema.EmptyCheckpoint,
-		}
-
-		// Increase the number of child subnets for the current network.
-		st.TotalSubnets++
-
-		// Flush subnet into subnetMap
-		st.flushSubnet(rt, sh)
+		// Create the new subnet and register in SCA
+		st.registerSubnet(rt, shid, value)
 	})
 
-	return &AddSubnetReturn{ID: shid.String()}
+	return &SubnetIDParam{ID: shid.String()}
 }
 
 // AddStake
@@ -170,6 +146,10 @@ func (a SubnetCoordActor) AddStake(rt runtime.Runtime, _ *abi.EmptyValue) *abi.E
 	})
 
 	return nil
+}
+
+type FundParams struct {
+	Value abi.TokenAmount
 }
 
 // ReleaseStake
@@ -349,13 +329,45 @@ func (a SubnetCoordActor) Kill(rt runtime.Runtime, _ *abi.EmptyValue) *abi.Empty
 	return nil
 }
 
-// Fund XXX
-func (a SubnetCoordActor) Fund(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
-	panic("Fund not implemented yet")
-	// Adds frozen balance to the balance table of frozen balances of the subnet.
-	// This state change needs to be detected by the subnet manager and propagated to
-	// the consensus algorithm of the subnet to perform an implicitMessage
-	// to send the funds.
+// Fund injects new funds from an account of the parent chain to a subnet.
+//
+// This functions receives a transaction with the FILs that want to be injected in the subnet.
+// - Funds injected are frozen.
+// - A new fund cross-message is created and stored to propagate it to the subnet. It will be
+// picked up by miners to include it in the next possible block.
+// - The cross-message nonce is updated.
+func (a SubnetCoordActor) Fund(rt runtime.Runtime, params *SubnetIDParam) *abi.EmptyValue {
+	// Only account actors can inject funds to a subnet (for now).
+	rt.ValidateImmediateCallerType(builtin.AccountActorCodeID)
+
+	// Check if the transaction includes funds
+	value := rt.ValueReceived()
+	if value.LessThanEqual(big.NewInt(0)) {
+		rt.Abortf(exitcode.ErrIllegalArgument, "no funds included in transaction")
+	}
+
+	// Increment stake locked for subnet.
+	var st SCAState
+	var sh *Subnet
+	rt.StateTransaction(&st, func() {
+		var has bool
+		// Check if the subnet specified in params exists.
+		var err error
+		sh, has, err = st.GetSubnet(adt.AsStore(rt), hierarchical.SubnetID(params.ID))
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching subnet state")
+		if !has {
+			rt.Abortf(exitcode.ErrIllegalArgument, "subnet for for actor hasn't been registered yet")
+		}
+
+		// Freeze funds
+		sh.freezeFunds(rt, rt.Caller(), value)
+		// Create fund message and add to the HAMT (increase nonce, etc)
+		sh.addFundMsg(rt, value)
+		// Flush subnet.
+		st.flushSubnet(rt, sh)
+
+	})
+	return nil
 }
 
 // Release XXX
