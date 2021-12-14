@@ -4,30 +4,23 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
+	"io/ioutil"
 	"os"
+	"strings"
 
 	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
-func StoreConfig(ctx context.Context, host, accessKeyId, secretAccessKey, bucketName, hash string) error {
-	// Initialize minio client object.
-	minioClient, err := minio.New(host, &minio.Options{
-		Creds:  credentials.NewStaticV4(accessKeyId, secretAccessKey, ""),
-		Secure: false,
-	})
+func StoreConfig(ctx context.Context, minioClient *minio.Client, bucketName, hash string) error {
+	filename := hash + ".txt"
+	filePath := "/tmp/" + filename
+	contentType := "text/plain"
+
+	_, err := minioClient.FPutObject(ctx, bucketName, filename, filePath, minio.PutObjectOptions{ContentType: contentType})
 	if err != nil {
 		return err
 	}
-
-	filename := hash+".txt"
-    filePath := "/tmp/"+filename
-    contentType := "text/plain"
-
-	_, err = minioClient.FPutObject(ctx, bucketName, filename, filePath, minio.PutObjectOptions{ContentType: contentType})
-    if err != nil {
-        return err
-    }
 
 	return nil
 }
@@ -41,4 +34,23 @@ func CreateConfig(data []byte) ([]byte, error) {
 	}
 
 	return hash[:], nil
+}
+
+func GetConfig(ctx context.Context, minioClient *minio.Client, bucketName, hash string) (string, error) {
+	filename := hash + ".txt"
+	filePath := "/tmp/dom/" + filename
+
+	err := minioClient.FGetObject(context.Background(), bucketName, filename, filePath, minio.GetObjectOptions{})
+	if err != nil {
+		return "", err
+	}
+
+	content, err := ioutil.ReadFile(filePath) // the file is inside the local directory
+	if err != nil {
+		return "", err
+	}
+	cpCid := strings.Split(string(content), "\n")[0]
+	fmt.Println(cpCid)
+
+	return cpCid, nil
 }

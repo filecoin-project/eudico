@@ -385,9 +385,10 @@ type FeeConfig struct {
 }
 
 type Checkpoint struct {
-	Fee float64
-	MinioHost string
-	MinioAccessKeyID string
+	Fee                  float64
+	PublicKey            string
+	MinioHost            string
+	MinioAccessKeyID     string
 	MinioSecretAccessKey string
-	MinioBucketName string
+	MinioBucketName      string
 }

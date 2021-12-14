@@ -3,7 +3,7 @@
   #
   # type: string
   # env var: LOTUS_API_LISTENADDRESS
-  ListenAddress = "/ip4/127.0.0.1/tcp/1236/http"
+  ListenAddress = "/ip4/127.0.0.1/tcp/1237/http"
 
   # type: string
   # env var: LOTUS_API_REMOTELISTENADDRESS
@@ -29,7 +29,7 @@
   #
   # type: []string
   # env var: LOTUS_LIBP2P_LISTENADDRESSES
-  ListenAddresses = ["/ip4/0.0.0.0/tcp/3002", "/ip6/::/tcp/3002"]
+  ListenAddresses = ["/ip4/0.0.0.0/tcp/0", "/ip6/::/tcp/0"]
 
   # Addresses to explicitally announce to other peers. If not specified,
   # all interface addresses are announced
@@ -184,6 +184,7 @@
     # env var: LOTUS_CHAINSTORE_SPLITSTORE_HOTSTOREFULLGCFREQUENCY
     #HotStoreFullGCFrequency = 20
 
+
 [Checkpoint]
   Fee = 0.01
   PublicKey="66a554b8af6719851a936b0afc29dc59c3678f0e3f0b7bb081c57c5b77ad48ff"
@@ -191,3 +192,4 @@
   MinioAccessKeyID = "JLVSCVFWEPJGTFL67Z4C"
   MinioSecretAccessKey = "4MjUvWBrtzYdJESCBQF+CYWKzhagvUZn2WRqkHnz"
   MinioBucketName = "eudico"
+
