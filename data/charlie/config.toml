@@ -188,6 +188,6 @@
   Fee = 0.01
   PublicKey="66a554b8af6719851a936b0afc29dc59c3678f0e3f0b7bb081c57c5b77ad48ff"
   MinioHost = "127.0.0.1:9000"
-  MinioAccessKeyID = "JLVSCVFWEPJGTFL67Z4C"
-  MinioSecretAccessKey = "4MjUvWBrtzYdJESCBQF+CYWKzhagvUZn2WRqkHnz"
+  MinioAccessKeyID = "lola"
+  MinioSecretAccessKey = "123secure"
   MinioBucketName = "eudico"
