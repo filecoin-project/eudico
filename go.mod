@@ -10,12 +10,15 @@ require (
 	github.com/Gurpartap/async v0.0.0-20180927173644-4f7f499dd9ee
 	github.com/Kubuxu/imtui v0.0.0-20210401140320-41663d68d0fa
 	github.com/StackExchange/wmi v1.2.1 // indirect
+	github.com/Zondax/multi-party-sig v0.6.0-alpha-2021-09-21.0.20211202131736-ca8cb1c7e1a1
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d
 	github.com/alecthomas/jsonschema v0.0.0-20200530073317-71f438968921
+	github.com/btcsuite/btcutil v1.0.3-0.20210929233259-9cdf59f60c51
 	github.com/buger/goterm v1.0.3
 	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e
 	github.com/cockroachdb/pebble v0.0.0-20201001221639-879f3bfeef07
 	github.com/coreos/go-systemd/v22 v22.3.2
+	github.com/cronokirby/safenum v0.29.0 // indirect
 	github.com/detailyang/go-fallocate v0.0.0-20180908115635-432fa640bd2e
 	github.com/dgraph-io/badger/v2 v2.2007.2
 	github.com/docker/go-units v0.4.0
@@ -124,6 +127,7 @@ require (
 	github.com/libp2p/go-maddr-filter v0.1.0
 	github.com/mattn/go-isatty v0.0.14
 	github.com/minio/blake2b-simd v0.0.0-20160723061019-3f5f724cb5b1
+	github.com/minio/minio-go/v7 v7.0.16 // indirect
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/multiformats/go-base32 v0.0.4
 	github.com/multiformats/go-multiaddr v0.4.1

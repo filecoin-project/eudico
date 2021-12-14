@@ -9,6 +9,7 @@ var (
 	SplitActorCodeID       cid.Cid
 	SubnetCoordActorCodeID cid.Cid
 	SubnetActorCodeID      cid.Cid
+	MpowerActorCodeID      cid.Cid
 )
 
 var builtinActors map[cid.Cid]*actorInfo
@@ -25,6 +26,7 @@ func init() {
 		&SplitActorCodeID:       {name: "example/0/split"},
 		&SubnetCoordActorCodeID: {name: "hierarchical/0/sca"},
 		&SubnetActorCodeID:      {name: "hierarchical/0/subnet"},
+		&MpowerActorCodeID:      {name: "deleg/0/mpower"},
 	} {
 		c, err := builder.Sum([]byte(info.name))
 		if err != nil {

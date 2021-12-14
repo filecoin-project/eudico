@@ -26,6 +26,7 @@ type FullNode struct {
 	Wallet     Wallet
 	Fees       FeeConfig
 	Chainstore Chainstore
+	Checkpoint Checkpoint
 }
 
 // // Common
@@ -381,4 +382,13 @@ type Wallet struct {
 
 type FeeConfig struct {
 	DefaultMaxFee types.FIL
+}
+
+type Checkpoint struct {
+	Fee                  float64
+	PublicKey            string
+	MinioHost            string
+	MinioAccessKeyID     string
+	MinioSecretAccessKey string
+	MinioBucketName      string
 }

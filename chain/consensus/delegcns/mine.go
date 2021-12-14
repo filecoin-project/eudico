@@ -81,6 +81,7 @@ func Mine(ctx context.Context, api v1api.FullNode) error {
 			}
 
 			log.Info("delegated mined a block! ", bh.Cid(), " msgs ", len(msgs))
+
 		case <-ctx.Done():
 			return nil
 		}

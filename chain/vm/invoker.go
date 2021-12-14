@@ -99,6 +99,7 @@ func (ar *ActorRegistry) Register(pred ActorPredicate, actors ...rtt.VMActor) {
 		if err != nil {
 			panic(xerrors.Errorf("%s: %w", string(a.Code().Hash()), err))
 		}
+
 		ar.actors[a.Code()] = &actorInfo{
 			methods:   code,
 			vmActor:   a,
