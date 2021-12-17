@@ -32,6 +32,8 @@ const (
 	CrossMsgsAMTBitwidth = 3
 
 	// MaxNonce supported in cross messages
+	// Bear in mind that we cast to Int64 when marshalling in
+	// some places
 	MaxNonce = math.MaxInt64
 )
 

@@ -98,9 +98,9 @@ func (a Actor) ExternalFunding(rt runtime.Runtime, params *FundingParams) *abi.E
 	}
 	value := params.Value
 	// TODO: We should maybe remove this check and allow sending funds even if the actor doesn't have balance,
-	// of give virtually "infinite" balance to subnets. This transaction failing due to a lack of funds
+	// or give virtually "infinite" balance to subnets. This transaction failing due to a lack of funds
 	// could be catastrophic, and useres may lose their funds.
-	// TODO 2: The reward actor in subnetes should give no reward to miners, so much of this actor will be
+	// TODO 2: The reward actor in subnets should give no reward to miners, so much of this actor will be
 	// simplified, giving "infinite" balance to this actor won't mess up with FIL's circulating supply because
 	// the only way to move funds from here is by externally funding.
 	if value.GreaterThan(rt.CurrentBalance()) {

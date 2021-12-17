@@ -54,6 +54,7 @@ func Mine(ctx context.Context, api v1api.FullNode) error {
 			}
 
 			// TODO: CrossMessage select from subnet manager.
+			log.Warn("TODO: gather pending cross messages from subnet manager and include them in the block")
 
 			bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
 				Miner:            miner,
@@ -65,6 +66,8 @@ func Mine(ctx context.Context, api v1api.FullNode) error {
 				Epoch:            base.Height() + 1,
 				Timestamp:        base.MinTimestamp() + build.BlockDelaySecs,
 				WinningPoStProof: nil,
+				// TODO: Adding a sample cross-message for now
+				// (it won't do anything, just triggering a bunch of logs)
 				CrossMessages: []*types.Message{
 					{
 						To:         miner,

@@ -2,7 +2,6 @@ package subnet
 
 import (
 	"context"
-	"fmt"
 	"sync/atomic"
 
 	"github.com/filecoin-project/go-state-types/network"
@@ -145,6 +144,8 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 			processedMsgs[m.Cid()] = struct{}{}
 		}
 
+		// TODO: This is the reward for a miner, we should maybe remove it
+		// in subnets
 		rwMsg := &types.Message{
 			From:       reward.RewardActorAddr,
 			To:         b.Miner,
@@ -170,7 +171,7 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 		}
 
 		for _, crossm := range b.CrossMessages {
-			fmt.Println(">>>>> TODO: Apply cross messages", crossm)
+			log.Warnf("TODO: Apply cross messages (this is a test cross-message that needs to be removed): %v", crossm)
 		}
 
 	}

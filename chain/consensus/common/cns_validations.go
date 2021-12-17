@@ -275,7 +275,8 @@ func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.St
 		//
 		// Check the nonces are correct
 		// Check that they have been commmitted in parent-chain.
-		fmt.Println(">>>>>> TODO: Implement here cross-message check")
+		// Collect the full messages behind the Cids.
+		log.Warn("TODO: Implement here cross-message checks before they are included in a block")
 
 		// // NOTE: We don't check mesage against VM for cross shard messages. They are
 		// // checked in some other way.

@@ -53,7 +53,7 @@ func (cm *CrossMsgMeta) Cid() (cid.Cid, error) {
 		// NOTE: Instead of using the metaCID to compute CID of msgMeta
 		// we use from/to to de-duplicate between Cids of different msgMeta.
 		// This may be deemed unecessary, but it is a sanity-check for the case
-		// where a subnet may try to push the same Cid of MsgMeta than other subnets
+		// where a subnet may try to push the same Cid of MsgMeta of other subnets
 		// and thus remove previously stored msgMetas.
 		// _, mc, err := cid.CidFromBytes(m.MsgsCid)
 		// if err != nil {
@@ -306,7 +306,7 @@ func (st *SCAState) appendMsgToMeta(rt runtime.Runtime, prevMetaCid cid.Cid, msg
 	// Get previous meta
 	meta, found, err := getMsgMeta(msgMetas, prevMetaCid)
 	if !found || err != nil {
-		rt.Abortf(exitcode.ErrIllegalState, "error fetching meta by cid or not found: err=%s", err)
+		rt.Abortf(exitcode.ErrIllegalState, "error fetching meta by cid or not found: err=%v", err)
 	}
 	// Add new msg to meta
 	meta.AddMsg(msg)
@@ -331,7 +331,7 @@ func (st *SCAState) appendMetasToMeta(rt runtime.Runtime, prevMetaCid cid.Cid, m
 	if mcid == prevMetaCid {
 		return mcid
 	}
-	// NOTE: We can prevent one computation of metaCid here by adding mcid as
+	// FIXME: We can prevent one computation of metaCid here by adding mcid as
 	// an argument in this function.
 	return st.putDeleteFlushMeta(rt, msgMetas, prevMetaCid, meta)
 }

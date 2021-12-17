@@ -57,7 +57,8 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			log.Errorw("selecting messages failed", "error", err)
 		}
 
-		// TODO: Select Cross-messages
+		// TODO: CrossMessage select from subnet manager.
+		log.Warn("TODO: gather pending cross messages from subnet manager and include them in the block")
 
 		testaddr, err := address.NewFromString("t0100")
 		if err != nil {
@@ -73,13 +74,15 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			Epoch:            base.Height() + 1,
 			Timestamp:        uint64(time.Now().Unix()),
 			WinningPoStProof: nil,
+			// TODO: Adding a sample cross-message for now
+			// (it won't do anything, just triggering a bunch of logs)
 			CrossMessages: []*types.Message{
 				{
 					To:         testaddr,
 					From:       testaddr,
 					Value:      types.NewInt(1),
 					Nonce:      0,
-					GasLimit:   60000000,
+					GasLimit:   1 << 30,
 					GasFeeCap:  types.NewInt(100),
 					GasPremium: types.NewInt(1),
 					Params:     make([]byte, 10),
