@@ -252,6 +252,8 @@ func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *Chec
 		// If no previous checkpoint for child chain, it means this is the first one
 		// and we can add it without additional verifications.
 		if empty, _ := prevCom.IsEmpty(); empty {
+			// Apply cross messages from child checkpoint
+			st.applyCheckMsgs(rt, ch, commit)
 			// Append the new checkpoint to the list of childs.
 			err := ch.AddChild(commit)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error committing checkpoint to this epoch")
@@ -274,6 +276,8 @@ func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *Chec
 			rt.Abortf(exitcode.ErrIllegalArgument, "new checkpoint not consistent with previous one")
 		}
 
+		// Apply cross messages from child checkpoint
+		st.applyCheckMsgs(rt, ch, commit)
 		// Checks passed, we can append the child.
 		err = ch.AddChild(commit)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error committing checkpoint to this epoch")
@@ -284,6 +288,33 @@ func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *Chec
 	})
 
 	return nil
+}
+
+func (st *SCAState) applyCheckMsgs(rt runtime.Runtime, windowCh *schema.Checkpoint, childCh *schema.Checkpoint) {
+
+	// aux map[to]CrossMsgMeta
+	aux := make(map[string][]schema.CrossMsgMeta)
+	for _, mm := range childCh.CrossMsgs() {
+		// if it is directed to this subnet, add it to down-top messages
+		// for the consensus algorithm in the subnet to pick it up.
+		if mm.To == st.NetworkName.String() {
+			// Add to DownTopMsgMeta
+			st.storeDownTopMsgMeta(rt, mm)
+		} else {
+			// If not add to the aux structure to update the checkpoint when we've
+			// gone through all crossMsgs
+			_, ok := aux[mm.To]
+			if !ok {
+				aux[mm.To] = []schema.CrossMsgMeta{mm}
+			} else {
+				aux[mm.To] = append(aux[mm.To], mm)
+			}
+		}
+	}
+
+	// Aggregate all the msgsMeta directed to other subnets in the hierarchy
+	// into the checkpoint
+	st.aggChildMsgMeta(rt, windowCh, aux)
 }
 
 // Kill unregisters a subnet from the hierarchical consensus
@@ -308,6 +339,13 @@ func (a SubnetCoordActor) Kill(rt runtime.Runtime, _ *abi.EmptyValue) *abi.Empty
 		// This is a sanity check to ensure that there is enough balance in actor to return stakes
 		if rt.CurrentBalance().LessThan(sh.Stake) {
 			rt.Abortf(exitcode.ErrIllegalState, "yikes! actor doesn't have enough balance to release these funds")
+		}
+
+		// TODO: We should prevent a subnet from being killed if it still has user funds in circulation.
+		// We haven't figured out how to handle this yet, so in the meantime we just prevent from being able to kill
+		// the subnet when there are pending funds
+		if sh.CircSupply.GreaterThan(big.Zero()) {
+			rt.Abortf(exitcode.ErrForbidden, "you can't kill a subnet where users haven't released their funds yet")
 		}
 
 		// Remove subnet from subnet registry.
@@ -348,12 +386,10 @@ func (a SubnetCoordActor) Fund(rt runtime.Runtime, params *SubnetIDParam) *abi.E
 
 	// Increment stake locked for subnet.
 	var st SCAState
-	var sh *Subnet
 	rt.StateTransaction(&st, func() {
-		var has bool
 		// Check if the subnet specified in params exists.
 		var err error
-		sh, has, err = st.GetSubnet(adt.AsStore(rt), hierarchical.SubnetID(params.ID))
+		sh, has, err := st.GetSubnet(adt.AsStore(rt), hierarchical.SubnetID(params.ID))
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching subnet state")
 		if !has {
 			rt.Abortf(exitcode.ErrIllegalArgument, "subnet for for actor hasn't been registered yet")
@@ -370,19 +406,31 @@ func (a SubnetCoordActor) Fund(rt runtime.Runtime, params *SubnetIDParam) *abi.E
 	return nil
 }
 
-// Release XXX
+// Release creates a new check message to release funds in parent chain
+//
+// This function burns the funds that will be released in the current subnet
+// and propagates a new checkpoint message to the parent chain to signal
+// the amount of funds that can be released for a specific address.
 func (a SubnetCoordActor) Release(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
-	panic("Release not implemented")
-	// Burns the funds being released by an address.
-	// It flags in the checkpoint that certains funds need to be returned to the owner
-	// in parent chain.
+	// Only account actors can release funds from a subnet (for now).
+	rt.ValidateImmediateCallerType(builtin.AccountActorCodeID)
 
-	// Sample of burning.
-	/*
-		code := rt.Send(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, totalReward, &builtin.Discard{})
-		if !code.IsSuccess() {
-			rt.Log(rtt.ERROR, "failed to send unsent reward to the burnt funds actor, code: %v", code)
-		}
-		panic("Fund not implemented yet")
-	*/
+	// Check if the transaction includes funds
+	value := rt.ValueReceived()
+	if value.LessThanEqual(big.NewInt(0)) {
+		rt.Abortf(exitcode.ErrIllegalArgument, "no funds included in transaction")
+	}
+
+	code := rt.Send(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, rt.ValueReceived(), &builtin.Discard{})
+	if !code.IsSuccess() {
+		rt.Abortf(exitcode.ErrIllegalState,
+			"failed to send unsent reward to the burnt funds actor, code: %v", code)
+	}
+
+	var st SCAState
+	rt.StateTransaction(&st, func() {
+		// Create releaseMsg and include in currentwindow checkpoint
+		st.releaseMsg(rt, value)
+	})
+	return nil
 }

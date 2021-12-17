@@ -10,7 +10,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/types"
-	ltypes "github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
@@ -28,7 +27,10 @@ const (
 	MinCheckpointPeriod = abi.ChainEpoch(10)
 
 	// CrossMsgsAMTBitwidth determines the bitwidth to use for cross-msg AMT.
+	// TODO: We probably need some empirical experiments to determine the best values
+	// for these constants.
 	CrossMsgsAMTBitwidth = 3
+
 	// MaxNonce supported in cross messages
 	MaxNonce = math.MaxInt64
 )
@@ -66,28 +68,14 @@ type SCAState struct {
 	CheckPeriod abi.ChainEpoch
 	// Checkpoints committed in SCA
 	Checkpoints cid.Cid // HAMT[epoch]Checkpoint
-}
 
-type Subnet struct {
-	ID       hierarchical.SubnetID // human-readable name of the subnet ID (path in the hierarchy)
-	ParentID hierarchical.SubnetID
-	Stake    abi.TokenAmount
-	// The SCA doesn't keep track of the stake from miners, just locks the funds.
-	// Is up to the subnet actor to handle this and distribute the stake
-	// when the subnet is killed.
-	// NOTE: We may want to keep track of this in the future.
-	// Stake      cid.Cid // BalanceTable with locked stake.
-	Funds     cid.Cid // BalanceTable with funds from addresses that entered the subnet.
-	CrossMsgs cid.Cid // AMT[*ltypes.Messages] of cross messages to subnet.
-	// NOTE: We can avoid explitly storing the Nonce here and use CrossMsgs length
-	// to determine the nonce. Deferring that for future iterations.
-	Nonce      uint64          // Latest nonce of cross message submitted to subnet.
-	CircSupply abi.TokenAmount // Circulating supply of FIL in subnet.
-	Status     Status
-	// NOTE: We could probably save some gas here without affecting the
-	// overall behavior of check committment by just keeping the information
-	// required for verification (prevCheck cid and epoch).
-	PrevCheckpoint schema.Checkpoint
+	// CheckMsgMetaRegistry
+	// Stores information about the list of messages and child msgMetas being
+	// propagated in checkpoints to the top of the hierarchy.
+	CheckMsgsMetaRegistry cid.Cid // HAMT[cid]CrossMsgMeta
+	Nonce                 uint64  // Latest nonce of cross message sent from subnet.
+	DownTopNonce          uint64  // DownTopNonce of down top messages for msgMeta received from checkpoints (probably redundant)
+	DownTopMsgsMeta       cid.Cid // AMT[schema.CrossMsgMeta] from child subnets to apply.
 }
 
 func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, error) {
@@ -99,6 +87,15 @@ func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, e
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}
+	emptyMsgsMetaMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create empty map: %w", err)
+	}
+	emptyDownTopMsgsAMT, err := adt.StoreEmptyArray(store, CrossMsgsAMTBitwidth)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create empty AMT: %w", err)
+	}
+
 	nn := hierarchical.SubnetID(params.NetworkName)
 	// Don't allow really small checkpoint periods for now.
 	period := abi.ChainEpoch(params.CheckpointPeriod)
@@ -107,12 +104,14 @@ func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, e
 	}
 
 	return &SCAState{
-		NetworkName:  nn,
-		TotalSubnets: 0,
-		MinStake:     MinSubnetStake,
-		Subnets:      emptySubnetsMapCid,
-		CheckPeriod:  period,
-		Checkpoints:  emptyCheckpointsMapCid,
+		NetworkName:           nn,
+		TotalSubnets:          0,
+		MinStake:              MinSubnetStake,
+		Subnets:               emptySubnetsMapCid,
+		CheckPeriod:           period,
+		Checkpoints:           emptyCheckpointsMapCid,
+		CheckMsgsMetaRegistry: emptyMsgsMetaMapCid,
+		DownTopMsgsMeta:       emptyDownTopMsgsAMT,
 	}, nil
 }
 
@@ -135,39 +134,6 @@ func getSubnet(subnets *adt.Map, id hierarchical.SubnetID) (*Subnet, bool, error
 		return nil, false, nil
 	}
 	return &out, true, nil
-}
-
-// addStake adds new funds to the stake of the subnet.
-//
-// This function also accepts negative values to substract, and checks
-// if the funds are enough for the subnet to be active.
-func (sh *Subnet) addStake(rt runtime.Runtime, st *SCAState, value abi.TokenAmount) {
-	// Add stake to the subnet
-	sh.Stake = big.Add(sh.Stake, value)
-
-	// Check if subnet has still stake to be active
-	if sh.Stake.LessThan(st.MinStake) {
-		sh.Status = Inactive
-	}
-
-	// Flush subnet into subnetMap
-	st.flushSubnet(rt, sh)
-
-}
-
-// freezeFunds freezes some funds from an address to inject them into a subnet.
-func (sh *Subnet) freezeFunds(rt runtime.Runtime, source address.Address, value abi.TokenAmount) {
-	funds, err := adt.AsBalanceTable(adt.AsStore(rt), sh.Funds)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state balance map for frozen funds")
-	// Add the amount being frozen to address.
-	err = funds.Add(source, value)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error adding frozen funds to user balance table")
-	// Flush funds adding miner stake.
-	sh.Funds, err = funds.Root()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush funds")
-
-	// Increase circulating supply in subnet.
-	sh.CircSupply = big.Add(sh.CircSupply, value)
 }
 
 func (st *SCAState) flushSubnet(rt runtime.Runtime, sh *Subnet) {
@@ -270,8 +236,8 @@ func (st *SCAState) getSubnetFromActorAddr(s adt.Store, addr address.Address) (*
 func (st *SCAState) registerSubnet(rt runtime.Runtime, shid hierarchical.SubnetID, stake big.Int) {
 	emptyFundBalances, err := adt.StoreEmptyMap(adt.AsStore(rt), adt.BalanceTableBitwidth)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create empty funds balance table")
-	emptyCrossMsgsAMT, err := adt.StoreEmptyArray(adt.AsStore(rt), CrossMsgsAMTBitwidth)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create empty cross msgs array")
+	emptyTopDownMsgsAMT, err := adt.StoreEmptyArray(adt.AsStore(rt), CrossMsgsAMTBitwidth)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create empty top-down msgs array")
 
 	// We always initialize in instantiated state
 	status := Active
@@ -281,7 +247,7 @@ func (st *SCAState) registerSubnet(rt runtime.Runtime, shid hierarchical.SubnetI
 		ParentID:       st.NetworkName,
 		Stake:          stake,
 		Funds:          emptyFundBalances,
-		CrossMsgs:      emptyCrossMsgsAMT,
+		TopDownMsgs:    emptyTopDownMsgsAMT,
 		CircSupply:     big.Zero(),
 		Status:         status,
 		PrevCheckpoint: *schema.EmptyCheckpoint,
@@ -292,104 +258,6 @@ func (st *SCAState) registerSubnet(rt runtime.Runtime, shid hierarchical.SubnetI
 
 	// Flush subnet into subnetMap
 	st.flushSubnet(rt, sh)
-}
-
-func (sh *Subnet) addFundMsg(rt runtime.Runtime, value big.Int) {
-	// Source
-	// NOTE: We are including here the ID address from the source, but the user
-	// may have a completely different ID address in the subnet. Nodes will have
-	// to translate this ID address to the right SECP/BLS address that owns the
-	// account
-	source := rt.Caller()
-
-	// Build message.
-	//
-	// Fund messages include the same to and from.
-	msg := &ltypes.Message{
-		To:         source,
-		From:       source,
-		Value:      value,
-		Nonce:      sh.Nonce,
-		GasLimit:   1 << 30, // This is will be applied as an implicit msg, add enough gas
-		GasFeeCap:  ltypes.NewInt(0),
-		GasPremium: ltypes.NewInt(0),
-		Params:     nil,
-	}
-
-	// Store in the list of cross messages.
-	sh.storeCrossMsg(rt, msg)
-
-	// Increase nonce.
-	sh.incrementNonce(rt)
-}
-
-func (sh *Subnet) storeCrossMsg(rt runtime.Runtime, msg *ltypes.Message) {
-	crossMsgs, err := adt.AsArray(adt.AsStore(rt), sh.CrossMsgs, CrossMsgsAMTBitwidth)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load cross-messages")
-	// Set message in AMT
-	err = crossMsgs.Set(msg.Nonce, msg)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to store cross-messages")
-	// Flush AMT
-	sh.CrossMsgs, err = crossMsgs.Root()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush cross-messages")
-
-}
-
-func (sh *Subnet) GetCrossMsg(s adt.Store, nonce uint64) (*ltypes.Message, bool, error) {
-	crossMsgs, err := adt.AsArray(s, sh.CrossMsgs, CrossMsgsAMTBitwidth)
-	if err != nil {
-		return nil, false, xerrors.Errorf("failed to load cross-msgs: %w", err)
-	}
-	return getCrossMsg(crossMsgs, nonce)
-}
-
-func getCrossMsg(crossMsgs *adt.Array, nonce uint64) (*ltypes.Message, bool, error) {
-	if nonce > MaxNonce {
-		return nil, false, xerrors.Errorf("maximum cross-message nonce is 2^63-1")
-	}
-	var out ltypes.Message
-	found, err := crossMsgs.Get(nonce, &out)
-	if err != nil {
-		return nil, false, xerrors.Errorf("failed to get cross-msg with nonce %v: %w", nonce, err)
-	}
-	if !found {
-		return nil, false, nil
-	}
-	return &out, true, nil
-}
-
-func (sh *Subnet) incrementNonce(rt runtime.Runtime) {
-	// Increment nonce.
-	sh.Nonce++
-
-	// If overflow we restart from zero.
-	if sh.Nonce > MaxNonce {
-		// FIXME: This won't be a problem in the short-term, but we should handle this.
-		// We could maybe use a snapshot or paging approach so new peers can sync
-		// from scratch while restarting the nonce for cross-message for subnets to zero.
-		// sh.Nonce = 0
-		rt.Abortf(exitcode.ErrIllegalState, "nonce overflow not supported yet")
-	}
-}
-
-func (sh *Subnet) CrossMsgFromNonce(s adt.Store, nonce uint64) ([]*ltypes.Message, error) {
-	crossMsgs, err := adt.AsArray(s, sh.CrossMsgs, CrossMsgsAMTBitwidth)
-	if err != nil {
-		return nil, xerrors.Errorf("failed to load cross-msgs: %w", err)
-	}
-	// FIXME: Consider setting the length of the slice in advance
-	// to improve performance.
-	out := make([]*ltypes.Message, 0)
-	for i := nonce; i < sh.Nonce; i++ {
-		msg, found, err := getCrossMsg(crossMsgs, i)
-		if err != nil {
-			return nil, err
-		}
-		if found {
-			out = append(out, msg)
-		}
-	}
-	return out, nil
 }
 
 func ListSubnets(s adt.Store, st SCAState) ([]Subnet, error) {
