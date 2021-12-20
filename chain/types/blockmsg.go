@@ -22,6 +22,8 @@ type OldBlockMsg struct {
 func DecodeBlockMsg(b []byte) (*BlockMsg, error) {
 	var bm BlockMsg
 	if err := bm.UnmarshalCBOR(bytes.NewReader(b)); err != nil {
+		// If we couldn't unmarshal the new version of block format,
+		// we try with the old version.
 		var obm OldBlockMsg
 		if err := obm.UnmarshalCBOR(bytes.NewReader(b)); err != nil {
 			return nil, err

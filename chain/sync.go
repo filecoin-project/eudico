@@ -1196,7 +1196,7 @@ func persistMessages(ctx context.Context, bs bstore.Blockstore, bst *exchange.Co
 		}
 	}
 
-	// TODO: Persist cross-messages, or as they are stored in SCA we don't need it?
+	// TODO: Persist cross-messages, or as they are stored in SCA we don't need to?
 
 	return nil
 }

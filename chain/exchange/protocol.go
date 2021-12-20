@@ -202,17 +202,17 @@ type NewCompactedMessages struct {
 }
 
 func (t *CompactedMessages) MarshalCBOR(w io.Writer) error {
-	// NOTE: I don't think its needed to added a handler here to determine
+	// NOTE: I don't think we need to add a handler here to determine
 	// if to marshal a new or old CompactedMessages format. UnmarshalCBOR will
 	// handle any format conveniently. However, if something breaks
-	// in the chain exchange protocol bear in mind that we are marshalling new
+	// in the chain exchange protocol bear in mind that we are _always_ marshalling new
 	// CompactedMessages type here.
 	bm := NewCompactedMessages{t.Bls, t.BlsIncludes, t.Secpk, t.SecpkIncludes, t.Cross, t.CrossIncludes}
 	return bm.MarshalCBOR(w)
 }
 
 // isOldCompacted checks if a new or old version of compactedMesasges is being
-// send in the reader.
+// sent in the reader.
 func isOldCompacted(r io.Reader) (bool, io.Reader, error) {
 	scratch := make([]byte, 1)
 	n, err := r.Read(scratch[:1])

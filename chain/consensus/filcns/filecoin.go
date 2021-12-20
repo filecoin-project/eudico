@@ -766,10 +766,10 @@ func (filec *FilecoinEC) validateMsgMeta(ctx context.Context, msg *types.BlockMs
 		return err
 	}
 
-	// TODO FIXME: No support for the application of cross-messages for
+	// TODO FIXME: No support for the application of cross-messages with
 	// filecoin consensus. To support cross-messages with Filecoin consensus this
-	// will need to change. For the meantime, we just process the OldMsgMeta as
-	// we did in previous versions.
+	// will need to change. In the meantime, we just process the OldMsgMeta as
+	// we did in previous versions and we disregard cross-msgs.
 	mrcid, err := store.Put(store.Context(), &types.OldMsgMeta{
 		BlsMessages:   bmroot,
 		SecpkMessages: smroot,
