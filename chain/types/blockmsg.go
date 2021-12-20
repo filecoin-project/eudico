@@ -13,10 +13,24 @@ type BlockMsg struct {
 	CrossMessages []cid.Cid
 }
 
+type OldBlockMsg struct {
+	Header        *BlockHeader
+	BlsMessages   []cid.Cid
+	SecpkMessages []cid.Cid
+}
+
 func DecodeBlockMsg(b []byte) (*BlockMsg, error) {
 	var bm BlockMsg
 	if err := bm.UnmarshalCBOR(bytes.NewReader(b)); err != nil {
-		return nil, err
+		// If we couldn't unmarshal the new version of block format,
+		// we try with the old version.
+		var obm OldBlockMsg
+		if err := obm.UnmarshalCBOR(bytes.NewReader(b)); err != nil {
+			return nil, err
+		}
+		bm.Header = obm.Header
+		bm.BlsMessages = obm.BlsMessages
+		bm.SecpkMessages = obm.SecpkMessages
 	}
 
 	return &bm, nil
