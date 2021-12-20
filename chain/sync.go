@@ -467,11 +467,23 @@ func computeMsgMeta(bs cbor.IpldStore, bmsgCids, smsgCids, crossCids []cid.Cid) 
 		return cid.Undef, err
 	}
 
-	mrcid, err := store.Put(store.Context(), &types.MsgMeta{
-		BlsMessages:   bmroot,
-		SecpkMessages: smroot,
-		CrossMessages: crossroot,
-	})
+	// root cid computed over BLS and SECPK messages if no cross messages are present,
+	// and all messages if any cross-messages is present (using old a new versions of
+	// MsgMeta conveniently). This ensures the backward compatibility with previous
+	// tipset validated on-chain.
+	var mrcid cid.Cid
+	if len(crossCids) == 0 {
+		mrcid, err = store.Put(store.Context(), &types.OldMsgMeta{
+			BlsMessages:   bmroot,
+			SecpkMessages: smroot,
+		})
+	} else {
+		mrcid, err = store.Put(store.Context(), &types.MsgMeta{
+			BlsMessages:   bmroot,
+			SecpkMessages: smroot,
+			CrossMessages: crossroot,
+		})
+	}
 	if err != nil {
 		return cid.Undef, xerrors.Errorf("failed to put msgmeta: %w", err)
 	}
@@ -1183,6 +1195,8 @@ func persistMessages(ctx context.Context, bs bstore.Blockstore, bst *exchange.Co
 			return xerrors.Errorf("secp256k1 message processing failed: %w", err)
 		}
 	}
+
+	// TODO: Persist cross-messages, or as they are stored in SCA we don't need it?
 
 	return nil
 }

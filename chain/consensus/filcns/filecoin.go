@@ -741,10 +741,6 @@ func (filec *FilecoinEC) validateMsgMeta(ctx context.Context, msg *types.BlockMs
 	store := blockadt.WrapStore(ctx, cbor.NewCborStore(bstore.NewMemory()))
 	bmArr := blockadt.MakeEmptyArray(store)
 	smArr := blockadt.MakeEmptyArray(store)
-	emptyroot, err := blockadt.MakeEmptyArray(store).Root()
-	if err != nil {
-		return err
-	}
 
 	for i, m := range msg.BlsMessages {
 		c := cbg.CborCid(m)
@@ -770,11 +766,13 @@ func (filec *FilecoinEC) validateMsgMeta(ctx context.Context, msg *types.BlockMs
 		return err
 	}
 
-	mrcid, err := store.Put(store.Context(), &types.MsgMeta{
+	// TODO FIXME: No support for the application of cross-messages for
+	// filecoin consensus. To support cross-messages with Filecoin consensus this
+	// will need to change. For the meantime, we just process the OldMsgMeta as
+	// we did in previous versions.
+	mrcid, err := store.Put(store.Context(), &types.OldMsgMeta{
 		BlsMessages:   bmroot,
 		SecpkMessages: smroot,
-		// NOTE: No support for cross messages in filcns at this moment
-		CrossMessages: emptyroot,
 	})
 
 	if err != nil {
