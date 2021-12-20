@@ -3,6 +3,7 @@ package sca_test
 import (
 	"testing"
 
+	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
@@ -54,7 +55,7 @@ func TestRegister(t *testing.T) {
 	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
 	// Call Register function
 	ret := rt.Call(h.SubnetCoordActor.Register, nil)
-	res, ok := ret.(*actor.AddSubnetReturn)
+	res, ok := ret.(*actor.SubnetIDParam)
 	require.True(t, ok)
 	shid := hierarchical.SubnetID("/root/f0101")
 	// Verify the return value is correct.
@@ -80,6 +81,7 @@ func TestRegister(t *testing.T) {
 	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
 		rt.Call(h.SubnetCoordActor.Register, nil)
 	})
+	rt.Verify()
 
 	t.Log("try registering without staking enough funds")
 	SubnetActorAddr = tutil.NewIDAddr(t, 102)
@@ -93,6 +95,7 @@ func TestRegister(t *testing.T) {
 	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
 		rt.Call(h.SubnetCoordActor.Register, nil)
 	})
+	rt.Verify()
 
 	t.Log("Register second subnet")
 	rt.SetCaller(SubnetActorAddr, actors.SubnetActorCodeID)
@@ -102,7 +105,7 @@ func TestRegister(t *testing.T) {
 	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
 	// Call Register function
 	ret = rt.Call(h.SubnetCoordActor.Register, nil)
-	res, ok = ret.(*actor.AddSubnetReturn)
+	res, ok = ret.(*actor.SubnetIDParam)
 	require.True(t, ok)
 	shid = hierarchical.SubnetID("/root/f0102")
 	// Verify the return value is correct.
@@ -134,8 +137,9 @@ func TestAddStake(t *testing.T) {
 	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
 	// Call Register function
 	ret := rt.Call(h.SubnetCoordActor.Register, nil)
-	res, ok := ret.(*actor.AddSubnetReturn)
+	res, ok := ret.(*actor.SubnetIDParam)
 	require.True(t, ok)
+	rt.Verify()
 
 	t.Log("add to unregistered subnet")
 	newActorAddr := tutil.NewIDAddr(t, 102)
@@ -150,6 +154,7 @@ func TestAddStake(t *testing.T) {
 	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
 		rt.Call(h.SubnetCoordActor.AddStake, nil)
 	})
+	rt.Verify()
 
 	t.Log("add some stake")
 	rt.SetCaller(SubnetActorAddr, actors.SubnetActorCodeID)
@@ -173,6 +178,7 @@ func TestAddStake(t *testing.T) {
 	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
 		rt.Call(h.SubnetCoordActor.AddStake, nil)
 	})
+	rt.Verify()
 }
 
 func TestReleaseStake(t *testing.T) {
@@ -191,7 +197,7 @@ func TestReleaseStake(t *testing.T) {
 	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
 	// Call Register function
 	ret := rt.Call(h.SubnetCoordActor.Register, nil)
-	res, ok := ret.(*actor.AddSubnetReturn)
+	res, ok := ret.(*actor.SubnetIDParam)
 	require.True(t, ok)
 
 	releaseVal := abi.NewTokenAmount(1e18)
@@ -206,6 +212,7 @@ func TestReleaseStake(t *testing.T) {
 	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
 		rt.Call(h.SubnetCoordActor.ReleaseStake, params)
 	})
+	rt.Verify()
 
 	t.Log("release some stake")
 	rt.SetCaller(SubnetActorAddr, actors.SubnetActorCodeID)
@@ -217,6 +224,7 @@ func TestReleaseStake(t *testing.T) {
 	require.True(h.t, found)
 	require.Equal(t, sh.Stake, big.Sub(value, releaseVal))
 	require.Equal(t, sh.Status, actor.Active)
+	rt.Verify()
 
 	t.Log("release to inactivate")
 	currStake := sh.Stake
@@ -231,6 +239,7 @@ func TestReleaseStake(t *testing.T) {
 	require.True(h.t, found)
 	require.Equal(t, sh.Stake, big.Sub(currStake, releaseVal))
 	require.Equal(t, sh.Status, actor.Inactive)
+	rt.Verify()
 
 	t.Log("not enough funds to release")
 	releaseVal = abi.NewTokenAmount(1e18)
@@ -285,7 +294,7 @@ func TestCheckpoints(t *testing.T) {
 	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
 	// Call Register function
 	ret := rt.Call(h.SubnetCoordActor.Register, nil)
-	res, ok := ret.(*actor.AddSubnetReturn)
+	res, ok := ret.(*actor.SubnetIDParam)
 	require.True(t, ok)
 	shid := hierarchical.SubnetID("/root/f0101")
 	// Verify the return value is correct.
@@ -309,7 +318,7 @@ func TestCheckpoints(t *testing.T) {
 	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
 	// Call Register function
 	ret = rt.Call(h.SubnetCoordActor.Register, nil)
-	res, ok = ret.(*actor.AddSubnetReturn)
+	res, ok = ret.(*actor.SubnetIDParam)
 	require.True(t, ok)
 	shid = hierarchical.SubnetID("/root/f0102")
 	// Verify the return value is correct.
@@ -335,6 +344,7 @@ func TestCheckpoints(t *testing.T) {
 	b, err := ch.MarshalBinary()
 	require.NoError(t, err)
 	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+	rt.Verify()
 	windowCh := currWindowCheckpoint(rt, epoch)
 	require.Equal(t, windowCh.Data.Epoch, 100)
 	// Check that child was added.
@@ -370,6 +380,7 @@ func TestCheckpoints(t *testing.T) {
 	b, err = ch.MarshalBinary()
 	require.NoError(t, err)
 	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+	rt.Verify()
 	windowCh = currWindowCheckpoint(rt, epoch)
 	require.Equal(t, windowCh.Data.Epoch, 100)
 	// Check that child was appended for subnet.
@@ -459,8 +470,7 @@ func TestCheckpoints(t *testing.T) {
 
 }
 
-func TestCheckpointInactive(t *testing.T) {
-
+func TestCheckpointCrossMsgs(t *testing.T) {
 	h := newHarness(t)
 	builder := mock.NewBuilder(builtin.StoragePowerActorAddr).WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
 	rt := builder.Build(t)
@@ -477,7 +487,160 @@ func TestCheckpointInactive(t *testing.T) {
 	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
 	// Call Register function
 	ret := rt.Call(h.SubnetCoordActor.Register, nil)
-	res, ok := ret.(*actor.AddSubnetReturn)
+	res, ok := ret.(*actor.SubnetIDParam)
+	require.True(t, ok)
+	shid := hierarchical.SubnetID("/root/f0101")
+	// Verify the return value is correct.
+	require.Equal(t, res.ID, shid.String())
+	rt.Verify()
+	require.Equal(t, getState(rt).TotalSubnets, uint64(1))
+	// Verify instantiated subnet
+	sh, found := h.getSubnet(rt, shid)
+	require.True(h.t, found)
+	require.Equal(t, sh.Stake, value)
+	require.Equal(t, sh.ID.String(), "/root/f0101")
+	require.Equal(t, sh.ParentID.String(), "/root")
+	require.Equal(t, sh.Status, actor.Active)
+
+	t.Log("commit checkpoint with cross msgs")
+	epoch := abi.ChainEpoch(10)
+	rt.SetCaller(SubnetActorAddr, actors.SubnetActorCodeID)
+	// Only subnet actors can call.
+	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
+	rt.SetEpoch(epoch)
+	ch := newCheckpoint(sh.ID, epoch+9)
+	// Add msgMeta directed to other subnets
+	addMsgMeta(ch, sh.ID, hierarchical.SubnetID("/root/f0102/child1"), "rand1")
+	// By not adding a random string we are checking that nothing fails when to MsgMeta
+	// for different subnets are propagating the same CID. This will probably never be the
+	// case for honest peers, but it is an attack vector.
+	addMsgMeta(ch, sh.ID, hierarchical.SubnetID("/root/f0102/child2"), "")
+	addMsgMeta(ch, sh.ID, hierarchical.SubnetID("/root/f0102/child3"), "")
+	// And to this subnet
+	addMsgMeta(ch, sh.ID, hierarchical.RootSubnet, "")
+	addMsgMeta(ch, sh.ID, hierarchical.RootSubnet, "rand")
+	prevcid, _ := ch.Cid()
+
+	b, err := ch.MarshalBinary()
+	require.NoError(t, err)
+	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+	rt.Verify()
+	windowCh := currWindowCheckpoint(rt, epoch)
+	require.Equal(t, windowCh.Data.Epoch, 100)
+	// Check that child was added.
+	require.GreaterOrEqual(t, windowCh.HasChildSource(sh.ID), 0)
+	// Check previous checkpoint added
+	prevCh, found := h.getPrevChildCheckpoint(rt, sh.ID)
+	require.True(t, found)
+	eq, err := prevCh.Equals(ch)
+	require.NoError(t, err)
+	require.True(t, eq)
+
+	// Check that the DownTopMsgs to be applied are added
+	st := getState(rt)
+	_, found, err = st.GetDownTopMsgMeta(adt.AsStore(rt), 0)
+	require.NoError(t, err)
+	require.True(t, found)
+	_, found, err = st.GetDownTopMsgMeta(adt.AsStore(rt), 1)
+	require.NoError(t, err)
+	require.True(t, found)
+
+	// Check msgMeta to other subnets are aggregated
+	m := windowCh.CrossMsgs()
+	subs := []hierarchical.SubnetID{"/root/f0102/child1", "/root/f0102/child2", "/root/f0102/child3"}
+	require.Equal(t, len(m), 3)
+	prevs := make(map[string]schema.CrossMsgMeta)
+	for i, mm := range m {
+		// Check that from has been renamed
+		require.Equal(t, mm.From, hierarchical.RootSubnet.String())
+		// Check the to is kept
+		require.Equal(t, len(windowCh.CrossMsgsTo(subs[i])), 1)
+		// Append for the future
+		prevs[mm.To] = mm
+	}
+
+	t.Log("commit second checkpoint with overlapping metas")
+	rt.SetCaller(SubnetActorAddr, actors.SubnetActorCodeID)
+	// Only subnet actors can call.
+	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
+	rt.SetEpoch(epoch)
+	ch = newCheckpoint(sh.ID, epoch+9)
+	ch.SetPrevious(prevcid)
+	// Add msgMeta directed to other subnets
+	addMsgMeta(ch, sh.ID, hierarchical.SubnetID("/root/f0102/child1"), "")
+	addMsgMeta(ch, sh.ID, hierarchical.SubnetID("/root/f0102/child2"), "")
+	addMsgMeta(ch, sh.ID, hierarchical.SubnetID("/root/f0102/child3"), "")
+	addMsgMeta(ch, sh.ID, hierarchical.SubnetID("/root/f0102/child4"), "")
+
+	b, err = ch.MarshalBinary()
+	require.NoError(t, err)
+	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+	rt.Verify()
+	windowCh = currWindowCheckpoint(rt, epoch)
+	require.Equal(t, windowCh.Data.Epoch, 100)
+	// Check that child was added.
+	require.GreaterOrEqual(t, windowCh.HasChildSource(sh.ID), 0)
+	// Check previous checkpoint added
+	prevCh, found = h.getPrevChildCheckpoint(rt, sh.ID)
+	require.True(t, found)
+	eq, err = prevCh.Equals(ch)
+	require.NoError(t, err)
+	require.True(t, eq)
+
+	// Check msgMeta to other subnets are aggregated
+	m = windowCh.CrossMsgs()
+	subs = []hierarchical.SubnetID{"/root/f0102/child1", "/root/f0102/child2", "/root/f0102/child3", "/root/f0102/child4"}
+	require.Equal(t, len(m), 4)
+	for i, mm := range m {
+		// Check that from has been renamed
+		require.Equal(t, mm.From, hierarchical.RootSubnet.String())
+		// Check the to is kept
+		require.Equal(t, len(windowCh.CrossMsgsTo(subs[i])), 1)
+		// Get current msgMetas
+		mcid, _ := mm.Cid()
+		msgmeta, found := h.getMsgMeta(rt, mcid)
+		require.True(t, found)
+		prev, ok := prevs[mm.To]
+		if ok {
+			prevCid, _ := prev.Cid()
+			_, found := h.getMsgMeta(rt, prevCid)
+			// The one subnet updated should have removed the previous
+			if mm.To == subs[0].String() {
+				require.False(h.t, found)
+			} else {
+				// The rest should stil be accessible
+				require.True(h.t, found)
+			}
+		}
+		// There should be one in every subnet (because its a new one,
+		// or they were either equal except for the first one where the
+		// cids of the msgMeta where different.
+		if mm.To == subs[0].String() {
+			require.Equal(t, len(msgmeta.Metas), 2)
+		} else {
+			require.Equal(t, len(msgmeta.Metas), 1)
+		}
+	}
+}
+
+func TestCheckpointInactive(t *testing.T) {
+	h := newHarness(t)
+	builder := mock.NewBuilder(builtin.StoragePowerActorAddr).WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
+	rt := builder.Build(t)
+	h.constructAndVerify(rt)
+	SubnetActorAddr := tutil.NewIDAddr(t, 101)
+
+	t.Log("register new subnet successfully")
+	// Send 2FIL of stake
+	value := abi.NewTokenAmount(2e18)
+	rt.SetCaller(SubnetActorAddr, actors.SubnetActorCodeID)
+	rt.SetReceived(value)
+	rt.SetBalance(value)
+	// Only subnet actors can call.
+	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
+	// Call Register function
+	ret := rt.Call(h.SubnetCoordActor.Register, nil)
+	res, ok := ret.(*actor.SubnetIDParam)
 	require.True(t, ok)
 	shid := hierarchical.SubnetID("/root/f0101")
 	// Verify the return value is correct.
@@ -501,6 +664,7 @@ func TestCheckpointInactive(t *testing.T) {
 	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
 	rt.ExpectSend(SubnetActorAddr, builtin.MethodSend, nil, releaseVal, nil, exitcode.Ok)
 	rt.Call(h.SubnetCoordActor.ReleaseStake, params)
+	rt.Verify()
 	sh, found = h.getSubnet(rt, shid)
 	require.True(h.t, found)
 	require.Equal(t, sh.Status, actor.Inactive)
@@ -519,6 +683,128 @@ func TestCheckpointInactive(t *testing.T) {
 	})
 }
 
+func TestFund(t *testing.T) {
+	h := newHarness(t)
+	builder := mock.NewBuilder(builtin.StoragePowerActorAddr).WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
+	rt := builder.Build(t)
+	h.constructAndVerify(rt)
+	SubnetActorAddr := tutil.NewIDAddr(t, 101)
+
+	t.Log("register new subnet successfully")
+	// Send 2FIL of stake
+	value := abi.NewTokenAmount(2e18)
+	rt.SetCaller(SubnetActorAddr, actors.SubnetActorCodeID)
+	rt.SetReceived(value)
+	rt.SetBalance(value)
+	// Only subnet actors can call.
+	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
+	// Call Register function
+	ret := rt.Call(h.SubnetCoordActor.Register, nil)
+	res, ok := ret.(*actor.SubnetIDParam)
+	require.True(t, ok)
+	shid := hierarchical.SubnetID("/root/f0101")
+	// Verify the return value is correct.
+	require.Equal(t, res.ID, shid.String())
+	rt.Verify()
+	require.Equal(t, getState(rt).TotalSubnets, uint64(1))
+	// Verify instantiated subnet
+	sh, found := h.getSubnet(rt, shid)
+	nn1 := sh.ID
+	require.True(h.t, found)
+	require.Equal(t, sh.Stake, value)
+	require.Equal(t, sh.ID.String(), "/root/f0101")
+	require.Equal(t, sh.ParentID.String(), "/root")
+	require.Equal(t, sh.Status, actor.Active)
+
+	t.Log("inject some funds in subnet")
+	funder := tutil.NewIDAddr(h.t, 1000)
+	value = abi.NewTokenAmount(1e18)
+	fund(h, rt, nn1, funder, value, 1, value, value)
+	newfunder := tutil.NewIDAddr(h.t, 1001)
+	fund(h, rt, nn1, newfunder, value, 2, big.Mul(big.NewInt(2), value), value)
+	fund(h, rt, nn1, newfunder, value, 3, big.Mul(big.NewInt(3), value), big.Mul(big.NewInt(2), value))
+
+	t.Log("get cross messages from nonce")
+	sh, _ = h.getSubnet(rt, nn1)
+	msgs, err := sh.TopDownMsgFromNonce(adt.AsStore(rt), 0)
+	require.NoError(h.t, err)
+	require.Equal(h.t, len(msgs), 3)
+	msgs, err = sh.TopDownMsgFromNonce(adt.AsStore(rt), 2)
+	require.NoError(h.t, err)
+	require.Equal(h.t, len(msgs), 1)
+}
+
+func TestReleaseFunds(t *testing.T) {
+	h := newHarness(t)
+	builder := mock.NewBuilder(builtin.StoragePowerActorAddr).WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
+	rt := builder.Build(t)
+	shid := hierarchical.SubnetID("/root/f0101")
+	h.constructAndVerifyWithNetworkName(rt, shid)
+
+	t.Log("release some funds from subnet")
+	releaser := tutil.NewIDAddr(h.t, 1000)
+	value := abi.NewTokenAmount(1e18)
+	prev := release(h, rt, shid, releaser, value, 0, cid.Undef)
+	release(h, rt, shid, releaser, value, 1, prev)
+
+}
+
+func release(h *shActorHarness, rt *mock.Runtime, shid hierarchical.SubnetID, releaser address.Address, value big.Int, nonce uint64, prevMeta cid.Cid) cid.Cid {
+	rt.SetReceived(value)
+	rt.SetBalance(value)
+	rt.SetCaller(releaser, builtin.AccountActorCodeID)
+	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
+	rt.ExpectSend(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, value, nil, exitcode.Ok)
+	rt.Call(h.SubnetCoordActor.Release, nil)
+	rt.Verify()
+
+	// Check that msgMeta included in checkpoint
+	windowCh := currWindowCheckpoint(rt, 0)
+	_, chmeta := windowCh.CrossMsgMeta(shid, shid.Parent())
+	require.NotNil(h.t, chmeta)
+	cidmeta, err := chmeta.Cid()
+	require.NoError(h.t, err)
+	meta, found := h.getMsgMeta(rt, cidmeta)
+	require.True(h.t, found)
+	require.Equal(h.t, len(meta.Msgs), int(nonce+1))
+	msg := meta.Msgs[nonce]
+	require.Equal(h.t, msg.From, builtin.BurntFundsActorAddr)
+	require.Equal(h.t, msg.To, releaser)
+	require.Equal(h.t, msg.Value, value)
+	require.Equal(h.t, msg.Nonce, nonce)
+	// check previous meta is removed
+	if prevMeta != cid.Undef {
+		_, found := h.getMsgMeta(rt, prevMeta)
+		require.False(h.t, found)
+	}
+	// return cid of meta
+	return cidmeta
+
+}
+
+func fund(h *shActorHarness, rt *mock.Runtime, sn hierarchical.SubnetID, funder address.Address, value abi.TokenAmount,
+	expectedNonce uint64, expectedCircSupply big.Int, expectedAddrFunds abi.TokenAmount) {
+	rt.SetReceived(value)
+	params := &actor.SubnetIDParam{ID: sn.String()}
+	rt.SetCaller(funder, builtin.AccountActorCodeID)
+	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
+	rt.Call(h.SubnetCoordActor.Fund, params)
+	rt.Verify()
+	sh, found := h.getSubnet(rt, sn)
+	require.True(h.t, found)
+	require.Equal(h.t, sh.CircSupply, expectedCircSupply)
+	require.Equal(h.t, sh.Nonce, expectedNonce)
+	require.Equal(h.t, getFunds(h.t, rt, sh, funder), expectedAddrFunds)
+	msg, found, err := sh.GetTopDownMsg(adt.AsStore(rt), expectedNonce-1)
+	require.NoError(h.t, err)
+	require.True(h.t, found)
+	// TODO: Add additional checks over msg?
+	require.Equal(h.t, msg.Value, value)
+	require.Equal(h.t, msg.From, funder)
+	require.Equal(h.t, msg.To, funder)
+	require.Equal(h.t, msg.Nonce, expectedNonce-1)
+}
+
 func TestKill(t *testing.T) {
 	h := newHarness(t)
 	builder := mock.NewBuilder(builtin.StoragePowerActorAddr).WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
@@ -535,7 +821,7 @@ func TestKill(t *testing.T) {
 	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
 	// Call Register function
 	ret := rt.Call(h.SubnetCoordActor.Register, nil)
-	res, ok := ret.(*actor.AddSubnetReturn)
+	res, ok := ret.(*actor.SubnetIDParam)
 	require.True(t, ok)
 
 	t.Log("kill subnet")
@@ -544,6 +830,7 @@ func TestKill(t *testing.T) {
 	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
 	rt.ExpectSend(SubnetActorAddr, builtin.MethodSend, nil, value, nil, exitcode.Ok)
 	rt.Call(h.SubnetCoordActor.Kill, nil)
+	rt.Verify()
 	// The subnet has been removed.
 	_, found := h.getSubnet(rt, hierarchical.SubnetID(res.ID))
 	require.False(h.t, found)
@@ -562,8 +849,13 @@ func newHarness(t *testing.T) *shActorHarness {
 }
 
 func (h *shActorHarness) constructAndVerify(rt *mock.Runtime) {
+	shid := hierarchical.RootSubnet
+	h.constructAndVerifyWithNetworkName(rt, shid)
+}
+
+func (h *shActorHarness) constructAndVerifyWithNetworkName(rt *mock.Runtime, shid hierarchical.SubnetID) {
 	rt.ExpectValidateCallerAddr(builtin.SystemActorAddr)
-	ret := rt.Call(h.SubnetCoordActor.Constructor, &actor.ConstructorParams{NetworkName: "/root", CheckpointPeriod: 100})
+	ret := rt.Call(h.SubnetCoordActor.Constructor, &actor.ConstructorParams{NetworkName: shid.String(), CheckpointPeriod: 100})
 	assert.Nil(h.t, ret)
 	rt.Verify()
 
@@ -571,10 +863,11 @@ func (h *shActorHarness) constructAndVerify(rt *mock.Runtime) {
 
 	rt.GetState(&st)
 	assert.Equal(h.t, actor.MinSubnetStake, st.MinStake)
-	shid := hierarchical.RootSubnet
 	assert.Equal(h.t, st.NetworkName, shid)
 	assert.Equal(h.t, st.CheckPeriod, abi.ChainEpoch(100))
 	verifyEmptyMap(h.t, rt, st.Subnets)
+	verifyEmptyMap(h.t, rt, st.CheckMsgsMetaRegistry)
+	verifyEmptyMap(h.t, rt, st.Checkpoints)
 }
 
 func verifyEmptyMap(t testing.TB, rt *mock.Runtime, cid cid.Cid) {
@@ -632,4 +925,34 @@ func newCheckpoint(source hierarchical.SubnetID, epoch abi.ChainEpoch) *schema.C
 	ts := ltypes.NewTipSetKey(c1, c2, c3)
 	ch.SetTipsetKey(ts)
 	return ch
+}
+
+func addMsgMeta(ch *schema.Checkpoint, from, to hierarchical.SubnetID, rand string) *schema.CrossMsgMeta {
+	cb := cid.V1Builder{Codec: cid.DagCBOR, MhType: multihash.BLAKE2B_MIN + 31}
+	c, _ := cb.Sum([]byte(from.String() + rand))
+	m := schema.NewCrossMsgMeta(from, to)
+	m.SetCid(c)
+	ch.AppendMsgMeta(m)
+	return m
+
+}
+func getFunds(t *testing.T, rt *mock.Runtime, sh *actor.Subnet, addr address.Address) abi.TokenAmount {
+	funds, err := adt.AsBalanceTable(adt.AsStore(rt), sh.Funds)
+	require.NoError(t, err)
+	out, err := funds.Get(addr)
+	require.NoError(t, err)
+	return out
+}
+
+func (h *shActorHarness) getMsgMeta(rt *mock.Runtime, c cid.Cid) (*actor.CrossMsgMeta, bool) {
+	var st actor.SCAState
+	rt.GetState(&st)
+
+	metas, err := adt.AsMap(adt.AsStore(rt), st.CheckMsgsMetaRegistry, builtin.DefaultHamtBitwidth)
+	require.NoError(h.t, err)
+	var out actor.CrossMsgMeta
+	found, err := metas.Get(abi.CidKey(c), &out)
+	require.NoError(h.t, err)
+
+	return &out, found
 }

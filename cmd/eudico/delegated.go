@@ -15,6 +15,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
+	snmgr "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	lcli "github.com/filecoin-project/lotus/cli"
@@ -32,8 +33,8 @@ var delegatedCmd = &cli.Command{
 		daemonCmd(node.Options(
 			node.Override(new(consensus.Consensus), delegcns.NewDelegatedConsensus),
 			node.Override(new(store.WeightFunc), delegcns.Weight),
-			node.Override(new(stmgr.Executor), delegcns.TipSetExecutor()),
-			node.Override(new(stmgr.UpgradeSchedule), delegcns.DefaultUpgradeSchedule()),
+			node.Override(new(stmgr.Executor), snmgr.RootTipSetExecutor()),
+			node.Override(new(stmgr.UpgradeSchedule), snmgr.DefaultUpgradeSchedule()),
 		)),
 	},
 }
@@ -76,7 +77,7 @@ var delegatedGenesisCmd = &cli.Command{
 
 		// TODO: Make configurable
 		checkPeriod := sca.DefaultCheckpointPeriod
-		if err := subnet.WriteGenesis(hierarchical.RootSubnet, subnet.Delegated, miner, vreg, rem, checkPeriod, uint64(time.Now().Unix()), f); err != nil {
+		if err := subnet.WriteGenesis(hierarchical.RootSubnet, hierarchical.Delegated, miner, vreg, rem, checkPeriod, uint64(time.Now().Unix()), f); err != nil {
 			return xerrors.Errorf("write genesis car: %w", err)
 		}
 

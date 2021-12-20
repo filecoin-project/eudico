@@ -14,7 +14,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/messagepool"
@@ -49,7 +48,7 @@ type Subnet struct {
 	// chain
 	ch *store.ChainStore
 	// Consensus type
-	consType subnet.ConsensusType
+	consType hierarchical.ConsensusType
 	// Consensus of the subnet
 	cons consensus.Consensus
 	// Mempool for the subnet.
@@ -262,11 +261,11 @@ func (sh *Subnet) mine(ctx context.Context) error {
 	// Mining in the root chain is an independent process.
 	// TODO: We should check if these processes throw an error
 	switch sh.consType {
-	case subnet.Delegated:
+	case hierarchical.Delegated:
 		// Assigning mining context.
 		sh.miningCtx, sh.miningCncl = context.WithCancel(ctx)
 		go delegcns.Mine(sh.miningCtx, sh.api)
-	case subnet.PoW:
+	case hierarchical.PoW:
 		miner, err := sh.getWallet(ctx)
 		if err != nil {
 			log.Errorw("no valid identity found for PoW mining", "err", err)

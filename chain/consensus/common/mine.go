@@ -1,38 +1,26 @@
-package filcns
+package common
 
 import (
 	"context"
 
-	"github.com/ipfs/go-cid"
-	"golang.org/x/xerrors"
-
 	"github.com/filecoin-project/go-state-types/crypto"
-	"github.com/filecoin-project/lotus/api"
+	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/types"
-	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
+	"github.com/ipfs/go-cid"
+	"golang.org/x/xerrors"
 )
 
-func (filec *FilecoinEC) CreateBlock(ctx context.Context, w api.Wallet, bt *api.BlockTemplate) (*types.FullBlock, error) {
-	pts, err := filec.sm.ChainStore().LoadTipSet(bt.Parents)
+func PrepareBlockForSignature(ctx context.Context, sm *stmgr.StateManager, bt *lapi.BlockTemplate) (*types.FullBlock, error) {
+	pts, err := sm.ChainStore().LoadTipSet(bt.Parents)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to load parent tipset: %w", err)
 	}
 
-	st, recpts, err := filec.sm.TipSetState(ctx, pts)
+	st, recpts, err := sm.TipSetState(ctx, pts)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to load tipset state: %w", err)
-	}
-
-	_, lbst, err := stmgr.GetLookbackTipSetForRound(ctx, filec.sm, pts, bt.Epoch)
-	if err != nil {
-		return nil, xerrors.Errorf("getting lookback miner actor state: %w", err)
-	}
-
-	worker, err := stmgr.GetMinerWorkerRaw(ctx, filec.sm, lbst, bt.Miner)
-	if err != nil {
-		return nil, xerrors.Errorf("failed to get miner worker: %w", err)
 	}
 
 	next := &types.BlockHeader{
@@ -52,32 +40,40 @@ func (filec *FilecoinEC) CreateBlock(ctx context.Context, w api.Wallet, bt *api.
 	var blsMessages []*types.Message
 	var secpkMessages []*types.SignedMessage
 
-	var blsMsgCids, secpkMsgCids []cid.Cid
+	var blsMsgCids, secpkMsgCids, crossMsgCids []cid.Cid
 	var blsSigs []crypto.Signature
 	for _, msg := range bt.Messages {
 		if msg.Signature.Type == crypto.SigTypeBLS {
 			blsSigs = append(blsSigs, msg.Signature)
 			blsMessages = append(blsMessages, &msg.Message)
 
-			c, err := filec.sm.ChainStore().PutMessage(&msg.Message)
+			c, err := sm.ChainStore().PutMessage(&msg.Message)
 			if err != nil {
 				return nil, err
 			}
 
 			blsMsgCids = append(blsMsgCids, c)
 		} else {
-			c, err := filec.sm.ChainStore().PutMessage(msg)
+			c, err := sm.ChainStore().PutMessage(msg)
 			if err != nil {
 				return nil, err
 			}
 
 			secpkMsgCids = append(secpkMsgCids, c)
 			secpkMessages = append(secpkMessages, msg)
-
 		}
 	}
 
-	store := filec.sm.ChainStore().ActorStore(ctx)
+	for _, msg := range bt.CrossMessages {
+		c, err := sm.ChainStore().PutMessage(msg)
+		if err != nil {
+			return nil, err
+		}
+
+		crossMsgCids = append(crossMsgCids, c)
+	}
+
+	store := sm.ChainStore().ActorStore(ctx)
 	blsmsgroot, err := consensus.ToMessagesArray(store, blsMsgCids)
 	if err != nil {
 		return nil, xerrors.Errorf("building bls amt: %w", err)
@@ -86,15 +82,15 @@ func (filec *FilecoinEC) CreateBlock(ctx context.Context, w api.Wallet, bt *api.
 	if err != nil {
 		return nil, xerrors.Errorf("building secpk amt: %w", err)
 	}
-
-	emptyroot, err := blockadt.MakeEmptyArray(store).Root()
+	crossmsgroot, err := consensus.ToMessagesArray(store, crossMsgCids)
 	if err != nil {
-		return nil, err
+		return nil, xerrors.Errorf("building cross amt: %w", err)
 	}
+
 	mmcid, err := store.Put(store.Context(), &types.MsgMeta{
 		BlsMessages:   blsmsgroot,
 		SecpkMessages: secpkmsgroot,
-		CrossMessages: emptyroot,
+		CrossMessages: crossmsgroot,
 	})
 	if err != nil {
 		return nil, err
@@ -107,37 +103,40 @@ func (filec *FilecoinEC) CreateBlock(ctx context.Context, w api.Wallet, bt *api.
 	}
 
 	next.BLSAggregate = aggSig
-	pweight, err := filec.sm.ChainStore().Weight(ctx, pts)
+	pweight, err := sm.ChainStore().Weight(ctx, pts)
 	if err != nil {
 		return nil, err
 	}
 	next.ParentWeight = pweight
 
-	baseFee, err := filec.sm.ChainStore().ComputeBaseFee(ctx, pts)
+	baseFee, err := sm.ChainStore().ComputeBaseFee(ctx, pts)
 	if err != nil {
 		return nil, xerrors.Errorf("computing base fee: %w", err)
 	}
 	next.ParentBaseFee = baseFee
-
-	nosigbytes, err := next.SigningBytes()
-	if err != nil {
-		return nil, xerrors.Errorf("failed to get signing bytes for block: %w", err)
-	}
-
-	sig, err := w.WalletSign(ctx, worker, nosigbytes, api.MsgMeta{
-		Type: api.MTBlock,
-	})
-	if err != nil {
-		return nil, xerrors.Errorf("failed to sign new block: %w", err)
-	}
-
-	next.BlockSig = sig
-
-	fullBlock := &types.FullBlock{
+	return &types.FullBlock{
 		Header:        next,
 		BlsMessages:   blsMessages,
 		SecpkMessages: secpkMessages,
+		CrossMessages: bt.CrossMessages,
+	}, nil
+
+}
+
+func SignBlock(ctx context.Context, w lapi.Wallet, b *types.FullBlock) error {
+	next := b.Header
+	nosigbytes, err := next.SigningBytes()
+	if err != nil {
+		return xerrors.Errorf("failed to get signing bytes for block: %w", err)
 	}
 
-	return fullBlock, nil
+	sig, err := w.WalletSign(ctx, next.Miner, nosigbytes, lapi.MsgMeta{
+		Type: lapi.MTBlock,
+	})
+	if err != nil {
+		return xerrors.Errorf("failed to sign new block: %w", err)
+	}
+
+	next.BlockSig = sig
+	return nil
 }

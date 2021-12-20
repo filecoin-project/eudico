@@ -36,6 +36,8 @@ var Linkproto = cidlink.LinkPrototype{
 
 var (
 	CheckpointSchema schema.Type
+	MsgMetaSchema    schema.Type
+
 	// NoPreviousCheck is a work-around to avoid undefined CIDs,
 	// that results in unexpected errors when marshalling.
 	// This needs a fix in go-ipld-prime::bindnode
@@ -47,6 +49,7 @@ var (
 
 func init() {
 	CheckpointSchema = initCheckpointSchema()
+	MsgMetaSchema = initCrossMsgMetaSchema()
 	var err error
 	NoPreviousCheck, err = Linkproto.Sum([]byte("nil"))
 	if err != nil {
@@ -71,13 +74,20 @@ type ChildCheck struct {
 	// cid from the state tree. We still want to use IPLD
 	// for now. We may be able to remove this problem
 	// if we use cbor-gen directly.
-	Checks [][]byte //NOTE:
+	Checks [][]byte //[]cid.Cid
 }
 
-// MsgTreeList is the list of trees with cross-shard messages
-// to propagate to the rest of the hierarchy.
-// TODO: This is still under development.
-type MsgTreeList struct{}
+// CrossMsgMeta includes information about the messages being propagated from and to
+// a subnet.
+//
+// MsgsCid is the cid of the list of cids of the mesasges propagated
+// for a specific subnet in that checkpoint
+type CrossMsgMeta struct {
+	From    string // Determines the source of the messages being propagated in MsgsCid
+	To      string // Determines the destination of the messages included in MsgsCid
+	MsgsCid []byte // cid.Cid
+	Nonce   int    // Nonce of the msgMeta
+}
 
 // CheckData is the data included in a Checkpoint.
 type CheckData struct {
@@ -89,8 +99,8 @@ type CheckData struct {
 	// tree trying to fetch it and failing because it can't find anything, so we
 	// are "hiding" them behing a byte type
 	PrevCheckCid []byte
-	Childs       []ChildCheck
-	XShardMsg    *MsgTreeList
+	Childs       []ChildCheck   // List of child checks
+	CrossMsgs    []CrossMsgMeta // List with meta of msgs being propagated.
 }
 
 // Checkpoint data structure
@@ -102,6 +112,28 @@ type CheckData struct {
 type Checkpoint struct {
 	Data      CheckData
 	Signature []byte
+}
+
+// initCheckpointType initializes the Checkpoint schema
+func initCrossMsgMetaSchema() schema.Type {
+	ts := schema.TypeSystem{}
+	ts.Init()
+	ts.Accumulate(schema.SpawnString("String"))
+	ts.Accumulate(schema.SpawnInt("Int"))
+	ts.Accumulate(schema.SpawnLink("Link"))
+	ts.Accumulate(schema.SpawnBytes("Bytes"))
+
+	ts.Accumulate(schema.SpawnStruct("CrossMsgMeta",
+		[]schema.StructField{
+			schema.SpawnStructField("From", "String", false, false),
+			schema.SpawnStructField("To", "String", false, false),
+			schema.SpawnStructField("MsgsCid", "Bytes", false, false),
+			schema.SpawnStructField("Nonce", "Int", false, false),
+		},
+		schema.SpawnStructRepresentationMap(map[string]string{}),
+	))
+
+	return ts.TypeByName("CrossMsgMeta")
 }
 
 // initCheckpointType initializes the Checkpoint schema
@@ -120,10 +152,8 @@ func initCheckpointSchema() schema.Type {
 		},
 		schema.SpawnStructRepresentationMap(map[string]string{}),
 	))
-	ts.Accumulate(schema.SpawnStruct("MsgTreeList",
-		[]schema.StructField{},
-		schema.SpawnStructRepresentationMap(map[string]string{}),
-	))
+	ts.Accumulate(initCrossMsgMetaSchema())
+
 	ts.Accumulate(schema.SpawnStruct("CheckData",
 		[]schema.StructField{
 			schema.SpawnStructField("Source", "String", false, false),
@@ -131,7 +161,7 @@ func initCheckpointSchema() schema.Type {
 			schema.SpawnStructField("Epoch", "Int", false, false),
 			schema.SpawnStructField("PrevCheckCid", "Bytes", false, false),
 			schema.SpawnStructField("Childs", "List_ChildCheck", false, false),
-			schema.SpawnStructField("XShardMsg", "MsgTreeList", false, true),
+			schema.SpawnStructField("CrossMsgs", "List_CrossMsgMeta", false, false),
 		},
 		schema.SpawnStructRepresentationMap(nil),
 	))
@@ -146,6 +176,7 @@ func initCheckpointSchema() schema.Type {
 	ts.Accumulate(schema.SpawnList("List_Link", "Link", false))
 	ts.Accumulate(schema.SpawnList("List_Bytes", "Bytes", false))
 	ts.Accumulate(schema.SpawnList("List_ChildCheck", "ChildCheck", false))
+	ts.Accumulate(schema.SpawnList("List_CrossMsgMeta", "CrossMsgMeta", false))
 
 	return ts.TypeByName("Checkpoint")
 }
@@ -178,6 +209,14 @@ func NewRawCheckpoint(source hierarchical.SubnetID, epoch abi.ChainEpoch) *Check
 		},
 	}
 
+}
+
+func NewCrossMsgMeta(from, to hierarchical.SubnetID) *CrossMsgMeta {
+	return &CrossMsgMeta{
+		From:  from.String(),
+		To:    to.String(),
+		Nonce: -1,
+	}
 }
 
 func (c *Checkpoint) IsEmpty() (bool, error) {
@@ -258,6 +297,53 @@ func (c *Checkpoint) UnmarshalCBOR(r io.Reader) error {
 		return xerrors.Errorf("Unmarshalled node not of type CheckData")
 	}
 	*c = *ch
+	return nil
+}
+
+func (cm *CrossMsgMeta) Cid() (cid.Cid, error) {
+	_, c, err := cid.CidFromBytes(cm.MsgsCid)
+	return c, err
+}
+
+func (cm *CrossMsgMeta) GetFrom() hierarchical.SubnetID {
+	return hierarchical.SubnetID(cm.From)
+}
+
+func (cm *CrossMsgMeta) GetTo() hierarchical.SubnetID {
+	return hierarchical.SubnetID(cm.To)
+}
+
+func (cm *CrossMsgMeta) SetCid(c cid.Cid) {
+	cm.MsgsCid = c.Bytes()
+}
+
+func (cm *CrossMsgMeta) Equal(other *CrossMsgMeta) bool {
+	return cm.From == other.From && cm.To == other.To && bytes.Equal(cm.MsgsCid, other.MsgsCid)
+}
+
+func (cm *CrossMsgMeta) MarshalCBOR(w io.Writer) error {
+	node := bindnode.Wrap(cm, MsgMetaSchema)
+	nodeRepr := node.Representation()
+	err := dagcbor.Encode(nodeRepr, w)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (cm *CrossMsgMeta) UnmarshalCBOR(r io.Reader) error {
+	nb := bindnode.Prototype(cm, MsgMetaSchema).NewBuilder()
+	err := dagcbor.Decode(nb, r)
+	if err != nil {
+		return err
+	}
+	n := bindnode.Unwrap(nb.Build())
+
+	ch, ok := n.(*CrossMsgMeta)
+	if !ok {
+		return xerrors.Errorf("Unmarshalled node not of type CheckData")
+	}
+	*cm = *ch
 	return nil
 }
 
@@ -342,9 +428,9 @@ func (c *Checkpoint) LenChilds() int {
 	return len(c.Data.Childs)
 }
 
-func (c *Checkpoint) GetSourceChilds(source hierarchical.SubnetID) *ChildCheck {
+func (c *Checkpoint) GetSourceChilds(source hierarchical.SubnetID) ChildCheck {
 	i := c.HasChildSource(source)
-	return &c.GetChilds()[i]
+	return c.GetChilds()[i]
 }
 
 func (c *Checkpoint) GetChilds() []ChildCheck {
@@ -361,6 +447,54 @@ func (c *Checkpoint) TipSet() (types.TipSetKey, error) {
 
 func (c *Checkpoint) EqualTipSet(tsk types.TipSetKey) bool {
 	return bytes.Equal(tsk.Bytes(), c.Data.TipSet)
+}
+
+// CrossMsgs returns crossMsgs data included in checkpoint
+func (c *Checkpoint) CrossMsgs() []CrossMsgMeta {
+	return c.Data.CrossMsgs
+}
+
+// CrossMsgMeta returns the MsgMeta from and to a subnet from a checkpoint
+// and the index the crossMsgMeta is in the slice
+func (c *Checkpoint) CrossMsgMeta(from, to hierarchical.SubnetID) (int, *CrossMsgMeta) {
+	for i, m := range c.Data.CrossMsgs {
+		if m.From == from.String() && m.To == to.String() {
+			return i, &m
+		}
+	}
+	return -1, nil
+}
+
+func (c *Checkpoint) AppendMsgMeta(meta *CrossMsgMeta) {
+	_, has := c.CrossMsgMeta(meta.GetFrom(), meta.GetTo())
+	// If no previous, append right away
+	if has == nil {
+		c.Data.CrossMsgs = append(c.Data.CrossMsgs, *meta)
+		return
+	}
+
+	// If not equal Cids
+	if !bytes.Equal(has.MsgsCid, meta.MsgsCid) {
+		c.Data.CrossMsgs = append(c.Data.CrossMsgs, *meta)
+		return
+	}
+
+	// Do nothing in the rest of the cases
+}
+
+func (c *Checkpoint) SetMsgMetaCid(i int, cd cid.Cid) {
+	c.Data.CrossMsgs[i].MsgsCid = cd.Bytes()
+}
+
+// CrossMsgsTo returns the crossMsgsMeta directed to a specific subnet
+func (c *Checkpoint) CrossMsgsTo(to hierarchical.SubnetID) []CrossMsgMeta {
+	out := make([]CrossMsgMeta, 0)
+	for _, m := range c.Data.CrossMsgs {
+		if m.To == to.String() {
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 func ByteSliceToCidList(l [][]byte) ([]cid.Cid, error) {

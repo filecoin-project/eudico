@@ -1,6 +1,8 @@
 package sca
 
 import (
+	"math"
+
 	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
@@ -21,9 +23,18 @@ const (
 	// This may be too short, but at this point it comes pretty handy
 	// for testing purposes.
 	DefaultCheckpointPeriod = abi.ChainEpoch(10)
-
 	// MinCheckpointPeriod allowed for subnets
 	MinCheckpointPeriod = abi.ChainEpoch(10)
+
+	// CrossMsgsAMTBitwidth determines the bitwidth to use for cross-msg AMT.
+	// TODO: We probably need some empirical experiments to determine the best values
+	// for these constants.
+	CrossMsgsAMTBitwidth = 3
+
+	// MaxNonce supported in cross messages
+	// Bear in mind that we cast to Int64 when marshalling in
+	// some places
+	MaxNonce = math.MaxInt64
 )
 
 var (
@@ -59,23 +70,14 @@ type SCAState struct {
 	CheckPeriod abi.ChainEpoch
 	// Checkpoints committed in SCA
 	Checkpoints cid.Cid // HAMT[epoch]Checkpoint
-}
 
-type Subnet struct {
-	ID       hierarchical.SubnetID // human-readable name of the subnet ID (path in the hierarchy)
-	ParentID hierarchical.SubnetID
-	Stake    abi.TokenAmount
-	// The SCA doesn't keep track of the stake from miners, just locks the funds.
-	// Is up to the subnet actor to handle this and distribute the stake
-	// when the subnet is killed.
-	// NOTE: We may want to keep track of this in the future.
-	// Stake      cid.Cid // BalanceTable with locked stake.
-	Funds  cid.Cid // BalanceTable with funds from addresses that entered the subnet.
-	Status Status
-	// NOTE: We could probably save some gas here without affecting the
-	// overall behavior of check committment by just keeping the information
-	// required for verification (prevCheck cid and epoch).
-	PrevCheckpoint schema.Checkpoint
+	// CheckMsgMetaRegistry
+	// Stores information about the list of messages and child msgMetas being
+	// propagated in checkpoints to the top of the hierarchy.
+	CheckMsgsMetaRegistry cid.Cid // HAMT[cid]CrossMsgMeta
+	Nonce                 uint64  // Latest nonce of cross message sent from subnet.
+	DownTopNonce          uint64  // DownTopNonce of down top messages for msgMeta received from checkpoints (probably redundant)
+	DownTopMsgsMeta       cid.Cid // AMT[schema.CrossMsgMeta] from child subnets to apply.
 }
 
 func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, error) {
@@ -87,6 +89,15 @@ func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, e
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}
+	emptyMsgsMetaMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create empty map: %w", err)
+	}
+	emptyDownTopMsgsAMT, err := adt.StoreEmptyArray(store, CrossMsgsAMTBitwidth)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create empty AMT: %w", err)
+	}
+
 	nn := hierarchical.SubnetID(params.NetworkName)
 	// Don't allow really small checkpoint periods for now.
 	period := abi.ChainEpoch(params.CheckpointPeriod)
@@ -95,12 +106,14 @@ func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, e
 	}
 
 	return &SCAState{
-		NetworkName:  nn,
-		TotalSubnets: 0,
-		MinStake:     MinSubnetStake,
-		Subnets:      emptySubnetsMapCid,
-		CheckPeriod:  period,
-		Checkpoints:  emptyCheckpointsMapCid,
+		NetworkName:           nn,
+		TotalSubnets:          0,
+		MinStake:              MinSubnetStake,
+		Subnets:               emptySubnetsMapCid,
+		CheckPeriod:           period,
+		Checkpoints:           emptyCheckpointsMapCid,
+		CheckMsgsMetaRegistry: emptyMsgsMetaMapCid,
+		DownTopMsgsMeta:       emptyDownTopMsgsAMT,
 	}, nil
 }
 
@@ -125,24 +138,6 @@ func getSubnet(subnets *adt.Map, id hierarchical.SubnetID) (*Subnet, bool, error
 	return &out, true, nil
 }
 
-// addStake adds new funds to the stake of the subnet.
-//
-// This function also accepts negative values to substract, and checks
-// if the funds are enough for the subnet to be active.
-func (sh *Subnet) addStake(rt runtime.Runtime, st *SCAState, value abi.TokenAmount) {
-	// Add stake to the subnet
-	sh.Stake = big.Add(sh.Stake, value)
-
-	// Check if subnet has still stake to be active
-	if sh.Stake.LessThan(st.MinStake) {
-		sh.Status = Inactive
-	}
-
-	// Flush subnet into subnetMap
-	st.flushSubnet(rt, sh)
-
-}
-
 func (st *SCAState) flushSubnet(rt runtime.Runtime, sh *Subnet) {
 	// Update subnet in the list of subnets.
 	subnets, err := adt.AsMap(adt.AsStore(rt), st.Subnets, builtin.DefaultHamtBitwidth)
@@ -158,7 +153,7 @@ func (st *SCAState) flushSubnet(rt runtime.Runtime, sh *Subnet) {
 // populated in the current window.
 //
 // If it hasn't been instantiated, a template is created. From there on,
-// the template is populated with every new xShard transaction and
+// the template is populated with every new x-net transaction and
 // child checkpoint, until the windows passes that the template is frozen
 // and is ready for miners to populate the rest and sign it.
 func (st *SCAState) CurrWindowCheckpoint(store adt.Store, epoch abi.ChainEpoch) (*schema.Checkpoint, error) {
@@ -183,7 +178,7 @@ func (st *SCAState) currWindowCheckpoint(rt runtime.Runtime) *schema.Checkpoint 
 // the signing window for an epoch
 //
 // It returns the checkpoint that is ready to be signed
-// and already includes all the checkpoints and xshard messages
+// and already includes all the checkpoints and x-net messages
 // to include in it. Miners need to populate the prevCheckpoint
 // and tipset of this template and sign ot.
 func RawCheckpoint(st *SCAState, store adt.Store, epoch abi.ChainEpoch) (*schema.Checkpoint, error) {
@@ -238,6 +233,33 @@ func (st *SCAState) flushCheckpoint(rt runtime.Runtime, ch *schema.Checkpoint) {
 func (st *SCAState) getSubnetFromActorAddr(s adt.Store, addr address.Address) (*Subnet, bool, error) {
 	shid := hierarchical.NewSubnetID(st.NetworkName, addr)
 	return st.GetSubnet(s, shid)
+}
+
+func (st *SCAState) registerSubnet(rt runtime.Runtime, shid hierarchical.SubnetID, stake big.Int) {
+	emptyFundBalances, err := adt.StoreEmptyMap(adt.AsStore(rt), adt.BalanceTableBitwidth)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create empty funds balance table")
+	emptyTopDownMsgsAMT, err := adt.StoreEmptyArray(adt.AsStore(rt), CrossMsgsAMTBitwidth)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create empty top-down msgs array")
+
+	// We always initialize in instantiated state
+	status := Active
+
+	sh := &Subnet{
+		ID:             shid,
+		ParentID:       st.NetworkName,
+		Stake:          stake,
+		Funds:          emptyFundBalances,
+		TopDownMsgs:    emptyTopDownMsgsAMT,
+		CircSupply:     big.Zero(),
+		Status:         status,
+		PrevCheckpoint: *schema.EmptyCheckpoint,
+	}
+
+	// Increase the number of child subnets for the current network.
+	st.TotalSubnets++
+
+	// Flush subnet into subnetMap
+	st.flushSubnet(rt, sh)
 }
 
 func ListSubnets(s adt.Store, st SCAState) ([]Subnet, error) {

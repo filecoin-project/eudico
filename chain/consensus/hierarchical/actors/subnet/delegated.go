@@ -54,6 +54,7 @@ func makeDelegatedGenesisBlock(ctx context.Context, bs bstore.Blockstore, templa
 	mm := &types.MsgMeta{
 		BlsMessages:   emptyroot,
 		SecpkMessages: emptyroot,
+		CrossMessages: emptyroot,
 	}
 	mmb, err := mm.ToStorageBlock()
 	if err != nil {

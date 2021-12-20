@@ -10,7 +10,7 @@ import (
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/system"
-	param "github.com/filecoin-project/lotus/chain/consensus/params"
+	"github.com/filecoin-project/lotus/chain/consensus/common"
 	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/genesis"
@@ -54,6 +54,7 @@ func makePoWGenesisBlock(ctx context.Context, bs bstore.Blockstore, template gen
 	mm := &types.MsgMeta{
 		BlsMessages:   emptyroot,
 		SecpkMessages: emptyroot,
+		CrossMessages: emptyroot,
 	}
 	mmb, err := mm.ToStorageBlock()
 	if err != nil {
@@ -65,7 +66,7 @@ func makePoWGenesisBlock(ctx context.Context, bs bstore.Blockstore, template gen
 
 	log.Infof("Empty Genesis root: %s", emptyroot)
 
-	wtb, err := param.GenesisWorkTarget.Bytes()
+	wtb, err := common.GenesisWorkTarget.Bytes()
 	if err != nil {
 		return nil, err
 	}

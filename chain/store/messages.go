@@ -101,6 +101,7 @@ type BlockMessages struct {
 	Miner         address.Address
 	BlsMessages   []types.ChainMsg
 	SecpkMessages []types.ChainMsg
+	CrossMessages []types.ChainMsg
 }
 
 func (cs *ChainStore) BlockMsgsForTipset(ts *types.TipSet) ([]BlockMessages, error) {
@@ -142,7 +143,7 @@ func (cs *ChainStore) BlockMsgsForTipset(ts *types.TipSet) ([]BlockMessages, err
 	var out []BlockMessages
 	for _, b := range ts.Blocks() {
 
-		bms, sms, err := cs.MessagesForBlock(b)
+		bms, sms, cms, err := cs.MessagesForBlock(b)
 		if err != nil {
 			return nil, xerrors.Errorf("failed to get messages for block: %w", err)
 		}
@@ -151,6 +152,7 @@ func (cs *ChainStore) BlockMsgsForTipset(ts *types.TipSet) ([]BlockMessages, err
 			Miner:         b.Miner,
 			BlsMessages:   make([]types.ChainMsg, 0, len(bms)),
 			SecpkMessages: make([]types.ChainMsg, 0, len(sms)),
+			CrossMessages: make([]types.ChainMsg, 0, len(sms)),
 		}
 
 		for _, bmsg := range bms {
@@ -172,6 +174,17 @@ func (cs *ChainStore) BlockMsgsForTipset(ts *types.TipSet) ([]BlockMessages, err
 
 			if b {
 				bm.SecpkMessages = append(bm.SecpkMessages, smsg)
+			}
+		}
+
+		for _, crossmsg := range cms {
+			b, err := selectMsg(crossmsg.VMMessage())
+			if err != nil {
+				return nil, xerrors.Errorf("failed to decide whether to select message for block: %w", err)
+			}
+
+			if b {
+				bm.CrossMessages = append(bm.CrossMessages, crossmsg)
 			}
 		}
 
@@ -204,56 +217,68 @@ func (cs *ChainStore) MessagesForTipset(ts *types.TipSet) ([]types.ChainMsg, err
 type mmCids struct {
 	bls   []cid.Cid
 	secpk []cid.Cid
+	cross []cid.Cid
 }
 
-func (cs *ChainStore) ReadMsgMetaCids(mmc cid.Cid) ([]cid.Cid, []cid.Cid, error) {
+func (cs *ChainStore) ReadMsgMetaCids(mmc cid.Cid) ([]cid.Cid, []cid.Cid, []cid.Cid, error) {
 	o, ok := cs.mmCache.Get(mmc)
 	if ok {
 		mmcids := o.(*mmCids)
-		return mmcids.bls, mmcids.secpk, nil
+		return mmcids.bls, mmcids.secpk, mmcids.cross, nil
 	}
 
 	cst := cbor.NewCborStore(cs.chainLocalBlockstore)
 	var msgmeta types.MsgMeta
 	if err := cst.Get(context.TODO(), mmc, &msgmeta); err != nil {
-		return nil, nil, xerrors.Errorf("failed to load msgmeta (%s): %w", mmc, err)
+		return nil, nil, nil, xerrors.Errorf("failed to load msgmeta (%s): %w", mmc, err)
 	}
 
 	blscids, err := cs.readAMTCids(msgmeta.BlsMessages)
 	if err != nil {
-		return nil, nil, xerrors.Errorf("loading bls message cids for block: %w", err)
+		return nil, nil, nil, xerrors.Errorf("loading bls message cids for block: %w", err)
 	}
 
 	secpkcids, err := cs.readAMTCids(msgmeta.SecpkMessages)
 	if err != nil {
-		return nil, nil, xerrors.Errorf("loading secpk message cids for block: %w", err)
+		return nil, nil, nil, xerrors.Errorf("loading secpk message cids for block: %w", err)
+	}
+
+	crosscids, err := cs.readAMTCids(msgmeta.CrossMessages)
+	if err != nil {
+		return nil, nil, nil, xerrors.Errorf("loading cross message cids for block: %w", err)
 	}
 
 	cs.mmCache.Add(mmc, &mmCids{
 		bls:   blscids,
 		secpk: secpkcids,
+		cross: crosscids,
 	})
 
-	return blscids, secpkcids, nil
+	return blscids, secpkcids, crosscids, nil
 }
 
-func (cs *ChainStore) MessagesForBlock(b *types.BlockHeader) ([]*types.Message, []*types.SignedMessage, error) {
-	blscids, secpkcids, err := cs.ReadMsgMetaCids(b.Messages)
+func (cs *ChainStore) MessagesForBlock(b *types.BlockHeader) ([]*types.Message, []*types.SignedMessage, []*types.Message, error) {
+	blscids, secpkcids, crosscids, err := cs.ReadMsgMetaCids(b.Messages)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	blsmsgs, err := cs.LoadMessagesFromCids(blscids)
 	if err != nil {
-		return nil, nil, xerrors.Errorf("loading bls messages for block: %w", err)
+		return nil, nil, nil, xerrors.Errorf("loading bls messages for block: %w", err)
 	}
 
 	secpkmsgs, err := cs.LoadSignedMessagesFromCids(secpkcids)
 	if err != nil {
-		return nil, nil, xerrors.Errorf("loading secpk messages for block: %w", err)
+		return nil, nil, nil, xerrors.Errorf("loading secpk messages for block: %w", err)
 	}
 
-	return blsmsgs, secpkmsgs, nil
+	crossmsgs, err := cs.LoadMessagesFromCids(crosscids)
+	if err != nil {
+		return nil, nil, nil, xerrors.Errorf("loading cross messages messages for block: %w", err)
+	}
+
+	return blsmsgs, secpkmsgs, crossmsgs, nil
 }
 
 func (cs *ChainStore) GetParentReceipt(b *types.BlockHeader, i int) (*types.MessageReceipt, error) {

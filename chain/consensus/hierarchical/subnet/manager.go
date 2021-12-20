@@ -159,7 +159,7 @@ func NewSubnetMgr(
 }
 
 func (s *SubnetMgr) startSubnet(id hierarchical.SubnetID,
-	parentAPI *API, consensus subnet.ConsensusType,
+	parentAPI *API, consensus hierarchical.ConsensusType,
 	genesis []byte) error {
 	var err error
 	// Subnets inherit the context from the SubnetManager.
@@ -188,11 +188,7 @@ func (s *SubnetMgr) startSubnet(id hierarchical.SubnetID,
 	sh.bs = blockstore.FromDatastore(s.ds)
 
 	// Select the right TipSetExecutor for the consensus algorithms chosen.
-	tsExec, err := tipSetExecutor(consensus)
-	if err != nil {
-		log.Errorw("Error getting TipSetExecutor for consensus", "subnetID", id, "err", err)
-		return err
-	}
+	tsExec := TipSetExecutor(sh)
 	weight, err := weight(consensus)
 	if err != nil {
 		log.Errorw("Error getting weight for consensus", "subnetID", id, "err", err)
@@ -330,7 +326,7 @@ func (s *SubnetMgr) AddSubnet(
 		NetworkName:   string(s.api.NetName),
 		MinMinerStake: minerStake,
 		Name:          name,
-		Consensus:     subnet.ConsensusType(consensus),
+		Consensus:     hierarchical.ConsensusType(consensus),
 		DelegMiner:    delegminer,
 		CheckPeriod:   checkPeriod,
 	}

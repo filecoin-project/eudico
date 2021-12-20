@@ -10,6 +10,7 @@ type BlockMsg struct {
 	Header        *BlockHeader
 	BlsMessages   []cid.Cid
 	SecpkMessages []cid.Cid
+	CrossMessages []cid.Cid
 }
 
 func DecodeBlockMsg(b []byte) (*BlockMsg, error) {

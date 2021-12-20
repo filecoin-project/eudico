@@ -16,9 +16,9 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	init_ "github.com/filecoin-project/lotus/chain/actors/builtin/init"
-	"github.com/filecoin-project/lotus/chain/actors/builtin/reward"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/system"
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
+	"github.com/filecoin-project/lotus/chain/consensus/actors/reward"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/gen"
@@ -39,12 +39,12 @@ const (
 	networkVersion = network.Version14
 )
 
-func WriteGenesis(netName hierarchical.SubnetID, consensus ConsensusType, miner, vreg, rem address.Address, checkPeriod abi.ChainEpoch, seq uint64, w io.Writer) error {
+func WriteGenesis(netName hierarchical.SubnetID, consensus hierarchical.ConsensusType, miner, vreg, rem address.Address, checkPeriod abi.ChainEpoch, seq uint64, w io.Writer) error {
 	bs := bstore.WrapIDStore(bstore.NewMemorySync())
 
 	var b *genesis2.GenesisBootstrap
 	switch consensus {
-	case Delegated:
+	case hierarchical.Delegated:
 		if miner == address.Undef {
 			return xerrors.Errorf("no miner specified for delegated consensus")
 		}
@@ -56,7 +56,7 @@ func WriteGenesis(netName hierarchical.SubnetID, consensus ConsensusType, miner,
 		if err != nil {
 			return xerrors.Errorf("error making genesis delegated block: %w", err)
 		}
-	case PoW:
+	case hierarchical.PoW:
 		template, err := powGenTemplate(netName.String(), vreg, rem, seq)
 		if err != nil {
 			return err
@@ -124,7 +124,10 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 	}
 
 	// Setup sca actor
-	params := &sca.ConstructorParams{template.NetworkName, uint64(checkPeriod)}
+	params := &sca.ConstructorParams{
+		NetworkName:      template.NetworkName,
+		CheckpointPeriod: uint64(checkPeriod),
+	}
 	scaact, err := SetupSCAActor(ctx, bs, params)
 	if err != nil {
 		return nil, nil, err
@@ -134,14 +137,15 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 		return nil, nil, xerrors.Errorf("set SCA actor: %w", err)
 	}
 
-	// Setup reward
-	// RewardActor's state is overwritten by SetupStorageMiners, but needs to exist for miner creation messages
-	rewact, err := genesis2.SetupRewardActor(ctx, bs, big.Zero(), av)
+	// Setup reward actor
+	// This is a modified reward actor to support the needs of hierarchical consensus
+	// protocol.
+	rewact, err := SetupRewardActor(ctx, bs, big.Zero(), av)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup reward actor: %w", err)
 	}
 
-	err = state.SetActor(reward.Address, rewact)
+	err = state.SetActor(reward.RewardActorAddr, rewact)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("set reward actor: %w", err)
 	}
@@ -245,6 +249,28 @@ func SetupSCAActor(ctx context.Context, bs bstore.Blockstore, params *sca.Constr
 	act := &types.Actor{
 		Code:    actor.SubnetCoordActorCodeID,
 		Balance: big.Zero(),
+		Head:    statecid,
+	}
+
+	return act, nil
+}
+
+func SetupRewardActor(ctx context.Context, bs bstore.Blockstore, qaPower big.Int, av actors.Version) (*types.Actor, error) {
+	cst := cbor.NewCborStore(bs)
+	rst := reward.ConstructState(qaPower)
+
+	statecid, err := cst.Put(ctx, rst)
+	if err != nil {
+		return nil, err
+	}
+
+	// NOTE: For now, everything in the reward actor is the same except the code,
+	// where we included an additional method to fund accounts. This may change
+	// in the future when we design specific reward system for subnets.
+	act := &types.Actor{
+		Code: actor.RewardActorCodeID,
+		// NOTE: This sets up the initial balance of the reward actor.
+		Balance: types.BigInt{Int: build.InitialRewardBalance},
 		Head:    statecid,
 	}
 
