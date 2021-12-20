@@ -301,6 +301,12 @@ func (st *SCAState) applyCheckMsgs(rt runtime.Runtime, windowCh *schema.Checkpoi
 			// Add to DownTopMsgMeta
 			st.storeDownTopMsgMeta(rt, mm)
 		} else {
+			// Check if it comes from a valid child, i.e. we are their parent.
+			if hierarchical.SubnetID(mm.From).Parent() != st.NetworkName {
+				// Someone is trying to forge a cross-msgs into the checkpoint
+				// from a network from which we are not a parent.
+				continue
+			}
 			// If not add to the aux structure to update the checkpoint when we've
 			// gone through all crossMsgs
 			_, ok := aux[mm.To]
