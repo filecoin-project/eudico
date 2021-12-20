@@ -78,6 +78,12 @@ type SCAState struct {
 	Nonce                 uint64  // Latest nonce of cross message sent from subnet.
 	DownTopNonce          uint64  // DownTopNonce of down top messages for msgMeta received from checkpoints (probably redundant)
 	DownTopMsgsMeta       cid.Cid // AMT[schema.CrossMsgMeta] from child subnets to apply.
+
+	// AppliedNonces
+	//
+	// Keep track of the next nonce of the message to be applied.
+	AppliedDownTopNonce uint64
+	AppliedTopDownNonce uint64
 }
 
 func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, error) {

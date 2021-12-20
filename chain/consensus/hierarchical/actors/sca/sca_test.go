@@ -8,6 +8,7 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	actors "github.com/filecoin-project/lotus/chain/consensus/actors"
+	"github.com/filecoin-project/lotus/chain/consensus/actors/reward"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	actor "github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
@@ -28,7 +29,7 @@ func TestExports(t *testing.T) {
 }
 
 func TestConstruction(t *testing.T) {
-	builder := mock.NewBuilder(actor.SubnetCoordActorAddr).WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
+	builder := mock.NewBuilder(hierarchical.SubnetCoordActorAddr).WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
 
 	actor := newHarness(t)
 	t.Run("simple construction", func(t *testing.T) {
@@ -747,6 +748,50 @@ func TestReleaseFunds(t *testing.T) {
 	prev := release(h, rt, shid, releaser, value, 0, cid.Undef)
 	release(h, rt, shid, releaser, value, 1, prev)
 
+}
+
+func TestApplyMsg(t *testing.T) {
+	h := newHarness(t)
+	builder := mock.NewBuilder(builtin.StoragePowerActorAddr).WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
+	rt := builder.Build(t)
+	shid := hierarchical.SubnetID("/root/f0101")
+	h.constructAndVerifyWithNetworkName(rt, shid)
+	funder := tutil.NewIDAddr(h.t, 1000)
+	value := abi.NewTokenAmount(1)
+
+	t.Log("apply fund messages")
+	for i := 0; i < 5; i++ {
+		h.applyFundMsg(rt, funder, value, uint64(i))
+	}
+
+}
+
+func (h *shActorHarness) applyFundMsg(rt *mock.Runtime, addr address.Address, value big.Int, nonce uint64) {
+	rt.SetCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
+	params := &actor.ApplyParams{
+		MsgType: hierarchical.Fund,
+		Msg: ltypes.Message{
+			To:         addr,
+			From:       addr,
+			Value:      value,
+			Nonce:      nonce,
+			GasLimit:   1 << 30, // This is will be applied as an implicit msg, add enough gas
+			GasFeeCap:  ltypes.NewInt(0),
+			GasPremium: ltypes.NewInt(0),
+			Params:     nil,
+		},
+	}
+
+	rewParams := &reward.FundingParams{
+		Addr:  addr,
+		Value: value,
+	}
+	rt.ExpectValidateCallerAddr(builtin.SystemActorAddr)
+	rt.ExpectSend(reward.RewardActorAddr, reward.Methods.ExternalFunding, rewParams, big.Zero(), nil, exitcode.Ok)
+	rt.Call(h.SubnetCoordActor.ApplyMessage, params)
+	rt.Verify()
+	st := getState(rt)
+	require.Equal(h.t, st.AppliedTopDownNonce, nonce+1)
 }
 
 func release(h *shActorHarness, rt *mock.Runtime, shid hierarchical.SubnetID, releaser address.Address, value big.Int, nonce uint64, prevMeta cid.Cid) cid.Cid {

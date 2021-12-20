@@ -10,6 +10,7 @@ import (
 	"github.com/filecoin-project/go-state-types/exitcode"
 	rtt "github.com/filecoin-project/go-state-types/rt"
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
 	reward0 "github.com/filecoin-project/specs-actors/actors/builtin/reward"
 	"github.com/ipfs/go-cid"
@@ -91,7 +92,7 @@ type FundingParams struct {
 
 // ExternalFunding sends to an address funding coming from another subnet.
 func (a Actor) ExternalFunding(rt runtime.Runtime, params *FundingParams) *abi.EmptyValue {
-	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
+	rt.ValidateImmediateCallerIs(hierarchical.SubnetCoordActorAddr)
 	addr, ok := rt.ResolveAddress(params.Addr)
 	if !ok {
 		rt.Abortf(exitcode.ErrNotFound, "failed to resolve given owner address")

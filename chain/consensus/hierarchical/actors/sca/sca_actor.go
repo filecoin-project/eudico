@@ -3,7 +3,6 @@ package sca
 //go:generate go run ./gen/gen.go
 
 import (
-	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/cbor"
@@ -11,6 +10,7 @@ import (
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
+	types "github.com/filecoin-project/lotus/chain/types"
 	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
@@ -19,16 +19,6 @@ import (
 )
 
 var _ runtime.VMActor = SubnetCoordActor{}
-
-// SubnetCoordActorAddr is initialized in genesis with the
-// address t064
-var SubnetCoordActorAddr = func() address.Address {
-	a, err := address.NewIDAddress(64)
-	if err != nil {
-		panic(err)
-	}
-	return a
-}()
 
 var Methods = struct {
 	Constructor           abi.MethodNum
@@ -39,7 +29,8 @@ var Methods = struct {
 	CommitChildCheckpoint abi.MethodNum
 	Fund                  abi.MethodNum
 	Release               abi.MethodNum
-}{builtin0.MethodConstructor, 2, 3, 4, 5, 6, 7, 8}
+	ApplyMessage          abi.MethodNum
+}{builtin0.MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9}
 
 type SubnetIDParam struct {
 	ID string
@@ -57,7 +48,7 @@ func (a SubnetCoordActor) Exports() []interface{} {
 		6:                         a.CommitChildCheckpoint,
 		7:                         a.Fund,
 		8:                         a.Release,
-		// -1:                         a.XSubnetTx,
+		9:                         a.ApplyMessage,
 	}
 }
 
@@ -290,6 +281,8 @@ func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *Chec
 	return nil
 }
 
+// applyCheckMsgs does the require logic required to trigger the computation or propagate cross-messages
+// coming from a checkpoint of a child subnet.
 func (st *SCAState) applyCheckMsgs(rt runtime.Runtime, windowCh *schema.Checkpoint, childCh *schema.Checkpoint) {
 
 	// aux map[to]CrossMsgMeta
@@ -438,5 +431,34 @@ func (a SubnetCoordActor) Release(rt runtime.Runtime, _ *abi.EmptyValue) *abi.Em
 		// Create releaseMsg and include in currentwindow checkpoint
 		st.releaseMsg(rt, value)
 	})
+	return nil
+}
+
+// ApplyParams determines the cross message to apply.
+type ApplyParams struct {
+	MsgType hierarchical.MsgType
+	Msg     types.Message
+}
+
+// ApplyMessage triggers the execution of a cross-subnet message validated through the consensus.
+//
+// This function can only be triggered using `ApplyImplicitMessage`, and the source needs to
+// be the SystemActor. Cross messages are applied similarly to how rewards are applied once
+// a block has been validated. This function:
+// - Determines the type of cross-message.
+// - Performs the corresponding state changes.
+// - And updated the latest nonce applied for future checks.
+func (a SubnetCoordActor) ApplyMessage(rt runtime.Runtime, params *ApplyParams) *abi.EmptyValue {
+	// Only system actor can trigger this function.
+	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
+
+	switch params.MsgType {
+	case hierarchical.Fund:
+		applyFund(rt, params.Msg)
+	case hierarchical.Release:
+		rt.Abortf(exitcode.ErrIllegalArgument, "Not implemented yet")
+	case hierarchical.Cross:
+		rt.Abortf(exitcode.ErrIllegalArgument, "Not implemented yet")
+	}
 	return nil
 }

@@ -52,7 +52,7 @@ var listSubnetsCmd = &cli.Command{
 
 		var st sca.SCAState
 
-		act, err := api.StateGetActor(ctx, sca.SubnetCoordActorAddr, ts.Key())
+		act, err := api.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, ts.Key())
 		if err != nil {
 			return xerrors.Errorf("error getting actor state: %w", err)
 		}
@@ -151,7 +151,7 @@ var addCmd = &cli.Command{
 		// FIXME: This is a horrible workaround to avoid delegminer from
 		// not being set. But need to demo in 30 mins, so will fix it afterwards
 		// (we all know I'll come across this comment in 2 years and laugh at it).
-		delegminer := sca.SubnetCoordActorAddr
+		delegminer := hierarchical.SubnetCoordActorAddr
 		if cctx.IsSet("delegminer") {
 			d := cctx.String("delegminer")
 			delegminer, err = address.NewFromString(d)

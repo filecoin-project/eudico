@@ -132,7 +132,7 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 	if err != nil {
 		return nil, nil, err
 	}
-	err = state.SetActor(sca.SubnetCoordActorAddr, scaact)
+	err = state.SetActor(hierarchical.SubnetCoordActorAddr, scaact)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("set SCA actor: %w", err)
 	}
