@@ -968,6 +968,21 @@ func (mr *MockFullNodeMockRecorder) GasEstimateMessageGas(arg0, arg1, arg2, arg3
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GasEstimateMessageGas", reflect.TypeOf((*MockFullNode)(nil).GasEstimateMessageGas), arg0, arg1, arg2, arg3)
 }
 
+// GetCrossMsgsPool mocks base method.
+func (m *MockFullNode) GetCrossMsgsPool(arg0 context.Context, arg1 hierarchical.SubnetID, arg2 int) ([]*types.Message, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCrossMsgsPool", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]*types.Message)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetCrossMsgsPool indicates an expected call of GetCrossMsgsPool.
+func (mr *MockFullNodeMockRecorder) GetCrossMsgsPool(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCrossMsgsPool", reflect.TypeOf((*MockFullNode)(nil).GetCrossMsgsPool), arg0, arg1, arg2)
+}
+
 // ID mocks base method.
 func (m *MockFullNode) ID(arg0 context.Context) (peer.ID, error) {
 	m.ctrl.T.Helper()

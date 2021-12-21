@@ -630,6 +630,77 @@ func (s *SubnetMgr) SubmitSignedCheckpoint(
 	return smsg.Cid(), nil
 }
 
+// GetCrossMsgsPool returns a list with `num` number of of cross messages pending for validation.
+//
+// if num == 0 there's no limit in the number of cross-messages returned.
+func (s *SubnetMgr) GetCrossMsgsPool(
+	ctx context.Context, id hierarchical.SubnetID, num int) ([]*types.Message, error) {
+	// TODO: Think a bit deeper the locking strategy for subnets.
+	s.lk.RLock()
+	defer s.lk.RUnlock()
+
+	topdown, err := s.getTopDownPool(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	// TODO: Get downtop messages and return all.
+	return topdown, nil
+}
+
+func (s *SubnetMgr) getTopDownPool(ctx context.Context, id hierarchical.SubnetID) ([]*types.Message, error) {
+	// Get status for SCA in subnet to determine from which nonce to fetch messages
+	subAPI := s.getAPI(id)
+	if subAPI == nil {
+		xerrors.Errorf("Not listening to subnet")
+	}
+	subnetAct, err := subAPI.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, types.EmptyTSK)
+	if err != nil {
+		return nil, err
+	}
+	var snst sca.SCAState
+	bs := blockstore.NewAPIBlockstore(subAPI)
+	cst := cbor.NewCborStore(bs)
+	if err := cst.Get(ctx, subnetAct.Head, &snst); err != nil {
+		return nil, err
+	}
+
+	// Get state for subnet in parent SCA
+	parentAPI, err := s.getParentAPI(id)
+	if err != nil {
+		return nil, err
+	}
+	pAct, err := parentAPI.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, types.EmptyTSK)
+	if err != nil {
+		return nil, err
+	}
+	var st sca.SCAState
+	pbs := blockstore.NewAPIBlockstore(parentAPI)
+	pcst := cbor.NewCborStore(pbs)
+	if err := pcst.Get(ctx, pAct.Head, &st); err != nil {
+		return nil, err
+	}
+	pstore := adt.WrapStore(ctx, pcst)
+	sh, found, err := st.GetSubnet(pstore, id)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, xerrors.Errorf("subnet with ID %v not found", id)
+	}
+
+	return sh.TopDownMsgFromNonce(pstore, snst.AppliedDownTopNonce)
+
+}
+func getDownTopPool() {
+	// 1. Get DownTopMsgMeta from SCA in the subnet (the ones that need to
+	// be applied here).
+	// 2. Get Cid and From of CrossMsgMeta
+	// 3. (Implement LinkSystem) Check locally if we have the messages behind the
+	// cid or if they need to be fetched from the subnet.
+	// 4. (Implement cross message exchange protocol) Get the message behind a Cid.
+	panic("Not implemented")
+}
+
 func (s *SubnetMgr) ListCheckpoints(
 	ctx context.Context, id hierarchical.SubnetID, num int) ([]*schema.Checkpoint, error) {
 

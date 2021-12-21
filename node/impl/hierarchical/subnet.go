@@ -9,6 +9,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
+	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/ipfs/go-cid"
 	"go.uber.org/fx"
 )
@@ -59,4 +60,9 @@ func (a *HierarchicalAPI) ListCheckpoints(ctx context.Context,
 func (a *HierarchicalAPI) ValidateCheckpoint(ctx context.Context,
 	id hierarchical.SubnetID, epoch abi.ChainEpoch) (*schema.Checkpoint, error) {
 	return a.Sub.ValidateCheckpoint(ctx, id, epoch)
+}
+
+func (a *HierarchicalAPI) GetCrossMsgsPool(ctx context.Context, id hierarchical.SubnetID,
+	num int) ([]*types.Message, error) {
+	return a.Sub.GetCrossMsgsPool(ctx, id, num)
 }

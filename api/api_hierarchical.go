@@ -7,6 +7,7 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
+	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/ipfs/go-cid"
 )
 
@@ -19,4 +20,5 @@ type HierarchicalCns interface {
 	KillSubnet(ctx context.Context, wallet address.Address, id hierarchical.SubnetID) (cid.Cid, error)                        // perm:write
 	ListCheckpoints(ctx context.Context, id hierarchical.SubnetID, num int) ([]*schema.Checkpoint, error)                     // perm:read
 	ValidateCheckpoint(ctx context.Context, id hierarchical.SubnetID, epoch abi.ChainEpoch) (*schema.Checkpoint, error)       // perm:read
+	GetCrossMsgsPool(ctx context.Context, id hierarchical.SubnetID, num int) ([]*types.Message, error)                        // perm:read
 }
