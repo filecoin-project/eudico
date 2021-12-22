@@ -386,6 +386,7 @@ type FeeConfig struct {
 
 type Checkpoint struct {
 	Fee                  float64
+	BitcoinHost          string
 	PublicKey            string
 	MinioHost            string
 	MinioAccessKeyID     string

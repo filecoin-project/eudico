@@ -3,7 +3,7 @@
   #
   # type: string
   # env var: LOTUS_API_LISTENADDRESS
-  ListenAddress = "/ip4/127.0.0.1/tcp/1235/http"
+  ListenAddress = "/ip4/0.0.0.0/tcp/1235/http"
 
   # type: string
   # env var: LOTUS_API_REMOTELISTENADDRESS
@@ -29,7 +29,7 @@
   #
   # type: []string
   # env var: LOTUS_LIBP2P_LISTENADDRESSES
-  ListenAddresses = ["/ip4/0.0.0.0/tcp/3001", "/ip6/::/tcp/3001"]
+  ListenAddresses = ["/ip4/0.0.0.0/tcp/3001"]
 
   # Addresses to explicitally announce to other peers. If not specified,
   # all interface addresses are announced
@@ -186,8 +186,9 @@
 
 [Checkpoint]
   Fee = 0.01
+  BitcoinHost="http://btc-rpc:8332"
   PublicKey="66a554b8af6719851a936b0afc29dc59c3678f0e3f0b7bb081c57c5b77ad48ff"
-  MinioHost = "127.0.0.1:9000"
+  MinioHost = "minio:9000"
   MinioAccessKeyID = "lola"
   MinioSecretAccessKey = "123secure"
   MinioBucketName = "eudico"

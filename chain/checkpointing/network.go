@@ -26,6 +26,11 @@ func NewNetwork(parties party.IDSlice, sub *pubsub.Subscription, topic *pubsub.T
 
 func (n *Network) Next(ctx context.Context) *protocol.Message {
 	msg, err := n.sub.Next(ctx)
+	if err == context.Canceled {
+		// We are actually done and don't want to wait for messages anymore
+		return nil
+	}
+
 	if err != nil {
 		panic(err)
 	}
@@ -47,7 +52,10 @@ func (n *Network) Send(ctx context.Context, msg *protocol.Message) {
 	if err != nil {
 		panic(err)
 	}
-	n.topic.Publish(ctx, data)
+	err = n.topic.Publish(ctx, data)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func (n *Network) Done() {
@@ -58,4 +66,51 @@ func (n *Network) Done() {
 
 func (n *Network) Parties() party.IDSlice {
 	return n.parties
+}
+
+/*
+	Handling incoming and outgoing messages
+*/
+
+func broadcastingMessage(ctx context.Context, h protocol.Handler, network *Network, over chan bool) {
+	for {
+		msg, ok := <-h.Listen()
+		fmt.Println("Outgoing message:", msg)
+		if !ok {
+			network.Done()
+			// the channel was closed, indicating that the protocol is done executing.
+			close(over)
+			return
+		}
+		network.Send(ctx, msg)
+	}
+}
+
+func waitingMessages(ctx context.Context, h protocol.Handler, network *Network, over chan bool) {
+	for {
+		select {
+		case <-over:
+			return
+		default:
+			msg := network.Next(ctx)
+			if h.CanAccept(msg) {
+				// This message is ours
+				fmt.Println("Incoming message:", msg)
+			}
+			h.Accept(msg)
+		}
+
+	}
+}
+
+func LoopHandler(ctx context.Context, h protocol.Handler, network *Network) {
+	over := make(chan bool)
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	go broadcastingMessage(ctx, h, network, over)
+	go waitingMessages(ctx, h, network, over)
+
+	<-over
 }

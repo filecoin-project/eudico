@@ -38,7 +38,7 @@ func CreateConfig(data []byte) ([]byte, error) {
 
 func GetConfig(ctx context.Context, minioClient *minio.Client, bucketName, hash string) (string, error) {
 	filename := hash + ".txt"
-	filePath := "/tmp/dom/" + filename
+	filePath := "/tmp/verification/" + filename
 
 	err := minioClient.FGetObject(context.Background(), bucketName, filename, filePath, minio.GetObjectOptions{})
 	if err != nil {

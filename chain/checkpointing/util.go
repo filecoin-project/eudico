@@ -90,11 +90,10 @@ func TaprootSignatureHash(tx []byte, utxo []byte, hash_type byte) ([]byte, error
 	return TaggedHash("TapSighash", ss), nil
 }
 
-func PubkeyToTapprootAddress(pubkey []byte) string {
+func PubkeyToTapprootAddress(pubkey []byte) (string, error) {
 	conv, err := bech32.ConvertBits(pubkey, 8, 5, true)
 	if err != nil {
-		fmt.Println("Error:", err)
-		log.Fatal("I dunno.")
+		return "", err
 	}
 
 	// Add segwit version byte 1
@@ -104,13 +103,12 @@ func PubkeyToTapprootAddress(pubkey []byte) string {
 	// Using EncodeM becasue we want bech32m... which has a new checksum
 	taprootAddress, err := bech32.EncodeM("bcrt", conv)
 	if err != nil {
-		fmt.Println(err)
-		log.Fatal("Couldn't produce our tapproot address.")
+		return "", err
 	}
-	return taprootAddress
+	return taprootAddress, nil
 }
 
-func PubkeyToTapprootAddressLegacy(pubkey []byte) string {
+/*func PubkeyToTapprootAddressLegacy(pubkey []byte) string {
 	conv, err := bech32.ConvertBits(pubkey, 8, 5, true)
 	if err != nil {
 		fmt.Println("Error:", err)
@@ -125,7 +123,7 @@ func PubkeyToTapprootAddressLegacy(pubkey []byte) string {
 		log.Fatal("Couldn't produce our tapproot address.")
 	}
 	return taprootAddressLegacy
-}
+}*/
 
 func ApplyTweakToPublicKeyTaproot(public []byte, tweak []byte) []byte {
 	group := curve.Secp256k1{}
@@ -164,9 +162,9 @@ func GenCheckpointPublicKeyTaproot(internal_pubkey []byte, checkpoint []byte) []
 	return tweaked_pubkey
 }
 
-func AddTaprootToWallet(taprootScript string) bool {
+func AddTaprootToWallet(url, taprootScript string) bool {
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"importaddress\", \"params\": [\"" + taprootScript + "\", \"\", true]}"
-	result := jsonRPC(payload)
+	result := jsonRPC(url, payload)
 
 	if result["error"] == nil {
 		return true
@@ -183,29 +181,30 @@ func AddTaprootToWallet(taprootScript string) bool {
 }
 
 func GetTaprootScript(pubkey []byte) string {
+	// 1 <20-size>  pukey
 	return "5120" + hex.EncodeToString(pubkey)
 }
 
-func LoadWallet() {
+func LoadWallet(url string) {
 	// Create wallet
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createwallet\", \"params\": [\"wow\"]}"
-	_ = jsonRPC(payload)
+	_ = jsonRPC(url, payload)
 	// We don't check error here
 }
 
 // Temporary
-func BitcoindGetWalletAddress() string {
+func BitcoindGetWalletAddress(url string) string {
 	//Get new address
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"getnewaddress\", \"params\": []}"
 
-	result := jsonRPC(payload)
+	result := jsonRPC(url, payload)
 	address := fmt.Sprintf("%v", result["result"])
 	return address
 }
 
-func WalletGetTxidFromAddress(taprootAddress string) (string, error) {
+func WalletGetTxidFromAddress(url, taprootAddress string) (string, error) {
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"listtransactions\", \"params\": [\"*\", 500000000, 0, true]}"
-	result := jsonRPC(payload)
+	result := jsonRPC(url, payload)
 	list := result["result"].([]interface{})
 	for _, item := range list {
 		item_map := item.(map[string]interface{})
@@ -217,9 +216,9 @@ func WalletGetTxidFromAddress(taprootAddress string) (string, error) {
 	return "", errors.New("did not find checkpoint")
 }
 
-func BitcoindPing() bool {
+func BitcoindPing(url string) bool {
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"ping\", \"params\": []}"
-	result := jsonRPC(payload)
+	result := jsonRPC(url, payload)
 	return result != nil
 }
 
@@ -233,9 +232,9 @@ func ParseUnspentTxOut(utxo []byte) (amount, script []byte) {
 	return utxo[0:8], utxo[9:]
 }
 
-func GetTxOut(txid string, index int) (float64, []byte) {
+func GetTxOut(url, txid string, index int) (float64, []byte) {
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"gettxout\", \"params\": [\"" + txid + "\", " + strconv.Itoa(index) + "]}"
-	result := jsonRPC(payload)
+	result := jsonRPC(url, payload)
 	if result == nil {
 		panic("cant retrieve previous transaction")
 	}
@@ -246,10 +245,9 @@ func GetTxOut(txid string, index int) (float64, []byte) {
 	return taprootTxOut["value"].(float64), scriptPubkeyBytes
 }
 
-func jsonRPC(payload string) map[string]interface{} {
+func jsonRPC(url, payload string) map[string]interface{} {
 	// ZONDAX TODO
 	// This needs to be in a config file
-	url := "http://127.0.0.1:18443"
 	method := "POST"
 
 	user := "satoshi"
