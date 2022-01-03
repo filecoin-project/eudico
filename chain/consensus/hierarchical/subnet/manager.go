@@ -19,6 +19,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	ctypes "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/types"
+	subcns "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/consensus"
 	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/messagepool"
 	"github.com/filecoin-project/lotus/chain/stmgr"
@@ -189,7 +190,7 @@ func (s *SubnetMgr) startSubnet(id hierarchical.SubnetID,
 
 	// Select the right TipSetExecutor for the consensus algorithms chosen.
 	tsExec := TipSetExecutor(sh)
-	weight, err := weight(consensus)
+	weight, err := subcns.Weight(consensus)
 	if err != nil {
 		log.Errorw("Error getting weight for consensus", "subnetID", id, "err", err)
 		return err
@@ -209,7 +210,7 @@ func (s *SubnetMgr) startSubnet(id hierarchical.SubnetID,
 		log.Errorw("Error loading genesis bootstrap for subnet", "subnetID", id, "err", err)
 		return err
 	}
-	sh.cons, err = newConsensus(consensus, sh.sm, s.beacon, s.verifier, gen)
+	sh.cons, err = subcns.New(consensus, sh.sm, s.beacon, s.verifier, gen)
 	if err != nil {
 		log.Errorw("Error creating consensus", "subnetID", id, "err", err)
 		return err
@@ -636,69 +637,14 @@ func (s *SubnetMgr) SubmitSignedCheckpoint(
 func (s *SubnetMgr) GetCrossMsgsPool(
 	ctx context.Context, id hierarchical.SubnetID, num int) ([]*types.Message, error) {
 	// TODO: Think a bit deeper the locking strategy for subnets.
-	s.lk.RLock()
-	defer s.lk.RUnlock()
-
+	// s.lk.RLock()
+	// defer s.lk.RUnlock()
 	topdown, err := s.getTopDownPool(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 	// TODO: Get downtop messages and return all.
 	return topdown, nil
-}
-
-func (s *SubnetMgr) getTopDownPool(ctx context.Context, id hierarchical.SubnetID) ([]*types.Message, error) {
-	// Get status for SCA in subnet to determine from which nonce to fetch messages
-	subAPI := s.getAPI(id)
-	if subAPI == nil {
-		xerrors.Errorf("Not listening to subnet")
-	}
-	subnetAct, err := subAPI.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, types.EmptyTSK)
-	if err != nil {
-		return nil, err
-	}
-	var snst sca.SCAState
-	bs := blockstore.NewAPIBlockstore(subAPI)
-	cst := cbor.NewCborStore(bs)
-	if err := cst.Get(ctx, subnetAct.Head, &snst); err != nil {
-		return nil, err
-	}
-
-	// Get state for subnet in parent SCA
-	parentAPI, err := s.getParentAPI(id)
-	if err != nil {
-		return nil, err
-	}
-	pAct, err := parentAPI.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, types.EmptyTSK)
-	if err != nil {
-		return nil, err
-	}
-	var st sca.SCAState
-	pbs := blockstore.NewAPIBlockstore(parentAPI)
-	pcst := cbor.NewCborStore(pbs)
-	if err := pcst.Get(ctx, pAct.Head, &st); err != nil {
-		return nil, err
-	}
-	pstore := adt.WrapStore(ctx, pcst)
-	sh, found, err := st.GetSubnet(pstore, id)
-	if err != nil {
-		return nil, err
-	}
-	if !found {
-		return nil, xerrors.Errorf("subnet with ID %v not found", id)
-	}
-
-	return sh.TopDownMsgFromNonce(pstore, snst.AppliedDownTopNonce)
-
-}
-func getDownTopPool() {
-	// 1. Get DownTopMsgMeta from SCA in the subnet (the ones that need to
-	// be applied here).
-	// 2. Get Cid and From of CrossMsgMeta
-	// 3. (Implement LinkSystem) Check locally if we have the messages behind the
-	// cid or if they need to be fetched from the subnet.
-	// 4. (Implement cross message exchange protocol) Get the message behind a Cid.
-	panic("Not implemented")
 }
 
 func (s *SubnetMgr) ListCheckpoints(
