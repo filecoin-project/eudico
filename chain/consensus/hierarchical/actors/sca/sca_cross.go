@@ -118,6 +118,7 @@ func (cm *CrossMsgMeta) AddMsgMeta(from, to hierarchical.SubnetID, meta schema.C
 func (st *SCAState) releaseMsg(rt runtime.Runtime, value big.Int) {
 	// The way we identify it is a release message from the subnet is by
 	// setting the burntFundsActor as the from of the message
+	// See hierarchical/types.go
 	source := builtin.BurntFundsActorAddr
 
 	// Build message.
@@ -155,6 +156,17 @@ func (st *SCAState) storeDownTopMsgMeta(rt runtime.Runtime, meta schema.CrossMsg
 
 	// Increase nonce.
 	incrementNonce(rt, &st.DownTopNonce)
+}
+
+func (st *SCAState) GetTopDownMsg(s adt.Store, id hierarchical.SubnetID, nonce uint64) (*ltypes.Message, bool, error) {
+	sh, found, err := st.GetSubnet(s, id)
+	if err != nil {
+		return nil, false, err
+	}
+	if !found {
+		return nil, false, xerrors.Errorf("subnet not registered in hierarchical consensus")
+	}
+	return sh.GetTopDownMsg(s, nonce)
 }
 
 func (st *SCAState) GetDownTopMsgMeta(s adt.Store, nonce uint64) (*schema.CrossMsgMeta, bool, error) {

@@ -2,6 +2,8 @@ package hierarchical
 
 import (
 	address "github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/lotus/chain/actors/builtin"
+	"github.com/filecoin-project/lotus/chain/types"
 )
 
 // ConsensusType for subnet
@@ -22,6 +24,18 @@ const (
 	Release
 	Cross
 )
+
+// MsgType returns the
+func GetMsgType(msg *types.Message) MsgType {
+	if msg.From == msg.To {
+		return Fund
+	}
+
+	if msg.From == builtin.BurntFundsActorAddr {
+		return Release
+	}
+	return Cross
+}
 
 // SubnetCoordActorAddr is the address of the SCA actor
 // in a subnet.

@@ -16,7 +16,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/beacon"
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/consensus/filcns"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
+	snmgr "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/manager"
 	"github.com/filecoin-project/lotus/chain/exchange"
 	"github.com/filecoin-project/lotus/chain/gen/slashfilter"
 	"github.com/filecoin-project/lotus/chain/market"
@@ -137,8 +137,8 @@ var ChainNode = Options(
 
 	// Subneting
 	// Start sharding sub to listent to shard events
-	Override(new(*subnet.SubnetMgr), subnet.NewSubnetMgr),
-	Override(StartSubnetMgrKey, subnet.BuildSubnetMgr),
+	Override(new(*snmgr.SubnetMgr), snmgr.NewSubnetMgr),
+	Override(StartSubnetMgrKey, snmgr.BuildSubnetMgr),
 
 	// Lite node API
 	ApplyIf(isLiteNode,

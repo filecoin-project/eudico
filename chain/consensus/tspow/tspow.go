@@ -25,13 +25,16 @@ import (
 	"github.com/filecoin-project/lotus/chain/beacon"
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
+	param "github.com/filecoin-project/lotus/chain/consensus/common/params"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
 	"github.com/filecoin-project/lotus/lib/sigs"
 	"github.com/filecoin-project/lotus/metrics"
+	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
 var log = logging.Logger("tspow-consensus")
@@ -63,7 +66,7 @@ func Difficulty(baseTs, lbts *types.TipSet) big.Int {
 	prevdiff.SetBytes(baseTs.Blocks()[0].Ticket.VRFProof)
 	diff := big.Div(types.BigMul(prevdiff, big.NewInt(int64(expLbTime))), big.NewInt(int64(actTime)))
 
-	pgen, _ := big2.NewFloat(0).SetInt(common.GenesisWorkTarget.Int).Float64()
+	pgen, _ := big2.NewFloat(0).SetInt(param.GenesisWorkTarget.Int).Float64()
 	fdiff, _ := big2.NewFloat(0).SetInt(diff.Int).Float64()
 	pgen = fdiff * 100 / pgen
 	// Difficulty adjustement print. Really helpful for debugging purposes.
@@ -85,19 +88,26 @@ type TSPoW struct {
 	verifier ffiwrapper.Verifier
 
 	genesis *types.TipSet
+
+	subMgr subnet.SubnetMgr
+
+	netName hierarchical.SubnetID
 }
 
 // Blocks that are more than MaxHeightDrift epochs above
 // the theoretical max height based on systime are quickly rejected
 const MaxHeightDrift = 5
 
-func NewTSPoWConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, verifier ffiwrapper.Verifier, genesis chain.Genesis) consensus.Consensus {
+func NewTSPoWConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon.Schedule,
+	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
 	return &TSPoW{
 		store:    sm.ChainStore(),
 		beacon:   beacon,
 		sm:       sm,
 		verifier: verifier,
 		genesis:  genesis,
+		subMgr:   submgr,
+		netName:  hierarchical.SubnetID(netName),
 	}
 }
 
@@ -136,7 +146,7 @@ func (tsp *TSPoW) ValidateBlock(ctx context.Context, b *types.FullBlock) (err er
 
 	// check work threshold
 	if b.Header.Height < MaxDiffLookback {
-		if !thr.Equals(common.GenesisWorkTarget) {
+		if !thr.Equals(param.GenesisWorkTarget) {
 			return xerrors.Errorf("wrong work target")
 		}
 	} else {
@@ -153,7 +163,7 @@ func (tsp *TSPoW) ValidateBlock(ctx context.Context, b *types.FullBlock) (err er
 		}
 	}
 
-	msgsChecks := common.CheckMsgs(ctx, tsp.store, tsp.sm, b, baseTs)
+	msgsChecks := common.CheckMsgs(ctx, tsp.store, tsp.sm, tsp.subMgr, tsp.netName, b, baseTs)
 
 	minerCheck := async.Err(func() error {
 		if err := tsp.minerIsValid(h.Miner); err != nil {

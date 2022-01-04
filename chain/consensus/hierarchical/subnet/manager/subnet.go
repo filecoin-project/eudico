@@ -1,4 +1,4 @@
-package subnet
+package subnetmgr
 
 import (
 	"bytes"

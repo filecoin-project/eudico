@@ -10,10 +10,12 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
+	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	logging "github.com/ipfs/go-log/v2"
 	"golang.org/x/xerrors"
 )
@@ -35,15 +37,16 @@ func Weight(consensus hierarchical.ConsensusType) (store.WeightFunc, error) {
 }
 
 func New(consensus hierarchical.ConsensusType,
-	sm *stmgr.StateManager, beacon beacon.Schedule,
+	sm *stmgr.StateManager, snMgr subnet.SubnetMgr,
+	beacon beacon.Schedule,
 	verifier ffiwrapper.Verifier,
-	genesis chain.Genesis) (consensus.Consensus, error) {
+	genesis chain.Genesis, netName dtypes.NetworkName) (consensus.Consensus, error) {
 
 	switch consensus {
 	case hierarchical.Delegated:
-		return delegcns.NewDelegatedConsensus(sm, beacon, verifier, genesis), nil
+		return delegcns.NewDelegatedConsensus(sm, snMgr, beacon, verifier, genesis, netName), nil
 	case hierarchical.PoW:
-		return tspow.NewTSPoWConsensus(sm, beacon, verifier, genesis), nil
+		return tspow.NewTSPoWConsensus(sm, snMgr, beacon, verifier, genesis, netName), nil
 	default:
 		return nil, xerrors.New("consensus type not suported")
 	}

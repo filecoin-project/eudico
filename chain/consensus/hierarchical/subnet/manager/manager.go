@@ -1,4 +1,4 @@
-package subnet
+package subnetmgr
 
 import (
 	"bytes"
@@ -8,17 +8,17 @@ import (
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/beacon"
 	act "github.com/filecoin-project/lotus/chain/consensus/actors"
+	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
-	ctypes "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/types"
+	subiface "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	subcns "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/consensus"
 	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/messagepool"
@@ -30,7 +30,7 @@ import (
 	"github.com/filecoin-project/lotus/journal"
 	"github.com/filecoin-project/lotus/lib/peermgr"
 	"github.com/filecoin-project/lotus/node/impl/client"
-	"github.com/filecoin-project/lotus/node/impl/common"
+	commonapi "github.com/filecoin-project/lotus/node/impl/common"
 	"github.com/filecoin-project/lotus/node/impl/full"
 	"github.com/filecoin-project/lotus/node/impl/market"
 	"github.com/filecoin-project/lotus/node/impl/net"
@@ -39,13 +39,11 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/helpers"
 	"github.com/filecoin-project/specs-actors/actors/builtin"
 	init_ "github.com/filecoin-project/specs-actors/actors/builtin/init"
-	"github.com/filecoin-project/specs-actors/actors/util/adt"
 	"github.com/ipfs/go-blockservice"
 	"github.com/ipfs/go-cid"
 	ds "github.com/ipfs/go-datastore"
 	nsds "github.com/ipfs/go-datastore/namespace"
 	offline "github.com/ipfs/go-ipfs-exchange-offline"
-	cbor "github.com/ipfs/go-ipld-cbor"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p-core/host"
 	peer "github.com/libp2p/go-libp2p-core/peer"
@@ -54,7 +52,7 @@ import (
 	"golang.org/x/xerrors"
 )
 
-var log = logging.Logger("subnet")
+var log = logging.Logger("subnetMgr")
 
 // SubnetMgr is the subneting manager in the root chain
 type SubnetMgr struct {
@@ -98,7 +96,7 @@ func NewSubnetMgr(
 	verifier ffiwrapper.Verifier,
 	pmgr peermgr.MaybePeerMgr,
 	bootstrapper dtypes.Bootstrapper,
-	commonapi common.CommonAPI,
+	commonapi commonapi.CommonAPI,
 	netapi net.NetAPI,
 	chainapi full.ChainAPI,
 	clientapi client.API,
@@ -189,7 +187,7 @@ func (s *SubnetMgr) startSubnet(id hierarchical.SubnetID,
 	sh.bs = blockstore.FromDatastore(s.ds)
 
 	// Select the right TipSetExecutor for the consensus algorithms chosen.
-	tsExec := TipSetExecutor(sh)
+	tsExec := common.TipSetExecutor(s)
 	weight, err := subcns.Weight(consensus)
 	if err != nil {
 		log.Errorw("Error getting weight for consensus", "subnetID", id, "err", err)
@@ -210,7 +208,7 @@ func (s *SubnetMgr) startSubnet(id hierarchical.SubnetID,
 		log.Errorw("Error loading genesis bootstrap for subnet", "subnetID", id, "err", err)
 		return err
 	}
-	sh.cons, err = subcns.New(consensus, sh.sm, s.beacon, s.verifier, gen)
+	sh.cons, err = subcns.New(consensus, sh.sm, s, s.beacon, s.verifier, gen, dtypes.NetworkName(id))
 	if err != nil {
 		log.Errorw("Error creating consensus", "subnetID", id, "err", err)
 		return err
@@ -579,235 +577,44 @@ func (s *SubnetMgr) KillSubnet(
 	return smsg.Cid(), nil
 }
 
-func (s *SubnetMgr) SubmitSignedCheckpoint(
-	ctx context.Context, wallet address.Address,
-	id hierarchical.SubnetID, ch *schema.Checkpoint) (cid.Cid, error) {
-
-	// TODO: Think a bit deeper the locking strategy for subnets.
-	s.lk.RLock()
-	defer s.lk.RUnlock()
-
-	// Get actor from subnet ID
-	SubnetActor, err := id.Actor()
-	if err != nil {
-		return cid.Undef, err
-	}
-
-	// Get the api for the parent network hosting the subnet actor
-	// for the subnet.
-	parentAPI, err := s.getParentAPI(id)
-	if err != nil {
-		return cid.Undef, err
-	}
-
-	b, err := ch.MarshalBinary()
-	if err != nil {
-		return cid.Undef, err
-	}
-	params := &sca.CheckpointParams{Checkpoint: b}
-	serparams, err := actors.SerializeParams(params)
-	if err != nil {
-		return cid.Undef, xerrors.Errorf("failed serializing init actor params: %s", err)
-	}
-
-	// Get the parent and the actor to know where to send the message.
-	smsg, aerr := parentAPI.MpoolPushMessage(ctx, &types.Message{
-		To:       SubnetActor,
-		From:     wallet,
-		Value:    abi.NewTokenAmount(0),
-		Method:   subnet.Methods.SubmitCheckpoint,
-		Params:   serparams,
-		GasLimit: 1_000_000_000, // NOTE: Adding high gas limit to ensure that the message is accepted.
-	}, nil)
-	if aerr != nil {
-		log.Errorf("Error MpoolPushMessage: %s", aerr)
-		return cid.Undef, aerr
-	}
-
-	msg := smsg.Cid()
-
-	chcid, _ := ch.Cid()
-	log.Infow("Success signing checkpoint in subnet", "subnetID", id, "message", msg, "cid", chcid)
-	return smsg.Cid(), nil
+// isRoot checks if the
+func (s *SubnetMgr) isRoot(id hierarchical.SubnetID) bool {
+	return id.String() == string(s.api.NetName)
 }
 
-// GetCrossMsgsPool returns a list with `num` number of of cross messages pending for validation.
-//
-// if num == 0 there's no limit in the number of cross-messages returned.
-func (s *SubnetMgr) GetCrossMsgsPool(
-	ctx context.Context, id hierarchical.SubnetID, num int) ([]*types.Message, error) {
-	// TODO: Think a bit deeper the locking strategy for subnets.
-	// s.lk.RLock()
-	// defer s.lk.RUnlock()
-	topdown, err := s.getTopDownPool(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	// TODO: Get downtop messages and return all.
-	return topdown, nil
-}
-
-func (s *SubnetMgr) ListCheckpoints(
-	ctx context.Context, id hierarchical.SubnetID, num int) ([]*schema.Checkpoint, error) {
-
-	// TODO: Think a bit deeper the locking strategy for subnets.
-	s.lk.RLock()
-	defer s.lk.RUnlock()
-
-	// Get actor from subnet ID
-	subnetActAddr, err := id.Actor()
-	if err != nil {
-		return nil, err
-	}
-
-	// Get the api for the parent network hosting the subnet actor
-	// for the subnet.
-	parentAPI, err := s.getParentAPI(id)
-	if err != nil {
-		return nil, err
-	}
-
-	subAPI := s.getAPI(id)
-	if subAPI == nil {
-		xerrors.Errorf("Not listening to subnet")
-	}
-
-	subnetAct, err := parentAPI.StateGetActor(ctx, subnetActAddr, types.EmptyTSK)
-	if err != nil {
-		return nil, err
-	}
-
-	var snst subnet.SubnetState
-	pbs := blockstore.NewAPIBlockstore(parentAPI)
-	pcst := cbor.NewCborStore(pbs)
-	if err := pcst.Get(ctx, subnetAct.Head, &snst); err != nil {
-		return nil, err
-	}
-	pstore := adt.WrapStore(ctx, pcst)
-	out := make([]*schema.Checkpoint, 0)
-	ts := subAPI.ChainAPI.Chain.GetHeaviestTipSet()
-	currEpoch := ts.Height()
-	for i := 0; i < num; i++ {
-		signWindow := ctypes.CheckpointEpoch(currEpoch, snst.CheckPeriod)
-		signWindow = abi.ChainEpoch(int(signWindow) - i*int(snst.CheckPeriod))
-		if signWindow < 0 {
-			break
-		}
-		ch, found, err := snst.GetCheckpoint(pstore, signWindow)
-		if err != nil {
-			return nil, err
-		}
-		if found {
-			out = append(out, ch)
-		}
-	}
-	return out, nil
-}
-
-func (s *SubnetMgr) ValidateCheckpoint(
-	ctx context.Context, id hierarchical.SubnetID, epoch abi.ChainEpoch) (*schema.Checkpoint, error) {
-
-	// TODO: Think a bit deeper the locking strategy for subnets.
-	s.lk.RLock()
-	defer s.lk.RUnlock()
-
-	// Get actor from subnet ID
-	subnetActAddr, err := id.Actor()
-	if err != nil {
-		return nil, err
-	}
-
-	// Get the api for the parent network hosting the subnet actor
-	// for the subnet.
-	parentAPI, err := s.getParentAPI(id)
-	if err != nil {
-		return nil, err
-	}
-
-	subAPI := s.getAPI(id)
-	if subAPI == nil {
-		xerrors.Errorf("Not listening to subnet")
-	}
-
-	subnetAct, err := parentAPI.StateGetActor(ctx, subnetActAddr, types.EmptyTSK)
-	if err != nil {
-		return nil, err
-	}
-
-	var snst subnet.SubnetState
-	pbs := blockstore.NewAPIBlockstore(parentAPI)
-	pcst := cbor.NewCborStore(pbs)
-	if err := pcst.Get(ctx, subnetAct.Head, &snst); err != nil {
-		return nil, err
-	}
-	pstore := adt.WrapStore(ctx, pcst)
-	ts := subAPI.ChainAPI.Chain.GetHeaviestTipSet()
-
-	// If epoch < 0 we are singalling that we want to verify the
-	// checkpoint for the latest epoch submitted.
-	if epoch < 0 {
-		currEpoch := ts.Height()
-		epoch = ctypes.CheckpointEpoch(currEpoch-snst.CheckPeriod, snst.CheckPeriod)
-	}
-
-	ch, found, err := snst.GetCheckpoint(pstore, epoch)
-	if err != nil {
-		return nil, err
-	}
-	if !found {
-		return nil, xerrors.Errorf("no checkpoint committed in epoch: %s", epoch)
-	}
-	prevCid, err := snst.PrevCheckCid(pstore, epoch)
-	if err != nil {
-		return nil, err
-	}
-
-	if pchc, _ := ch.PreviousCheck(); prevCid != pchc {
-		return ch, xerrors.Errorf("verification failed, previous checkpoints not equal: %s, %s", prevCid, pchc)
-	}
-
-	if ch.Epoch() != epoch {
-		return ch, xerrors.Errorf("verification failed, wrong epoch: %s, %s", ch.Epoch(), epoch)
-	}
-
-	subts, err := subAPI.ChainGetTipSetByHeight(ctx, epoch, types.EmptyTSK)
-	if err != nil {
-		return nil, err
-	}
-	if !ch.EqualTipSet(subts.Key()) {
-		chtsk, _ := ch.TipSet()
-		return ch, xerrors.Errorf("verification failed, checkpoint includes wrong tipSets : %s, %s", ts.Key(), chtsk)
-	}
-
-	// TODO: Verify that the checkpoint has been committed in the corresponding SCA as a sanity check.
-	// TODO: Verify that committed childs are correct
-	// TODO: Any other verification?
-	return ch, nil
-}
-
-func (s *SubnetMgr) getAPI(n hierarchical.SubnetID) *API {
-	if n.String() == string(s.api.NetName) {
+func (s *SubnetMgr) getAPI(id hierarchical.SubnetID) *API {
+	if s.isRoot(id) {
 		return s.api
 	}
-	sh, ok := s.subnets[n]
+	sh, ok := s.subnets[id]
 	if !ok {
 		return nil
 	}
 	return sh.api
 }
 
-func (s *SubnetMgr) getParentAPI(n hierarchical.SubnetID) (*API, error) {
-	parentAPI := s.getAPI(n.Parent())
+func (s *SubnetMgr) getParentAPI(id hierarchical.SubnetID) (*API, error) {
+	parentAPI := s.getAPI(id.Parent())
 	if parentAPI == nil {
 		return nil, xerrors.Errorf("not syncing with parent network")
 	}
 	return parentAPI, nil
 }
 
-func (s *SubnetMgr) getSubnet(n hierarchical.SubnetID) (*Subnet, error) {
-	sh, ok := s.subnets[n]
+func (s *SubnetMgr) getSubnet(id hierarchical.SubnetID) (*Subnet, error) {
+	sh, ok := s.subnets[id]
 	if !ok {
-		return nil, xerrors.Errorf("Not part of subnet %v. Consider joining it", n)
+		return nil, xerrors.Errorf("Not part of subnet %v. Consider joining it", id)
 	}
 	return sh, nil
 }
+
+func (s *SubnetMgr) GetSubnetAPI(id hierarchical.SubnetID) (v1api.FullNode, error) {
+	api := s.getAPI(id)
+	if api == nil {
+		return nil, xerrors.Errorf("subnet manager not syncing with network")
+	}
+	return api, nil
+}
+
+var _ subiface.SubnetMgr = &SubnetMgr{}

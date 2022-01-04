@@ -10,6 +10,7 @@ import (
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
 	common "github.com/filecoin-project/lotus/chain/consensus/common"
+	param "github.com/filecoin-project/lotus/chain/consensus/common/params"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/types"
 	"golang.org/x/xerrors"
@@ -37,7 +38,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		}
 		base, _ = types.NewTipSet([]*types.BlockHeader{BestWorkBlock(base)})
 
-		expDiff := common.GenesisWorkTarget
+		expDiff := param.GenesisWorkTarget
 		if base.Height()+1 >= MaxDiffLookback {
 			lbr := base.Height() + 1 - DiffLookback(base.Height())
 			lbts, err := api.ChainGetTipSetByHeight(ctx, lbr, base.Key())

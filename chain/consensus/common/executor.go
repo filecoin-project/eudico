@@ -1,4 +1,4 @@
-package subnet
+package common
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"github.com/filecoin-project/go-state-types/network"
 	"github.com/filecoin-project/lotus/chain/consensus/actors/registry"
 	"github.com/filecoin-project/lotus/chain/consensus/actors/reward"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	"github.com/filecoin-project/lotus/chain/rand"
 	"github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
@@ -47,15 +48,15 @@ func DefaultUpgradeSchedule() stmgr.UpgradeSchedule {
 }
 
 type tipSetExecutor struct {
-	subnet *Subnet
+	submgr subnet.SubnetMgr
 }
 
 func (t *tipSetExecutor) NewActorRegistry() *vm.ActorRegistry {
 	return registry.NewActorRegistry()
 }
 
-func TipSetExecutor(sn *Subnet) stmgr.Executor {
-	return &tipSetExecutor{sn}
+func TipSetExecutor(submgr subnet.SubnetMgr) stmgr.Executor {
+	return &tipSetExecutor{submgr}
 }
 
 func RootTipSetExecutor() stmgr.Executor {
