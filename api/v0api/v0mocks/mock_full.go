@@ -969,7 +969,7 @@ func (mr *MockFullNodeMockRecorder) GasEstimateMessageGas(arg0, arg1, arg2, arg3
 }
 
 // GetCrossMsgsPool mocks base method.
-func (m *MockFullNode) GetCrossMsgsPool(arg0 context.Context, arg1 hierarchical.SubnetID, arg2 int) ([]*types.Message, error) {
+func (m *MockFullNode) GetCrossMsgsPool(arg0 context.Context, arg1 hierarchical.SubnetID, arg2 abi.ChainEpoch) ([]*types.Message, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetCrossMsgsPool", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]*types.Message)

@@ -436,8 +436,7 @@ func (a SubnetCoordActor) Release(rt runtime.Runtime, _ *abi.EmptyValue) *abi.Em
 
 // ApplyParams determines the cross message to apply.
 type ApplyParams struct {
-	MsgType hierarchical.MsgType
-	Msg     types.Message
+	Msg types.Message
 }
 
 // ApplyMessage triggers the execution of a cross-subnet message validated through the consensus.
@@ -452,8 +451,10 @@ func (a SubnetCoordActor) ApplyMessage(rt runtime.Runtime, params *ApplyParams) 
 	// Only system actor can trigger this function.
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
 
-	switch params.MsgType {
+	switch hierarchical.GetMsgType(&params.Msg) {
 	case hierarchical.Fund:
+		// Fund messages are applied in the SCA of the subnet to which
+		// the TopDown message is directed.
 		applyFund(rt, params.Msg)
 	case hierarchical.Release:
 		rt.Abortf(exitcode.ErrIllegalArgument, "Not implemented yet")

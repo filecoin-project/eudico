@@ -2,25 +2,140 @@ package subnetmgr
 
 import (
 	"context"
+	"fmt"
+	"sync"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/chain/actors"
+	"github.com/filecoin-project/lotus/chain/consensus/actors/registry"
+	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
+	"github.com/filecoin-project/lotus/chain/rand"
+	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/types"
+	"github.com/filecoin-project/lotus/chain/vm"
+	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/specs-actors/actors/util/adt"
 	"github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
 	"golang.org/x/xerrors"
 )
 
+// finalityWait is the number of epochs that we will wait
+// before being able to re-propose a cross-msg. This is used to
+// wait for all the state changes to be propagated.
+const finalityWait = 5
+
+func newCrossMsgPool() *crossMsgPool {
+	return &crossMsgPool{pool: make(map[hierarchical.SubnetID]*lastApplied)}
+}
+
+type crossMsgPool struct {
+	lk   sync.RWMutex
+	pool map[hierarchical.SubnetID]*lastApplied
+}
+
+type lastApplied struct {
+	lk      sync.RWMutex
+	topdown map[uint64]abi.ChainEpoch // nonce[epoch]
+	downtop map[uint64]abi.ChainEpoch // nonce[epoch]
+	height  abi.ChainEpoch
+}
+
+func (cm *crossMsgPool) getPool(id hierarchical.SubnetID, height abi.ChainEpoch) *lastApplied {
+	cm.lk.RLock()
+	p, ok := cm.pool[id]
+	cm.lk.RUnlock()
+	// If no pool for subnet or height higher than the subsequent one.
+	// Add a buffer before pruning message pool.
+	if !ok || height > p.height+finalityWait {
+		cm.lk.Lock()
+		p = &lastApplied{
+			height:  height,
+			topdown: make(map[uint64]abi.ChainEpoch),
+			downtop: make(map[uint64]abi.ChainEpoch),
+		}
+		cm.pool[id] = p
+		cm.lk.Unlock()
+	}
+
+	return p
+}
+
+func (cm *crossMsgPool) rmPool(id hierarchical.SubnetID) {
+	cm.lk.Lock()
+	defer cm.lk.Unlock()
+	delete(cm.pool, id)
+}
+
+func (cm *crossMsgPool) applyTopDown(n uint64, id hierarchical.SubnetID, height abi.ChainEpoch) {
+	p := cm.getPool(id, height)
+	p.lk.Lock()
+	defer p.lk.Unlock()
+	p.topdown[n] = height
+}
+
+func (cm *crossMsgPool) applyDownTop(n uint64, id hierarchical.SubnetID, height abi.ChainEpoch) {
+	p := cm.getPool(id, height)
+	p.lk.Lock()
+	defer p.lk.Unlock()
+	p.downtop[n] = height
+}
+
+func (cm *crossMsgPool) isTopDownApplied(n uint64, id hierarchical.SubnetID, height abi.ChainEpoch) bool {
+	p := cm.getPool(id, height)
+	p.lk.RLock()
+	defer p.lk.RUnlock()
+	h, ok := p.topdown[n]
+	return ok && h != height
+}
+
+func (cm *crossMsgPool) isDownTopApplied(n uint64, id hierarchical.SubnetID, height abi.ChainEpoch) bool {
+	p := cm.getPool(id, height)
+	p.lk.RLock()
+	defer p.lk.RUnlock()
+	h, ok := p.downtop[n]
+	return ok && h != height
+}
+
+// applyMsgs runs the cross-message before providing it to the pool.
+// We shouldn't propose invalid cross-messages.
+func (s *SubnetMgr) applyMsg(ctx context.Context, sm *stmgr.StateManager, id hierarchical.SubnetID, msg *types.Message) error {
+	ts := sm.ChainStore().GetHeaviestTipSet()
+	r := rand.NewStateRand(sm.ChainStore(), ts.Cids(), nil)
+	makeVmWithBaseState := func(base cid.Cid) (*vm.VM, error) {
+		vmopt := &vm.VMOpts{
+			StateBase:      base,
+			Epoch:          ts.Height(),
+			Rand:           r,
+			Bstore:         sm.ChainStore().StateBlockstore(),
+			Actors:         registry.NewActorRegistry(),
+			Syscalls:       sm.Syscalls,
+			CircSupplyCalc: sm.GetVMCirculatingSupply,
+			NtwkVersion:    sm.GetNtwkVersion,
+			BaseFee:        abi.NewTokenAmount(0),
+			LookbackState:  stmgr.LookbackStateGetterForTipset(sm, ts),
+		}
+
+		return sm.VMConstructor()(ctx, vmopt)
+	}
+
+	pstate := ts.ParentState()
+	vmi, err := makeVmWithBaseState(pstate)
+	if err != nil {
+		return xerrors.Errorf("making vm: %w", err)
+	}
+	return common.ApplyCrossMsg(ctx, vmi, s, nil, msg, ts, dtypes.NetworkName(id))
+}
+
 // GetCrossMsgsPool returns a list with `num` number of of cross messages pending for validation.
 //
-// if num == 0 there's no limit in the number of cross-messages returned.
+// height determines the current consensus height
 func (s *SubnetMgr) GetCrossMsgsPool(
-	ctx context.Context, id hierarchical.SubnetID, num int) ([]*types.Message, error) {
+	ctx context.Context, id hierarchical.SubnetID, height abi.ChainEpoch) ([]*types.Message, error) {
 	// TODO: Think a bit deeper the locking strategy for subnets.
 	// s.lk.RLock()
 	// defer s.lk.RUnlock()
@@ -33,7 +148,7 @@ func (s *SubnetMgr) GetCrossMsgsPool(
 
 	// topDown messages only supported in subnets, not the root.
 	if !s.isRoot(id) {
-		topdown, err = s.getTopDownPool(ctx, id)
+		topdown, err = s.getTopDownPool(ctx, id, height)
 		if err != nil {
 			return nil, err
 		}
@@ -47,6 +162,7 @@ func (s *SubnetMgr) GetCrossMsgsPool(
 	copy(out[:len(topdown)], topdown)
 	copy(out[len(topdown):], downtop)
 
+	fmt.Println(">>>>> CrossMsgs: ", len(out))
 	return out, nil
 }
 
@@ -121,7 +237,7 @@ func (s *SubnetMgr) getParentSCAWithFinality(ctx context.Context, id hierarchica
 	return &st, adt.WrapStore(ctx, pcst), nil
 }
 
-func (s *SubnetMgr) getTopDownPool(ctx context.Context, id hierarchical.SubnetID) ([]*types.Message, error) {
+func (s *SubnetMgr) getTopDownPool(ctx context.Context, id hierarchical.SubnetID, height abi.ChainEpoch) ([]*types.Message, error) {
 
 	// Get status for SCA in subnet to determine from which nonce to fetch messages
 	subAPI := s.getAPI(id)
@@ -154,7 +270,30 @@ func (s *SubnetMgr) getTopDownPool(ctx context.Context, id hierarchical.SubnetID
 		return nil, xerrors.Errorf("subnet with ID %v not found", id)
 	}
 
-	return sh.TopDownMsgFromNonce(pstore, snst.AppliedDownTopNonce)
+	fmt.Println(">>>> TopDownMsgFromNonce applied", snst.AppliedTopDownNonce)
+	msgs, err := sh.TopDownMsgFromNonce(pstore, snst.AppliedTopDownNonce)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*types.Message, 0)
+	for _, m := range msgs {
+		// Pass a few epochs before re-proposing a cross-msg if nonce hasn't changed.
+		// TODO: Using != 0 for testing purposes. This logic should be done right.
+		// What we need to do here if for each message nonce, check if it was recently
+		// proposed and wait one epoch to see if it is applied and applied nonce incremented.
+		// If not, we can re-propose in the pool.
+		if s.cm.isTopDownApplied(m.Nonce, id, height) {
+			continue
+		}
+		// Apply message to see if it succeeds before considering it for the pool.
+		if err := s.applyMsg(ctx, subAPI.StateManager, id, m); err != nil {
+			fmt.Println("===== Error applying mesasge for proposal", err)
+			continue
+		}
+		out = append(out, m)
+		s.cm.applyTopDown(m.Nonce, id, height)
+	}
+	return out, nil
 }
 
 func (s *SubnetMgr) getDownTopPool(ctx context.Context, id hierarchical.SubnetID) ([]*types.Message, error) {

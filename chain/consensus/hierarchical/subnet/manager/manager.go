@@ -77,6 +77,7 @@ type SubnetMgr struct {
 
 	lk      sync.RWMutex
 	subnets map[hierarchical.SubnetID]*Subnet
+	cm      *crossMsgPool
 
 	j journal.Journal
 }
@@ -127,6 +128,7 @@ func NewSubnetMgr(
 		bootstrapper: bootstrapper,
 		verifier:     verifier,
 		subnets:      make(map[hierarchical.SubnetID]*Subnet),
+		cm:           newCrossMsgPool(),
 	}
 
 	s.api = &API{
@@ -187,7 +189,7 @@ func (s *SubnetMgr) startSubnet(id hierarchical.SubnetID,
 	sh.bs = blockstore.FromDatastore(s.ds)
 
 	// Select the right TipSetExecutor for the consensus algorithms chosen.
-	tsExec := common.TipSetExecutor(s)
+	tsExec := common.TipSetExecutor(s, dtypes.NetworkName(id))
 	weight, err := subcns.Weight(consensus)
 	if err != nil {
 		log.Errorw("Error getting weight for consensus", "subnetID", id, "err", err)

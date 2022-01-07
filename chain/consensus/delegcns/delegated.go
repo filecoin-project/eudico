@@ -52,6 +52,8 @@ type Delegated struct {
 
 	subMgr subnet.SubnetMgr
 
+	// We could get network name from state manager, but with this
+	// we avoid having fetch it for every block validation.
 	netName hierarchical.SubnetID
 }
 
@@ -86,7 +88,6 @@ func (deleg *Delegated) ValidateBlock(ctx context.Context, b *types.FullBlock) (
 	}
 
 	h := b.Header
-
 	baseTs, err := deleg.store.LoadTipSet(types.NewTipSetKey(h.Parents...))
 	if err != nil {
 		return xerrors.Errorf("load parent tipset failed (%s): %w", h.Parents, err)

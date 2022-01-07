@@ -59,7 +59,7 @@ func Mine(ctx context.Context, api v1api.FullNode) error {
 			if err != nil {
 				return err
 			}
-			crossmsgs, err := api.GetCrossMsgsPool(ctx, hierarchical.SubnetID(nn), 0)
+			crossmsgs, err := api.GetCrossMsgsPool(ctx, hierarchical.SubnetID(nn), base.Height()+1)
 			if err != nil {
 				log.Errorw("selecting cross-messages failed", "error", err)
 			}

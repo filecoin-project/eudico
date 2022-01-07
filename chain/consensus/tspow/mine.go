@@ -2,6 +2,7 @@ package tspow
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -64,10 +65,11 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		if err != nil {
 			return err
 		}
-		crossmsgs, err := api.GetCrossMsgsPool(ctx, hierarchical.SubnetID(nn), 0)
+		crossmsgs, err := api.GetCrossMsgsPool(ctx, hierarchical.SubnetID(nn), base.Height()+1)
 		if err != nil {
 			log.Errorw("selecting cross-messages failed", "error", err)
 		}
+		fmt.Println("======= CrossMsgs being proposed in block @", base.Height()+1, crossmsgs)
 
 		bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
 			Miner:            miner,

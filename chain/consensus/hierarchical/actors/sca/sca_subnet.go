@@ -134,6 +134,9 @@ func getTopDownMsg(crossMsgs *adt.Array, nonce uint64) (*ltypes.Message, bool, e
 	return &out, true, nil
 }
 
+// TopDownMsgFromNonce gets the latest topDownMessages from a specific nonce
+// (including the one of the specified nonce, i.e. [nonce, latest], both limits
+// included).
 func (sh *Subnet) TopDownMsgFromNonce(s adt.Store, nonce uint64) ([]*ltypes.Message, error) {
 	crossMsgs, err := adt.AsArray(s, sh.TopDownMsgs, CrossMsgsAMTBitwidth)
 	if err != nil {

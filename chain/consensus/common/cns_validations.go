@@ -271,31 +271,31 @@ func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.St
 	}
 
 	crossArr := blockadt.MakeEmptyArray(tmpstore)
+	// Preamble to get states required for cross-msg checks.
 	var (
 		parentSCA *sca.SCAState
+		snSCA     *sca.SCAState
 		pstore    blockadt.Store
+		snstore   blockadt.Store
 	)
-	// Preamble to get states required for cross-msg checks.
 	// If subnet manager is not set we are in the root chain and we don't need to get parentSCA
 	// state
 	if submgr != nil {
-		parentSCA, pstore, err = parentSCAState(ctx, sm, submgr, netName)
+		parentSCA, pstore, err = getSCAState(ctx, sm, submgr, netName.Parent())
 		if err != nil {
 			return err
 		}
 	}
+	// Get SCA state in subnet.
+	snSCA, snstore, err = getSCAState(ctx, sm, submgr, netName)
+	if err != nil {
+		return err
+	}
 	// Check cross messages
 	for i, m := range b.CrossMessages {
-		if err := checkCrossMsg(pstore, parentSCA, netName, m); err != nil {
+		if err := checkCrossMsg(pstore, snstore, parentSCA, snSCA, m); err != nil {
 			return xerrors.Errorf("failed to check message %s: %w", m.Cid(), err)
 		}
-		// TODO: Implement cross message check here.
-		//
-		// Check the nonces are correct
-		// Check that they have been commmitted in parent-chain.
-		// Collect the full messages behind the Cids.
-		log.Warn("TODO: Implement here cross-message checks before they are included in a block")
-
 		// // NOTE: We don't check mesage against VM for cross shard messages. They are
 		// // checked in some other way.
 		// if err := checkMsg(m); err != nil {

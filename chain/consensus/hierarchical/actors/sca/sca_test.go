@@ -769,7 +769,6 @@ func TestApplyMsg(t *testing.T) {
 func (h *shActorHarness) applyFundMsg(rt *mock.Runtime, addr address.Address, value big.Int, nonce uint64) {
 	rt.SetCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
 	params := &actor.ApplyParams{
-		MsgType: hierarchical.Fund,
 		Msg: ltypes.Message{
 			To:         addr,
 			From:       addr,
