@@ -227,7 +227,7 @@ var joinCmd = &cli.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cctx.App.Writer, "Successfully added stake to subnet in message: %s\n", c)
+		fmt.Fprintf(cctx.App.Writer, "Successfully added stake to subnet %s in message: %s\n", subnet, c)
 		return nil
 	},
 }

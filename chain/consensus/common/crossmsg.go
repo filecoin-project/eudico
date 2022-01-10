@@ -2,7 +2,6 @@ package common
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/lotus/blockstore"
@@ -46,7 +45,7 @@ func checkCrossMsg(pstore, snstore blockadt.Store, parentSCA, snSCA *sca.SCAStat
 func checkTopDownMsg(pstore blockadt.Store, parentSCA, snSCA *sca.SCAState, msg *types.Message) error {
 	// Check valid nonce in subnet where message is applied.
 	if msg.Nonce < snSCA.AppliedDownTopNonce {
-		return xerrors.Errorf("topDown msg nonce below AppliedDownTop nonce in subnet where is applied")
+		return xerrors.Errorf("topDown msg nonce reuse in subnet")
 	}
 
 	// check the message for nonce is committed in sca.
@@ -130,6 +129,18 @@ func applyMsg(ctx context.Context, vmi *vm.VM, em stmgr.ExecMonitor,
 		Method:     sca.Methods.ApplyMessage,
 		Params:     serparams,
 	}
+
+	// If the destination account hasn't been initialized, init the account actor.
+	st := vmi.StateTree()
+	_, acterr := st.GetActor(params.Msg.To)
+	if acterr != nil {
+		log.Infow("Initializing To address for crossmsg", "address", params.Msg.To)
+		_, _, err := vmi.CreateAccountActor(ctx, apply, params.Msg.To)
+		if err != nil {
+			return xerrors.Errorf("failed to initialize address for crossmsg: %w", err)
+		}
+	}
+
 	ret, actErr := vmi.ApplyImplicitMessage(ctx, apply)
 	if actErr != nil {
 		return xerrors.Errorf("failed to apply cross message :%w", actErr)
@@ -143,7 +154,7 @@ func applyMsg(ctx context.Context, vmi *vm.VM, em stmgr.ExecMonitor,
 	if ret.ExitCode != 0 {
 		return xerrors.Errorf("reward application message failed (exit %d): %s", ret.ExitCode, ret.ActorErr)
 	}
-	fmt.Println(">>>>>>>>>>> IMPLICIT FUND MESSAGE APPLIED", apply.Cid(), ret)
+	log.Infow("Applied cross msg implicitly (original msg Cid)", "cid", msg.Cid())
 	return nil
 }
 

@@ -233,6 +233,9 @@ func (s *SubnetMgr) startSubnet(id hierarchical.SubnetID,
 	// is created but before we set-up the gossipsub topics to listen for
 	// new blocks and messages.
 	sh.runHello(ctx)
+
+	// FIXME: Consider inheriting Bitswap ChainBlockService instead of using
+	// offline.Exchange here. See builder_chain to undertand how is built.
 	bserv := blockservice.New(sh.bs, offline.Exchange(sh.bs))
 	prov := messagepool.NewProvider(sh.sm, s.pubsub)
 
@@ -402,6 +405,7 @@ func (s *SubnetMgr) JoinSubnet(
 		Params: nil,
 	}, nil)
 	if aerr != nil {
+		log.Errorw("Error pushing join subnet message to parent api", "err", aerr)
 		return cid.Undef, aerr
 	}
 
@@ -410,6 +414,7 @@ func (s *SubnetMgr) JoinSubnet(
 	// Wait state message.
 	_, aerr = parentAPI.StateWaitMsg(ctx, msg, build.MessageConfidence, api.LookbackNoLimit, true)
 	if aerr != nil {
+		log.Errorw("Error waiting for message to be committed", "err", aerr)
 		return cid.Undef, aerr
 	}
 
@@ -424,8 +429,9 @@ func (s *SubnetMgr) JoinSubnet(
 	// Get genesis from actor state.
 	st, err := parentAPI.getActorState(ctx, SubnetActor)
 	if err != nil {
-		return cid.Undef, nil
+		return cid.Undef, err
 	}
+
 	err = s.startSubnet(id, parentAPI, st.Consensus, st.Genesis)
 	if err != nil {
 		return cid.Undef, err
@@ -469,7 +475,7 @@ func (s *SubnetMgr) MineSubnet(
 	// of miners
 	st, err := parentAPI.getActorState(ctx, SubnetActor)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	if st.IsMiner(wallet) && st.Status != subnet.Killed {

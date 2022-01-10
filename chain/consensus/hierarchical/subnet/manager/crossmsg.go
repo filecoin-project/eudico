@@ -2,7 +2,6 @@ package subnetmgr
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/filecoin-project/go-address"
@@ -162,7 +161,7 @@ func (s *SubnetMgr) GetCrossMsgsPool(
 	copy(out[:len(topdown)], topdown)
 	copy(out[len(topdown):], downtop)
 
-	fmt.Println(">>>>> CrossMsgs: ", len(out))
+	log.Infof("Picked up %d cross-msgs from CrossMsgPool", len(out))
 	return out, nil
 }
 
@@ -242,7 +241,7 @@ func (s *SubnetMgr) getTopDownPool(ctx context.Context, id hierarchical.SubnetID
 	// Get status for SCA in subnet to determine from which nonce to fetch messages
 	subAPI := s.getAPI(id)
 	if subAPI == nil {
-		xerrors.Errorf("Not listening to subnet")
+		return nil, xerrors.Errorf("Not listening to subnet")
 	}
 	subnetAct, err := subAPI.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, types.EmptyTSK)
 	if err != nil {
@@ -270,7 +269,6 @@ func (s *SubnetMgr) getTopDownPool(ctx context.Context, id hierarchical.SubnetID
 		return nil, xerrors.Errorf("subnet with ID %v not found", id)
 	}
 
-	fmt.Println(">>>> TopDownMsgFromNonce applied", snst.AppliedTopDownNonce)
 	msgs, err := sh.TopDownMsgFromNonce(pstore, snst.AppliedTopDownNonce)
 	if err != nil {
 		return nil, err
@@ -287,7 +285,7 @@ func (s *SubnetMgr) getTopDownPool(ctx context.Context, id hierarchical.SubnetID
 		}
 		// Apply message to see if it succeeds before considering it for the pool.
 		if err := s.applyMsg(ctx, subAPI.StateManager, id, m); err != nil {
-			fmt.Println("===== Error applying mesasge for proposal", err)
+			log.Warnf("Error applying cross message when picking it up from CrossMsgPool: %s", err)
 			continue
 		}
 		out = append(out, m)

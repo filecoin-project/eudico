@@ -178,14 +178,16 @@ func (cs *ChainStore) BlockMsgsForTipset(ts *types.TipSet) ([]BlockMessages, err
 		}
 
 		for _, crossmsg := range cms {
-			b, err := selectMsg(crossmsg.VMMessage())
-			if err != nil {
-				return nil, xerrors.Errorf("failed to decide whether to select message for block: %w", err)
-			}
-
-			if b {
-				bm.CrossMessages = append(bm.CrossMessages, crossmsg)
-			}
+			// b, err := selectMsg(crossmsg.VMMessage())
+			// if err != nil {
+			//         return nil, xerrors.Errorf("failed to decide whether to select message for block: %w", err)
+			// }
+			//
+			// if b {
+			// TODO: Message selection and cross-msg checks follow a different path
+			// no message selection here.
+			bm.CrossMessages = append(bm.CrossMessages, crossmsg)
+			// }
 		}
 
 		out = append(out, bm)
