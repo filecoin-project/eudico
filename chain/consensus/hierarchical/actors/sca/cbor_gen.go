@@ -242,21 +242,21 @@ func (t *SCAState) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.DownTopNonce (uint64) (uint64)
+	// t.BottomUpNonce (uint64) (uint64)
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.DownTopNonce)); err != nil {
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.BottomUpNonce)); err != nil {
 		return err
 	}
 
-	// t.DownTopMsgsMeta (cid.Cid) (struct)
+	// t.BottomUpMsgsMeta (cid.Cid) (struct)
 
-	if err := cbg.WriteCidBuf(scratch, w, t.DownTopMsgsMeta); err != nil {
-		return xerrors.Errorf("failed to write cid field t.DownTopMsgsMeta: %w", err)
+	if err := cbg.WriteCidBuf(scratch, w, t.BottomUpMsgsMeta); err != nil {
+		return xerrors.Errorf("failed to write cid field t.BottomUpMsgsMeta: %w", err)
 	}
 
-	// t.AppliedDownTopNonce (uint64) (uint64)
+	// t.AppliedBottomUpNonce (uint64) (uint64)
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.AppliedDownTopNonce)); err != nil {
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.AppliedBottomUpNonce)); err != nil {
 		return err
 	}
 
@@ -395,7 +395,7 @@ func (t *SCAState) UnmarshalCBOR(r io.Reader) error {
 		t.Nonce = uint64(extra)
 
 	}
-	// t.DownTopNonce (uint64) (uint64)
+	// t.BottomUpNonce (uint64) (uint64)
 
 	{
 
@@ -406,22 +406,22 @@ func (t *SCAState) UnmarshalCBOR(r io.Reader) error {
 		if maj != cbg.MajUnsignedInt {
 			return fmt.Errorf("wrong type for uint64 field")
 		}
-		t.DownTopNonce = uint64(extra)
+		t.BottomUpNonce = uint64(extra)
 
 	}
-	// t.DownTopMsgsMeta (cid.Cid) (struct)
+	// t.BottomUpMsgsMeta (cid.Cid) (struct)
 
 	{
 
 		c, err := cbg.ReadCid(br)
 		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.DownTopMsgsMeta: %w", err)
+			return xerrors.Errorf("failed to read cid field t.BottomUpMsgsMeta: %w", err)
 		}
 
-		t.DownTopMsgsMeta = c
+		t.BottomUpMsgsMeta = c
 
 	}
-	// t.AppliedDownTopNonce (uint64) (uint64)
+	// t.AppliedBottomUpNonce (uint64) (uint64)
 
 	{
 
@@ -432,7 +432,7 @@ func (t *SCAState) UnmarshalCBOR(r io.Reader) error {
 		if maj != cbg.MajUnsignedInt {
 			return fmt.Errorf("wrong type for uint64 field")
 		}
-		t.AppliedDownTopNonce = uint64(extra)
+		t.AppliedBottomUpNonce = uint64(extra)
 
 	}
 	// t.AppliedTopDownNonce (uint64) (uint64)

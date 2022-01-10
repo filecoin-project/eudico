@@ -291,8 +291,8 @@ func (st *SCAState) applyCheckMsgs(rt runtime.Runtime, windowCh *schema.Checkpoi
 		// if it is directed to this subnet, add it to down-top messages
 		// for the consensus algorithm in the subnet to pick it up.
 		if mm.To == st.NetworkName.String() {
-			// Add to DownTopMsgMeta
-			st.storeDownTopMsgMeta(rt, mm)
+			// Add to BottomUpMsgMeta
+			st.storeBottomUpMsgMeta(rt, mm)
 		} else {
 			// Check if it comes from a valid child, i.e. we are their parent.
 			if hierarchical.SubnetID(mm.From).Parent() != st.NetworkName {

@@ -38,10 +38,10 @@ type crossMsgPool struct {
 }
 
 type lastApplied struct {
-	lk      sync.RWMutex
-	topdown map[uint64]abi.ChainEpoch // nonce[epoch]
-	downtop map[uint64]abi.ChainEpoch // nonce[epoch]
-	height  abi.ChainEpoch
+	lk       sync.RWMutex
+	topdown  map[uint64]abi.ChainEpoch // nonce[epoch]
+	bottomup map[uint64]abi.ChainEpoch // nonce[epoch]
+	height   abi.ChainEpoch
 }
 
 func (cm *crossMsgPool) getPool(id hierarchical.SubnetID, height abi.ChainEpoch) *lastApplied {
@@ -53,9 +53,9 @@ func (cm *crossMsgPool) getPool(id hierarchical.SubnetID, height abi.ChainEpoch)
 	if !ok || height > p.height+finalityWait {
 		cm.lk.Lock()
 		p = &lastApplied{
-			height:  height,
-			topdown: make(map[uint64]abi.ChainEpoch),
-			downtop: make(map[uint64]abi.ChainEpoch),
+			height:   height,
+			topdown:  make(map[uint64]abi.ChainEpoch),
+			bottomup: make(map[uint64]abi.ChainEpoch),
 		}
 		cm.pool[id] = p
 		cm.lk.Unlock()
@@ -77,11 +77,11 @@ func (cm *crossMsgPool) applyTopDown(n uint64, id hierarchical.SubnetID, height 
 	p.topdown[n] = height
 }
 
-func (cm *crossMsgPool) applyDownTop(n uint64, id hierarchical.SubnetID, height abi.ChainEpoch) {
+func (cm *crossMsgPool) applyBottomUp(n uint64, id hierarchical.SubnetID, height abi.ChainEpoch) {
 	p := cm.getPool(id, height)
 	p.lk.Lock()
 	defer p.lk.Unlock()
-	p.downtop[n] = height
+	p.bottomup[n] = height
 }
 
 func (cm *crossMsgPool) isTopDownApplied(n uint64, id hierarchical.SubnetID, height abi.ChainEpoch) bool {
@@ -92,11 +92,11 @@ func (cm *crossMsgPool) isTopDownApplied(n uint64, id hierarchical.SubnetID, hei
 	return ok && h != height
 }
 
-func (cm *crossMsgPool) isDownTopApplied(n uint64, id hierarchical.SubnetID, height abi.ChainEpoch) bool {
+func (cm *crossMsgPool) isBottomUpApplied(n uint64, id hierarchical.SubnetID, height abi.ChainEpoch) bool {
 	p := cm.getPool(id, height)
 	p.lk.RLock()
 	defer p.lk.RUnlock()
-	h, ok := p.downtop[n]
+	h, ok := p.bottomup[n]
 	return ok && h != height
 }
 
@@ -140,9 +140,9 @@ func (s *SubnetMgr) GetCrossMsgsPool(
 	// defer s.lk.RUnlock()
 
 	var (
-		topdown []*types.Message
-		downtop []*types.Message
-		err     error
+		topdown  []*types.Message
+		bottomup []*types.Message
+		err      error
 	)
 
 	// topDown messages only supported in subnets, not the root.
@@ -153,13 +153,13 @@ func (s *SubnetMgr) GetCrossMsgsPool(
 		}
 	}
 
-	// TODO: Get downtop messages and return all cross-messages.
+	// TODO: Get bottomup messages and return all cross-messages.
 	// NOTE: Down-top transactions are supported also in root chain.
-	// topdown, err := s.getDownTopPool(ctx, id)
+	// topdown, err := s.getBottomUpPool(ctx, id)
 
-	out := make([]*types.Message, len(topdown)+len(downtop))
+	out := make([]*types.Message, len(topdown)+len(bottomup))
 	copy(out[:len(topdown)], topdown)
-	copy(out[len(topdown):], downtop)
+	copy(out[len(topdown):], bottomup)
 
 	log.Infof("Picked up %d cross-msgs from CrossMsgPool", len(out))
 	return out, nil
@@ -294,8 +294,8 @@ func (s *SubnetMgr) getTopDownPool(ctx context.Context, id hierarchical.SubnetID
 	return out, nil
 }
 
-func (s *SubnetMgr) getDownTopPool(ctx context.Context, id hierarchical.SubnetID) ([]*types.Message, error) {
-	// 1. Get DownTopMsgMeta from SCA in the subnet (the ones that need to
+func (s *SubnetMgr) getBottomUpPool(ctx context.Context, id hierarchical.SubnetID) ([]*types.Message, error) {
+	// 1. Get BottomUpMsgMeta from SCA in the subnet (the ones that need to
 	// be applied here).
 	// 2. Get Cid and From of CrossMsgMeta
 	// 3. (Implement LinkSystem) Check locally if we have the messages behind the

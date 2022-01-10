@@ -537,12 +537,12 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, eq)
 
-	// Check that the DownTopMsgs to be applied are added
+	// Check that the BottomUpMsgs to be applied are added
 	st := getState(rt)
-	_, found, err = st.GetDownTopMsgMeta(adt.AsStore(rt), 0)
+	_, found, err = st.GetBottomUpMsgMeta(adt.AsStore(rt), 0)
 	require.NoError(t, err)
 	require.True(t, found)
-	_, found, err = st.GetDownTopMsgMeta(adt.AsStore(rt), 1)
+	_, found, err = st.GetBottomUpMsgMeta(adt.AsStore(rt), 1)
 	require.NoError(t, err)
 	require.True(t, found)
 

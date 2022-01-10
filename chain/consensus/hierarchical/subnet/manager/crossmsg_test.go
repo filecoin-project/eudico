@@ -36,30 +36,30 @@ func TestPoolTopDown(t *testing.T) {
 	require.True(t, cm.isTopDownApplied(nonce+3, id, height))
 }
 
-func TestPoolDownTop(t *testing.T) {
+func TestPoolBottomUp(t *testing.T) {
 	cm := newCrossMsgPool()
 	id := hierarchical.SubnetID("test")
 	var nonce uint64 = 3
 	height := abi.ChainEpoch(5)
-	cm.applyDownTop(nonce, id, height)
-	cm.applyDownTop(nonce+1, id, height)
-	require.False(t, cm.isDownTopApplied(nonce, id, height))
-	require.False(t, cm.isDownTopApplied(nonce+1, id, height))
-	require.False(t, cm.isDownTopApplied(nonce+2, id, height))
+	cm.applyBottomUp(nonce, id, height)
+	cm.applyBottomUp(nonce+1, id, height)
+	require.False(t, cm.isBottomUpApplied(nonce, id, height))
+	require.False(t, cm.isBottomUpApplied(nonce+1, id, height))
+	require.False(t, cm.isBottomUpApplied(nonce+2, id, height))
 
 	// In the next epoch we consider the previous ones as applied
 	height++
-	cm.applyDownTop(nonce+2, id, height)
-	require.True(t, cm.isDownTopApplied(nonce, id, height))
-	require.True(t, cm.isDownTopApplied(nonce+1, id, height))
-	require.False(t, cm.isDownTopApplied(nonce+2, id, height))
+	cm.applyBottomUp(nonce+2, id, height)
+	require.True(t, cm.isBottomUpApplied(nonce, id, height))
+	require.True(t, cm.isBottomUpApplied(nonce+1, id, height))
+	require.False(t, cm.isBottomUpApplied(nonce+2, id, height))
 
 	// After the finality threshold we are free to re-propose previous ones if needed.
 	// (state changes would probably have propagated already).
 	height += finalityThreshold
-	cm.applyDownTop(nonce+3, id, height)
-	require.False(t, cm.isDownTopApplied(nonce+2, id, height))
-	require.False(t, cm.isDownTopApplied(nonce+3, id, height))
+	cm.applyBottomUp(nonce+3, id, height)
+	require.False(t, cm.isBottomUpApplied(nonce+2, id, height))
+	require.False(t, cm.isBottomUpApplied(nonce+3, id, height))
 	height++
-	require.True(t, cm.isDownTopApplied(nonce+3, id, height))
+	require.True(t, cm.isBottomUpApplied(nonce+3, id, height))
 }

@@ -38,13 +38,13 @@ func checkCrossMsg(pstore, snstore blockadt.Store, parentSCA, snSCA *sca.SCAStat
 }
 
 // checkTopDownMsg validates the topdown message.
-// - It checks that the msg nonce is larger than AppliedDownTopNonce in the subnet SCA
+// - It checks that the msg nonce is larger than AppliedBottomUpNonce in the subnet SCA
 // Recall that applying crossMessages increases the AppliedNonce of the SCA in the subnet
 // where the message is applied.
 // - It checks that the cross-msg is committed in the sca of the parent chain
 func checkTopDownMsg(pstore blockadt.Store, parentSCA, snSCA *sca.SCAState, msg *types.Message) error {
 	// Check valid nonce in subnet where message is applied.
-	if msg.Nonce < snSCA.AppliedDownTopNonce {
+	if msg.Nonce < snSCA.AppliedBottomUpNonce {
 		return xerrors.Errorf("topDown msg nonce reuse in subnet")
 	}
 
