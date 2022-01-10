@@ -161,7 +161,7 @@ func (s *SubnetMgr) GetCrossMsgsPool(
 	copy(out[:len(topdown)], topdown)
 	copy(out[len(topdown):], bottomup)
 
-	log.Infof("Picked up %d cross-msgs from CrossMsgPool", len(out))
+	log.Debugf("Picked up %d cross-msgs from CrossMsgPool", len(out))
 	return out, nil
 }
 

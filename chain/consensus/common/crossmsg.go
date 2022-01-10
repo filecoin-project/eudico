@@ -154,7 +154,7 @@ func applyMsg(ctx context.Context, vmi *vm.VM, em stmgr.ExecMonitor,
 	if ret.ExitCode != 0 {
 		return xerrors.Errorf("reward application message failed (exit %d): %s", ret.ExitCode, ret.ActorErr)
 	}
-	log.Infow("Applied cross msg implicitly (original msg Cid)", "cid", msg.Cid())
+	log.Debugw("Applied cross msg implicitly (original msg Cid)", "cid", msg.Cid())
 	return nil
 }
 
