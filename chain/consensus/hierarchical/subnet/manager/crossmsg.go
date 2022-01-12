@@ -8,15 +8,9 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/chain/actors"
-	"github.com/filecoin-project/lotus/chain/consensus/actors/registry"
-	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
-	"github.com/filecoin-project/lotus/chain/rand"
-	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/filecoin-project/lotus/chain/vm"
-	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/specs-actors/actors/util/adt"
 	"github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
@@ -64,12 +58,6 @@ func (cm *crossMsgPool) getPool(id hierarchical.SubnetID, height abi.ChainEpoch)
 	return p
 }
 
-func (cm *crossMsgPool) rmPool(id hierarchical.SubnetID) {
-	cm.lk.Lock()
-	defer cm.lk.Unlock()
-	delete(cm.pool, id)
-}
-
 func (cm *crossMsgPool) applyTopDown(n uint64, id hierarchical.SubnetID, height abi.ChainEpoch) {
 	p := cm.getPool(id, height)
 	p.lk.Lock()
@@ -98,36 +86,6 @@ func (cm *crossMsgPool) isBottomUpApplied(n uint64, id hierarchical.SubnetID, he
 	defer p.lk.RUnlock()
 	h, ok := p.bottomup[n]
 	return ok && h != height
-}
-
-// applyMsgs runs the cross-message before providing it to the pool.
-// We shouldn't propose invalid cross-messages.
-func (s *SubnetMgr) applyMsg(ctx context.Context, sm *stmgr.StateManager, id hierarchical.SubnetID, msg *types.Message) error {
-	ts := sm.ChainStore().GetHeaviestTipSet()
-	r := rand.NewStateRand(sm.ChainStore(), ts.Cids(), nil)
-	makeVmWithBaseState := func(base cid.Cid) (*vm.VM, error) {
-		vmopt := &vm.VMOpts{
-			StateBase:      base,
-			Epoch:          ts.Height(),
-			Rand:           r,
-			Bstore:         sm.ChainStore().StateBlockstore(),
-			Actors:         registry.NewActorRegistry(),
-			Syscalls:       sm.Syscalls,
-			CircSupplyCalc: sm.GetVMCirculatingSupply,
-			NtwkVersion:    sm.GetNtwkVersion,
-			BaseFee:        abi.NewTokenAmount(0),
-			LookbackState:  stmgr.LookbackStateGetterForTipset(sm, ts),
-		}
-
-		return sm.VMConstructor()(ctx, vmopt)
-	}
-
-	pstate := ts.ParentState()
-	vmi, err := makeVmWithBaseState(pstate)
-	if err != nil {
-		return xerrors.Errorf("making vm: %w", err)
-	}
-	return common.ApplyCrossMsg(ctx, vmi, s, nil, msg, ts, dtypes.NetworkName(id))
 }
 
 // GetCrossMsgsPool returns a list with `num` number of of cross messages pending for validation.
@@ -204,6 +162,8 @@ func (s *SubnetMgr) FundSubnet(
 	return smsg.Cid(), nil
 }
 
+// getParentSCAWithFinality returns the state of the SCA of the parent with `finalityThreshold`
+// epochs ago to ensure that no reversion happens and we can operate with the state we got.
 func (s *SubnetMgr) getParentSCAWithFinality(ctx context.Context, id hierarchical.SubnetID) (*sca.SCAState, adt.Store, error) {
 
 	parentAPI, err := s.getParentAPI(id)
@@ -212,6 +172,8 @@ func (s *SubnetMgr) getParentSCAWithFinality(ctx context.Context, id hierarchica
 	}
 	finTs := parentAPI.ChainAPI.Chain.GetHeaviestTipSet()
 	height := finTs.Height()
+
+	// Avoid negative epochs
 	if height-finalityThreshold >= 0 {
 		// Go back finalityThreshold to ensure the state is final in parent chain
 		finTs, err = parentAPI.ChainGetTipSetByHeight(ctx, height-finalityThreshold, types.EmptyTSK)
@@ -275,19 +237,21 @@ func (s *SubnetMgr) getTopDownPool(ctx context.Context, id hierarchical.SubnetID
 	}
 	out := make([]*types.Message, 0)
 	for _, m := range msgs {
-		// Pass a few epochs before re-proposing a cross-msg if nonce hasn't changed.
-		// TODO: Using != 0 for testing purposes. This logic should be done right.
-		// What we need to do here if for each message nonce, check if it was recently
-		// proposed and wait one epoch to see if it is applied and applied nonce incremented.
-		// If not, we can re-propose in the pool.
+		// The pool waits a few epochs before re-proposing a cross-msg if the applied nonce
+		// hasn't changed in order to give enough time for state changes to propagate.
 		if s.cm.isTopDownApplied(m.Nonce, id, height) {
 			continue
 		}
-		// Apply message to see if it succeeds before considering it for the pool.
-		if err := s.applyMsg(ctx, subAPI.StateManager, id, m); err != nil {
-			log.Warnf("Error applying cross message when picking it up from CrossMsgPool: %s", err)
-			continue
-		}
+		// FIXME: Instead of applying the message to check if it fails before including in
+		// the cross-msg pool, we include every cross-msg and if it fails it is handled by
+		// the SCA when applied. We could probably check here if it fails, and for failing messages
+		// revert the source transaction. Check https://github.com/filecoin-project/eudico/issues/92
+		// for further details.
+		// // Apply message to see if it succeeds before considering it for the pool.
+		// if err := s.applyMsg(ctx, subAPI.StateManager, id, m); err != nil {
+		//         log.Warnf("Error applying cross message when picking it up from CrossMsgPool: %s", err)
+		//         continue
+		// }
 		out = append(out, m)
 		s.cm.applyTopDown(m.Nonce, id, height)
 	}

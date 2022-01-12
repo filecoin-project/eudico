@@ -53,20 +53,28 @@ const (
 )
 
 type SubnetState struct {
-	Name      string
-	ParentID  hierarchical.SubnetID
+	// Human-readable name of the subnet.
+	Name string
+	// ID of the parent subnet
+	ParentID hierarchical.SubnetID
+	// Type of Consensus algorithm.
 	Consensus hierarchical.ConsensusType
-	// Minimum stake required by new joiners.
+	// Minimum stake required for an address to join the subnet
+	// as a miner
 	MinMinerStake abi.TokenAmount
-	// NOTE: Consider adding miners list as AMT
-	Miners     []address.Address
+	// List of miners in the subnet.
+	// NOTE: Consider using AMT.
+	Miners []address.Address
+	// Total collateral currently deposited in the
 	TotalStake abi.TokenAmount
-	Stake      cid.Cid // BalanceTable with the distribution of stake by miners
-	// State of the subnet
+	// BalanceTable with the distribution of stake by address
+	Stake cid.Cid // HAMT[tokenAmount]address
+	// State of the subnet (Active, Inactive, Terminating)
 	Status Status
 	// Genesis bootstrap for the subnet. This is created
 	// when the subnet is generated.
-	Genesis     []byte
+	Genesis []byte
+	// Checkpointing period.
 	CheckPeriod abi.ChainEpoch
 	// Checkpoints submit to SubnetActor per epoch
 	Checkpoints cid.Cid // HAMT[epoch]Checkpoint

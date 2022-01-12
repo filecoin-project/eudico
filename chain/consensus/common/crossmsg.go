@@ -62,7 +62,6 @@ func checkTopDownMsg(pstore blockadt.Store, parentSCA, snSCA *sca.SCAState, msg 
 	}
 
 	// NOTE: Any additional check required?
-	// TODO: ApplyMsg to see that it is correct?
 	return nil
 
 }
@@ -134,7 +133,7 @@ func applyMsg(ctx context.Context, vmi *vm.VM, em stmgr.ExecMonitor,
 	st := vmi.StateTree()
 	_, acterr := st.GetActor(params.Msg.To)
 	if acterr != nil {
-		log.Infow("Initializing To address for crossmsg", "address", params.Msg.To)
+		log.Debugw("Initializing To address for crossmsg", "address", params.Msg.To)
 		_, _, err := vmi.CreateAccountActor(ctx, apply, params.Msg.To)
 		if err != nil {
 			return xerrors.Errorf("failed to initialize address for crossmsg: %w", err)

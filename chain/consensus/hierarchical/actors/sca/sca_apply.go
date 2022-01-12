@@ -3,21 +3,12 @@ package sca
 import (
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
+	rtt "github.com/filecoin-project/go-state-types/rt"
 	"github.com/filecoin-project/lotus/chain/consensus/actors/reward"
 	types "github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
 )
-
-// TODO FIXME: We may be receiving malformed messages to be applied here.
-// Due to how the crooss-msg protocol is built, the inability to apply a malformed message
-// could harm the protocol's liveliness, as peers would attempt to apply it
-// and it would keep failing. We need checks to prevent this. A potential way is to
-// increment the nonce if the message fails. This has a drawback, cross-msg applications are
-// not completely atomic, so the parent chain may have frozen the funds for the mesage, while
-// due to a malformed message the correponding change is not propagated to the destination subnet.
-// We should add also checks in the parent chain to avoid malformed messages, and include a way
-// to revert unpropagated cross-msgs in the source chain.
 
 func applyFund(rt runtime.Runtime, msg types.Message) {
 	var st SCAState
@@ -46,7 +37,18 @@ func applyFund(rt runtime.Runtime, msg types.Message) {
 	}
 	code := rt.Send(reward.RewardActorAddr, reward.Methods.ExternalFunding, params, big.Zero(), &builtin.Discard{})
 	if !code.IsSuccess() {
-		rt.Abortf(exitcode.ErrIllegalState,
-			"failed to send unsent reward to the burnt funds actor, code: %v", code)
+		noop(rt, code)
 	}
+}
+
+// noop is triggered to notify when a crossMsg fails to be applied.
+func noop(rt runtime.Runtime, code exitcode.ExitCode) {
+	// rt.Abortf(exitcode.ErrIllegalState, "failed to apply crossMsg, code: %v", code)
+	// NOTE: If the message is not well-formed and something fails when applying the mesasge,
+	// instead of aborting (which could be harming the liveliness of the subnet consensus protocol, as there wouldn't
+	// be a way of applying the top-down message and allowing the nonce sequence continue), we log the error
+	// and seamlessly increment the nonce without triggering the state changes for the cross-msg. This may require
+	// notifying the source subnet in some way so it may revert potential state changes in the cross-msg path.
+	rt.Log(rtt.WARN, `cross-msg couldn't be applied. Failed with code: %v. 
+	Some state changes in other subnet may need to be reverted`, code)
 }

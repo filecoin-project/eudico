@@ -162,7 +162,7 @@ func (a SubnetCoordActor) ReleaseStake(rt runtime.Runtime, params *FundParams) *
 		sh, has, err := st.getSubnetFromActorAddr(adt.AsStore(rt), SubnetActorAddr)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching subnet state")
 		if !has {
-			rt.Abortf(exitcode.ErrIllegalArgument, "subnet for for actor hasn't been registered yet")
+			rt.Abortf(exitcode.ErrIllegalArgument, "subnet for actor hasn't been registered yet")
 		}
 
 		// Check if the subnet actor is allowed to release the amount of stake specified.
@@ -227,7 +227,7 @@ func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *Chec
 		sh, has, err := st.GetSubnet(adt.AsStore(rt), shid)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching subnet state")
 		if !has {
-			rt.Abortf(exitcode.ErrIllegalArgument, "subnet for for actor hasn't been registered yet")
+			rt.Abortf(exitcode.ErrIllegalArgument, "subnet for actor hasn't been registered yet")
 		}
 		// Check that it is active. Only active shards can commit checkpoints.
 		if sh.Status != Active {
@@ -332,7 +332,7 @@ func (a SubnetCoordActor) Kill(rt runtime.Runtime, _ *abi.EmptyValue) *abi.Empty
 		sh, has, err = st.GetSubnet(adt.AsStore(rt), shid)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching subnet state")
 		if !has {
-			rt.Abortf(exitcode.ErrIllegalArgument, "subnet for for actor hasn't been registered yet")
+			rt.Abortf(exitcode.ErrIllegalArgument, "subnet for actor hasn't been registered yet")
 		}
 
 		// This is a sanity check to ensure that there is enough balance in actor to return stakes
@@ -391,7 +391,7 @@ func (a SubnetCoordActor) Fund(rt runtime.Runtime, params *SubnetIDParam) *abi.E
 		sh, has, err := st.GetSubnet(adt.AsStore(rt), hierarchical.SubnetID(params.ID))
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching subnet state")
 		if !has {
-			rt.Abortf(exitcode.ErrIllegalArgument, "subnet for for actor hasn't been registered yet")
+			rt.Abortf(exitcode.ErrIllegalArgument, "subnet for actor hasn't been registered yet")
 		}
 
 		// Freeze funds

@@ -68,7 +68,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		if err != nil {
 			log.Errorw("selecting cross-messages failed", "error", err)
 		}
-		log.Infof("CrossMsgs being proposed in block @%s: %d", base.Height()+1, len(crossmsgs))
+		log.Debugf("CrossMsgs being proposed in block @%s: %d", base.Height()+1, len(crossmsgs))
 
 		bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
 			Miner:            miner,

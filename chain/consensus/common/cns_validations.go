@@ -296,6 +296,12 @@ func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.St
 		if err := checkCrossMsg(pstore, snstore, parentSCA, snSCA, m); err != nil {
 			return xerrors.Errorf("failed to check message %s: %w", m.Cid(), err)
 		}
+
+		// FIXME: Should we try to apply the message before accepting the block?
+		// Check if the message can be applied before accepting it for proposal.
+		// if err := canApplyMsg(ctx, submgr, sm, netName, m); err != nil {
+		//         return xerrors.Errorf("failed testing the application of cross-msg %s: %w", m.Cid(), err)
+		// }
 		// // NOTE: We don't check mesage against VM for cross shard messages. They are
 		// // checked in some other way.
 		// if err := checkMsg(m); err != nil {
