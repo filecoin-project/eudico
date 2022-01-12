@@ -25,6 +25,7 @@ var subnetCmds = &cli.Command{
 	Subcommands: []*cli.Command{
 		addCmd,
 		joinCmd,
+		syncCmd,
 		listSubnetsCmd,
 		mineCmd,
 		leaveCmd,
@@ -228,6 +229,45 @@ var joinCmd = &cli.Command{
 			return err
 		}
 		fmt.Fprintf(cctx.App.Writer, "Successfully added stake to subnet %s in message: %s\n", subnet, c)
+		return nil
+	},
+}
+
+var syncCmd = &cli.Command{
+	Name:      "sync",
+	Usage:     "Sync with a subnet without adding stake to it",
+	ArgsUsage: "[<stake amount>]",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "subnet",
+			Usage: "specify the id of the subnet to sync with",
+			Value: hierarchical.RootSubnet.String(),
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+
+		if cctx.Args().Len() != 0 {
+			return lcli.ShowHelp(cctx, fmt.Errorf("'sync' expects no arguments, and a set of flags"))
+		}
+		api, closer, err := lcli.GetFullNodeAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+
+		ctx := lcli.ReqContext(cctx)
+
+		// If subnet not set use root. Otherwise, use flag value
+		subnet := cctx.String("subnet")
+		if cctx.String("subnet") == hierarchical.RootSubnet.String() {
+			return xerrors.Errorf("no valid subnet so sync with specified")
+		}
+
+		err = api.SyncSubnet(ctx, hierarchical.SubnetID(subnet))
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(cctx.App.Writer, "Successfully syncing with subnet %s \n", subnet)
 		return nil
 	},
 }
