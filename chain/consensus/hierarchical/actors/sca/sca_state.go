@@ -76,8 +76,14 @@ type SCAState struct {
 	// propagated in checkpoints to the top of the hierarchy.
 	CheckMsgsMetaRegistry cid.Cid // HAMT[cid]CrossMsgMeta
 	Nonce                 uint64  // Latest nonce of cross message sent from subnet.
-	DownTopNonce          uint64  // DownTopNonce of down top messages for msgMeta received from checkpoints (probably redundant)
-	DownTopMsgsMeta       cid.Cid // AMT[schema.CrossMsgMeta] from child subnets to apply.
+	BottomUpNonce         uint64  // BottomUpNonce of down top messages for msgMeta received from checkpoints (probably redundant)
+	BottomUpMsgsMeta      cid.Cid // AMT[schema.CrossMsgMeta] from child subnets to apply.
+
+	// AppliedNonces
+	//
+	// Keep track of the next nonce of the message to be applied.
+	AppliedBottomUpNonce uint64
+	AppliedTopDownNonce  uint64
 }
 
 func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, error) {
@@ -93,7 +99,7 @@ func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, e
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}
-	emptyDownTopMsgsAMT, err := adt.StoreEmptyArray(store, CrossMsgsAMTBitwidth)
+	emptyBottomUpMsgsAMT, err := adt.StoreEmptyArray(store, CrossMsgsAMTBitwidth)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty AMT: %w", err)
 	}
@@ -113,7 +119,7 @@ func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, e
 		CheckPeriod:           period,
 		Checkpoints:           emptyCheckpointsMapCid,
 		CheckMsgsMetaRegistry: emptyMsgsMetaMapCid,
-		DownTopMsgsMeta:       emptyDownTopMsgsAMT,
+		BottomUpMsgsMeta:      emptyBottomUpMsgsAMT,
 	}, nil
 }
 

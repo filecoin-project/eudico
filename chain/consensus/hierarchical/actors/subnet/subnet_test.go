@@ -73,7 +73,7 @@ func TestJoin(t *testing.T) {
 	rt.SetBalance(totalStake)
 	rt.SetCaller(miner, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerAny()
-	rt.ExpectSend(sca.SubnetCoordActorAddr, sca.Methods.Register, nil, totalStake, nil, exitcode.Ok)
+	rt.ExpectSend(hierarchical.SubnetCoordActorAddr, sca.Methods.Register, nil, totalStake, nil, exitcode.Ok)
 	rt.Call(h.SubnetActor.Join, nil)
 	rt.Verify()
 	// Check that we are active
@@ -90,7 +90,7 @@ func TestJoin(t *testing.T) {
 	rt.SetCaller(notMiner, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerAny()
 	// Triggers a stake top-up in SCA
-	rt.ExpectSend(sca.SubnetCoordActorAddr, sca.Methods.AddStake, nil, value, nil, exitcode.Ok)
+	rt.ExpectSend(hierarchical.SubnetCoordActorAddr, sca.Methods.AddStake, nil, value, nil, exitcode.Ok)
 	rt.Call(h.SubnetActor.Join, nil)
 	rt.Verify()
 	// Check that the subnet is instantiated but not active.
@@ -120,7 +120,7 @@ func TestLeaveAndKill(t *testing.T) {
 	totalStake = big.Add(totalStake, value)
 	// Anyone can call
 	rt.ExpectValidateCallerAny()
-	rt.ExpectSend(sca.SubnetCoordActorAddr, sca.Methods.Register, nil, totalStake, nil, exitcode.Ok)
+	rt.ExpectSend(hierarchical.SubnetCoordActorAddr, sca.Methods.Register, nil, totalStake, nil, exitcode.Ok)
 	ret := rt.Call(h.SubnetActor.Join, nil)
 	assert.Nil(h.t, ret)
 	// Check that the subnet is instantiated but not active.
@@ -137,7 +137,7 @@ func TestLeaveAndKill(t *testing.T) {
 	rt.SetBalance(value)
 	rt.SetCaller(joiner2, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerAny()
-	rt.ExpectSend(sca.SubnetCoordActorAddr, sca.Methods.AddStake, nil, value, nil, exitcode.Ok)
+	rt.ExpectSend(hierarchical.SubnetCoordActorAddr, sca.Methods.AddStake, nil, value, nil, exitcode.Ok)
 	rt.Call(h.SubnetActor.Join, nil)
 	rt.Verify()
 	// Check that we are active
@@ -154,7 +154,7 @@ func TestLeaveAndKill(t *testing.T) {
 	rt.SetBalance(value)
 	rt.SetCaller(joiner3, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerAny()
-	rt.ExpectSend(sca.SubnetCoordActorAddr, sca.Methods.AddStake, nil, value, nil, exitcode.Ok)
+	rt.ExpectSend(hierarchical.SubnetCoordActorAddr, sca.Methods.AddStake, nil, value, nil, exitcode.Ok)
 	rt.Call(h.SubnetActor.Join, nil)
 	rt.Verify()
 	// Check that we are active
@@ -170,7 +170,7 @@ func TestLeaveAndKill(t *testing.T) {
 	minerStake := getStake(t, rt, joiner2)
 	totalStake = big.Sub(totalStake, minerStake)
 	rt.SetBalance(minerStake)
-	rt.ExpectSend(sca.SubnetCoordActorAddr, sca.Methods.ReleaseStake, &sca.FundParams{Value: minerStake}, big.Zero(), nil, exitcode.Ok)
+	rt.ExpectSend(hierarchical.SubnetCoordActorAddr, sca.Methods.ReleaseStake, &sca.FundParams{Value: minerStake}, big.Zero(), nil, exitcode.Ok)
 	rt.ExpectSend(joiner2, builtin.MethodSend, nil, big.Div(minerStake, actor.LeavingFeeCoeff), nil, exitcode.Ok)
 	rt.Call(h.SubnetActor.Leave, nil)
 	rt.Verify()
@@ -193,7 +193,7 @@ func TestLeaveAndKill(t *testing.T) {
 	minerStake = getStake(t, rt, joiner)
 	totalStake = big.Sub(totalStake, minerStake)
 	rt.SetBalance(minerStake)
-	rt.ExpectSend(sca.SubnetCoordActorAddr, sca.Methods.ReleaseStake, &sca.FundParams{Value: minerStake}, big.Zero(), nil, exitcode.Ok)
+	rt.ExpectSend(hierarchical.SubnetCoordActorAddr, sca.Methods.ReleaseStake, &sca.FundParams{Value: minerStake}, big.Zero(), nil, exitcode.Ok)
 	rt.ExpectSend(joiner, builtin.MethodSend, nil, big.Div(minerStake, actor.LeavingFeeCoeff), nil, exitcode.Ok)
 	rt.Call(h.SubnetActor.Leave, nil)
 	rt.Verify()
@@ -214,7 +214,7 @@ func TestLeaveAndKill(t *testing.T) {
 	rt.SetCaller(joiner3, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerAny()
 	rt.SetBalance(minerStake)
-	rt.ExpectSend(sca.SubnetCoordActorAddr, sca.Methods.Kill, nil, big.Zero(), nil, exitcode.Ok)
+	rt.ExpectSend(hierarchical.SubnetCoordActorAddr, sca.Methods.Kill, nil, big.Zero(), nil, exitcode.Ok)
 	rt.Call(h.SubnetActor.Kill, nil)
 	rt.Verify()
 	st = getState(rt)
@@ -268,9 +268,9 @@ func TestCheckpoints(t *testing.T) {
 		rt.ExpectValidateCallerAny()
 		// The first miner triggers a register message to SCA
 		if i == 0 {
-			rt.ExpectSend(sca.SubnetCoordActorAddr, sca.Methods.Register, nil, totalStake, nil, exitcode.Ok)
+			rt.ExpectSend(hierarchical.SubnetCoordActorAddr, sca.Methods.Register, nil, totalStake, nil, exitcode.Ok)
 		} else {
-			rt.ExpectSend(sca.SubnetCoordActorAddr, sca.Methods.AddStake, nil, value, nil, exitcode.Ok)
+			rt.ExpectSend(hierarchical.SubnetCoordActorAddr, sca.Methods.AddStake, nil, value, nil, exitcode.Ok)
 		}
 		ret := rt.Call(h.SubnetActor.Join, nil)
 		rt.Verify()
@@ -390,7 +390,7 @@ func TestCheckpoints(t *testing.T) {
 	b, err = ch.MarshalBinary()
 	require.NoError(t, err)
 	params = &sca.CheckpointParams{Checkpoint: b}
-	rt.ExpectSend(sca.SubnetCoordActorAddr, sca.Methods.CommitChildCheckpoint, params, big.Zero(), nil, exitcode.Ok)
+	rt.ExpectSend(hierarchical.SubnetCoordActorAddr, sca.Methods.CommitChildCheckpoint, params, big.Zero(), nil, exitcode.Ok)
 	rt.Call(h.SubnetActor.SubmitCheckpoint, params)
 	rt.Verify()
 	st = getState(rt)
@@ -588,7 +588,7 @@ func (h *shActorHarness) fullSignCheckpoint(t *testing.T, rt *mock.Runtime, mine
 	b, err = ch.MarshalBinary()
 	require.NoError(t, err)
 	params = &sca.CheckpointParams{Checkpoint: b}
-	rt.ExpectSend(sca.SubnetCoordActorAddr, sca.Methods.CommitChildCheckpoint, params, big.Zero(), nil, exitcode.Ok)
+	rt.ExpectSend(hierarchical.SubnetCoordActorAddr, sca.Methods.CommitChildCheckpoint, params, big.Zero(), nil, exitcode.Ok)
 	rt.Call(h.SubnetActor.SubmitCheckpoint, params)
 	st = getState(rt)
 	chcid, err = ch.Cid()

@@ -8,7 +8,8 @@ import (
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
+	snmgr "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/manager"
+	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/ipfs/go-cid"
 	"go.uber.org/fx"
 )
@@ -18,7 +19,7 @@ var _ api.HierarchicalCns = &HierarchicalAPI{}
 type HierarchicalAPI struct {
 	fx.In
 
-	Sub *subnet.SubnetMgr
+	Sub *snmgr.SubnetMgr
 }
 
 func (a *HierarchicalAPI) AddSubnet(
@@ -59,4 +60,14 @@ func (a *HierarchicalAPI) ListCheckpoints(ctx context.Context,
 func (a *HierarchicalAPI) ValidateCheckpoint(ctx context.Context,
 	id hierarchical.SubnetID, epoch abi.ChainEpoch) (*schema.Checkpoint, error) {
 	return a.Sub.ValidateCheckpoint(ctx, id, epoch)
+}
+
+func (a *HierarchicalAPI) GetCrossMsgsPool(ctx context.Context, id hierarchical.SubnetID,
+	height abi.ChainEpoch) ([]*types.Message, error) {
+	return a.Sub.GetCrossMsgsPool(ctx, id, height)
+}
+
+func (a *HierarchicalAPI) FundSubnet(ctx context.Context, wallet address.Address,
+	id hierarchical.SubnetID, value abi.TokenAmount) (cid.Cid, error) {
+	return a.Sub.FundSubnet(ctx, wallet, id, value)
 }

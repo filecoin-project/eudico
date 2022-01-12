@@ -22,12 +22,14 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
 	"github.com/filecoin-project/lotus/lib/sigs"
 	"github.com/filecoin-project/lotus/metrics"
+	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
 var _ consensus.Consensus = &Delegated{}
@@ -47,6 +49,12 @@ type Delegated struct {
 	verifier ffiwrapper.Verifier
 
 	genesis *types.TipSet
+
+	subMgr subnet.SubnetMgr
+
+	// We could get network name from state manager, but with this
+	// we avoid having fetch it for every block validation.
+	netName hierarchical.SubnetID
 }
 
 var producer = func() address.Address {
@@ -61,13 +69,16 @@ var producer = func() address.Address {
 // the theoretical max height based on systime are quickly rejected
 const MaxHeightDrift = 5
 
-func NewDelegatedConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, verifier ffiwrapper.Verifier, genesis chain.Genesis) consensus.Consensus {
+func NewDelegatedConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon.Schedule,
+	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
 	return &Delegated{
 		store:    sm.ChainStore(),
 		beacon:   beacon,
 		sm:       sm,
 		verifier: verifier,
 		genesis:  genesis,
+		subMgr:   submgr,
+		netName:  hierarchical.SubnetID(netName),
 	}
 }
 
@@ -77,7 +88,6 @@ func (deleg *Delegated) ValidateBlock(ctx context.Context, b *types.FullBlock) (
 	}
 
 	h := b.Header
-
 	baseTs, err := deleg.store.LoadTipSet(types.NewTipSetKey(h.Parents...))
 	if err != nil {
 		return xerrors.Errorf("load parent tipset failed (%s): %w", h.Parents, err)
@@ -101,7 +111,7 @@ func (deleg *Delegated) ValidateBlock(ctx context.Context, b *types.FullBlock) (
 		log.Warn("Got block from the future, but within threshold", h.Timestamp, build.Clock.Now().Unix())
 	}
 
-	msgsChecks := common.CheckMsgs(ctx, deleg.store, deleg.sm, b, baseTs)
+	msgsChecks := common.CheckMsgs(ctx, deleg.store, deleg.sm, deleg.subMgr, deleg.netName, b, baseTs)
 
 	minerCheck := async.Err(func() error {
 		if err := deleg.minerIsValid(ctx, h.Miner, baseTs); err != nil {

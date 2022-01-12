@@ -118,6 +118,7 @@ func (cm *CrossMsgMeta) AddMsgMeta(from, to hierarchical.SubnetID, meta schema.C
 func (st *SCAState) releaseMsg(rt runtime.Runtime, value big.Int) {
 	// The way we identify it is a release message from the subnet is by
 	// setting the burntFundsActor as the from of the message
+	// See hierarchical/types.go
 	source := builtin.BurntFundsActorAddr
 
 	// Build message.
@@ -142,30 +143,41 @@ func (st *SCAState) releaseMsg(rt runtime.Runtime, value big.Int) {
 	incrementNonce(rt, &st.Nonce)
 }
 
-func (st *SCAState) storeDownTopMsgMeta(rt runtime.Runtime, meta schema.CrossMsgMeta) {
-	meta.Nonce = int(st.DownTopNonce)
-	crossMsgs, err := adt.AsArray(adt.AsStore(rt), st.DownTopMsgsMeta, CrossMsgsAMTBitwidth)
+func (st *SCAState) storeBottomUpMsgMeta(rt runtime.Runtime, meta schema.CrossMsgMeta) {
+	meta.Nonce = int(st.BottomUpNonce)
+	crossMsgs, err := adt.AsArray(adt.AsStore(rt), st.BottomUpMsgsMeta, CrossMsgsAMTBitwidth)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load cross-messages")
 	// Set message in AMT
 	err = crossMsgs.Set(uint64(meta.Nonce), &meta)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to store cross-messages")
 	// Flush AMT
-	st.DownTopMsgsMeta, err = crossMsgs.Root()
+	st.BottomUpMsgsMeta, err = crossMsgs.Root()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush cross-messages")
 
 	// Increase nonce.
-	incrementNonce(rt, &st.DownTopNonce)
+	incrementNonce(rt, &st.BottomUpNonce)
 }
 
-func (st *SCAState) GetDownTopMsgMeta(s adt.Store, nonce uint64) (*schema.CrossMsgMeta, bool, error) {
-	crossMsgs, err := adt.AsArray(s, st.DownTopMsgsMeta, CrossMsgsAMTBitwidth)
+func (st *SCAState) GetTopDownMsg(s adt.Store, id hierarchical.SubnetID, nonce uint64) (*ltypes.Message, bool, error) {
+	sh, found, err := st.GetSubnet(s, id)
+	if err != nil {
+		return nil, false, err
+	}
+	if !found {
+		return nil, false, xerrors.Errorf("subnet not registered in hierarchical consensus")
+	}
+	return sh.GetTopDownMsg(s, nonce)
+}
+
+func (st *SCAState) GetBottomUpMsgMeta(s adt.Store, nonce uint64) (*schema.CrossMsgMeta, bool, error) {
+	crossMsgs, err := adt.AsArray(s, st.BottomUpMsgsMeta, CrossMsgsAMTBitwidth)
 	if err != nil {
 		return nil, false, xerrors.Errorf("failed to load cross-msgs: %w", err)
 	}
-	return getDownTopMsgMeta(crossMsgs, nonce)
+	return getBottomUpMsgMeta(crossMsgs, nonce)
 }
 
-func getDownTopMsgMeta(crossMsgs *adt.Array, nonce uint64) (*schema.CrossMsgMeta, bool, error) {
+func getBottomUpMsgMeta(crossMsgs *adt.Array, nonce uint64) (*schema.CrossMsgMeta, bool, error) {
 	if nonce > MaxNonce {
 		return nil, false, xerrors.Errorf("maximum cross-message nonce is 2^63-1")
 	}

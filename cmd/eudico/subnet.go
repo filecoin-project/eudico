@@ -30,6 +30,7 @@ var subnetCmds = &cli.Command{
 		leaveCmd,
 		killCmd,
 		checkpointCmds,
+		fundCmd,
 	},
 }
 
@@ -52,7 +53,7 @@ var listSubnetsCmd = &cli.Command{
 
 		var st sca.SCAState
 
-		act, err := api.StateGetActor(ctx, sca.SubnetCoordActorAddr, ts.Key())
+		act, err := api.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, ts.Key())
 		if err != nil {
 			return xerrors.Errorf("error getting actor state: %w", err)
 		}
@@ -151,7 +152,7 @@ var addCmd = &cli.Command{
 		// FIXME: This is a horrible workaround to avoid delegminer from
 		// not being set. But need to demo in 30 mins, so will fix it afterwards
 		// (we all know I'll come across this comment in 2 years and laugh at it).
-		delegminer := sca.SubnetCoordActorAddr
+		delegminer := hierarchical.SubnetCoordActorAddr
 		if cctx.IsSet("delegminer") {
 			d := cctx.String("delegminer")
 			delegminer, err = address.NewFromString(d)
@@ -226,7 +227,7 @@ var joinCmd = &cli.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cctx.App.Writer, "Successfully added stake to subnet in message: %s\n", c)
+		fmt.Fprintf(cctx.App.Writer, "Successfully added stake to subnet %s in message: %s\n", subnet, c)
 		return nil
 	},
 }
@@ -392,6 +393,66 @@ var killCmd = &cli.Command{
 			return err
 		}
 		fmt.Fprintf(cctx.App.Writer, "Successfully sent kill to subnet in message: %s\n", c)
+		return nil
+	},
+}
+
+var fundCmd = &cli.Command{
+	Name:      "fund",
+	Usage:     "Inject new funds to your address in a subnet",
+	ArgsUsage: "[<value amount>]",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "from",
+			Usage: "optionally specify the account to send funds from",
+		},
+		&cli.StringFlag{
+			Name:  "subnet",
+			Usage: "specify the id of the subnet",
+			Value: hierarchical.RootSubnet.String(),
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+
+		if cctx.Args().Len() != 1 {
+			return lcli.ShowHelp(cctx, fmt.Errorf("'fund' expects the amount of FILs to inject to subnet, and a set of flags"))
+		}
+		api, closer, err := lcli.GetFullNodeAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+
+		ctx := lcli.ReqContext(cctx)
+
+		// Try to get default address first
+		addr, _ := api.WalletDefaultAddress(ctx)
+		if from := cctx.String("from"); from != "" {
+			addr, err = address.NewFromString(from)
+			if err != nil {
+				return err
+			}
+		}
+
+		// Injecting funds needs to be done in a subnet
+		var subnet string
+		if cctx.String("subnet") == hierarchical.RootSubnet.String() ||
+			cctx.String("subnet") == "" {
+			return xerrors.Errorf("only subnets can be fund with new tokens, please set a valid subnet")
+		}
+
+		subnet = cctx.String("subnet")
+		val, err := types.ParseFIL(cctx.Args().Get(0))
+		if err != nil {
+			return lcli.ShowHelp(cctx, fmt.Errorf("failed to parse amount: %w", err))
+		}
+
+		c, err := api.FundSubnet(ctx, addr, hierarchical.SubnetID(subnet), big.Int(val))
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(cctx.App.Writer, "Successfully funded subnet in message: %s\n", c)
+		fmt.Fprintf(cctx.App.Writer, "Cross-message should be validated shortly in subnet: %s\n", subnet)
 		return nil
 	},
 }

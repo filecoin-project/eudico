@@ -1,4 +1,4 @@
-package subnet
+package subnetmgr
 
 import (
 	"bytes"
@@ -6,15 +6,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/consensus"
-	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
-	"github.com/filecoin-project/lotus/chain/consensus/tspow"
+	subcns "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/consensus"
 	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/messagepool"
 	"github.com/filecoin-project/lotus/chain/stmgr"
@@ -254,29 +252,16 @@ func (sh *Subnet) mine(ctx context.Context) error {
 		log.Warnw("already mining in subnet", "subnetID", sh.ID)
 		return nil
 	}
-	// TODO: As-is a node will keep mining in a subnet until the node process
-	// is completely stopped. In the next iteration we need to figure out
-	// how to manage contexts for when a subnet is killed or a node moves into
-	// another subnet. (see next function)
-	// Mining in the root chain is an independent process.
-	// TODO: We should check if these processes throw an error
-	switch sh.consType {
-	case hierarchical.Delegated:
-		// Assigning mining context.
-		sh.miningCtx, sh.miningCncl = context.WithCancel(ctx)
-		go delegcns.Mine(sh.miningCtx, sh.api)
-	case hierarchical.PoW:
-		miner, err := sh.getWallet(ctx)
-		if err != nil {
-			log.Errorw("no valid identity found for PoW mining", "err", err)
-			return err
-		}
-		sh.miningCtx, sh.miningCncl = context.WithCancel(ctx)
-		go tspow.Mine(sh.miningCtx, miner, sh.api)
-	default:
-		return xerrors.New("consensus type not suported")
+
+	mctx, cancel := context.WithCancel(ctx)
+	if err := subcns.Mine(mctx, sh.api, sh.consType); err != nil {
+		cancel()
+		return err
 	}
+	// Set context and cancel for mining if started successfully
+	sh.miningCtx, sh.miningCncl = mctx, cancel
 	log.Infow("Started mining in subnet", "subnetID", sh.ID, "consensus", sh.consType)
+
 	return nil
 }
 
@@ -289,24 +274,4 @@ func (sh *Subnet) stopMining(ctx context.Context) error {
 		return nil
 	}
 	return xerrors.Errorf("Currently not mining in subnet")
-}
-
-// Get an identity from the peer's wallet.
-// First check if a default identity has been set and
-// if not take the first from the list.
-// NOTE: We should probably make this configurable.
-func (sh *Subnet) getWallet(ctx context.Context) (address.Address, error) {
-	addr, err := sh.api.WalletDefaultAddress(ctx)
-	// If no defualt wallet set
-	if err != nil || addr == address.Undef {
-		addrs, err := sh.api.WalletList(ctx)
-		if err != nil {
-			return address.Undef, err
-		}
-		if len(addrs) == 0 {
-			return address.Undef, xerrors.Errorf("no valid wallet found in peer")
-		}
-		addr = addrs[0]
-	}
-	return addr, nil
 }

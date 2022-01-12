@@ -389,7 +389,7 @@ func copyBlockstore(ctx context.Context, from, to bstore.Blockstore) error {
 // sure the blocksync code checks it?)
 // maybe this code should actually live in blocksync??
 func zipTipSetAndMessages(bs cbor.IpldStore, ts *types.TipSet, allbmsgs []*types.Message, allsmsgs []*types.SignedMessage, allcross []*types.Message, bmi, smi, crossmi [][]uint64) (*store.FullTipSet, error) {
-	if len(ts.Blocks()) != len(smi) || len(ts.Blocks()) != len(bmi) {
+	if len(ts.Blocks()) != len(smi) || len(ts.Blocks()) != len(bmi) || len(ts.Blocks()) != len(crossmi) {
 		return nil, fmt.Errorf("msgincl length didnt match tipset size")
 	}
 
@@ -410,10 +410,16 @@ func zipTipSetAndMessages(bs cbor.IpldStore, ts *types.TipSet, allbmsgs []*types
 			bmsgs = append(bmsgs, allbmsgs[m])
 		}
 
+		var crossmsgs []*types.Message
+		for _, m := range crossmi[bi] {
+			crossmsgs = append(crossmsgs, allcross[m])
+		}
+
 		fb := &types.FullBlock{
 			Header:        b,
 			BlsMessages:   bmsgs,
 			SecpkMessages: smsgs,
+			CrossMessages: crossmsgs,
 		}
 
 		fts.Blocks = append(fts.Blocks, fb)
@@ -1080,7 +1086,7 @@ func checkMsgMeta(ts *types.TipSet, allbmsgs []*types.Message, allsmsgs []*types
 
 		var crossCids []cid.Cid
 		for _, m := range crossmi[bi] {
-			bmsgCids = append(crossCids, allcross[m].Cid())
+			crossCids = append(crossCids, allcross[m].Cid())
 		}
 
 		mrcid, err := computeMsgMeta(cbor.NewCborStore(bstore.NewMemory()), bmsgCids, smsgCids, crossCids)
@@ -1193,6 +1199,13 @@ func persistMessages(ctx context.Context, bs bstore.Blockstore, bst *exchange.Co
 		if _, err := store.PutMessage(bs, m); err != nil {
 			log.Errorf("failed to persist messages: %+v", err)
 			return xerrors.Errorf("secp256k1 message processing failed: %w", err)
+		}
+	}
+	for _, m := range bst.Cross {
+		//log.Infof("putting Cross message: %s", m.Cid())
+		if _, err := store.PutMessage(bs, m); err != nil {
+			log.Errorf("failed to persist messages: %+v", err)
+			return xerrors.Errorf("Cross message processing failed: %w", err)
 		}
 	}
 

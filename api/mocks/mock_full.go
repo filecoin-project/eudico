@@ -908,6 +908,21 @@ func (mr *MockFullNodeMockRecorder) Discover(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Discover", reflect.TypeOf((*MockFullNode)(nil).Discover), arg0)
 }
 
+// FundSubnet mocks base method.
+func (m *MockFullNode) FundSubnet(arg0 context.Context, arg1 address.Address, arg2 hierarchical.SubnetID, arg3 big.Int) (cid.Cid, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FundSubnet", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(cid.Cid)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FundSubnet indicates an expected call of FundSubnet.
+func (mr *MockFullNodeMockRecorder) FundSubnet(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FundSubnet", reflect.TypeOf((*MockFullNode)(nil).FundSubnet), arg0, arg1, arg2, arg3)
+}
+
 // GasEstimateFeeCap mocks base method.
 func (m *MockFullNode) GasEstimateFeeCap(arg0 context.Context, arg1 *types.Message, arg2 int64, arg3 types.TipSetKey) (big.Int, error) {
 	m.ctrl.T.Helper()
@@ -966,6 +981,21 @@ func (m *MockFullNode) GasEstimateMessageGas(arg0 context.Context, arg1 *types.M
 func (mr *MockFullNodeMockRecorder) GasEstimateMessageGas(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GasEstimateMessageGas", reflect.TypeOf((*MockFullNode)(nil).GasEstimateMessageGas), arg0, arg1, arg2, arg3)
+}
+
+// GetCrossMsgsPool mocks base method.
+func (m *MockFullNode) GetCrossMsgsPool(arg0 context.Context, arg1 hierarchical.SubnetID, arg2 abi.ChainEpoch) ([]*types.Message, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCrossMsgsPool", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]*types.Message)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetCrossMsgsPool indicates an expected call of GetCrossMsgsPool.
+func (mr *MockFullNodeMockRecorder) GetCrossMsgsPool(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCrossMsgsPool", reflect.TypeOf((*MockFullNode)(nil).GetCrossMsgsPool), arg0, arg1, arg2)
 }
 
 // ID mocks base method.

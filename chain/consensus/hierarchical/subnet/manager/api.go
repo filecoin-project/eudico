@@ -1,4 +1,4 @@
-package subnet
+package subnetmgr
 
 import (
 	"context"
@@ -181,6 +181,7 @@ func (sh *Subnet) populateAPIs(
 		BeaconAPI:   parentAPI.BeaconAPI,
 		DS:          sh.ds,
 		NetworkName: dtypes.NetworkName(sh.ID.String()),
+		SubnetMgr:   parentAPI.SubnetMgr,
 	}
 
 	// Register API so it can be accessed from CLI

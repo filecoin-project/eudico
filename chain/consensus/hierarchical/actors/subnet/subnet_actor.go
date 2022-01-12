@@ -124,7 +124,7 @@ func (a SubnetActor) Join(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue
 				// Send a transaction with the total stake to the subnet actor.
 				// We are discarding the result (which is the CID assigned for the subnet)
 				// because we can compute it deterministically, but we can consider keeping it.
-				code := rt.Send(sca.SubnetCoordActorAddr, sca.Methods.Register, nil, st.TotalStake, &builtin.Discard{})
+				code := rt.Send(hierarchical.SubnetCoordActorAddr, sca.Methods.Register, nil, st.TotalStake, &builtin.Discard{})
 				if !code.IsSuccess() {
 					rt.Abortf(exitcode.ErrIllegalState, "failed registering subnet in SCA")
 				}
@@ -134,7 +134,7 @@ func (a SubnetActor) Join(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue
 		// We need to send an addStake transaction to SCA
 		if rt.CurrentBalance().GreaterThanEqual(value) {
 			// Top-up stake in SCA
-			code := rt.Send(sca.SubnetCoordActorAddr, sca.Methods.AddStake, nil, value, &builtin.Discard{})
+			code := rt.Send(hierarchical.SubnetCoordActorAddr, sca.Methods.AddStake, nil, value, &builtin.Discard{})
 			if !code.IsSuccess() {
 				rt.Abortf(exitcode.ErrIllegalState, "failed sending addStake to SCA")
 			}
@@ -178,7 +178,7 @@ func (a SubnetActor) Leave(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValu
 	// Release stake from SCA if all the stake hasn't been released already because the subnet
 	// is in a terminating state
 	if st.Status != Terminating {
-		code := rt.Send(sca.SubnetCoordActorAddr, sca.Methods.ReleaseStake, &sca.FundParams{Value: minerStake}, big.Zero(), &builtin.Discard{})
+		code := rt.Send(hierarchical.SubnetCoordActorAddr, sca.Methods.ReleaseStake, &sca.FundParams{Value: minerStake}, big.Zero(), &builtin.Discard{})
 		if !code.IsSuccess() {
 			rt.Abortf(exitcode.ErrIllegalState, "failed releasing stake in SCA")
 		}
@@ -337,7 +337,7 @@ func (a SubnetActor) SubmitCheckpoint(rt runtime.Runtime, params *sca.Checkpoint
 	// If we reached amjority propagate the commitment to SCA
 	if majority {
 		// If the checkpoint is correct we can reuse params and avoid having to marshal it again.
-		code := rt.Send(sca.SubnetCoordActorAddr, sca.Methods.CommitChildCheckpoint, params, big.Zero(), &builtin.Discard{})
+		code := rt.Send(hierarchical.SubnetCoordActorAddr, sca.Methods.CommitChildCheckpoint, params, big.Zero(), &builtin.Discard{})
 		if !code.IsSuccess() {
 			rt.Abortf(exitcode.ErrIllegalState, "failed committing checkpoint in SCA")
 		}
@@ -366,7 +366,7 @@ func (a SubnetActor) Kill(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue
 	})
 
 	// Kill (unregister) subnet from SCA and release full stake
-	code := rt.Send(sca.SubnetCoordActorAddr, sca.Methods.Kill, nil, big.Zero(), &builtin.Discard{})
+	code := rt.Send(hierarchical.SubnetCoordActorAddr, sca.Methods.Kill, nil, big.Zero(), &builtin.Discard{})
 	if !code.IsSuccess() {
 		rt.Abortf(exitcode.ErrIllegalState, "failed killing subnet in SCA")
 	}

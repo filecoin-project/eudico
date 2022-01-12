@@ -171,7 +171,7 @@ func (t *CheckpointParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufSCAState = []byte{138}
+var lengthBufSCAState = []byte{140}
 
 func (t *SCAState) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -242,16 +242,28 @@ func (t *SCAState) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.DownTopNonce (uint64) (uint64)
+	// t.BottomUpNonce (uint64) (uint64)
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.DownTopNonce)); err != nil {
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.BottomUpNonce)); err != nil {
 		return err
 	}
 
-	// t.DownTopMsgsMeta (cid.Cid) (struct)
+	// t.BottomUpMsgsMeta (cid.Cid) (struct)
 
-	if err := cbg.WriteCidBuf(scratch, w, t.DownTopMsgsMeta); err != nil {
-		return xerrors.Errorf("failed to write cid field t.DownTopMsgsMeta: %w", err)
+	if err := cbg.WriteCidBuf(scratch, w, t.BottomUpMsgsMeta); err != nil {
+		return xerrors.Errorf("failed to write cid field t.BottomUpMsgsMeta: %w", err)
+	}
+
+	// t.AppliedBottomUpNonce (uint64) (uint64)
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.AppliedBottomUpNonce)); err != nil {
+		return err
+	}
+
+	// t.AppliedTopDownNonce (uint64) (uint64)
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.AppliedTopDownNonce)); err != nil {
+		return err
 	}
 
 	return nil
@@ -271,7 +283,7 @@ func (t *SCAState) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 10 {
+	if extra != 12 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -383,7 +395,7 @@ func (t *SCAState) UnmarshalCBOR(r io.Reader) error {
 		t.Nonce = uint64(extra)
 
 	}
-	// t.DownTopNonce (uint64) (uint64)
+	// t.BottomUpNonce (uint64) (uint64)
 
 	{
 
@@ -394,19 +406,47 @@ func (t *SCAState) UnmarshalCBOR(r io.Reader) error {
 		if maj != cbg.MajUnsignedInt {
 			return fmt.Errorf("wrong type for uint64 field")
 		}
-		t.DownTopNonce = uint64(extra)
+		t.BottomUpNonce = uint64(extra)
 
 	}
-	// t.DownTopMsgsMeta (cid.Cid) (struct)
+	// t.BottomUpMsgsMeta (cid.Cid) (struct)
 
 	{
 
 		c, err := cbg.ReadCid(br)
 		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.DownTopMsgsMeta: %w", err)
+			return xerrors.Errorf("failed to read cid field t.BottomUpMsgsMeta: %w", err)
 		}
 
-		t.DownTopMsgsMeta = c
+		t.BottomUpMsgsMeta = c
+
+	}
+	// t.AppliedBottomUpNonce (uint64) (uint64)
+
+	{
+
+		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+		if maj != cbg.MajUnsignedInt {
+			return fmt.Errorf("wrong type for uint64 field")
+		}
+		t.AppliedBottomUpNonce = uint64(extra)
+
+	}
+	// t.AppliedTopDownNonce (uint64) (uint64)
+
+	{
+
+		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+		if maj != cbg.MajUnsignedInt {
+			return fmt.Errorf("wrong type for uint64 field")
+		}
+		t.AppliedTopDownNonce = uint64(extra)
 
 	}
 	return nil
@@ -906,6 +946,54 @@ func (t *MetaTag) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		t.MetasCid = c
+
+	}
+	return nil
+}
+
+var lengthBufApplyParams = []byte{129}
+
+func (t *ApplyParams) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufApplyParams); err != nil {
+		return err
+	}
+
+	// t.Msg (types.Message) (struct)
+	if err := t.Msg.MarshalCBOR(w); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *ApplyParams) UnmarshalCBOR(r io.Reader) error {
+	*t = ApplyParams{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 1 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.Msg (types.Message) (struct)
+
+	{
+
+		if err := t.Msg.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Msg: %w", err)
+		}
 
 	}
 	return nil

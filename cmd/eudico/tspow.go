@@ -6,12 +6,16 @@ import (
 	"time"
 
 	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/lotus/chain"
+	"github.com/filecoin-project/lotus/chain/beacon"
+	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
-	snmgr "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/gen/slashfilter"
+	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
+	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
 
@@ -26,6 +30,11 @@ import (
 	"github.com/filecoin-project/lotus/node"
 )
 
+func NewRootTSPoWConsensus(sm *stmgr.StateManager, beacon beacon.Schedule,
+	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
+	return tspow.NewTSPoWConsensus(sm, nil, beacon, verifier, genesis, netName)
+}
+
 var tpowCmd = &cli.Command{
 	Name:  "tspow",
 	Usage: "TipSet PoW consensus testbed",
@@ -34,11 +43,11 @@ var tpowCmd = &cli.Command{
 		tpowMinerCmd,
 
 		daemonCmd(node.Options(
-			node.Override(new(consensus.Consensus), tspow.NewTSPoWConsensus),
+			node.Override(new(consensus.Consensus), NewRootTSPoWConsensus),
 			node.Override(new(store.WeightFunc), tspow.Weight),
 			node.Unset(new(*slashfilter.SlashFilter)),
-			node.Override(new(stmgr.Executor), snmgr.RootTipSetExecutor()),
-			node.Override(new(stmgr.UpgradeSchedule), snmgr.DefaultUpgradeSchedule()),
+			node.Override(new(stmgr.Executor), common.RootTipSetExecutor),
+			node.Override(new(stmgr.UpgradeSchedule), common.DefaultUpgradeSchedule()),
 		)),
 	},
 }

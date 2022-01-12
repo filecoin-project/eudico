@@ -12,6 +12,8 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
@@ -62,14 +64,14 @@ func CheckStateRoot(ctx context.Context, store *store.ChainStore, sm *stmgr.Stat
 	})
 }
 
-func CheckMsgs(ctx context.Context, store *store.ChainStore, sm *stmgr.StateManager, b *types.FullBlock, baseTs *types.TipSet) []async.ErrorFuture {
+func CheckMsgs(ctx context.Context, store *store.ChainStore, sm *stmgr.StateManager, submgr subnet.SubnetMgr, netName hierarchical.SubnetID, b *types.FullBlock, baseTs *types.TipSet) []async.ErrorFuture {
 	h := b.Header
 	msgsCheck := async.Err(func() error {
 		if b.Cid() == build.WhitelistedBlock {
 			return nil
 		}
 
-		if err := checkBlockMessages(ctx, store, sm, b, baseTs); err != nil {
+		if err := checkBlockMessages(ctx, store, sm, submgr, netName, b, baseTs); err != nil {
 			return xerrors.Errorf("block had invalid messages: %w", err)
 		}
 		return nil
@@ -135,7 +137,7 @@ func BlockSanityChecks(ctype hierarchical.ConsensusType, h *types.BlockHeader) e
 	return nil
 }
 
-func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.StateManager, b *types.FullBlock, baseTs *types.TipSet) error {
+func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.StateManager, submgr subnet.SubnetMgr, netName hierarchical.SubnetID, b *types.FullBlock, baseTs *types.TipSet) error {
 	{
 		var sigCids []cid.Cid // this is what we get for people not wanting the marshalcbor method on the cid type
 		var pubks [][]byte
@@ -269,15 +271,37 @@ func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.St
 	}
 
 	crossArr := blockadt.MakeEmptyArray(tmpstore)
+	// Preamble to get states required for cross-msg checks.
+	var (
+		parentSCA *sca.SCAState
+		snSCA     *sca.SCAState
+		pstore    blockadt.Store
+		snstore   blockadt.Store
+	)
+	// If subnet manager is not set we are in the root chain and we don't need to get parentSCA
+	// state
+	if submgr != nil {
+		parentSCA, pstore, err = getSCAState(ctx, sm, submgr, netName.Parent())
+		if err != nil {
+			return err
+		}
+	}
+	// Get SCA state in subnet.
+	snSCA, snstore, err = getSCAState(ctx, sm, submgr, netName)
+	if err != nil {
+		return err
+	}
+	// Check cross messages
 	for i, m := range b.CrossMessages {
+		if err := checkCrossMsg(pstore, snstore, parentSCA, snSCA, m); err != nil {
+			return xerrors.Errorf("failed to check message %s: %w", m.Cid(), err)
+		}
 
-		// TODO: Implement cross message check here.
-		//
-		// Check the nonces are correct
-		// Check that they have been commmitted in parent-chain.
-		// Collect the full messages behind the Cids.
-		log.Warn("TODO: Implement here cross-message checks before they are included in a block")
-
+		// FIXME: Should we try to apply the message before accepting the block?
+		// Check if the message can be applied before accepting it for proposal.
+		// if err := canApplyMsg(ctx, submgr, sm, netName, m); err != nil {
+		//         return xerrors.Errorf("failed testing the application of cross-msg %s: %w", m.Cid(), err)
+		// }
 		// // NOTE: We don't check mesage against VM for cross shard messages. They are
 		// // checked in some other way.
 		// if err := checkMsg(m); err != nil {

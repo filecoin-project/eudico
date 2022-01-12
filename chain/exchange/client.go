@@ -266,6 +266,7 @@ func (c *client) processResponse(req *Request, res *Response, tipsets []*types.T
 					Blocks:   tipsets[i].Blocks(),
 					Messages: resChain.Messages,
 				}
+
 				chain = append(chain, next)
 			}
 
@@ -295,6 +296,11 @@ func (c *client) validateCompressedIndices(chain []*BSTipSet) error {
 				len(msgs.SecpkIncludes), blocksNum)
 		}
 
+		if len(msgs.CrossIncludes) != blocksNum {
+			return xerrors.Errorf("CrossIncludes (%d) does not match number of blocks (%d)",
+				len(msgs.CrossIncludes), blocksNum)
+		}
+
 		for blockIdx := 0; blockIdx < blocksNum; blockIdx++ {
 			for _, mi := range msgs.BlsIncludes[blockIdx] {
 				if int(mi) >= len(msgs.Bls) {
@@ -307,6 +313,12 @@ func (c *client) validateCompressedIndices(chain []*BSTipSet) error {
 				if int(mi) >= len(msgs.Secpk) {
 					return xerrors.Errorf("index in SecpkIncludes (%d) exceeds number of messages (%d)",
 						mi, len(msgs.Secpk))
+				}
+			}
+			for _, mi := range msgs.CrossIncludes[blockIdx] {
+				if int(mi) >= len(msgs.Cross) {
+					return xerrors.Errorf("index in CrossIncludes (%d) exceeds number of messages (%d)",
+						mi, len(msgs.Cross))
 				}
 			}
 		}
@@ -384,7 +396,6 @@ func (c *client) GetChainMessages(ctx context.Context, tipsets []*types.TipSet) 
 	if err != nil {
 		return nil, err
 	}
-
 	return validRes.messages, nil
 }
 

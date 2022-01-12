@@ -1,4 +1,4 @@
-package subnet
+package subnetmgr
 
 import (
 	"context"
@@ -122,11 +122,11 @@ func (s *SubnetMgr) listenSubnetEvents(ctx context.Context, sh *Subnet) {
 }
 
 func (s *SubnetMgr) matchSCAChildCommit(ctx context.Context, api *API, oldTs, newTs *types.TipSet, diff *diffInfo) (bool, error) {
-	oldAct, err := api.StateGetActor(ctx, sca.SubnetCoordActorAddr, oldTs.Key())
+	oldAct, err := api.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, oldTs.Key())
 	if err != nil {
 		return false, err
 	}
-	newAct, err := api.StateGetActor(ctx, sca.SubnetCoordActorAddr, newTs.Key())
+	newAct, err := api.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, newTs.Key())
 	if err != nil {
 		return false, err
 	}
@@ -248,7 +248,7 @@ func (s *SubnetMgr) matchCheckpointSignature(ctx context.Context, sh *Subnet, ne
 	}
 
 	// Get raw checkpoint for this window from SCA of subnet
-	scaAct, err := sh.api.StateGetActor(ctx, sca.SubnetCoordActorAddr, newTs.Key())
+	scaAct, err := sh.api.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, newTs.Key())
 	if err != nil {
 		return false, err
 	}

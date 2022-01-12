@@ -10,6 +10,8 @@ import (
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
 	common "github.com/filecoin-project/lotus/chain/consensus/common"
+	param "github.com/filecoin-project/lotus/chain/consensus/common/params"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/types"
 	"golang.org/x/xerrors"
 )
@@ -36,7 +38,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		}
 		base, _ = types.NewTipSet([]*types.BlockHeader{BestWorkBlock(base)})
 
-		expDiff := common.GenesisWorkTarget
+		expDiff := param.GenesisWorkTarget
 		if base.Height()+1 >= MaxDiffLookback {
 			lbr := base.Height() + 1 - DiffLookback(base.Height())
 			lbts, err := api.ChainGetTipSetByHeight(ctx, lbr, base.Key())
@@ -57,13 +59,16 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			log.Errorw("selecting messages failed", "error", err)
 		}
 
-		// TODO: CrossMessage select from subnet manager.
-		log.Warn("TODO: gather pending cross messages from subnet manager and include them in the block")
-
-		testaddr, err := address.NewFromString("t0100")
+		// Get cross-message pool from subnet.
+		nn, err := api.StateNetworkName(ctx)
 		if err != nil {
 			return err
 		}
+		crossmsgs, err := api.GetCrossMsgsPool(ctx, hierarchical.SubnetID(nn), base.Height()+1)
+		if err != nil {
+			log.Errorw("selecting cross-messages failed", "error", err)
+		}
+		log.Debugf("CrossMsgs being proposed in block @%s: %d", base.Height()+1, len(crossmsgs))
 
 		bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
 			Miner:            miner,
@@ -74,20 +79,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			Epoch:            base.Height() + 1,
 			Timestamp:        uint64(time.Now().Unix()),
 			WinningPoStProof: nil,
-			// TODO: Adding a sample cross-message for now
-			// (it won't do anything, just triggering a bunch of logs)
-			CrossMessages: []*types.Message{
-				{
-					To:         testaddr,
-					From:       testaddr,
-					Value:      types.NewInt(1),
-					Nonce:      0,
-					GasLimit:   1 << 30,
-					GasFeeCap:  types.NewInt(100),
-					GasPremium: types.NewInt(1),
-					Params:     make([]byte, 10),
-				},
-			},
+			CrossMessages:    crossmsgs,
 		})
 		if err != nil {
 			log.Errorw("creating block failed", "error", err)
