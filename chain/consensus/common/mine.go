@@ -5,6 +5,7 @@ import (
 
 	"github.com/filecoin-project/go-state-types/crypto"
 	lapi "github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -87,11 +88,12 @@ func PrepareBlockForSignature(ctx context.Context, sm *stmgr.StateManager, bt *l
 		return nil, xerrors.Errorf("building cross amt: %w", err)
 	}
 
-	mmcid, err := store.Put(store.Context(), &types.MsgMeta{
-		BlsMessages:   blsmsgroot,
-		SecpkMessages: secpkmsgroot,
-		CrossMessages: crossmsgroot,
-	})
+	// mmcid, err := store.Put(store.Context(), &types.MsgMeta{
+	//         BlsMessages:   blsmsgroot,
+	//         SecpkMessages: secpkmsgroot,
+	//         CrossMessages: crossmsgroot,
+	// })
+	mmcid, err := ComputeMsgMetaFromRoots(store, blsmsgroot, secpkmsgroot, crossmsgroot, len(crossMsgCids))
 	if err != nil {
 		return nil, err
 	}
@@ -139,4 +141,18 @@ func SignBlock(ctx context.Context, w lapi.Wallet, b *types.FullBlock) error {
 
 	next.BlockSig = sig
 	return nil
+}
+
+func ComputeMsgMetaFromRoots(store adt.Store, blsmsgroot, secpkmsgroot, crossmsgroot cid.Cid, lenCross int) (cid.Cid, error) {
+	if lenCross == 0 {
+		return store.Put(store.Context(), &types.OldMsgMeta{
+			BlsMessages:   blsmsgroot,
+			SecpkMessages: secpkmsgroot,
+		})
+	}
+	return store.Put(store.Context(), &types.MsgMeta{
+		BlsMessages:   blsmsgroot,
+		SecpkMessages: secpkmsgroot,
+		CrossMessages: crossmsgroot,
+	})
 }

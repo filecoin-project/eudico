@@ -161,6 +161,20 @@ func (mm *MsgMeta) ToStorageBlock() (block.Block, error) {
 	return block.NewBlockWithCid(buf.Bytes(), c)
 }
 
+func (mm *OldMsgMeta) ToStorageBlock() (block.Block, error) {
+	var buf bytes.Buffer
+	if err := mm.MarshalCBOR(&buf); err != nil {
+		return nil, xerrors.Errorf("failed to marshal MsgMeta: %w", err)
+	}
+
+	c, err := abi.CidBuilder.Sum(buf.Bytes())
+	if err != nil {
+		return nil, err
+	}
+
+	return block.NewBlockWithCid(buf.Bytes(), c)
+}
+
 func CidArrsEqual(a, b []cid.Cid) bool {
 	if len(a) != len(b) {
 		return false

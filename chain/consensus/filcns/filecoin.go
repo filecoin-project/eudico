@@ -31,6 +31,7 @@ import (
 	bstore "github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain"
+	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/power"
 	"github.com/filecoin-project/lotus/chain/beacon"
@@ -770,11 +771,15 @@ func (filec *FilecoinEC) validateMsgMeta(ctx context.Context, msg *types.BlockMs
 	// filecoin consensus. To support cross-messages with Filecoin consensus this
 	// will need to change. In the meantime, we just process the OldMsgMeta as
 	// we did in previous versions and we disregard cross-msgs.
-	mrcid, err := store.Put(store.Context(), &types.OldMsgMeta{
-		BlsMessages:   bmroot,
-		SecpkMessages: smroot,
-	})
-
+	// mrcid, err := store.Put(store.Context(), &types.OldMsgMeta{
+	//         BlsMessages:   bmroot,
+	//         SecpkMessages: smroot,
+	// })
+	emptyroot, err := blockadt.MakeEmptyArray(store).Root()
+	if err != nil {
+		return err
+	}
+	mrcid, err := computeMsgMetaFromRoots(store, bmroot, smroot, emptyroot, 0)
 	if err != nil {
 		return err
 	}
@@ -784,6 +789,20 @@ func (filec *FilecoinEC) validateMsgMeta(ctx context.Context, msg *types.BlockMs
 	}
 
 	return nil
+}
+
+func computeMsgMetaFromRoots(store adt.Store, blsmsgroot, secpkmsgroot, crossmsgroot cid.Cid, lenCross int) (cid.Cid, error) {
+	if lenCross == 0 {
+		return store.Put(store.Context(), &types.OldMsgMeta{
+			BlsMessages:   blsmsgroot,
+			SecpkMessages: secpkmsgroot,
+		})
+	}
+	return store.Put(store.Context(), &types.MsgMeta{
+		BlsMessages:   blsmsgroot,
+		SecpkMessages: secpkmsgroot,
+		CrossMessages: crossmsgroot,
+	})
 }
 
 func (filec *FilecoinEC) validateBlockHeader(ctx context.Context, b *types.BlockHeader) (rejectReason string, err error) {

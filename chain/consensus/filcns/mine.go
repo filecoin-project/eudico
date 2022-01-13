@@ -91,11 +91,17 @@ func (filec *FilecoinEC) CreateBlock(ctx context.Context, w api.Wallet, bt *api.
 	if err != nil {
 		return nil, err
 	}
-	mmcid, err := store.Put(store.Context(), &types.MsgMeta{
-		BlsMessages:   blsmsgroot,
-		SecpkMessages: secpkmsgroot,
-		CrossMessages: emptyroot,
-	})
+
+	// FIXME: Filecion mining doesn't support fetching cross-msgs. This should
+	// be fixed before going into production. What is pending is:
+	// - Getting crossMsgs from CrossMsgPool and proposing it in the block.
+	// - Including the right msgMeta and crossroot here instead of an empty one.
+	// mmcid, err := store.Put(store.Context(), &types.MsgMeta{
+	//         BlsMessages:   blsmsgroot,
+	//         SecpkMessages: secpkmsgroot,
+	//         CrossMessages: emptyroot,
+	// })
+	mmcid, err := computeMsgMetaFromRoots(store, blsmsgroot, secpkmsgroot, emptyroot, 0)
 	if err != nil {
 		return nil, err
 	}

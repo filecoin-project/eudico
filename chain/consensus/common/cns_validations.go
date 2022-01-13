@@ -334,11 +334,12 @@ func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.St
 		return err
 	}
 
-	mrcid, err := tmpstore.Put(ctx, &types.MsgMeta{
-		BlsMessages:   bmroot,
-		SecpkMessages: smroot,
-		CrossMessages: crossroot,
-	})
+	// mrcid, err := tmpstore.Put(ctx, &types.MsgMeta{
+	//         BlsMessages:   bmroot,
+	//         SecpkMessages: smroot,
+	//         CrossMessages: crossroot,
+	// })
+	mrcid, err := ComputeMsgMetaFromRoots(tmpstore, bmroot, smroot, crossroot, len(b.CrossMessages))
 	if err != nil {
 		return err
 	}
@@ -432,12 +433,12 @@ func ValidateMsgMeta(ctx context.Context, msg *types.BlockMsg) error {
 		return err
 	}
 
-	mrcid, err := store.Put(store.Context(), &types.MsgMeta{
-		BlsMessages:   bmroot,
-		SecpkMessages: smroot,
-		CrossMessages: crossroot,
-	})
-
+	// mrcid, err := store.Put(store.Context(), &types.MsgMeta{
+	//         BlsMessages:   bmroot,
+	//         SecpkMessages: smroot,
+	//         CrossMessages: crossroot,
+	// })
+	mrcid, err := ComputeMsgMetaFromRoots(store, bmroot, smroot, crossroot, len(msg.CrossMessages))
 	if err != nil {
 		return err
 	}

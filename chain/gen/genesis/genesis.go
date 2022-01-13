@@ -583,10 +583,9 @@ func MakeGenesisBlock(ctx context.Context, j journal.Journal, bs bstore.Blocksto
 		return nil, xerrors.Errorf("amt build failed: %w", err)
 	}
 
-	mm := &types.MsgMeta{
+	mm := &types.OldMsgMeta{
 		BlsMessages:   emptyroot,
 		SecpkMessages: emptyroot,
-		CrossMessages: emptyroot,
 	}
 	mmb, err := mm.ToStorageBlock()
 	if err != nil {

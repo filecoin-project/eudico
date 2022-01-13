@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/consensus"
 
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
@@ -473,23 +474,24 @@ func computeMsgMeta(bs cbor.IpldStore, bmsgCids, smsgCids, crossCids []cid.Cid) 
 		return cid.Undef, err
 	}
 
-	// root cid computed over BLS and SECPK messages if no cross messages are present,
-	// and all messages if any cross-messages is present (using old a new versions of
-	// MsgMeta conveniently). This ensures the backward compatibility with previous
-	// tipset validated on-chain.
-	var mrcid cid.Cid
-	if len(crossCids) == 0 {
-		mrcid, err = store.Put(store.Context(), &types.OldMsgMeta{
-			BlsMessages:   bmroot,
-			SecpkMessages: smroot,
-		})
-	} else {
-		mrcid, err = store.Put(store.Context(), &types.MsgMeta{
-			BlsMessages:   bmroot,
-			SecpkMessages: smroot,
-			CrossMessages: crossroot,
-		})
-	}
+	// // root cid computed over BLS and SECPK messages if no cross messages are present,
+	// // and all messages if any cross-messages is present (using old a new versions of
+	// // MsgMeta conveniently). This ensures the backward compatibility with previous
+	// // tipset validated on-chain.
+	// var mrcid cid.Cid
+	// if len(crossCids) == 0 {
+	//         mrcid, err = store.Put(store.Context(), &types.OldMsgMeta{
+	//                 BlsMessages:   bmroot,
+	//                 SecpkMessages: smroot,
+	//         })
+	// } else {
+	//         mrcid, err = store.Put(store.Context(), &types.MsgMeta{
+	//                 BlsMessages:   bmroot,
+	//                 SecpkMessages: smroot,
+	//                 CrossMessages: crossroot,
+	//         })
+	// }
+	mrcid, err := computeMsgMetaFromRoots(store, bmroot, smroot, crossroot, len(crossCids))
 	if err != nil {
 		return cid.Undef, xerrors.Errorf("failed to put msgmeta: %w", err)
 	}
@@ -1102,6 +1104,19 @@ func checkMsgMeta(ts *types.TipSet, allbmsgs []*types.Message, allsmsgs []*types
 	return nil
 }
 
+func computeMsgMetaFromRoots(store adt.Store, blsmsgroot, secpkmsgroot, crossmsgroot cid.Cid, lenCross int) (cid.Cid, error) {
+	if lenCross == 0 {
+		return store.Put(store.Context(), &types.OldMsgMeta{
+			BlsMessages:   blsmsgroot,
+			SecpkMessages: secpkmsgroot,
+		})
+	}
+	return store.Put(store.Context(), &types.MsgMeta{
+		BlsMessages:   blsmsgroot,
+		SecpkMessages: secpkmsgroot,
+		CrossMessages: crossmsgroot,
+	})
+}
 func (syncer *Syncer) fetchMessages(ctx context.Context, headers []*types.TipSet, startOffset int) ([]*exchange.CompactedMessages, error) {
 	batchSize := len(headers)
 	batch := make([]*exchange.CompactedMessages, batchSize)
@@ -1208,8 +1223,6 @@ func persistMessages(ctx context.Context, bs bstore.Blockstore, bst *exchange.Co
 			return xerrors.Errorf("Cross message processing failed: %w", err)
 		}
 	}
-
-	// TODO: Persist cross-messages, or as they are stored in SCA we don't need to?
 
 	return nil
 }
