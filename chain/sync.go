@@ -473,27 +473,13 @@ func computeMsgMeta(bs cbor.IpldStore, bmsgCids, smsgCids, crossCids []cid.Cid) 
 		return cid.Undef, err
 	}
 
-	// root cid computed over BLS and SECPK messages if no cross messages are present,
-	// and all messages if any cross-messages is present (using old a new versions of
-	// MsgMeta conveniently). This ensures the backward compatibility with previous
-	// tipset validated on-chain.
-	var mrcid cid.Cid
-	if len(crossCids) == 0 {
-		mrcid, err = store.Put(store.Context(), &types.OldMsgMeta{
-			BlsMessages:   bmroot,
-			SecpkMessages: smroot,
-		})
-	} else {
-		mrcid, err = store.Put(store.Context(), &types.MsgMeta{
-			BlsMessages:   bmroot,
-			SecpkMessages: smroot,
-			CrossMessages: crossroot,
-		})
-	}
-	if err != nil {
-		return cid.Undef, xerrors.Errorf("failed to put msgmeta: %w", err)
-	}
-
+	// FIXME: This needs to change if we want the chain to be backward-compatible,
+	// as the chain currently has blocks that don't have msgMeta.
+	mrcid, err := store.Put(store.Context(), &types.MsgMeta{
+		BlsMessages:   bmroot,
+		SecpkMessages: smroot,
+		CrossMessages: crossroot,
+	})
 	return mrcid, nil
 }
 
