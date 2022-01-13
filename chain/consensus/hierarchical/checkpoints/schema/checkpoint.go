@@ -85,7 +85,7 @@ type ChildCheck struct {
 type CrossMsgMeta struct {
 	From    string // Determines the source of the messages being propagated in MsgsCid
 	To      string // Determines the destination of the messages included in MsgsCid
-	MsgsCid []byte // cid.Cid
+	MsgsCid []byte // cid.Cid of the msgMeta with the list of msgs.
 	Nonce   int    // Nonce of the msgMeta
 }
 

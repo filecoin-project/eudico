@@ -2,6 +2,7 @@ package subnetmgr
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/filecoin-project/go-address"
@@ -111,9 +112,11 @@ func (s *SubnetMgr) GetCrossMsgsPool(
 		}
 	}
 
-	// TODO: Get bottomup messages and return all cross-messages.
-	// NOTE: Down-top transactions are supported also in root chain.
-	// topdown, err := s.getBottomUpPool(ctx, id)
+	// Get bottomup messages and return all cross-messages.
+	// bottomup, err = s.getBottomUpPool(ctx, id, height)
+	// if err != nil {
+	//         return nil, err
+	// }
 
 	out := make([]*types.Message, len(topdown)+len(bottomup))
 	copy(out[:len(topdown)], topdown)
@@ -162,21 +165,46 @@ func (s *SubnetMgr) FundSubnet(
 	return smsg.Cid(), nil
 }
 
-// getParentSCAWithFinality returns the state of the SCA of the parent with `finalityThreshold`
-// epochs ago to ensure that no reversion happens and we can operate with the state we got.
-func (s *SubnetMgr) getParentSCAWithFinality(ctx context.Context, id hierarchical.SubnetID) (*sca.SCAState, adt.Store, error) {
+// ReleaseFunds releases some funds from a subnet
+func (s *SubnetMgr) ReleaseFunds(
+	ctx context.Context, wallet address.Address,
+	id hierarchical.SubnetID, value abi.TokenAmount) (cid.Cid, error) {
 
-	parentAPI, err := s.getParentAPI(id)
+	// TODO: Think a bit deeper the locking strategy for subnets.
+	s.lk.RLock()
+	defer s.lk.RUnlock()
+
+	// Get the api for the subnet
+	api, err := s.GetSubnetAPI(id)
 	if err != nil {
-		return nil, nil, err
+		return cid.Undef, err
 	}
-	finTs := parentAPI.ChainAPI.Chain.GetHeaviestTipSet()
+
+	// Send a release message to SCA in subnet
+	smsg, aerr := api.MpoolPushMessage(ctx, &types.Message{
+		To:     hierarchical.SubnetCoordActorAddr,
+		From:   wallet,
+		Value:  value,
+		Method: sca.Methods.Release,
+		Params: nil,
+	}, nil)
+	if aerr != nil {
+		log.Errorf("Error MpoolPushMessage: %s", aerr)
+		return cid.Undef, aerr
+	}
+
+	return smsg.Cid(), nil
+}
+
+func (s *SubnetMgr) getSCAStateWithFinality(ctx context.Context, api *API, id hierarchical.SubnetID) (*sca.SCAState, adt.Store, error) {
+	var err error
+	finTs := api.ChainAPI.Chain.GetHeaviestTipSet()
 	height := finTs.Height()
 
 	// Avoid negative epochs
 	if height-finalityThreshold >= 0 {
 		// Go back finalityThreshold to ensure the state is final in parent chain
-		finTs, err = parentAPI.ChainGetTipSetByHeight(ctx, height-finalityThreshold, types.EmptyTSK)
+		finTs, err = api.ChainGetTipSetByHeight(ctx, height-finalityThreshold, types.EmptyTSK)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -184,18 +212,28 @@ func (s *SubnetMgr) getParentSCAWithFinality(ctx context.Context, id hierarchica
 
 	// Get parent state back in the past where it should be final.
 	// (we don't want to validate in the subnet a state that may be reverted in the parent)
-	pAct, err := parentAPI.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, finTs.Key())
+	pAct, err := api.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, finTs.Key())
 	if err != nil {
 		return nil, nil, err
 	}
 	var st sca.SCAState
-	pbs := blockstore.NewAPIBlockstore(parentAPI)
+	pbs := blockstore.NewAPIBlockstore(api)
 	pcst := cbor.NewCborStore(pbs)
 	if err := pcst.Get(ctx, pAct.Head, &st); err != nil {
 		return nil, nil, err
 	}
 
 	return &st, adt.WrapStore(ctx, pcst), nil
+}
+
+// getParentSCAWithFinality returns the state of the SCA of the parent with `finalityThreshold`
+// epochs ago to ensure that no reversion happens and we can operate with the state we got.
+func (s *SubnetMgr) getParentSCAWithFinality(ctx context.Context, id hierarchical.SubnetID) (*sca.SCAState, adt.Store, error) {
+	parentAPI, err := s.getParentAPI(id)
+	if err != nil {
+		return nil, nil, err
+	}
+	return s.getSCAStateWithFinality(ctx, parentAPI, id)
 }
 
 func (s *SubnetMgr) getTopDownPool(ctx context.Context, id hierarchical.SubnetID, height abi.ChainEpoch) ([]*types.Message, error) {
@@ -258,12 +296,29 @@ func (s *SubnetMgr) getTopDownPool(ctx context.Context, id hierarchical.SubnetID
 	return out, nil
 }
 
-func (s *SubnetMgr) getBottomUpPool(ctx context.Context, id hierarchical.SubnetID) ([]*types.Message, error) {
+func (s *SubnetMgr) getBottomUpPool(ctx context.Context, id hierarchical.SubnetID, height abi.ChainEpoch) ([]*types.Message, error) {
+	subAPI := s.getAPI(id)
+	if subAPI == nil {
+		return nil, xerrors.Errorf("Not listening to subnet")
+	}
+	// Get tipset at height-finalityThreshold to ensure some level of finality
+	// to get pool of cross-messages.
+	st, pstore, err := s.getSCAStateWithFinality(ctx, subAPI, id)
+	if err != nil {
+		return nil, err
+	}
+	metas, err := st.BottomUpMsgFromNonce(pstore, st.AppliedBottomUpNonce)
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Println(">>>>> TODO: Received metas, we need to resolve the CID for meta", metas)
+	return []*types.Message{}, nil
+
 	// 1. Get BottomUpMsgMeta from SCA in the subnet (the ones that need to
 	// be applied here).
 	// 2. Get Cid and From of CrossMsgMeta
 	// 3. (Implement LinkSystem) Check locally if we have the messages behind the
 	// cid or if they need to be fetched from the subnet.
 	// 4. (Implement cross message exchange protocol) Get the message behind a Cid.
-	panic("Not implemented")
 }

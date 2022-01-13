@@ -192,6 +192,29 @@ func getBottomUpMsgMeta(crossMsgs *adt.Array, nonce uint64) (*schema.CrossMsgMet
 	return &out, true, nil
 }
 
+// TopDownMsgFromNonce gets the latest topDownMessages from a specific nonce
+// (including the one of the specified nonce, i.e. [nonce, latest], both limits
+// included).
+func (st *SCAState) BottomUpMsgFromNonce(s adt.Store, nonce uint64) ([]*schema.CrossMsgMeta, error) {
+	crossMsgs, err := adt.AsArray(s, st.BottomUpMsgsMeta, CrossMsgsAMTBitwidth)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to load cross-msgs meta: %w", err)
+	}
+	// FIXME: Consider setting the length of the slice in advance
+	// to improve performance.
+	out := make([]*schema.CrossMsgMeta, 0)
+	for i := nonce; i < st.BottomUpNonce; i++ {
+		meta, found, err := getBottomUpMsgMeta(crossMsgs, i)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			out = append(out, meta)
+		}
+	}
+	return out, nil
+}
+
 // Using this approach to increment nonce to avoid code repetition.
 // We could probably do better and be more efficient if we had generics.
 func incrementNonce(rt runtime.Runtime, nonceCounter *uint64) {

@@ -281,7 +281,7 @@ func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *Chec
 	return nil
 }
 
-// applyCheckMsgs does the require logic required to trigger the computation or propagate cross-messages
+// applyCheckMsgs prepares messages to trigger their execution or propagate cross-messages
 // coming from a checkpoint of a child subnet.
 func (st *SCAState) applyCheckMsgs(rt runtime.Runtime, windowCh *schema.Checkpoint, childCh *schema.Checkpoint) {
 
@@ -423,7 +423,7 @@ func (a SubnetCoordActor) Release(rt runtime.Runtime, _ *abi.EmptyValue) *abi.Em
 	code := rt.Send(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, rt.ValueReceived(), &builtin.Discard{})
 	if !code.IsSuccess() {
 		rt.Abortf(exitcode.ErrIllegalState,
-			"failed to send unsent reward to the burnt funds actor, code: %v", code)
+			"failed to send release funds to the burnt funds actor, code: %v", code)
 	}
 
 	var st SCAState

@@ -571,6 +571,8 @@ type HierarchicalCnsStruct struct {
 
 		MineSubnet func(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 bool) error `perm:"read"`
 
+		ReleaseFunds func(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) `perm:"write"`
+
 		SyncSubnet func(p0 context.Context, p1 hierarchical.SubnetID, p2 bool) error `perm:"write"`
 
 		ValidateCheckpoint func(p0 context.Context, p1 hierarchical.SubnetID, p2 abi.ChainEpoch) (*schema.Checkpoint, error) `perm:"read"`
@@ -3501,6 +3503,17 @@ func (s *HierarchicalCnsStruct) MineSubnet(p0 context.Context, p1 address.Addres
 
 func (s *HierarchicalCnsStub) MineSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 bool) error {
 	return ErrNotSupported
+}
+
+func (s *HierarchicalCnsStruct) ReleaseFunds(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) {
+	if s.Internal.ReleaseFunds == nil {
+		return *new(cid.Cid), ErrNotSupported
+	}
+	return s.Internal.ReleaseFunds(p0, p1, p2, p3)
+}
+
+func (s *HierarchicalCnsStub) ReleaseFunds(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) {
+	return *new(cid.Cid), ErrNotSupported
 }
 
 func (s *HierarchicalCnsStruct) SyncSubnet(p0 context.Context, p1 hierarchical.SubnetID, p2 bool) error {

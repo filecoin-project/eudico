@@ -75,3 +75,8 @@ func (a *HierarchicalAPI) FundSubnet(ctx context.Context, wallet address.Address
 	id hierarchical.SubnetID, value abi.TokenAmount) (cid.Cid, error) {
 	return a.Sub.FundSubnet(ctx, wallet, id, value)
 }
+
+func (a *HierarchicalAPI) ReleaseFunds(ctx context.Context, wallet address.Address,
+	id hierarchical.SubnetID, value abi.TokenAmount) (cid.Cid, error) {
+	return a.Sub.ReleaseFunds(ctx, wallet, id, value)
+}
