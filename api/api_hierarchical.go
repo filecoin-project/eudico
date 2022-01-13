@@ -15,8 +15,8 @@ type HierarchicalCns interface {
 	AddSubnet(ctx context.Context, wallet address.Address, parent hierarchical.SubnetID, name string, consensus uint64, minerStake abi.TokenAmount,
 		checkperiod abi.ChainEpoch, delegminer address.Address) (address.Address, error) // perm:write
 	JoinSubnet(ctx context.Context, wallet address.Address, value abi.TokenAmount, id hierarchical.SubnetID) (cid.Cid, error) // perm:write
-	SyncSubnet(ctx context.Context, id hierarchical.SubnetID) error                                                           // perm:write
-	MineSubnet(ctx context.Context, wallet address.Address, id hierarchical.SubnetID, stop bool) error                        // perm:write
+	SyncSubnet(ctx context.Context, id hierarchical.SubnetID, stop bool) error                                                // perm:write
+	MineSubnet(ctx context.Context, wallet address.Address, id hierarchical.SubnetID, stop bool) error                        // perm:read
 	LeaveSubnet(ctx context.Context, wallet address.Address, id hierarchical.SubnetID) (cid.Cid, error)                       // perm:write
 	KillSubnet(ctx context.Context, wallet address.Address, id hierarchical.SubnetID) (cid.Cid, error)                        // perm:write
 	ListCheckpoints(ctx context.Context, id hierarchical.SubnetID, num int) ([]*schema.Checkpoint, error)                     // perm:read

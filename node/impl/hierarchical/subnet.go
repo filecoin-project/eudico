@@ -37,8 +37,8 @@ func (a *HierarchicalAPI) JoinSubnet(ctx context.Context, wallet address.Address
 	return a.Sub.JoinSubnet(ctx, wallet, value, id)
 }
 
-func (a *HierarchicalAPI) SyncSubnet(ctx context.Context, id hierarchical.SubnetID) error {
-	return a.Sub.SyncSubnet(ctx, id)
+func (a *HierarchicalAPI) SyncSubnet(ctx context.Context, id hierarchical.SubnetID, stop bool) error {
+	return a.Sub.SyncSubnet(ctx, id, stop)
 }
 
 func (a *HierarchicalAPI) MineSubnet(ctx context.Context, wallet address.Address,

@@ -455,7 +455,10 @@ func (s *SubnetMgr) syncSubnet(ctx context.Context, id hierarchical.SubnetID, pa
 }
 
 // SyncSubnet starts syncing with a subnet even if we are not an active participant.
-func (s *SubnetMgr) SyncSubnet(ctx context.Context, id hierarchical.SubnetID) error {
+func (s *SubnetMgr) SyncSubnet(ctx context.Context, id hierarchical.SubnetID, stop bool) error {
+	if stop {
+		return s.stopSyncSubnet(ctx, id)
+	}
 	// Get the api for the parent network hosting the subnet actor
 	// for the subnet.
 	parentAPI, err := s.getParentAPI(id)
@@ -463,6 +466,15 @@ func (s *SubnetMgr) SyncSubnet(ctx context.Context, id hierarchical.SubnetID) er
 		return err
 	}
 	return s.syncSubnet(ctx, id, parentAPI)
+}
+
+// stopSyncSubnet stops syncing from a subnet
+func (s *SubnetMgr) stopSyncSubnet(ctx context.Context, id hierarchical.SubnetID) error {
+	if sh, _ := s.getSubnet(id); s != nil {
+		delete(s.subnets, id)
+		return sh.Close(ctx)
+	}
+	return xerrors.Errorf("Not currently syncing with subnet: %s", id)
 }
 
 func (s *SubnetMgr) MineSubnet(

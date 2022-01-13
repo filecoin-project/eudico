@@ -2995,17 +2995,17 @@ func (mr *MockFullNodeMockRecorder) SyncSubmitBlock(arg0, arg1 interface{}) *gom
 }
 
 // SyncSubnet mocks base method.
-func (m *MockFullNode) SyncSubnet(arg0 context.Context, arg1 hierarchical.SubnetID) error {
+func (m *MockFullNode) SyncSubnet(arg0 context.Context, arg1 hierarchical.SubnetID, arg2 bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SyncSubnet", arg0, arg1)
+	ret := m.ctrl.Call(m, "SyncSubnet", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SyncSubnet indicates an expected call of SyncSubnet.
-func (mr *MockFullNodeMockRecorder) SyncSubnet(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockFullNodeMockRecorder) SyncSubnet(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncSubnet", reflect.TypeOf((*MockFullNode)(nil).SyncSubnet), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncSubnet", reflect.TypeOf((*MockFullNode)(nil).SyncSubnet), arg0, arg1, arg2)
 }
 
 // SyncUnmarkAllBad mocks base method.

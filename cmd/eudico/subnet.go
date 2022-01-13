@@ -243,6 +243,10 @@ var syncCmd = &cli.Command{
 			Usage: "specify the id of the subnet to sync with",
 			Value: hierarchical.RootSubnet.String(),
 		},
+		&cli.BoolFlag{
+			Name:  "stop",
+			Usage: "use this flag to determine if you want to start or stop mining",
+		},
 	},
 	Action: func(cctx *cli.Context) error {
 
@@ -262,12 +266,11 @@ var syncCmd = &cli.Command{
 		if cctx.String("subnet") == hierarchical.RootSubnet.String() {
 			return xerrors.Errorf("no valid subnet so sync with specified")
 		}
-
-		err = api.SyncSubnet(ctx, hierarchical.SubnetID(subnet))
+		err = api.SyncSubnet(ctx, hierarchical.SubnetID(subnet), cctx.Bool("stop"))
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cctx.App.Writer, "Successfully syncing with subnet %s \n", subnet)
+		fmt.Fprintf(cctx.App.Writer, "Successfully started/stopped syncing with subnet %s \n", subnet)
 		return nil
 	},
 }
@@ -288,7 +291,7 @@ var mineCmd = &cli.Command{
 		},
 		&cli.BoolFlag{
 			Name:  "stop",
-			Usage: "use this flag to determine if you want to start or stop mining",
+			Usage: "use this flag to stop mining a subnet",
 		},
 	},
 	Action: func(cctx *cli.Context) error {
