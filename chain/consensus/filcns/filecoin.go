@@ -765,14 +765,17 @@ func (filec *FilecoinEC) validateMsgMeta(ctx context.Context, msg *types.BlockMs
 	if err != nil {
 		return err
 	}
-
+	emptyroot, err := blockadt.MakeEmptyArray(store).Root()
+	if err != nil {
+		return err
+	}
 	// TODO FIXME: No support for the application of cross-messages with
 	// filecoin consensus. To support cross-messages with Filecoin consensus this
-	// will need to change. In the meantime, we just process the OldMsgMeta as
-	// we did in previous versions and we disregard cross-msgs.
-	mrcid, err := store.Put(store.Context(), &types.OldMsgMeta{
+	// will need to change.
+	mrcid, err := store.Put(store.Context(), &types.MsgMeta{
 		BlsMessages:   bmroot,
 		SecpkMessages: smroot,
+		CrossMessages: emptyroot,
 	})
 
 	if err != nil {

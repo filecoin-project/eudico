@@ -1,9 +1,6 @@
 package exchange
 
 import (
-	"bytes"
-	"fmt"
-	"io"
 	"time"
 
 	"github.com/filecoin-project/lotus/build"
@@ -171,103 +168,6 @@ type CompactedMessages struct {
 	CrossIncludes [][]uint64
 }
 
-// OldCompactedMessages is as the serialized representation of
-// previously validated blocks that didn't support the inclusion of
-// cross-net messages inside the block.
-//
-// When a block without cross-messages is received through the wire,
-// it is unmarshalled into and OldCompactedMessage that is afterwards
-// translated into a CompactedMessage without cross-mesasges.
-type OldCompactedMessages struct {
-	Bls         []*types.Message
-	BlsIncludes [][]uint64
-
-	Secpk         []*types.SignedMessage
-	SecpkIncludes [][]uint64
-}
-
-// NewCompactedMesasges is the serialized representation of a modern
-// compactedMessages including cross-net messages. This is an auxiliary
-// type used to ensure backward compatibility with previous versions of
-// compactedMessages used in the protocol.
-type NewCompactedMessages struct {
-	Bls         []*types.Message
-	BlsIncludes [][]uint64
-
-	Secpk         []*types.SignedMessage
-	SecpkIncludes [][]uint64
-
-	Cross         []*types.Message
-	CrossIncludes [][]uint64
-}
-
-func (t *CompactedMessages) MarshalCBOR(w io.Writer) error {
-	// NOTE: I don't think we need to add a handler here to determine
-	// if to marshal a new or old CompactedMessages format. UnmarshalCBOR will
-	// handle any format conveniently. However, if something breaks
-	// in the chain exchange protocol bear in mind that we are _always_ marshalling new
-	// CompactedMessages type here.
-	bm := NewCompactedMessages{t.Bls, t.BlsIncludes, t.Secpk, t.SecpkIncludes, t.Cross, t.CrossIncludes}
-	return bm.MarshalCBOR(w)
-}
-
-// isOldCompacted checks if a new or old version of compactedMesasges is being
-// sent in the reader.
-func isOldCompacted(r io.Reader) (bool, io.Reader, error) {
-	scratch := make([]byte, 1)
-	n, err := r.Read(scratch[:1])
-	if err != nil {
-		return false, nil, err
-	}
-	if n != 1 {
-		return false, nil, fmt.Errorf("failed to read a byte")
-	}
-
-	extra := scratch[0] & 0x1f
-	u := io.MultiReader(bytes.NewReader(scratch[:1]), r)
-	// The check is performed through the number of fields in the
-	// type being sent.
-	if extra != 4 {
-		return false, u, err
-	}
-	return true, u, err
-}
-
-func (t *CompactedMessages) UnmarshalCBOR(r io.Reader) error {
-	isOld, u, err := isOldCompacted(r)
-	if err != nil {
-		return err
-	}
-	if isOld {
-		var obm OldCompactedMessages
-		if err := obm.UnmarshalCBOR(u); err != nil {
-			return err
-		}
-		// unwrapping old into CompactedMessages
-		t.Bls = obm.Bls
-		t.BlsIncludes = obm.BlsIncludes
-		t.Secpk = obm.Secpk
-		t.SecpkIncludes = obm.SecpkIncludes
-		t.Cross = make([]*types.Message, 0)
-		t.CrossIncludes = make([][]uint64, 0)
-		return nil
-	}
-
-	var nbm NewCompactedMessages
-	if err := nbm.UnmarshalCBOR(u); err != nil {
-		return err
-	}
-	// unwrapping new into CompactedMessages
-	t.Bls = nbm.Bls
-	t.BlsIncludes = nbm.BlsIncludes
-	t.Secpk = nbm.Secpk
-	t.SecpkIncludes = nbm.SecpkIncludes
-	t.Cross = nbm.Cross
-	t.CrossIncludes = nbm.CrossIncludes
-
-	return nil
-}
-
 // Response that has been validated according to the protocol
 // and can be safely accessed.
 type validatedResponse struct {
@@ -301,12 +201,8 @@ func (res *validatedResponse) toFullTipSets() []*store.FullTipSet {
 			for _, mi := range msgs.SecpkIncludes[blockIdx] {
 				fb.SecpkMessages = append(fb.SecpkMessages, msgs.Secpk[mi])
 			}
-
-			// Only validate tipset with cross-messages if any are present.
-			if msgs.CrossIncludes != nil && len(msgs.CrossIncludes) > 0 {
-				for _, mi := range msgs.CrossIncludes[blockIdx] {
-					fb.CrossMessages = append(fb.CrossMessages, msgs.Cross[mi])
-				}
+			for _, mi := range msgs.CrossIncludes[blockIdx] {
+				fb.CrossMessages = append(fb.CrossMessages, msgs.Cross[mi])
 			}
 
 			fts.Blocks = append(fts.Blocks, fb)
