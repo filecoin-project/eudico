@@ -470,7 +470,7 @@ func (s *SubnetMgr) SyncSubnet(ctx context.Context, id hierarchical.SubnetID, st
 
 // stopSyncSubnet stops syncing from a subnet
 func (s *SubnetMgr) stopSyncSubnet(ctx context.Context, id hierarchical.SubnetID) error {
-	if sh, _ := s.getSubnet(id); s != nil {
+	if sh, _ := s.getSubnet(id); sh != nil {
 		delete(s.subnets, id)
 		return sh.Close(ctx)
 	}
@@ -567,7 +567,7 @@ func (s *SubnetMgr) LeaveSubnet(
 
 	// See if we are already syncing with that chain. If this
 	// is the case we can remove the subnet
-	if sh, _ := s.getSubnet(id); s != nil {
+	if sh, _ := s.getSubnet(id); sh != nil {
 		log.Infow("Stop syncing with subnet", "subnetID", id)
 		delete(s.subnets, id)
 		return msg, sh.Close(ctx)
