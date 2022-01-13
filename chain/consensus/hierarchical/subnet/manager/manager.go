@@ -426,18 +426,55 @@ func (s *SubnetMgr) JoinSubnet(
 	}
 
 	// If not we need to initialize the subnet in our client to start syncing.
-	// Get genesis from actor state.
-	st, err := parentAPI.getActorState(ctx, SubnetActor)
-	if err != nil {
-		return cid.Undef, err
-	}
-
-	err = s.startSubnet(id, parentAPI, st.Consensus, st.Genesis)
+	err = s.syncSubnet(ctx, id, parentAPI)
 	if err != nil {
 		return cid.Undef, err
 	}
 
 	return smsg.Cid(), nil
+}
+
+func (s *SubnetMgr) syncSubnet(ctx context.Context, id hierarchical.SubnetID, parentAPI *API) error {
+	// Get actor from subnet ID
+	SubnetActor, err := id.Actor()
+	if err != nil {
+		return err
+	}
+	// See if we are already syncing with that chain.
+	if s.getAPI(id) != nil {
+		return xerrors.Errorf("Already syncing with subnet: %v", id)
+	}
+
+	// Get genesis from actor state.
+	st, err := parentAPI.getActorState(ctx, SubnetActor)
+	if err != nil {
+		return err
+	}
+
+	return s.startSubnet(id, parentAPI, st.Consensus, st.Genesis)
+}
+
+// SyncSubnet starts syncing with a subnet even if we are not an active participant.
+func (s *SubnetMgr) SyncSubnet(ctx context.Context, id hierarchical.SubnetID, stop bool) error {
+	if stop {
+		return s.stopSyncSubnet(ctx, id)
+	}
+	// Get the api for the parent network hosting the subnet actor
+	// for the subnet.
+	parentAPI, err := s.getParentAPI(id)
+	if err != nil {
+		return err
+	}
+	return s.syncSubnet(ctx, id, parentAPI)
+}
+
+// stopSyncSubnet stops syncing from a subnet
+func (s *SubnetMgr) stopSyncSubnet(ctx context.Context, id hierarchical.SubnetID) error {
+	if sh, _ := s.getSubnet(id); sh != nil {
+		delete(s.subnets, id)
+		return sh.Close(ctx)
+	}
+	return xerrors.Errorf("Not currently syncing with subnet: %s", id)
 }
 
 func (s *SubnetMgr) MineSubnet(
@@ -530,7 +567,7 @@ func (s *SubnetMgr) LeaveSubnet(
 
 	// See if we are already syncing with that chain. If this
 	// is the case we can remove the subnet
-	if sh, _ := s.getSubnet(id); s != nil {
+	if sh, _ := s.getSubnet(id); sh != nil {
 		log.Infow("Stop syncing with subnet", "subnetID", id)
 		delete(s.subnets, id)
 		return msg, sh.Close(ctx)

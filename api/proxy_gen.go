@@ -569,7 +569,9 @@ type HierarchicalCnsStruct struct {
 
 		ListCheckpoints func(p0 context.Context, p1 hierarchical.SubnetID, p2 int) ([]*schema.Checkpoint, error) `perm:"read"`
 
-		MineSubnet func(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 bool) error `perm:"write"`
+		MineSubnet func(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 bool) error `perm:"read"`
+
+		SyncSubnet func(p0 context.Context, p1 hierarchical.SubnetID, p2 bool) error `perm:"write"`
 
 		ValidateCheckpoint func(p0 context.Context, p1 hierarchical.SubnetID, p2 abi.ChainEpoch) (*schema.Checkpoint, error) `perm:"read"`
 	}
@@ -3498,6 +3500,17 @@ func (s *HierarchicalCnsStruct) MineSubnet(p0 context.Context, p1 address.Addres
 }
 
 func (s *HierarchicalCnsStub) MineSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 bool) error {
+	return ErrNotSupported
+}
+
+func (s *HierarchicalCnsStruct) SyncSubnet(p0 context.Context, p1 hierarchical.SubnetID, p2 bool) error {
+	if s.Internal.SyncSubnet == nil {
+		return ErrNotSupported
+	}
+	return s.Internal.SyncSubnet(p0, p1, p2)
+}
+
+func (s *HierarchicalCnsStub) SyncSubnet(p0 context.Context, p1 hierarchical.SubnetID, p2 bool) error {
 	return ErrNotSupported
 }
 
