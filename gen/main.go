@@ -24,11 +24,9 @@ func main() {
 		types.Message{},
 		types.SignedMessage{},
 		types.MsgMeta{},
-		types.OldMsgMeta{},
 		types.Actor{},
 		types.MessageReceipt{},
 		types.BlockMsg{},
-		types.OldBlockMsg{},
 		types.ExpTipSet{},
 		types.BeaconEntry{},
 		types.StateRoot{},
@@ -83,8 +81,7 @@ func main() {
 	err = gen.WriteTupleEncodersToFile("./chain/exchange/cbor_gen.go", "exchange",
 		exchange.Request{},
 		exchange.Response{},
-		exchange.OldCompactedMessages{},
-		exchange.NewCompactedMessages{},
+		exchange.CompactedMessages{},
 		exchange.BSTipSet{},
 	)
 	if err != nil {

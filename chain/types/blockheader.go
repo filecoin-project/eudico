@@ -134,11 +134,6 @@ type MsgMeta struct {
 	CrossMessages cid.Cid
 }
 
-type OldMsgMeta struct {
-	BlsMessages   cid.Cid
-	SecpkMessages cid.Cid
-}
-
 func (mm *MsgMeta) Cid() cid.Cid {
 	b, err := mm.ToStorageBlock()
 	if err != nil {
