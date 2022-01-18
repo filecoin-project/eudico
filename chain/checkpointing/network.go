@@ -4,22 +4,19 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Zondax/multi-party-sig/pkg/party"
 	"github.com/Zondax/multi-party-sig/pkg/protocol"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
 
 type Network struct {
-	sub     *pubsub.Subscription
-	topic   *pubsub.Topic
-	parties party.IDSlice
+	sub   *pubsub.Subscription
+	topic *pubsub.Topic
 }
 
-func NewNetwork(parties party.IDSlice, sub *pubsub.Subscription, topic *pubsub.Topic) *Network {
+func NewNetwork(sub *pubsub.Subscription, topic *pubsub.Topic) *Network {
 	c := &Network{
-		sub:     sub,
-		topic:   topic,
-		parties: parties,
+		sub:   sub,
+		topic: topic,
 	}
 	return c
 }
@@ -35,7 +32,7 @@ func (n *Network) Next(ctx context.Context) *protocol.Message {
 		panic(err)
 	}
 
-	// Converting a pubsub.Message into a protocol.Message
+	// Unwrapping protocol message from PubSub message
 	// see https://pkg.go.dev/github.com/libp2p/go-libp2p-pubsub@v0.5.3/pb#Message
 	// https://pkg.go.dev/github.com/taurusgroup/multi-party-sig@v0.6.0-alpha-2021-09-21/pkg/protocol?utm_source=gopls#Message
 	var pmessage protocol.Message
@@ -58,16 +55,6 @@ func (n *Network) Send(ctx context.Context, msg *protocol.Message) {
 	}
 }
 
-func (n *Network) Done() {
-	fmt.Println("Done")
-
-	/* Might need to do something here ? */
-}
-
-func (n *Network) Parties() party.IDSlice {
-	return n.parties
-}
-
 /*
 	Handling incoming and outgoing messages
 */
@@ -77,7 +64,6 @@ func broadcastingMessage(ctx context.Context, h protocol.Handler, network *Netwo
 		msg, ok := <-h.Listen()
 		fmt.Println("Outgoing message:", msg)
 		if !ok {
-			network.Done()
 			// the channel was closed, indicating that the protocol is done executing.
 			close(over)
 			return
@@ -93,10 +79,11 @@ func waitingMessages(ctx context.Context, h protocol.Handler, network *Network, 
 			return
 		default:
 			msg := network.Next(ctx)
-			if h.CanAccept(msg) {
+			fmt.Println("Incoming message:", msg, h.CanAccept(msg))
+			/*if h.CanAccept(msg) {
 				// This message is ours
 				fmt.Println("Incoming message:", msg)
-			}
+			}*/
 			h.Accept(msg)
 		}
 
@@ -113,4 +100,6 @@ func LoopHandler(ctx context.Context, h protocol.Handler, network *Network) {
 	go waitingMessages(ctx, h, network, over)
 
 	<-over
+
+	fmt.Println("We are done")
 }

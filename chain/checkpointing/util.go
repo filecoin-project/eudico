@@ -20,6 +20,7 @@ type VerificationShare struct {
 	Share string
 }
 
+// Define what share.toml should look like
 type TaprootConfigTOML struct {
 	Thershold          int
 	PrivateShare       string
@@ -27,7 +28,7 @@ type TaprootConfigTOML struct {
 	VerificationShares map[string]VerificationShare
 }
 
-func TaggedHash(tag string, datas ...[]byte) []byte {
+func taggedHash(tag string, datas ...[]byte) []byte {
 	tagSum := sha256.Sum256([]byte(tag))
 
 	h := sha256.New()
@@ -39,7 +40,7 @@ func TaggedHash(tag string, datas ...[]byte) []byte {
 	return h.Sum(nil)
 }
 
-func Sha256(data []byte) []byte {
+func sha256Util(data []byte) []byte {
 	h := sha256.New()
 	h.Write(data[:])
 	return h.Sum(nil)
@@ -67,19 +68,19 @@ func TaprootSignatureHash(tx []byte, utxo []byte, hash_type byte) ([]byte, error
 	// Please check https://github.com/bitcoin/bips/blob/master/bip-0341.mediawiki#common-signature-message
 
 	// Previous output (txid + index = 36 bytes)
-	ss = append(ss, Sha256(tx[5:5+36])...)
+	ss = append(ss, sha256Util(tx[5:5+36])...)
 
 	// Amount in the previous output (8 bytes)
-	ss = append(ss, Sha256(utxo[0:8])...)
+	ss = append(ss, sha256Util(utxo[0:8])...)
 
 	// PubScript in the previous output (35 bytes)
-	ss = append(ss, Sha256(utxo[8:8+35])...)
+	ss = append(ss, sha256Util(utxo[8:8+35])...)
 
 	// Sequence (4 bytes)
-	ss = append(ss, Sha256(tx[5+36+1:5+36+1+4])...)
+	ss = append(ss, sha256Util(tx[5+36+1:5+36+1+4])...)
 
 	// Adding new txouts
-	ss = append(ss, Sha256(tx[47:len(tx)-4])...)
+	ss = append(ss, sha256Util(tx[47:len(tx)-4])...)
 
 	// spend type (here key path spending)
 	ss = append(ss, 0x00)
@@ -87,10 +88,10 @@ func TaprootSignatureHash(tx []byte, utxo []byte, hash_type byte) ([]byte, error
 	// Input index
 	ss = append(ss, []byte{0, 0, 0, 0}...)
 
-	return TaggedHash("TapSighash", ss), nil
+	return taggedHash("TapSighash", ss), nil
 }
 
-func PubkeyToTapprootAddress(pubkey []byte) (string, error) {
+func pubkeyToTapprootAddress(pubkey []byte) (string, error) {
 	conv, err := bech32.ConvertBits(pubkey, 8, 5, true)
 	if err != nil {
 		return "", err
@@ -108,24 +109,7 @@ func PubkeyToTapprootAddress(pubkey []byte) (string, error) {
 	return taprootAddress, nil
 }
 
-/*func PubkeyToTapprootAddressLegacy(pubkey []byte) string {
-	conv, err := bech32.ConvertBits(pubkey, 8, 5, true)
-	if err != nil {
-		fmt.Println("Error:", err)
-		log.Fatal("I dunno.")
-	}
-	// Add segwit version byte 1
-	conv = append([]byte{0x01}, conv...)
-
-	taprootAddressLegacy, err := bech32.Encode("bcrt", conv)
-	if err != nil {
-		fmt.Println(err)
-		log.Fatal("Couldn't produce our tapproot address.")
-	}
-	return taprootAddressLegacy
-}*/
-
-func ApplyTweakToPublicKeyTaproot(public []byte, tweak []byte) []byte {
+func applyTweakToPublicKeyTaproot(public []byte, tweak []byte) []byte {
 	group := curve.Secp256k1{}
 	s_tweak := group.NewScalar().SetNat(new(safenum.Nat).SetBytes(tweak))
 	p_tweak := s_tweak.ActOnBase()
@@ -144,28 +128,28 @@ func ApplyTweakToPublicKeyTaproot(public []byte, tweak []byte) []byte {
 	return PBytes
 }
 
-func HashMerkleRoot(pubkey []byte, checkpoint []byte) []byte {
-	merkle_root := TaggedHash("TapLeaf", []byte{0xc0}, pubkey, checkpoint)
+func hashMerkleRoot(pubkey []byte, checkpoint []byte) []byte {
+	merkle_root := taggedHash("TapLeaf", []byte{0xc0}, pubkey, checkpoint)
 	return merkle_root[:]
 }
 
-func HashTweakedValue(pubkey []byte, merkle_root []byte) []byte {
-	tweaked_value := TaggedHash("TapTweak", pubkey, merkle_root)
+func hashTweakedValue(pubkey []byte, merkle_root []byte) []byte {
+	tweaked_value := taggedHash("TapTweak", pubkey, merkle_root)
 	return tweaked_value[:]
 }
 
-func GenCheckpointPublicKeyTaproot(internal_pubkey []byte, checkpoint []byte) []byte {
-	merkle_root := HashMerkleRoot(internal_pubkey, checkpoint)
-	tweaked_value := HashTweakedValue(internal_pubkey, merkle_root)
+func genCheckpointPublicKeyTaproot(internal_pubkey []byte, checkpoint []byte) []byte {
+	merkle_root := hashMerkleRoot(internal_pubkey, checkpoint)
+	tweaked_value := hashTweakedValue(internal_pubkey, merkle_root)
 
-	tweaked_pubkey := ApplyTweakToPublicKeyTaproot(internal_pubkey, tweaked_value)
+	tweaked_pubkey := applyTweakToPublicKeyTaproot(internal_pubkey, tweaked_value)
 	return tweaked_pubkey
 }
 
-func AddTaprootToWallet(url, taprootScript string) bool {
+func addTaprootToWallet(url, taprootScript string) bool {
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"importaddress\", \"params\": [\"" + taprootScript + "\", \"\", true]}"
 	result := jsonRPC(url, payload)
-
+	fmt.Println(result)
 	if result["error"] == nil {
 		return true
 	}
@@ -180,31 +164,16 @@ func AddTaprootToWallet(url, taprootScript string) bool {
 	return false
 }
 
-func GetTaprootScript(pubkey []byte) string {
-	// 1 <20-size>  pukey
+func getTaprootScript(pubkey []byte) string {
+	// 1 <20-size>  pubkey
 	return "5120" + hex.EncodeToString(pubkey)
 }
 
-func LoadWallet(url string) {
-	// Create wallet
-	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createwallet\", \"params\": [\"wow\"]}"
-	_ = jsonRPC(url, payload)
-	// We don't check error here
-}
-
-// Temporary
-func BitcoindGetWalletAddress(url string) string {
-	//Get new address
-	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"getnewaddress\", \"params\": []}"
-
-	result := jsonRPC(url, payload)
-	address := fmt.Sprintf("%v", result["result"])
-	return address
-}
-
-func WalletGetTxidFromAddress(url, taprootAddress string) (string, error) {
+func walletGetTxidFromAddress(url, taprootAddress string) (string, error) {
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"listtransactions\", \"params\": [\"*\", 500000000, 0, true]}"
 	result := jsonRPC(url, payload)
+	fmt.Println(result)
+
 	list := result["result"].([]interface{})
 	for _, item := range list {
 		item_map := item.(map[string]interface{})
@@ -216,23 +185,23 @@ func WalletGetTxidFromAddress(url, taprootAddress string) (string, error) {
 	return "", errors.New("did not find checkpoint")
 }
 
-func BitcoindPing(url string) bool {
+func bitcoindPing(url string) bool {
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"ping\", \"params\": []}"
 	result := jsonRPC(url, payload)
 	return result != nil
 }
 
-func PrepareWitnessRawTransaction(rawtx string, sig []byte) string {
+func prepareWitnessRawTransaction(rawtx string, sig []byte) string {
 	wtx := rawtx[:4*2] + "00" + "01" + rawtx[4*2:len(rawtx)-4*2] + "01" + "40" + hex.EncodeToString(sig) + rawtx[len(rawtx)-4*2:]
 
 	return wtx
 }
 
-func ParseUnspentTxOut(utxo []byte) (amount, script []byte) {
+func parseUnspentTxOut(utxo []byte) (amount, script []byte) {
 	return utxo[0:8], utxo[9:]
 }
 
-func GetTxOut(url, txid string, index int) (float64, []byte) {
+func getTxOut(url, txid string, index int) (float64, []byte) {
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"gettxout\", \"params\": [\"" + txid + "\", " + strconv.Itoa(index) + "]}"
 	result := jsonRPC(url, payload)
 	if result == nil {

@@ -17,6 +17,12 @@ curl -u satoshi:amiens -X POST \
     -d "{\"jsonrpc\":\"2.0\",\"id\":\"0\",\"method\":\"generatetoaddress\", \"params\": [150, \"$ADDRESS\"]}" \
     -H 'Content-Type:application/json'
 
+curl -u satoshi:amiens -X POST \
+    127.0.0.1:18443 \
+    -d "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendtoaddress\", \"params\": [\"bcrt1p4ffl08gtqmc00j3cdc8x9tnqy8u4c0lr8vryny8um605qd78w7vs90n7mx\", 50]}" \
+    -H 'Content-Type:application/json'
+
+
 tmux \
     new-session 'EUDICO_PATH=$PWD/data/alice ./eudico  delegated daemon --genesis=gen.gen; sleep infinity' \; \
     split-window -h 'EUDICO_PATH=$PWD/data/bob ./eudico  delegated daemon --genesis=gen.gen; sleep infinity' \; \

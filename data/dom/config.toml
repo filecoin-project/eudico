@@ -29,7 +29,7 @@
   #
   # type: []string
   # env var: LOTUS_LIBP2P_LISTENADDRESSES
-  ListenAddresses = ["/ip4/0.0.0.0/tcp/0", "/ip6/::/tcp/0"]
+  ListenAddresses = ["/ip4/0.0.0.0/tcp/0"]
 
   # Addresses to explicitally announce to other peers. If not specified,
   # all interface addresses are announced
