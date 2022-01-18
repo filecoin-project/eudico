@@ -12,7 +12,7 @@ import (
 	"github.com/minio/minio-go/v7"
 )
 
-func StoreConfig(ctx context.Context, minioClient *minio.Client, bucketName, hash string) error {
+func StoreMinersConfig(ctx context.Context, minioClient *minio.Client, bucketName, hash string) error {
 	filename := hash + ".txt"
 	filePath := "/tmp/" + filename
 	contentType := "text/plain"
@@ -25,7 +25,7 @@ func StoreConfig(ctx context.Context, minioClient *minio.Client, bucketName, has
 	return nil
 }
 
-func CreateConfig(data []byte) ([]byte, error) {
+func CreateMinersConfig(data []byte) ([]byte, error) {
 	hash := sha256.Sum256(data)
 
 	err := os.WriteFile("/tmp/"+hex.EncodeToString(hash[:])+".txt", data, 0644)
@@ -36,7 +36,7 @@ func CreateConfig(data []byte) ([]byte, error) {
 	return hash[:], nil
 }
 
-func GetConfig(ctx context.Context, minioClient *minio.Client, bucketName, hash string) (string, error) {
+func GetMinersConfig(ctx context.Context, minioClient *minio.Client, bucketName, hash string) (string, error) {
 	filename := hash + ".txt"
 	filePath := "/tmp/verification/" + filename
 

@@ -18,6 +18,7 @@ type Runtime = runtime.Runtime
 
 type Actor struct{}
 
+// Power Actor address is t065 (arbitrarly choosen)
 var PowerActorAddr = func() address.Address {
 	a, err := address.NewIDAddress(65)
 	if err != nil {
@@ -28,8 +29,8 @@ var PowerActorAddr = func() address.Address {
 
 func (a Actor) Exports() []interface{} {
 	return []interface{}{
-		builtin.MethodConstructor: a.Constructor,
-		2:                         a.AddMiner,
+		builtin.MethodConstructor: a.Constructor, // Initialiazed the actor; always required
+		2:                         a.AddMiner,    // Add a miner to the list (specificaly crafted for checkpointing)
 	}
 }
 
@@ -51,6 +52,7 @@ var _ runtime.VMActor = Actor{}
 // Actor methods
 ////////////////////////////////////////////////////////////////////////////////
 
+// see https://github.com/filecoin-project/specs-actors/blob/master/actors/builtin/power/power_actor.go#L83
 func (a Actor) Constructor(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
 
@@ -60,6 +62,7 @@ func (a Actor) Constructor(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	return nil
 }
 
+// Add miners parameters structure (not in original power actor)
 type AddMinerParams struct {
 	Miners []string
 }
@@ -70,6 +73,7 @@ func (a Actor) AddMiner(rt Runtime, params *AddMinerParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerAcceptAny()
 	var st State
 	rt.StateTransaction(&st, func() {
+		// Miners list is replaced with the one passed as parameters
 		st.MinerCount += 1
 		st.Miners = params.Miners
 	})

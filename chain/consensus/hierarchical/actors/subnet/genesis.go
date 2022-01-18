@@ -257,6 +257,8 @@ func SetupSubnetActor(ctx context.Context, bs bstore.Blockstore, networkName str
 	return act, nil
 }
 
+// This is our mocked power actor used in checkpointing module
+// This function allow initializing the state in our genesis file
 func SetupStoragePowerActor(ctx context.Context, bs bstore.Blockstore, av actors.Version) (*types.Actor, error) {
 	cst := cbor.NewCborStore(bs)
 	pst, err := mpower.ConstructState(adt.WrapStore(ctx, cbor.NewCborStore(bs)))

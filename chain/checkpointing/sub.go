@@ -218,6 +218,10 @@ func NewCheckpointSub(
 func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 
 	checkFunc := func(ctx context.Context, ts *types.TipSet) (done bool, more bool, err error) {
+
+		// Verify if we are sync here (maybe ?)
+		// if not sync return done = true and more = false
+
 		return false, true, nil
 	}
 
@@ -236,6 +240,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 		defer c.lk.Unlock()
 
 		// verify we are synced
+		// Maybe move it to checkFunc
 		st, err := c.api.SyncState(ctx)
 		if err != nil {
 			log.Errorf("unable to sync: %v", err)
@@ -244,11 +249,13 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 
 		if !c.synced {
 			// Are we synced ?
+			// Replace this WaitForSync logic with this function
+			// https://github.com/Zondax/eudico/blob/1de9d0f773e49b61cd405add93c3c28c9f74cb38/node/modules/services.go#L104
 			if len(st.ActiveSyncs) > 0 &&
 				st.ActiveSyncs[len(st.ActiveSyncs)-1].Height == newTs.Height() {
 
 				log.Infow("we are synced")
-				// Yes then verify our checkpoint
+				// Yes then verify our checkpoint from Bitcoin and verify if we find in it in our Eudico chain
 				ts, err := c.api.ChainGetTipSet(ctx, c.latestConfigCheckpoint)
 				if err != nil {
 					log.Errorf("couldnt get tipset: %v", err)
@@ -263,6 +270,11 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 			}
 		}
 
+		/*
+			Now we compared old Power Actor State and new Power Actor State
+		*/
+
+		// Get actors at specified tipset
 		newAct, err := c.api.StateGetActor(ctx, mpower.PowerActorAddr, newTs.Key())
 		if err != nil {
 			return false, nil, err
@@ -273,8 +285,8 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 			return false, nil, err
 		}
 
+		// Get state from specified actors
 		var oldSt, newSt mpower.State
-
 		bs := blockstore.NewAPIBlockstore(c.api)
 		cst := cbor.NewCborStore(bs)
 		if err := cst.Get(ctx, oldAct.Head, &oldSt); err != nil {
@@ -284,17 +296,19 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 			return false, nil, err
 		}
 
-		// Activate checkpointing every 30 blocks
+		// Activate checkpointing every 25 blocks
 		log.Infow("Height:", newTs.Height())
 		// NOTES: this will only work in delegated consensus
 		// Wait for more tipset to valid the height and be sure it is valid
+		// NOTES: should retrieve list of signing miners using Power actor state (see Miners) and not through config instanciation
 		if newTs.Height()%25 == 0 && (c.config != nil || c.newconfig != nil) {
-			log.Infow("Check point time")
+			log.Infow("check point time")
 
 			// Initiation and config should be happening at start
 			cp := oldTs.Key().Bytes()
 
 			// If we don't have a config we don't sign but update our config with key
+			// NOTES: `config` refers to config taproot as mentioned in the multi-party-sig lib
 			if c.config == nil {
 				log.Infow("We dont have a config")
 				pubkey := c.newconfig.PublicKey
@@ -308,21 +322,23 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 				c.newconfig = nil
 
 			} else {
-				var config string = hex.EncodeToString(cp) + "\n"
+				// Change name to MinerConfig (checkpoint in hex and miners list)?
+				var minersConfig string = hex.EncodeToString(cp) + "\n"
 				for _, partyId := range c.orderParticipantsList() {
-					config += partyId + "\n"
+					minersConfig += partyId + "\n"
 				}
 
-				hash, err := CreateConfig([]byte(config))
+				// This create the file that will be stored in minio (or any storage)
+				hash, err := CreateMinersConfig([]byte(minersConfig))
 				if err != nil {
-					log.Errorf("couldnt create config: %v", err)
+					log.Errorf("couldnt create miners config: %v", err)
 					return false, nil, err
 				}
 
-				// Push config to S3
-				err = StoreConfig(ctx, c.minioClient, c.cpconfig.MinioBucketName, hex.EncodeToString(hash))
+				// Push config to minio
+				err = StoreMinersConfig(ctx, c.minioClient, c.cpconfig.MinioBucketName, hex.EncodeToString(hash))
 				if err != nil {
-					log.Errorf("couldnt push config: %v", err)
+					log.Errorf("couldnt push miners config: %v", err)
 					return false, nil, err
 				}
 
@@ -350,6 +366,9 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 		return false, nil, nil
 	}
 
+	// Listen to changes in Eudico
+	// `76587687658765876` <- This is the confidence threshold used to determine if the StateChangeHandler should be triggered.
+	// It is an absurdly high number so the metric used to determine if to trigger it or not is the number of tipsets that have passed in the heaviest chain (the 5 you see there)
 	err := c.events.StateChanged(checkFunc, changeHandler, revertHandler, 5, 76587687658765876, match)
 	if err != nil {
 		return
@@ -385,7 +404,6 @@ func (c *CheckpointingSub) Start(ctx context.Context) error {
 
 func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []string) error {
 
-	//idsStrings := c.newOrderParticipantsList()
 	idsStrings := participants
 	sort.Strings(idsStrings)
 
@@ -406,6 +424,7 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	LoopHandler(ctx, handler, n)
 	r, err := handler.Result()
 	if err != nil {
+		// if a participant is mibehaving the DKG entirely fail (no fallback)
 		return err
 	}
 	log.Infow("result :", r)
@@ -604,7 +623,7 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 
 	// Get the config in minio using the last checkpoint found through bitcoin
 	// NOTES: We should be able to get the config regarless of storage (minio, IPFS, KVS,....)
-	cp, err := GetConfig(ctx, c.minioClient, c.cpconfig.MinioBucketName, btccp.cid)
+	cp, err := GetMinersConfig(ctx, c.minioClient, c.cpconfig.MinioBucketName, btccp.cid)
 
 	if cp != "" {
 		// Decode hex checkpoint to bytes
@@ -613,7 +632,7 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 			log.Errorf("couldnt decode checkpoint: %v", err)
 			return
 		}
-		// Cache latest checkpoint value for when we sync and compare wit Eudico key tipset values
+		// Cache latest checkpoint value from Bitcoin for when we sync and compare wit Eudico key tipset values
 		c.latestConfigCheckpoint, err = types.TipSetKeyFromBytes(cpBytes)
 		if err != nil {
 			log.Errorf("couldnt get tipset key from checkpoint: %v", err)
