@@ -14,6 +14,8 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	"github.com/filecoin-project/lotus/chain/types"
+	"github.com/filecoin-project/lotus/node/modules/dtypes"
+	"github.com/filecoin-project/lotus/node/modules/helpers"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
@@ -21,6 +23,7 @@ import (
 	logging "github.com/ipfs/go-log/v2"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"go.uber.org/fx"
 	xerrors "golang.org/x/xerrors"
 )
 
@@ -122,9 +125,11 @@ func (r *Resolver) addMsgReceipt(t MsgType, bcid cid.Cid, from peer.ID) int {
 	return r.pullCache.add(bcid.String() + from.String())
 }
 
-func NewResolver(ctx context.Context, self peer.ID,
-	ds datastore.Datastore, pubsub *pubsub.PubSub, netName hierarchical.SubnetID) (*Resolver, error) {
-	r := &Resolver{
+func NewRootResolver(self peer.ID, ds dtypes.MetadataDS, pubsub *pubsub.PubSub, nn dtypes.NetworkName) *Resolver {
+	return NewResolver(self, ds, pubsub, hierarchical.SubnetID(nn))
+}
+func NewResolver(self peer.ID, ds dtypes.MetadataDS, pubsub *pubsub.PubSub, netName hierarchical.SubnetID) *Resolver {
+	return &Resolver{
 		netName:     netName,
 		self:        self,
 		ds:          nsds.Wrap(ds, resolverNamespace(netName)),
@@ -133,23 +138,33 @@ func NewResolver(ctx context.Context, self peer.ID,
 		pullCache:   newMsgReceiptCache(),
 		ongoingPull: make(map[cid.Cid]time.Time),
 	}
+}
 
+func HandleMsgs(mctx helpers.MetricsCtx, lc fx.Lifecycle, r *Resolver, submgr subnet.SubnetMgr) {
+	ctx := helpers.LifecycleCtx(mctx, lc)
+	if err := r.HandleMsgs(ctx, submgr); err != nil {
+		panic(err)
+	}
+}
+
+func (r *Resolver) HandleMsgs(ctx context.Context, submgr subnet.SubnetMgr) error {
 	// Register new message validator for resolver msgs.
-	if err := r.pubsub.RegisterTopicValidator(SubnetResolverTopic(netName), r.resolveMsgValidator); err != nil {
-		return nil, err
+	v := NewValidator(submgr, r)
+	if err := r.pubsub.RegisterTopicValidator(SubnetResolverTopic(r.netName), v.Validate); err != nil {
+		return err
 	}
 
-	log.Infof("subscribing to subnet content resolver topic %s", SubnetResolverTopic(netName))
+	log.Infof("subscribing to subnet content resolver topic %s", SubnetResolverTopic(r.netName))
 
 	// Subscribe to subnet resolver topic.
-	msgSub, err := pubsub.Subscribe(SubnetResolverTopic(netName)) //nolint
+	msgSub, err := r.pubsub.Subscribe(SubnetResolverTopic(r.netName)) //nolint
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Start handle incoming resolver msg.
 	go r.HandleIncomingResolveMsg(ctx, msgSub)
-	return r, nil
+	return nil
 }
 
 func (r *Resolver) shouldPull(c cid.Cid) bool {
@@ -381,10 +396,9 @@ func (r *Resolver) WaitCrossMsgsResolved(ctx context.Context, c cid.Cid, from hi
 				}
 			}
 		}
-		// Close channel when it's been resolved.
 		close(out)
 	}()
-	return nil
+	return out
 }
 
 func (r *Resolver) ResolveCrossMsgs(c cid.Cid, from hierarchical.SubnetID) ([]types.Message, bool, error) {

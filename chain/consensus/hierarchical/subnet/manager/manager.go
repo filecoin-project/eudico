@@ -17,9 +17,11 @@ import (
 	act "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	subiface "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	subcns "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/consensus"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/messagepool"
 	"github.com/filecoin-project/lotus/chain/stmgr"
@@ -39,11 +41,13 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/helpers"
 	"github.com/filecoin-project/specs-actors/actors/builtin"
 	init_ "github.com/filecoin-project/specs-actors/actors/builtin/init"
+	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 	"github.com/ipfs/go-blockservice"
 	"github.com/ipfs/go-cid"
 	ds "github.com/ipfs/go-datastore"
 	nsds "github.com/ipfs/go-datastore/namespace"
 	offline "github.com/ipfs/go-ipfs-exchange-offline"
+	cbor "github.com/ipfs/go-ipld-cbor"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p-core/host"
 	peer "github.com/libp2p/go-libp2p-core/peer"
@@ -63,6 +67,7 @@ type SubnetMgr struct {
 	// api  *impl.FullNodeAPI
 	api  *API
 	host host.Host
+	self peer.ID
 
 	pubsub *pubsub.PubSub
 	// Root ds
@@ -77,7 +82,11 @@ type SubnetMgr struct {
 
 	lk      sync.RWMutex
 	subnets map[hierarchical.SubnetID]*Subnet
-	cm      *crossMsgPool
+
+	// Cross-msg general pool
+	cm *crossMsgPool
+	// Root cross-msg resolver. Each subnet has one.
+	r *resolver.Resolver
 
 	j journal.Journal
 }
@@ -111,14 +120,17 @@ func NewSubnetMgr(
 	netName dtypes.NetworkName,
 	syncapi full.SyncAPI,
 	beaconapi full.BeaconAPI,
+	r *resolver.Resolver,
 	j journal.Journal) (*SubnetMgr, error) {
 
-	var err error
 	ctx := helpers.LifecycleCtx(mctx, lc)
+	var err error
+
 	s := &SubnetMgr{
 		ctx:          ctx,
 		pubsub:       pubsub,
 		host:         host,
+		self:         self,
 		ds:           ds,
 		syscalls:     syscalls,
 		us:           us,
@@ -129,7 +141,14 @@ func NewSubnetMgr(
 		verifier:     verifier,
 		subnets:      make(map[hierarchical.SubnetID]*Subnet),
 		cm:           newCrossMsgPool(),
+		r:            r,
 	}
+
+	// Instantiate new cross-msg resolver
+	// s.r, err = resolver.NewResolver(ctx, self, s, ds, pubsub, hierarchical.RootSubnet)
+	// if err != nil {
+	//         return nil, err
+	// }
 
 	s.api = &API{
 		commonapi,
@@ -210,7 +229,10 @@ func (s *SubnetMgr) startSubnet(id hierarchical.SubnetID,
 		log.Errorw("Error loading genesis bootstrap for subnet", "subnetID", id, "err", err)
 		return err
 	}
-	sh.cons, err = subcns.New(consensus, sh.sm, s, s.beacon, s.verifier, gen, dtypes.NetworkName(id))
+	// Instantiate new cross-msg resolver
+	sh.r = resolver.NewResolver(s.self, sh.ds, sh.pubsub, sh.ID)
+	// Instantiate consensus
+	sh.cons, err = subcns.New(consensus, sh.sm, s, s.beacon, sh.r, s.verifier, gen, dtypes.NetworkName(id))
 	if err != nil {
 		log.Errorw("Error creating consensus", "subnetID", id, "err", err)
 		return err
@@ -243,6 +265,12 @@ func (s *SubnetMgr) startSubnet(id hierarchical.SubnetID,
 	if err != nil {
 		log.Errorw("Error creating message pool for subnet", "subnetID", id, "err", err)
 		return err
+	}
+
+	// Start listening to cross-msg resolve messages
+	err = sh.r.HandleMsgs(ctx, s)
+	if err != nil {
+		return xerrors.Errorf("error initializing cross-msg resolver: %s", err)
 	}
 
 	// This functions create a new pubsub topic for the subnet to start
@@ -660,6 +688,40 @@ func (s *SubnetMgr) GetSubnetAPI(id hierarchical.SubnetID) (v1api.FullNode, erro
 		return nil, xerrors.Errorf("subnet manager not syncing with network")
 	}
 	return api, nil
+}
+
+func (s *SubnetMgr) GetSCAState(ctx context.Context, id hierarchical.SubnetID) (*sca.SCAState, blockadt.Store, error) {
+	api, err := s.GetSubnetAPI(id)
+	if err != nil {
+		return nil, nil, err
+	}
+	var st sca.SCAState
+	subnetAct, err := api.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, types.EmptyTSK)
+	if err != nil {
+		return nil, nil, xerrors.Errorf("loading actor state: %w", err)
+	}
+	pbs := blockstore.NewAPIBlockstore(api)
+	pcst := cbor.NewCborStore(pbs)
+	if err := pcst.Get(ctx, subnetAct.Head, &st); err != nil {
+		return nil, nil, xerrors.Errorf("getting actor state: %w", err)
+	}
+	return &st, blockadt.WrapStore(ctx, pcst), nil
+}
+
+func (s *SubnetMgr) CrossMsgResolve(ctx context.Context, id hierarchical.SubnetID, c cid.Cid, from hierarchical.SubnetID) ([]types.Message, bool, error) {
+	r := s.r
+	if !s.isRoot(id) {
+		r = s.subnets[id].r
+	}
+	return r.ResolveCrossMsgs(c, hierarchical.SubnetID(from))
+}
+
+func (s *SubnetMgr) WaitCrossMsgResolved(ctx context.Context, id hierarchical.SubnetID, c cid.Cid, from hierarchical.SubnetID) chan error {
+	r := s.r
+	if !s.isRoot(id) {
+		r = s.subnets[id].r
+	}
+	return r.WaitCrossMsgsResolved(ctx, c, hierarchical.SubnetID(from))
 }
 
 var _ subiface.SubnetMgr = &SubnetMgr{}

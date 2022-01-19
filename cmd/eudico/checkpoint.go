@@ -54,7 +54,7 @@ var listCheckpoints = &cli.Command{
 		for _, ch := range chs {
 			chcid, _ := ch.Cid()
 			prev, _ := ch.PreviousCheck()
-			fmt.Printf("epoch: %d - cid=%s, previous=%v, childs=%v\n", ch.Epoch(), chcid, prev, ch.LenChilds())
+			fmt.Printf("epoch: %d - cid=%s, previous=%v, childs=%v, crossmsgs=%v\n", ch.Epoch(), chcid, prev, ch.LenChilds(), len(ch.CrossMsgs()))
 		}
 
 		return nil

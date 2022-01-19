@@ -14,6 +14,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
@@ -64,14 +65,14 @@ func CheckStateRoot(ctx context.Context, store *store.ChainStore, sm *stmgr.Stat
 	})
 }
 
-func CheckMsgs(ctx context.Context, store *store.ChainStore, sm *stmgr.StateManager, submgr subnet.SubnetMgr, netName hierarchical.SubnetID, b *types.FullBlock, baseTs *types.TipSet) []async.ErrorFuture {
+func CheckMsgs(ctx context.Context, store *store.ChainStore, sm *stmgr.StateManager, submgr subnet.SubnetMgr, r *resolver.Resolver, netName hierarchical.SubnetID, b *types.FullBlock, baseTs *types.TipSet) []async.ErrorFuture {
 	h := b.Header
 	msgsCheck := async.Err(func() error {
 		if b.Cid() == build.WhitelistedBlock {
 			return nil
 		}
 
-		if err := checkBlockMessages(ctx, store, sm, submgr, netName, b, baseTs); err != nil {
+		if err := checkBlockMessages(ctx, store, sm, submgr, r, netName, b, baseTs); err != nil {
 			return xerrors.Errorf("block had invalid messages: %w", err)
 		}
 		return nil
@@ -137,7 +138,7 @@ func BlockSanityChecks(ctype hierarchical.ConsensusType, h *types.BlockHeader) e
 	return nil
 }
 
-func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.StateManager, submgr subnet.SubnetMgr, netName hierarchical.SubnetID, b *types.FullBlock, baseTs *types.TipSet) error {
+func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.StateManager, submgr subnet.SubnetMgr, r *resolver.Resolver, netName hierarchical.SubnetID, b *types.FullBlock, baseTs *types.TipSet) error {
 	{
 		var sigCids []cid.Cid // this is what we get for people not wanting the marshalcbor method on the cid type
 		var pubks [][]byte
@@ -293,7 +294,7 @@ func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.St
 	}
 	// Check cross messages
 	for i, m := range b.CrossMessages {
-		if err := checkCrossMsg(pstore, snstore, parentSCA, snSCA, m); err != nil {
+		if err := checkCrossMsg(ctx, r, pstore, snstore, parentSCA, snSCA, m); err != nil {
 			return xerrors.Errorf("failed to check message %s: %w", m.Cid(), err)
 		}
 

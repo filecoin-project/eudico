@@ -2,7 +2,6 @@ package subnetmgr
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/filecoin-project/go-address"
@@ -113,10 +112,10 @@ func (s *SubnetMgr) GetCrossMsgsPool(
 	}
 
 	// Get bottomup messages and return all cross-messages.
-	// bottomup, err = s.getBottomUpPool(ctx, id, height)
-	// if err != nil {
-	//         return nil, err
-	// }
+	bottomup, err = s.getBottomUpPool(ctx, id, height)
+	if err != nil {
+		return nil, err
+	}
 
 	out := make([]*types.Message, len(topdown)+len(bottomup))
 	copy(out[:len(topdown)], topdown)
@@ -307,18 +306,68 @@ func (s *SubnetMgr) getBottomUpPool(ctx context.Context, id hierarchical.SubnetI
 	if err != nil {
 		return nil, err
 	}
-	metas, err := st.BottomUpMsgFromNonce(pstore, st.AppliedBottomUpNonce)
+	// BottomUpMessage work a bit different from topDown messages. We accept
+	// several messages with the same nonce because Metas batch several messages
+	// inside the same package. To prevent applying messages twice we look in
+	// the pool for messages with AppliedBottomUpNonce+1, because the previous
+	// nonce was already applied in the previous batch (see sca_actor::ApplyMsg)
+	toApply := st.AppliedBottomUpNonce + 1
+	metas, err := st.BottomUpMsgFromNonce(pstore, toApply)
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Println(">>>>> TODO: Received metas, we need to resolve the CID for meta", metas)
-	return []*types.Message{}, nil
+	// Get resolver for subnet
+	r := s.r
+	if !s.isRoot(id) {
+		r = s.subnets[id].r
+	}
 
-	// 1. Get BottomUpMsgMeta from SCA in the subnet (the ones that need to
-	// be applied here).
-	// 2. Get Cid and From of CrossMsgMeta
-	// 3. (Implement LinkSystem) Check locally if we have the messages behind the
-	// cid or if they need to be fetched from the subnet.
-	// 4. (Implement cross message exchange protocol) Get the message behind a Cid.
+	out := make([]*types.Message, 0)
+	isFound := make(map[uint64][]types.Message)
+	// Resolve CrossMsgs behind meta or send pull message.
+	for _, mt := range metas {
+		// Resolve CrossMsgs behind meta.
+		c, err := mt.Cid()
+		if err != nil {
+			return nil, err
+		}
+		cross, found, err := r.ResolveCrossMsgs(c, hierarchical.SubnetID(mt.From))
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			// Mark that the meta with specific nonce has been
+			// fully resolved including the messages
+			isFound[uint64(mt.Nonce)] = cross
+		}
+	}
+
+	// We return from AppliedBottomUpNonce all the metas that have been resolved
+	// successfully. They need to be applied sequentially, so the moment we find
+	// and unresolved meta we return.
+	// NOTE: This approach may affect the liveliness of hierarchical consensus.
+	// Assuming data availability and honest nodes we should include a fallback
+	// scheme to prevent the protocol from stalling.
+	for i := toApply; i < uint64(len(metas)); i++ {
+		cross, ok := isFound[i]
+		// If not found, return
+		if !ok {
+			return out, nil
+		}
+		// The pool waits a few epochs before re-proposing a cross-msg if the applied nonce
+		// hasn't changed in order to give enough time for state changes to propagate.
+		if s.cm.isBottomUpApplied(i, id, height) {
+			continue
+		}
+		for _, m := range cross {
+			// Add the meta nonce to the message nonce
+			m.Nonce = i
+			// Append for return
+			out = append(out, &m)
+		}
+		s.cm.applyBottomUp(i, id, height)
+	}
+
+	return out, nil
 }
