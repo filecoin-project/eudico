@@ -2,6 +2,8 @@ package consensus
 
 import (
 	"context"
+	"github.com/filecoin-project/lotus/chain/consensus/tendermint"
+	httptendermintrpcclient "github.com/tendermint/tendermint/rpc/client/http"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/api/v1api"
@@ -31,6 +33,8 @@ func Weight(consensus hierarchical.ConsensusType) (store.WeightFunc, error) {
 		return delegcns.Weight, nil
 	case hierarchical.PoW:
 		return tspow.Weight, nil
+	case hierarchical.Tendermint:
+		return tendermint.Weight, nil
 	default:
 		return nil, xerrors.New("consensus type not suported")
 	}
@@ -47,6 +51,8 @@ func New(consensus hierarchical.ConsensusType,
 		return delegcns.NewDelegatedConsensus(sm, snMgr, beacon, verifier, genesis, netName), nil
 	case hierarchical.PoW:
 		return tspow.NewTSPoWConsensus(sm, snMgr, beacon, verifier, genesis, netName), nil
+	case hierarchical.Tendermint:
+		return tendermint.NewConsensus(sm, snMgr, beacon, verifier, genesis, netName), nil
 	default:
 		return nil, xerrors.New("consensus type not suported")
 	}
@@ -64,10 +70,37 @@ func Mine(ctx context.Context, api v1api.FullNode, cnsType hierarchical.Consensu
 			return err
 		}
 		go tspow.Mine(ctx, miner, api)
+	case hierarchical.Tendermint:
+		miner, err := getTendermintID(ctx)
+		if err != nil {
+			log.Errorw("unable to get Tendermint ID", "err", err)
+			return err
+		}
+		go tendermint.Mine(ctx, miner, api)
 	default:
 		return xerrors.New("consensus type not suported")
 	}
 	return nil
+}
+
+func getTendermintID(ctx context.Context) (address.Address, error){
+	client, err := httptendermintrpcclient.New(tendermint.TendermintSidecar)
+	if err != nil {
+		// TODO: Tendermint: don't use panic
+		panic("unable to access a tendermint client")
+	}
+	info, err := client.Status(ctx)
+	if err != nil {
+		// TODO: Tendermint: don't use panic
+		panic(err)
+	}
+	id := string(info.NodeInfo.NodeID)
+	addr, err := address.NewFromString(id)
+	if err != nil {
+		// TODO: Tendermint: don't use panic
+		panic(err)
+	}
+	return addr, nil
 }
 
 // Get an identity from the peer's wallet.

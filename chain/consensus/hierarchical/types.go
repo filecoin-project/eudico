@@ -13,6 +13,7 @@ type ConsensusType uint64
 const (
 	Delegated ConsensusType = iota
 	PoW
+	Tendermint
 )
 
 // MsgType of cross message

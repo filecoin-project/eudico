@@ -65,6 +65,15 @@ func WriteGenesis(netName hierarchical.SubnetID, consensus hierarchical.Consensu
 		if err != nil {
 			return xerrors.Errorf("error making genesis delegated block: %w", err)
 		}
+	case hierarchical.Tendermint:
+		template, err := tendermintGenTemplate(netName.String(), vreg, rem, seq)
+		if err != nil {
+			return err
+		}
+		b, err = makeTendermintGenesisBlock(context.TODO(), bs, *template, checkPeriod)
+		if err != nil {
+			return xerrors.Errorf("error making genesis tendermint block: %w", err)
+		}
 	default:
 		return xerrors.Errorf("consensus type not supported. Not writing genesis")
 
