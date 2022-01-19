@@ -86,6 +86,8 @@ github.com/Zondax/multi-party-sig v0.6.0-alpha-2021-09-21.0.20211117140501-65990
 github.com/Zondax/multi-party-sig v0.6.0-alpha-2021-09-21.0.20211117140501-65990deeb804/go.mod h1:KOfSxMrl13ge7DX30LdWQyw4zrVzyZc9uykL77Q/TXc=
 github.com/Zondax/multi-party-sig v0.6.0-alpha-2021-09-21.0.20211202131736-ca8cb1c7e1a1 h1:txHoW8OAMuzzEJqKy/krlsq45hMtySGKxW6W5LIlveM=
 github.com/Zondax/multi-party-sig v0.6.0-alpha-2021-09-21.0.20211202131736-ca8cb1c7e1a1/go.mod h1:KOfSxMrl13ge7DX30LdWQyw4zrVzyZc9uykL77Q/TXc=
+github.com/Zondax/multi-party-sig v0.6.0-alpha-2021-09-21.0.20220119135030-8f412195b286 h1:ZxenR9Lvj/0m86G4oo/3mFKLBXdM+UpnpxzwWQybPq0=
+github.com/Zondax/multi-party-sig v0.6.0-alpha-2021-09-21.0.20220119135030-8f412195b286/go.mod h1:KOfSxMrl13ge7DX30LdWQyw4zrVzyZc9uykL77Q/TXc=
 github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d h1:licZJFw2RwpHMqeKTCYkitsPqHNxTmd4SNR5r94FGM8=
 github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d/go.mod h1:asat636LX7Bqt5lYEZ27JNDcqxfjdBQuJ/MM4CN/Lzo=
 github.com/aead/siphash v1.0.1/go.mod h1:Nywa3cDsYNNK3gaciGTWPwHt0wlpNV15vwmswBAUSII=
