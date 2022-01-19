@@ -8,8 +8,8 @@ import (
 	"math"
 	"sort"
 
+	address "github.com/filecoin-project/go-address"
 	abi "github.com/filecoin-project/go-state-types/abi"
-	hierarchical "github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	schema "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	types "github.com/filecoin-project/lotus/chain/types"
 	cid "github.com/ipfs/go-cid"
@@ -184,7 +184,7 @@ func (t *SCAState) MarshalCBOR(w io.Writer) error {
 
 	scratch := make([]byte, 9)
 
-	// t.NetworkName (hierarchical.SubnetID) (string)
+	// t.NetworkName (address.SubnetID) (string)
 	if len(t.NetworkName) > cbg.MaxLength {
 		return xerrors.Errorf("Value in field t.NetworkName was too long")
 	}
@@ -230,10 +230,10 @@ func (t *SCAState) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("failed to write cid field t.Checkpoints: %w", err)
 	}
 
-	// t.CheckMsgsMetaRegistry (cid.Cid) (struct)
+	// t.CheckMsgsRegistry (cid.Cid) (struct)
 
-	if err := cbg.WriteCidBuf(scratch, w, t.CheckMsgsMetaRegistry); err != nil {
-		return xerrors.Errorf("failed to write cid field t.CheckMsgsMetaRegistry: %w", err)
+	if err := cbg.WriteCidBuf(scratch, w, t.CheckMsgsRegistry); err != nil {
+		return xerrors.Errorf("failed to write cid field t.CheckMsgsRegistry: %w", err)
 	}
 
 	// t.Nonce (uint64) (uint64)
@@ -287,7 +287,7 @@ func (t *SCAState) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.NetworkName (hierarchical.SubnetID) (string)
+	// t.NetworkName (address.SubnetID) (string)
 
 	{
 		sval, err := cbg.ReadStringBuf(br, scratch)
@@ -295,7 +295,7 @@ func (t *SCAState) UnmarshalCBOR(r io.Reader) error {
 			return err
 		}
 
-		t.NetworkName = hierarchical.SubnetID(sval)
+		t.NetworkName = address.SubnetID(sval)
 	}
 	// t.TotalSubnets (uint64) (uint64)
 
@@ -369,16 +369,16 @@ func (t *SCAState) UnmarshalCBOR(r io.Reader) error {
 		t.Checkpoints = c
 
 	}
-	// t.CheckMsgsMetaRegistry (cid.Cid) (struct)
+	// t.CheckMsgsRegistry (cid.Cid) (struct)
 
 	{
 
 		c, err := cbg.ReadCid(br)
 		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.CheckMsgsMetaRegistry: %w", err)
+			return xerrors.Errorf("failed to read cid field t.CheckMsgsRegistry: %w", err)
 		}
 
-		t.CheckMsgsMetaRegistry = c
+		t.CheckMsgsRegistry = c
 
 	}
 	// t.Nonce (uint64) (uint64)
@@ -465,7 +465,7 @@ func (t *Subnet) MarshalCBOR(w io.Writer) error {
 
 	scratch := make([]byte, 9)
 
-	// t.ID (hierarchical.SubnetID) (string)
+	// t.ID (address.SubnetID) (string)
 	if len(t.ID) > cbg.MaxLength {
 		return xerrors.Errorf("Value in field t.ID was too long")
 	}
@@ -477,7 +477,7 @@ func (t *Subnet) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.ParentID (hierarchical.SubnetID) (string)
+	// t.ParentID (address.SubnetID) (string)
 	if len(t.ParentID) > cbg.MaxLength {
 		return xerrors.Errorf("Value in field t.ParentID was too long")
 	}
@@ -548,7 +548,7 @@ func (t *Subnet) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.ID (hierarchical.SubnetID) (string)
+	// t.ID (address.SubnetID) (string)
 
 	{
 		sval, err := cbg.ReadStringBuf(br, scratch)
@@ -556,9 +556,9 @@ func (t *Subnet) UnmarshalCBOR(r io.Reader) error {
 			return err
 		}
 
-		t.ID = hierarchical.SubnetID(sval)
+		t.ID = address.SubnetID(sval)
 	}
-	// t.ParentID (hierarchical.SubnetID) (string)
+	// t.ParentID (address.SubnetID) (string)
 
 	{
 		sval, err := cbg.ReadStringBuf(br, scratch)
@@ -566,7 +566,7 @@ func (t *Subnet) UnmarshalCBOR(r io.Reader) error {
 			return err
 		}
 
-		t.ParentID = hierarchical.SubnetID(sval)
+		t.ParentID = address.SubnetID(sval)
 	}
 	// t.Stake (big.Int) (struct)
 
@@ -756,14 +756,14 @@ func (t *SubnetIDParam) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufCrossMsgMeta = []byte{130}
+var lengthBufCrossMsgs = []byte{130}
 
-func (t *CrossMsgMeta) MarshalCBOR(w io.Writer) error {
+func (t *CrossMsgs) MarshalCBOR(w io.Writer) error {
 	if t == nil {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufCrossMsgMeta); err != nil {
+	if _, err := w.Write(lengthBufCrossMsgs); err != nil {
 		return err
 	}
 
@@ -799,8 +799,8 @@ func (t *CrossMsgMeta) MarshalCBOR(w io.Writer) error {
 	return nil
 }
 
-func (t *CrossMsgMeta) UnmarshalCBOR(r io.Reader) error {
-	*t = CrossMsgMeta{}
+func (t *CrossMsgs) UnmarshalCBOR(r io.Reader) error {
+	*t = CrossMsgs{}
 
 	br := cbg.GetPeeker(r)
 	scratch := make([]byte, 8)

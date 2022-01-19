@@ -81,7 +81,7 @@ type SubnetMgr struct {
 	bootstrapper dtypes.Bootstrapper
 
 	lk      sync.RWMutex
-	subnets map[hierarchical.SubnetID]*Subnet
+	subnets map[address.SubnetID]*Subnet
 
 	// Cross-msg general pool
 	cm *crossMsgPool
@@ -139,13 +139,13 @@ func NewSubnetMgr(
 		nodeServer:   nodeServer,
 		bootstrapper: bootstrapper,
 		verifier:     verifier,
-		subnets:      make(map[hierarchical.SubnetID]*Subnet),
+		subnets:      make(map[address.SubnetID]*Subnet),
 		cm:           newCrossMsgPool(),
 		r:            r,
 	}
 
 	// Instantiate new cross-msg resolver
-	// s.r, err = resolver.NewResolver(ctx, self, s, ds, pubsub, hierarchical.RootSubnet)
+	// s.r, err = resolver.NewResolver(ctx, self, s, ds, pubsub, address.RootSubnet)
 	// if err != nil {
 	//         return nil, err
 	// }
@@ -178,7 +178,7 @@ func NewSubnetMgr(
 	return s, nil
 }
 
-func (s *SubnetMgr) startSubnet(id hierarchical.SubnetID,
+func (s *SubnetMgr) startSubnet(id address.SubnetID,
 	parentAPI *API, consensus hierarchical.ConsensusType,
 	genesis []byte) error {
 	var err error
@@ -342,7 +342,7 @@ func BuildSubnetMgr(mctx helpers.MetricsCtx, lc fx.Lifecycle, s *SubnetMgr) {
 
 func (s *SubnetMgr) AddSubnet(
 	ctx context.Context, wallet address.Address,
-	parent hierarchical.SubnetID, name string,
+	parent address.SubnetID, name string,
 	consensus uint64, minerStake abi.TokenAmount,
 	checkPeriod abi.ChainEpoch,
 	delegminer address.Address) (address.Address, error) {
@@ -404,7 +404,7 @@ func (s *SubnetMgr) AddSubnet(
 func (s *SubnetMgr) JoinSubnet(
 	ctx context.Context, wallet address.Address,
 	value abi.TokenAmount,
-	id hierarchical.SubnetID) (cid.Cid, error) {
+	id address.SubnetID) (cid.Cid, error) {
 
 	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.Lock()
@@ -462,7 +462,7 @@ func (s *SubnetMgr) JoinSubnet(
 	return smsg.Cid(), nil
 }
 
-func (s *SubnetMgr) syncSubnet(ctx context.Context, id hierarchical.SubnetID, parentAPI *API) error {
+func (s *SubnetMgr) syncSubnet(ctx context.Context, id address.SubnetID, parentAPI *API) error {
 	// Get actor from subnet ID
 	SubnetActor, err := id.Actor()
 	if err != nil {
@@ -483,7 +483,7 @@ func (s *SubnetMgr) syncSubnet(ctx context.Context, id hierarchical.SubnetID, pa
 }
 
 // SyncSubnet starts syncing with a subnet even if we are not an active participant.
-func (s *SubnetMgr) SyncSubnet(ctx context.Context, id hierarchical.SubnetID, stop bool) error {
+func (s *SubnetMgr) SyncSubnet(ctx context.Context, id address.SubnetID, stop bool) error {
 	if stop {
 		return s.stopSyncSubnet(ctx, id)
 	}
@@ -497,7 +497,7 @@ func (s *SubnetMgr) SyncSubnet(ctx context.Context, id hierarchical.SubnetID, st
 }
 
 // stopSyncSubnet stops syncing from a subnet
-func (s *SubnetMgr) stopSyncSubnet(ctx context.Context, id hierarchical.SubnetID) error {
+func (s *SubnetMgr) stopSyncSubnet(ctx context.Context, id address.SubnetID) error {
 	if sh, _ := s.getSubnet(id); sh != nil {
 		delete(s.subnets, id)
 		return sh.Close(ctx)
@@ -507,7 +507,7 @@ func (s *SubnetMgr) stopSyncSubnet(ctx context.Context, id hierarchical.SubnetID
 
 func (s *SubnetMgr) MineSubnet(
 	ctx context.Context, wallet address.Address,
-	id hierarchical.SubnetID, stop bool) error {
+	id address.SubnetID, stop bool) error {
 
 	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.RLock()
@@ -554,7 +554,7 @@ func (s *SubnetMgr) MineSubnet(
 
 func (s *SubnetMgr) LeaveSubnet(
 	ctx context.Context, wallet address.Address,
-	id hierarchical.SubnetID) (cid.Cid, error) {
+	id address.SubnetID) (cid.Cid, error) {
 
 	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.Lock()
@@ -606,7 +606,7 @@ func (s *SubnetMgr) LeaveSubnet(
 
 func (s *SubnetMgr) KillSubnet(
 	ctx context.Context, wallet address.Address,
-	id hierarchical.SubnetID) (cid.Cid, error) {
+	id address.SubnetID) (cid.Cid, error) {
 
 	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.RLock()
@@ -651,11 +651,11 @@ func (s *SubnetMgr) KillSubnet(
 }
 
 // isRoot checks if the
-func (s *SubnetMgr) isRoot(id hierarchical.SubnetID) bool {
+func (s *SubnetMgr) isRoot(id address.SubnetID) bool {
 	return id.String() == string(s.api.NetName)
 }
 
-func (s *SubnetMgr) getAPI(id hierarchical.SubnetID) *API {
+func (s *SubnetMgr) getAPI(id address.SubnetID) *API {
 	if s.isRoot(id) {
 		return s.api
 	}
@@ -666,7 +666,7 @@ func (s *SubnetMgr) getAPI(id hierarchical.SubnetID) *API {
 	return sh.api
 }
 
-func (s *SubnetMgr) getParentAPI(id hierarchical.SubnetID) (*API, error) {
+func (s *SubnetMgr) getParentAPI(id address.SubnetID) (*API, error) {
 	parentAPI := s.getAPI(id.Parent())
 	if parentAPI == nil {
 		return nil, xerrors.Errorf("not syncing with parent network")
@@ -674,7 +674,7 @@ func (s *SubnetMgr) getParentAPI(id hierarchical.SubnetID) (*API, error) {
 	return parentAPI, nil
 }
 
-func (s *SubnetMgr) getSubnet(id hierarchical.SubnetID) (*Subnet, error) {
+func (s *SubnetMgr) getSubnet(id address.SubnetID) (*Subnet, error) {
 	sh, ok := s.subnets[id]
 	if !ok {
 		return nil, xerrors.Errorf("Not part of subnet %v. Consider joining it", id)
@@ -682,7 +682,7 @@ func (s *SubnetMgr) getSubnet(id hierarchical.SubnetID) (*Subnet, error) {
 	return sh, nil
 }
 
-func (s *SubnetMgr) GetSubnetAPI(id hierarchical.SubnetID) (v1api.FullNode, error) {
+func (s *SubnetMgr) GetSubnetAPI(id address.SubnetID) (v1api.FullNode, error) {
 	api := s.getAPI(id)
 	if api == nil {
 		return nil, xerrors.Errorf("subnet manager not syncing with network")
@@ -690,7 +690,7 @@ func (s *SubnetMgr) GetSubnetAPI(id hierarchical.SubnetID) (v1api.FullNode, erro
 	return api, nil
 }
 
-func (s *SubnetMgr) GetSCAState(ctx context.Context, id hierarchical.SubnetID) (*sca.SCAState, blockadt.Store, error) {
+func (s *SubnetMgr) GetSCAState(ctx context.Context, id address.SubnetID) (*sca.SCAState, blockadt.Store, error) {
 	api, err := s.GetSubnetAPI(id)
 	if err != nil {
 		return nil, nil, err
@@ -708,20 +708,20 @@ func (s *SubnetMgr) GetSCAState(ctx context.Context, id hierarchical.SubnetID) (
 	return &st, blockadt.WrapStore(ctx, pcst), nil
 }
 
-func (s *SubnetMgr) CrossMsgResolve(ctx context.Context, id hierarchical.SubnetID, c cid.Cid, from hierarchical.SubnetID) ([]types.Message, bool, error) {
+func (s *SubnetMgr) CrossMsgResolve(ctx context.Context, id address.SubnetID, c cid.Cid, from address.SubnetID) ([]types.Message, bool, error) {
 	r := s.r
 	if !s.isRoot(id) {
 		r = s.subnets[id].r
 	}
-	return r.ResolveCrossMsgs(c, hierarchical.SubnetID(from))
+	return r.ResolveCrossMsgs(c, address.SubnetID(from))
 }
 
-func (s *SubnetMgr) WaitCrossMsgResolved(ctx context.Context, id hierarchical.SubnetID, c cid.Cid, from hierarchical.SubnetID) chan error {
+func (s *SubnetMgr) WaitCrossMsgResolved(ctx context.Context, id address.SubnetID, c cid.Cid, from address.SubnetID) chan error {
 	r := s.r
 	if !s.isRoot(id) {
 		r = s.subnets[id].r
 	}
-	return r.WaitCrossMsgsResolved(ctx, c, hierarchical.SubnetID(from))
+	return r.WaitCrossMsgsResolved(ctx, c, address.SubnetID(from))
 }
 
 var _ subiface.SubnetMgr = &SubnetMgr{}

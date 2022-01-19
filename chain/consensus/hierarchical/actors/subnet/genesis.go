@@ -39,7 +39,7 @@ const (
 	networkVersion = network.Version14
 )
 
-func WriteGenesis(netName hierarchical.SubnetID, consensus hierarchical.ConsensusType, miner, vreg, rem address.Address, checkPeriod abi.ChainEpoch, seq uint64, w io.Writer) error {
+func WriteGenesis(netName address.SubnetID, consensus hierarchical.ConsensusType, miner, vreg, rem address.Address, checkPeriod abi.ChainEpoch, seq uint64, w io.Writer) error {
 	bs := bstore.WrapIDStore(bstore.NewMemorySync())
 
 	var b *genesis2.GenesisBootstrap

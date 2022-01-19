@@ -5,7 +5,6 @@ import (
 	abi "github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
-	hierarchical "github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	schema "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	ltypes "github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
@@ -16,8 +15,8 @@ import (
 )
 
 type Subnet struct {
-	ID       hierarchical.SubnetID // human-readable name of the subnet ID (path in the hierarchy)
-	ParentID hierarchical.SubnetID
+	ID       address.SubnetID // human-readable name of the subnet ID (path in the hierarchy)
+	ParentID address.SubnetID
 	Stake    abi.TokenAmount
 	// The SCA doesn't keep track of the stake from miners, just locks the funds.
 	// Is up to the subnet actor to handle this and distribute the stake
@@ -78,12 +77,18 @@ func (sh *Subnet) addFundMsg(rt runtime.Runtime, value big.Int) {
 	// account
 	source := rt.Caller()
 
+	// Transform To and From to HAddresses
+	to, err := address.NewHAddress(sh.ID, source)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
+	from, err := address.NewHAddress(sh.ID.Parent(), source)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
+
 	// Build message.
 	//
 	// Fund messages include the same to and from.
 	msg := &ltypes.Message{
-		To:         source,
-		From:       source,
+		To:         to,
+		From:       from,
 		Value:      value,
 		Nonce:      sh.Nonce,
 		GasLimit:   1 << 30, // This is will be applied as an implicit msg, add enough gas

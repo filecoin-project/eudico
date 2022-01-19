@@ -65,7 +65,7 @@ func CheckStateRoot(ctx context.Context, store *store.ChainStore, sm *stmgr.Stat
 	})
 }
 
-func CheckMsgs(ctx context.Context, store *store.ChainStore, sm *stmgr.StateManager, submgr subnet.SubnetMgr, r *resolver.Resolver, netName hierarchical.SubnetID, b *types.FullBlock, baseTs *types.TipSet) []async.ErrorFuture {
+func CheckMsgs(ctx context.Context, store *store.ChainStore, sm *stmgr.StateManager, submgr subnet.SubnetMgr, r *resolver.Resolver, netName address.SubnetID, b *types.FullBlock, baseTs *types.TipSet) []async.ErrorFuture {
 	h := b.Header
 	msgsCheck := async.Err(func() error {
 		if b.Cid() == build.WhitelistedBlock {
@@ -138,7 +138,7 @@ func BlockSanityChecks(ctype hierarchical.ConsensusType, h *types.BlockHeader) e
 	return nil
 }
 
-func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.StateManager, submgr subnet.SubnetMgr, r *resolver.Resolver, netName hierarchical.SubnetID, b *types.FullBlock, baseTs *types.TipSet) error {
+func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.StateManager, submgr subnet.SubnetMgr, r *resolver.Resolver, netName address.SubnetID, b *types.FullBlock, baseTs *types.TipSet) error {
 	{
 		var sigCids []cid.Cid // this is what we get for people not wanting the marshalcbor method on the cid type
 		var pubks [][]byte

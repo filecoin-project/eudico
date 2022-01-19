@@ -46,7 +46,7 @@ func (t *SubnetState) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.ParentID (hierarchical.SubnetID) (string)
+	// t.ParentID (address.SubnetID) (string)
 	if len(t.ParentID) > cbg.MaxLength {
 		return xerrors.Errorf("Value in field t.ParentID was too long")
 	}
@@ -167,7 +167,7 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) error {
 
 		t.Name = string(sval)
 	}
-	// t.ParentID (hierarchical.SubnetID) (string)
+	// t.ParentID (address.SubnetID) (string)
 
 	{
 		sval, err := cbg.ReadStringBuf(br, scratch)
@@ -175,7 +175,7 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) error {
 			return err
 		}
 
-		t.ParentID = hierarchical.SubnetID(sval)
+		t.ParentID = address.SubnetID(sval)
 	}
 	// t.Consensus (hierarchical.ConsensusType) (uint64)
 

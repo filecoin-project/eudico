@@ -3,14 +3,14 @@ package subnetmgr
 import (
 	"testing"
 
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/stretchr/testify/require"
 )
 
 func TestPoolTopDown(t *testing.T) {
 	cm := newCrossMsgPool()
-	id := hierarchical.SubnetID("test")
+	id := address.SubnetID("test")
 	var nonce uint64 = 3
 	height := abi.ChainEpoch(5)
 	cm.applyTopDown(nonce, id, height)
@@ -38,7 +38,7 @@ func TestPoolTopDown(t *testing.T) {
 
 func TestPoolBottomUp(t *testing.T) {
 	cm := newCrossMsgPool()
-	id := hierarchical.SubnetID("test")
+	id := address.SubnetID("test")
 	var nonce uint64 = 3
 	height := abi.ChainEpoch(5)
 	cm.applyBottomUp(nonce, id, height)

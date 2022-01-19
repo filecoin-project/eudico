@@ -94,7 +94,7 @@ type TSPoW struct {
 
 	r *resolver.Resolver
 
-	netName hierarchical.SubnetID
+	netName address.SubnetID
 }
 
 // Blocks that are more than MaxHeightDrift epochs above
@@ -111,7 +111,7 @@ func NewTSPoWConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon b
 		verifier: verifier,
 		genesis:  genesis,
 		subMgr:   submgr,
-		netName:  hierarchical.SubnetID(netName),
+		netName:  address.SubnetID(netName),
 	}
 }
 

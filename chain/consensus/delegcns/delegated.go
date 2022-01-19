@@ -57,7 +57,7 @@ type Delegated struct {
 
 	// We could get network name from state manager, but with this
 	// we avoid having fetch it for every block validation.
-	netName hierarchical.SubnetID
+	netName address.SubnetID
 }
 
 var producer = func() address.Address {
@@ -83,7 +83,7 @@ func NewDelegatedConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beac
 		verifier: verifier,
 		genesis:  genesis,
 		subMgr:   submgr,
-		netName:  hierarchical.SubnetID(netName),
+		netName:  address.SubnetID(netName),
 	}
 }
 

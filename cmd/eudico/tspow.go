@@ -86,7 +86,7 @@ var tpowGenesisCmd = &cli.Command{
 
 		// TODO: Make configurable
 		checkPeriod := sca.DefaultCheckpointPeriod
-		if err := subnet.WriteGenesis(hierarchical.RootSubnet, hierarchical.PoW, address.Undef, vreg, rem, checkPeriod, uint64(time.Now().Unix()), f); err != nil {
+		if err := subnet.WriteGenesis(address.RootSubnet, hierarchical.PoW, address.Undef, vreg, rem, checkPeriod, uint64(time.Now().Unix()), f); err != nil {
 			return xerrors.Errorf("write genesis car: %w", err)
 		}
 

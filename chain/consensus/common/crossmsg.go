@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
@@ -70,7 +71,7 @@ func checkBottomUpMsg(ctx context.Context, r *resolver.Resolver, snstore blockad
 	// to check.
 	ctx, cancel := context.WithTimeout(ctx, crossMsgResolutionTimeout)
 	defer cancel()
-	out := r.WaitCrossMsgsResolved(ctx, c, hierarchical.SubnetID(comMeta.From))
+	out := r.WaitCrossMsgsResolved(ctx, c, address.SubnetID(comMeta.From))
 	select {
 	case <-ctx.Done():
 		return xerrors.Errorf("context timeout")
@@ -81,7 +82,7 @@ func checkBottomUpMsg(ctx context.Context, r *resolver.Resolver, snstore blockad
 	}
 
 	// Get cross-messages
-	cross, found, err := r.ResolveCrossMsgs(c, hierarchical.SubnetID(comMeta.From))
+	cross, found, err := r.ResolveCrossMsgs(c, address.SubnetID(comMeta.From))
 	if err != nil {
 		return xerrors.Errorf("Error resolving messages: %v", err)
 	}
@@ -165,13 +166,18 @@ func applyFundMsg(ctx context.Context, vmi *vm.VM, submgr subnet.SubnetMgr,
 		return xerrors.Errorf("Root chain doesn't have parent and doesn't support topDown cross msgs")
 	}
 
+	// Get raw address
+	rfrom, err := msg.From.RawAddr()
+	if err != nil {
+		return err
+	}
 	// Get SECPK address for ID from parent chain included in message.
-	id := hierarchical.SubnetID(netName)
+	id := address.SubnetID(netName)
 	api, err := submgr.GetSubnetAPI(id.Parent())
 	if err != nil {
 		return xerrors.Errorf("getting subnet API: %w", err)
 	}
-	secpaddr, err := api.StateAccountKey(ctx, msg.From, types.EmptyTSK)
+	secpaddr, err := api.StateAccountKey(ctx, rfrom, types.EmptyTSK)
 	if err != nil {
 		return xerrors.Errorf("getting secp address: %w", err)
 	}
@@ -188,9 +194,9 @@ func applyMsg(ctx context.Context, vmi *vm.VM, em stmgr.ExecMonitor,
 	params := &sca.ApplyParams{
 		Msg: *msg,
 	}
-	serparams, err := actors.SerializeParams(params)
-	if err != nil {
-		return xerrors.Errorf("failed serializing init actor params: %s", err)
+	serparams, aerr := actors.SerializeParams(params)
+	if aerr != nil {
+		return xerrors.Errorf("failed serializing init actor params: %s", aerr)
 	}
 	apply := &types.Message{
 		From:       builtin.SystemActorAddr,
@@ -204,12 +210,20 @@ func applyMsg(ctx context.Context, vmi *vm.VM, em stmgr.ExecMonitor,
 		Params:     serparams,
 	}
 
-	// If the destination account hasn't been initialized, init the account actor.
+	// Before applying the message in subnget, if the destination
+	// account hasn't been initialized, init the account actor.
+	// TODO: When handling arbitrary cross-messages, we should check if
+	// we need to trigger the state change in this subnet, if not we may not
+	// need to do this.
+	rto, err := params.Msg.To.RawAddr()
+	if err != nil {
+		return err
+	}
 	st := vmi.StateTree()
-	_, acterr := st.GetActor(params.Msg.To)
+	_, acterr := st.GetActor(rto)
 	if acterr != nil {
-		log.Debugw("Initializing To address for crossmsg", "address", params.Msg.To)
-		_, _, err := vmi.CreateAccountActor(ctx, apply, params.Msg.To)
+		log.Debugw("Initializing To address for crossmsg", "address", rto)
+		_, _, err := vmi.CreateAccountActor(ctx, apply, rto)
 		if err != nil {
 			return xerrors.Errorf("failed to initialize address for crossmsg: %w", err)
 		}
@@ -232,7 +246,7 @@ func applyMsg(ctx context.Context, vmi *vm.VM, em stmgr.ExecMonitor,
 	return nil
 }
 
-func getSCAState(ctx context.Context, sm *stmgr.StateManager, submgr subnet.SubnetMgr, id hierarchical.SubnetID) (*sca.SCAState, blockadt.Store, error) {
+func getSCAState(ctx context.Context, sm *stmgr.StateManager, submgr subnet.SubnetMgr, id address.SubnetID) (*sca.SCAState, blockadt.Store, error) {
 
 	var st sca.SCAState
 	// if submgr == nil we are in root, so we can load the actor using the state manager.

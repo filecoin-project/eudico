@@ -282,7 +282,7 @@ func TestCheckpoints(t *testing.T) {
 
 	ver := checkpoint.NewSingleSigner()
 	addr := tutil.NewIDAddr(t, 100)
-	shid := hierarchical.NewSubnetID(hierarchical.RootSubnet, addr)
+	shid := address.NewSubnetID(address.RootSubnet, addr)
 
 	t.Log("checkpoint in first and second epoch from three miners")
 	h.fullSignCheckpoint(t, rt, miners, w, st.CheckPeriod)
@@ -430,7 +430,7 @@ func (h *shActorHarness) constructAndVerify(t *testing.T, rt *mock.Runtime) {
 	rt.ExpectValidateCallerType(builtin.InitActorCodeID)
 	ret := rt.Call(h.SubnetActor.Constructor,
 		&actor.ConstructParams{
-			NetworkName:   hierarchical.RootSubnet.String(),
+			NetworkName:   address.RootSubnet.String(),
 			Name:          "myTestSubnet",
 			Consensus:     hierarchical.PoW,
 			MinMinerStake: actor.MinMinerStake,
@@ -443,7 +443,7 @@ func (h *shActorHarness) constructAndVerify(t *testing.T, rt *mock.Runtime) {
 	var st actor.SubnetState
 
 	rt.GetState(&st)
-	assert.Equal(h.t, st.ParentID, hierarchical.RootSubnet)
+	assert.Equal(h.t, st.ParentID, address.RootSubnet)
 	assert.Equal(h.t, st.Consensus, hierarchical.PoW)
 	assert.Equal(h.t, st.MinMinerStake, actor.MinMinerStake)
 	assert.Equal(h.t, st.Status, actor.Instantiated)
@@ -462,7 +462,7 @@ func (h *shActorHarness) constructAndVerifyZeroCheck(t *testing.T, rt *mock.Runt
 	rt.ExpectValidateCallerType(builtin.InitActorCodeID)
 	ret := rt.Call(h.SubnetActor.Constructor,
 		&actor.ConstructParams{
-			NetworkName:   hierarchical.RootSubnet.String(),
+			NetworkName:   address.RootSubnet.String(),
 			Name:          "myTestSubnet",
 			Consensus:     hierarchical.PoW,
 			MinMinerStake: actor.MinMinerStake,
@@ -512,7 +512,7 @@ func (h *shActorHarness) fullSignCheckpoint(t *testing.T, rt *mock.Runtime, mine
 	var err error
 	ver := checkpoint.NewSingleSigner()
 	addr := tutil.NewIDAddr(t, 100)
-	shid := hierarchical.NewSubnetID(hierarchical.RootSubnet, addr)
+	shid := address.NewSubnetID(address.RootSubnet, addr)
 	ch := schema.NewRawCheckpoint(shid, epoch)
 	prevcid, err := st.PrevCheckCid(adt.AsStore(rt), epoch)
 	require.NoError(t, err)

@@ -4,10 +4,10 @@ import (
 	"context"
 	"sync/atomic"
 
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/network"
 	"github.com/filecoin-project/lotus/chain/consensus/actors/registry"
 	"github.com/filecoin-project/lotus/chain/consensus/actors/reward"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	"github.com/filecoin-project/lotus/chain/rand"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
@@ -66,7 +66,7 @@ func TipSetExecutor(submgr subnet.SubnetMgr, netName dtypes.NetworkName) stmgr.E
 }
 
 func RootTipSetExecutor() stmgr.Executor {
-	return &tipSetExecutor{nil, dtypes.NetworkName(hierarchical.RootSubnet)}
+	return &tipSetExecutor{nil, dtypes.NetworkName(address.RootSubnet)}
 }
 
 func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager, parentEpoch abi.ChainEpoch, pstate cid.Cid, bms []store.BlockMessages, epoch abi.ChainEpoch, r vm.Rand, em stmgr.ExecMonitor, baseFee abi.TokenAmount, ts *types.TipSet) (cid.Cid, cid.Cid, error) {

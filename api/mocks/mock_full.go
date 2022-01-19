@@ -23,7 +23,6 @@ import (
 	api "github.com/filecoin-project/lotus/api"
 	apitypes "github.com/filecoin-project/lotus/api/types"
 	miner "github.com/filecoin-project/lotus/chain/actors/builtin/miner"
-	hierarchical "github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	schema "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	types "github.com/filecoin-project/lotus/chain/types"
 	alerting "github.com/filecoin-project/lotus/journal/alerting"
@@ -65,7 +64,7 @@ func (m *MockFullNode) EXPECT() *MockFullNodeMockRecorder {
 }
 
 // AddSubnet mocks base method.
-func (m *MockFullNode) AddSubnet(arg0 context.Context, arg1 address.Address, arg2 hierarchical.SubnetID, arg3 string, arg4 uint64, arg5 big.Int, arg6 abi.ChainEpoch, arg7 address.Address) (address.Address, error) {
+func (m *MockFullNode) AddSubnet(arg0 context.Context, arg1 address.Address, arg2 address.SubnetID, arg3 string, arg4 uint64, arg5 big.Int, arg6 abi.ChainEpoch, arg7 address.Address) (address.Address, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddSubnet", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
 	ret0, _ := ret[0].(address.Address)
@@ -909,7 +908,7 @@ func (mr *MockFullNodeMockRecorder) Discover(arg0 interface{}) *gomock.Call {
 }
 
 // FundSubnet mocks base method.
-func (m *MockFullNode) FundSubnet(arg0 context.Context, arg1 address.Address, arg2 hierarchical.SubnetID, arg3 big.Int) (cid.Cid, error) {
+func (m *MockFullNode) FundSubnet(arg0 context.Context, arg1 address.Address, arg2 address.SubnetID, arg3 big.Int) (cid.Cid, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "FundSubnet", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(cid.Cid)
@@ -984,7 +983,7 @@ func (mr *MockFullNodeMockRecorder) GasEstimateMessageGas(arg0, arg1, arg2, arg3
 }
 
 // GetCrossMsgsPool mocks base method.
-func (m *MockFullNode) GetCrossMsgsPool(arg0 context.Context, arg1 hierarchical.SubnetID, arg2 abi.ChainEpoch) ([]*types.Message, error) {
+func (m *MockFullNode) GetCrossMsgsPool(arg0 context.Context, arg1 address.SubnetID, arg2 abi.ChainEpoch) ([]*types.Message, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetCrossMsgsPool", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]*types.Message)
@@ -1014,7 +1013,7 @@ func (mr *MockFullNodeMockRecorder) ID(arg0 interface{}) *gomock.Call {
 }
 
 // JoinSubnet mocks base method.
-func (m *MockFullNode) JoinSubnet(arg0 context.Context, arg1 address.Address, arg2 big.Int, arg3 hierarchical.SubnetID) (cid.Cid, error) {
+func (m *MockFullNode) JoinSubnet(arg0 context.Context, arg1 address.Address, arg2 big.Int, arg3 address.SubnetID) (cid.Cid, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "JoinSubnet", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(cid.Cid)
@@ -1029,7 +1028,7 @@ func (mr *MockFullNodeMockRecorder) JoinSubnet(arg0, arg1, arg2, arg3 interface{
 }
 
 // KillSubnet mocks base method.
-func (m *MockFullNode) KillSubnet(arg0 context.Context, arg1 address.Address, arg2 hierarchical.SubnetID) (cid.Cid, error) {
+func (m *MockFullNode) KillSubnet(arg0 context.Context, arg1 address.Address, arg2 address.SubnetID) (cid.Cid, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "KillSubnet", arg0, arg1, arg2)
 	ret0, _ := ret[0].(cid.Cid)
@@ -1044,7 +1043,7 @@ func (mr *MockFullNodeMockRecorder) KillSubnet(arg0, arg1, arg2 interface{}) *go
 }
 
 // LeaveSubnet mocks base method.
-func (m *MockFullNode) LeaveSubnet(arg0 context.Context, arg1 address.Address, arg2 hierarchical.SubnetID) (cid.Cid, error) {
+func (m *MockFullNode) LeaveSubnet(arg0 context.Context, arg1 address.Address, arg2 address.SubnetID) (cid.Cid, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "LeaveSubnet", arg0, arg1, arg2)
 	ret0, _ := ret[0].(cid.Cid)
@@ -1059,7 +1058,7 @@ func (mr *MockFullNodeMockRecorder) LeaveSubnet(arg0, arg1, arg2 interface{}) *g
 }
 
 // ListCheckpoints mocks base method.
-func (m *MockFullNode) ListCheckpoints(arg0 context.Context, arg1 hierarchical.SubnetID, arg2 int) ([]*schema.Checkpoint, error) {
+func (m *MockFullNode) ListCheckpoints(arg0 context.Context, arg1 address.SubnetID, arg2 int) ([]*schema.Checkpoint, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListCheckpoints", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]*schema.Checkpoint)
@@ -1192,7 +1191,7 @@ func (mr *MockFullNodeMockRecorder) MarketWithdraw(arg0, arg1, arg2, arg3 interf
 }
 
 // MineSubnet mocks base method.
-func (m *MockFullNode) MineSubnet(arg0 context.Context, arg1 address.Address, arg2 hierarchical.SubnetID, arg3 bool) error {
+func (m *MockFullNode) MineSubnet(arg0 context.Context, arg1 address.Address, arg2 address.SubnetID, arg3 bool) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MineSubnet", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
@@ -2204,7 +2203,7 @@ func (mr *MockFullNodeMockRecorder) PaychVoucherSubmit(arg0, arg1, arg2, arg3, a
 }
 
 // ReleaseFunds mocks base method.
-func (m *MockFullNode) ReleaseFunds(arg0 context.Context, arg1 address.Address, arg2 hierarchical.SubnetID, arg3 big.Int) (cid.Cid, error) {
+func (m *MockFullNode) ReleaseFunds(arg0 context.Context, arg1 address.Address, arg2 address.SubnetID, arg3 big.Int) (cid.Cid, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ReleaseFunds", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(cid.Cid)
@@ -3055,7 +3054,7 @@ func (mr *MockFullNodeMockRecorder) SyncSubmitBlock(arg0, arg1 interface{}) *gom
 }
 
 // SyncSubnet mocks base method.
-func (m *MockFullNode) SyncSubnet(arg0 context.Context, arg1 hierarchical.SubnetID, arg2 bool) error {
+func (m *MockFullNode) SyncSubnet(arg0 context.Context, arg1 address.SubnetID, arg2 bool) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SyncSubnet", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -3112,7 +3111,7 @@ func (mr *MockFullNodeMockRecorder) SyncValidateTipset(arg0, arg1 interface{}) *
 }
 
 // ValidateCheckpoint mocks base method.
-func (m *MockFullNode) ValidateCheckpoint(arg0 context.Context, arg1 hierarchical.SubnetID, arg2 abi.ChainEpoch) (*schema.Checkpoint, error) {
+func (m *MockFullNode) ValidateCheckpoint(arg0 context.Context, arg1 address.SubnetID, arg2 abi.ChainEpoch) (*schema.Checkpoint, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ValidateCheckpoint", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*schema.Checkpoint)

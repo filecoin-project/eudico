@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
@@ -31,16 +31,16 @@ const retryTimeout = 10 * time.Second
 
 var log = logging.Logger("subnet-resolver")
 
-func SubnetResolverTopic(id hierarchical.SubnetID) string {
+func SubnetResolverTopic(id address.SubnetID) string {
 	return "/fil/subnet/resolver" + id.String()
 }
 
-func resolverNamespace(id hierarchical.SubnetID) datastore.Key {
+func resolverNamespace(id address.SubnetID) datastore.Key {
 	return datastore.NewKey("/resolver/" + id.String())
 }
 
 type Resolver struct {
-	netName hierarchical.SubnetID
+	netName address.SubnetID
 	self    peer.ID
 	ds      datastore.Datastore
 	pubsub  *pubsub.PubSub
@@ -77,7 +77,7 @@ const (
 
 type ResolveMsg struct {
 	// From subnet
-	From hierarchical.SubnetID
+	From address.SubnetID
 	// Message type being propagated
 	Type MsgType
 	// Cid of the content
@@ -126,9 +126,9 @@ func (r *Resolver) addMsgReceipt(t MsgType, bcid cid.Cid, from peer.ID) int {
 }
 
 func NewRootResolver(self peer.ID, ds dtypes.MetadataDS, pubsub *pubsub.PubSub, nn dtypes.NetworkName) *Resolver {
-	return NewResolver(self, ds, pubsub, hierarchical.SubnetID(nn))
+	return NewResolver(self, ds, pubsub, address.SubnetID(nn))
 }
-func NewResolver(self peer.ID, ds dtypes.MetadataDS, pubsub *pubsub.PubSub, netName hierarchical.SubnetID) *Resolver {
+func NewResolver(self peer.ID, ds dtypes.MetadataDS, pubsub *pubsub.PubSub, netName address.SubnetID) *Resolver {
 	return &Resolver{
 		netName:     netName,
 		self:        self,
@@ -364,7 +364,7 @@ func (r *Resolver) setLocal(c cid.Cid, msgs *sca.CrossMsgs) error {
 	return r.ds.Put(datastore.NewKey(c.String()), w.Bytes())
 }
 
-func (r *Resolver) pushMsg(m *ResolveMsg, id hierarchical.SubnetID) error {
+func (r *Resolver) pushMsg(m *ResolveMsg, id address.SubnetID) error {
 	b, err := EncodeResolveMsg(m)
 	if err != nil {
 		return xerrors.Errorf("error serializing resolveMsg: %v", err)
@@ -373,7 +373,7 @@ func (r *Resolver) pushMsg(m *ResolveMsg, id hierarchical.SubnetID) error {
 }
 
 // WaitCrossMsgsResolved waits until crossMsgs for meta have been fully resolved
-func (r *Resolver) WaitCrossMsgsResolved(ctx context.Context, c cid.Cid, from hierarchical.SubnetID) chan error {
+func (r *Resolver) WaitCrossMsgsResolved(ctx context.Context, c cid.Cid, from address.SubnetID) chan error {
 	out := make(chan error)
 	resolved := false
 	go func() {
@@ -385,7 +385,7 @@ func (r *Resolver) WaitCrossMsgsResolved(ctx context.Context, c cid.Cid, from hi
 				return
 			default:
 				// Check if crossMsg fully resolved.
-				_, resolved, err = r.ResolveCrossMsgs(c, hierarchical.SubnetID(from))
+				_, resolved, err = r.ResolveCrossMsgs(c, address.SubnetID(from))
 				if err != nil {
 					out <- err
 				}
@@ -401,7 +401,7 @@ func (r *Resolver) WaitCrossMsgsResolved(ctx context.Context, c cid.Cid, from hi
 	return out
 }
 
-func (r *Resolver) ResolveCrossMsgs(c cid.Cid, from hierarchical.SubnetID) ([]types.Message, bool, error) {
+func (r *Resolver) ResolveCrossMsgs(c cid.Cid, from address.SubnetID) ([]types.Message, bool, error) {
 	// FIXME: This function should keep track of the retries that have been done,
 	// and fallback to a 1:1 exchange if this fails.
 	cross, found, err := r.getLocal(c)
@@ -419,7 +419,7 @@ func (r *Resolver) ResolveCrossMsgs(c cid.Cid, from hierarchical.SubnetID) ([]ty
 				return []types.Message{}, false, nil
 			}
 			// Recursively resolve crossMsg for meta
-			cross, found, err := r.ResolveCrossMsgs(c, hierarchical.SubnetID(mt.From))
+			cross, found, err := r.ResolveCrossMsgs(c, address.SubnetID(mt.From))
 			if err != nil {
 				return []types.Message{}, false, nil
 			}
@@ -449,7 +449,7 @@ func (r *Resolver) ResolveCrossMsgs(c cid.Cid, from hierarchical.SubnetID) ([]ty
 
 }
 
-func (r *Resolver) PushCrossMsgs(msgs sca.CrossMsgs, id hierarchical.SubnetID, isResponse bool) error {
+func (r *Resolver) PushCrossMsgs(msgs sca.CrossMsgs, id address.SubnetID, isResponse bool) error {
 	c, err := msgs.Cid()
 	if err != nil {
 		return err
@@ -482,14 +482,14 @@ func (r *Resolver) PushMsgFromCheckpoint(ch *schema.Checkpoint, st *sca.SCAState
 			return xerrors.Errorf("couldn't found crossmsgs for msgMeta with cid: %s", c)
 		}
 		// Push cross-msgs to subnet
-		if err = r.PushCrossMsgs(*msgs, hierarchical.SubnetID(meta.To), false); err != nil {
+		if err = r.PushCrossMsgs(*msgs, address.SubnetID(meta.To), false); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (r *Resolver) PullCrossMsgs(c cid.Cid, id hierarchical.SubnetID) error {
+func (r *Resolver) PullCrossMsgs(c cid.Cid, id address.SubnetID) error {
 	m := &ResolveMsg{
 		Type: PullMeta,
 		From: r.netName,

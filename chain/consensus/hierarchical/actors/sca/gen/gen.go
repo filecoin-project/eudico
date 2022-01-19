@@ -14,7 +14,7 @@ func main() {
 		actor.Subnet{},
 		actor.FundParams{},
 		actor.SubnetIDParam{},
-		actor.CrossMsgMeta{},
+		actor.CrossMsgs{},
 		actor.MetaTag{},
 		actor.ApplyParams{},
 	); err != nil {

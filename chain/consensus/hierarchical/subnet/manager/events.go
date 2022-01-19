@@ -54,7 +54,7 @@ type signingState struct {
 func (s *SubnetMgr) listenSubnetEvents(ctx context.Context, sh *Subnet) {
 	evs := s.events
 	api := s.api
-	id := hierarchical.RootSubnet
+	id := address.RootSubnet
 	root := true
 
 	// If subnet is nil, we are listening from the root chain.

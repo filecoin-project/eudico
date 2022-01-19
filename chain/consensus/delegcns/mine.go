@@ -12,7 +12,6 @@ import (
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
@@ -59,7 +58,7 @@ func Mine(ctx context.Context, api v1api.FullNode) error {
 			if err != nil {
 				return err
 			}
-			crossmsgs, err := api.GetCrossMsgsPool(ctx, hierarchical.SubnetID(nn), base.Height()+1)
+			crossmsgs, err := api.GetCrossMsgsPool(ctx, address.SubnetID(nn), base.Height()+1)
 			if err != nil {
 				log.Errorw("selecting cross-messages failed", "error", err)
 			}

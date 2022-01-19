@@ -23,12 +23,12 @@ import (
 const finalityWait = 5
 
 func newCrossMsgPool() *crossMsgPool {
-	return &crossMsgPool{pool: make(map[hierarchical.SubnetID]*lastApplied)}
+	return &crossMsgPool{pool: make(map[address.SubnetID]*lastApplied)}
 }
 
 type crossMsgPool struct {
 	lk   sync.RWMutex
-	pool map[hierarchical.SubnetID]*lastApplied
+	pool map[address.SubnetID]*lastApplied
 }
 
 type lastApplied struct {
@@ -38,7 +38,7 @@ type lastApplied struct {
 	height   abi.ChainEpoch
 }
 
-func (cm *crossMsgPool) getPool(id hierarchical.SubnetID, height abi.ChainEpoch) *lastApplied {
+func (cm *crossMsgPool) getPool(id address.SubnetID, height abi.ChainEpoch) *lastApplied {
 	cm.lk.RLock()
 	p, ok := cm.pool[id]
 	cm.lk.RUnlock()
@@ -58,21 +58,21 @@ func (cm *crossMsgPool) getPool(id hierarchical.SubnetID, height abi.ChainEpoch)
 	return p
 }
 
-func (cm *crossMsgPool) applyTopDown(n uint64, id hierarchical.SubnetID, height abi.ChainEpoch) {
+func (cm *crossMsgPool) applyTopDown(n uint64, id address.SubnetID, height abi.ChainEpoch) {
 	p := cm.getPool(id, height)
 	p.lk.Lock()
 	defer p.lk.Unlock()
 	p.topdown[n] = height
 }
 
-func (cm *crossMsgPool) applyBottomUp(n uint64, id hierarchical.SubnetID, height abi.ChainEpoch) {
+func (cm *crossMsgPool) applyBottomUp(n uint64, id address.SubnetID, height abi.ChainEpoch) {
 	p := cm.getPool(id, height)
 	p.lk.Lock()
 	defer p.lk.Unlock()
 	p.bottomup[n] = height
 }
 
-func (cm *crossMsgPool) isTopDownApplied(n uint64, id hierarchical.SubnetID, height abi.ChainEpoch) bool {
+func (cm *crossMsgPool) isTopDownApplied(n uint64, id address.SubnetID, height abi.ChainEpoch) bool {
 	p := cm.getPool(id, height)
 	p.lk.RLock()
 	defer p.lk.RUnlock()
@@ -80,7 +80,7 @@ func (cm *crossMsgPool) isTopDownApplied(n uint64, id hierarchical.SubnetID, hei
 	return ok && h != height
 }
 
-func (cm *crossMsgPool) isBottomUpApplied(n uint64, id hierarchical.SubnetID, height abi.ChainEpoch) bool {
+func (cm *crossMsgPool) isBottomUpApplied(n uint64, id address.SubnetID, height abi.ChainEpoch) bool {
 	p := cm.getPool(id, height)
 	p.lk.RLock()
 	defer p.lk.RUnlock()
@@ -92,7 +92,7 @@ func (cm *crossMsgPool) isBottomUpApplied(n uint64, id hierarchical.SubnetID, he
 //
 // height determines the current consensus height
 func (s *SubnetMgr) GetCrossMsgsPool(
-	ctx context.Context, id hierarchical.SubnetID, height abi.ChainEpoch) ([]*types.Message, error) {
+	ctx context.Context, id address.SubnetID, height abi.ChainEpoch) ([]*types.Message, error) {
 	// TODO: Think a bit deeper the locking strategy for subnets.
 	// s.lk.RLock()
 	// defer s.lk.RUnlock()
@@ -129,7 +129,7 @@ func (s *SubnetMgr) GetCrossMsgsPool(
 // message of the parent chain that included it.
 func (s *SubnetMgr) FundSubnet(
 	ctx context.Context, wallet address.Address,
-	id hierarchical.SubnetID, value abi.TokenAmount) (cid.Cid, error) {
+	id address.SubnetID, value abi.TokenAmount) (cid.Cid, error) {
 
 	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.RLock()
@@ -167,7 +167,7 @@ func (s *SubnetMgr) FundSubnet(
 // ReleaseFunds releases some funds from a subnet
 func (s *SubnetMgr) ReleaseFunds(
 	ctx context.Context, wallet address.Address,
-	id hierarchical.SubnetID, value abi.TokenAmount) (cid.Cid, error) {
+	id address.SubnetID, value abi.TokenAmount) (cid.Cid, error) {
 
 	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.RLock()
@@ -195,7 +195,7 @@ func (s *SubnetMgr) ReleaseFunds(
 	return smsg.Cid(), nil
 }
 
-func (s *SubnetMgr) getSCAStateWithFinality(ctx context.Context, api *API, id hierarchical.SubnetID) (*sca.SCAState, adt.Store, error) {
+func (s *SubnetMgr) getSCAStateWithFinality(ctx context.Context, api *API, id address.SubnetID) (*sca.SCAState, adt.Store, error) {
 	var err error
 	finTs := api.ChainAPI.Chain.GetHeaviestTipSet()
 	height := finTs.Height()
@@ -227,7 +227,7 @@ func (s *SubnetMgr) getSCAStateWithFinality(ctx context.Context, api *API, id hi
 
 // getParentSCAWithFinality returns the state of the SCA of the parent with `finalityThreshold`
 // epochs ago to ensure that no reversion happens and we can operate with the state we got.
-func (s *SubnetMgr) getParentSCAWithFinality(ctx context.Context, id hierarchical.SubnetID) (*sca.SCAState, adt.Store, error) {
+func (s *SubnetMgr) getParentSCAWithFinality(ctx context.Context, id address.SubnetID) (*sca.SCAState, adt.Store, error) {
 	parentAPI, err := s.getParentAPI(id)
 	if err != nil {
 		return nil, nil, err
@@ -235,7 +235,7 @@ func (s *SubnetMgr) getParentSCAWithFinality(ctx context.Context, id hierarchica
 	return s.getSCAStateWithFinality(ctx, parentAPI, id)
 }
 
-func (s *SubnetMgr) getTopDownPool(ctx context.Context, id hierarchical.SubnetID, height abi.ChainEpoch) ([]*types.Message, error) {
+func (s *SubnetMgr) getTopDownPool(ctx context.Context, id address.SubnetID, height abi.ChainEpoch) ([]*types.Message, error) {
 
 	// Get status for SCA in subnet to determine from which nonce to fetch messages
 	subAPI := s.getAPI(id)
@@ -295,7 +295,7 @@ func (s *SubnetMgr) getTopDownPool(ctx context.Context, id hierarchical.SubnetID
 	return out, nil
 }
 
-func (s *SubnetMgr) getBottomUpPool(ctx context.Context, id hierarchical.SubnetID, height abi.ChainEpoch) ([]*types.Message, error) {
+func (s *SubnetMgr) getBottomUpPool(ctx context.Context, id address.SubnetID, height abi.ChainEpoch) ([]*types.Message, error) {
 	subAPI := s.getAPI(id)
 	if subAPI == nil {
 		return nil, xerrors.Errorf("Not listening to subnet")
@@ -332,7 +332,7 @@ func (s *SubnetMgr) getBottomUpPool(ctx context.Context, id hierarchical.SubnetI
 		if err != nil {
 			return nil, err
 		}
-		cross, found, err := r.ResolveCrossMsgs(c, hierarchical.SubnetID(mt.From))
+		cross, found, err := r.ResolveCrossMsgs(c, address.SubnetID(mt.From))
 		if err != nil {
 			return nil, err
 		}

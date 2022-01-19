@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
@@ -35,7 +36,7 @@ import (
 type Subnet struct {
 	host host.Host
 	// SubnetID
-	ID hierarchical.SubnetID
+	ID address.SubnetID
 	// Metadata datastore.
 	ds dtypes.MetadataDS
 	// Exposed blockstore

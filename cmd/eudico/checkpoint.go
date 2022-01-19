@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/urfave/cli/v2"
 )
@@ -25,7 +25,7 @@ var listCheckpoints = &cli.Command{
 		&cli.StringFlag{
 			Name:  "subnet",
 			Usage: "specify the id of the subnet to list checkpoints from",
-			Value: hierarchical.RootSubnet.String(),
+			Value: address.RootSubnet.String(),
 		},
 		&cli.IntFlag{
 			Name:  "num",
@@ -43,11 +43,11 @@ var listCheckpoints = &cli.Command{
 
 		// If subnet not set use root. Otherwise, use flag value
 		var subnet string
-		if cctx.String("subnet") != hierarchical.RootSubnet.String() {
+		if cctx.String("subnet") != address.RootSubnet.String() {
 			subnet = cctx.String("subnet")
 		}
 
-		chs, err := api.ListCheckpoints(ctx, hierarchical.SubnetID(subnet), cctx.Int("num"))
+		chs, err := api.ListCheckpoints(ctx, address.SubnetID(subnet), cctx.Int("num"))
 		if err != nil {
 			return err
 		}
@@ -68,7 +68,7 @@ var validateCheckpoints = &cli.Command{
 		&cli.StringFlag{
 			Name:  "subnet",
 			Usage: "specify the id of the subnet to list checkpoints from",
-			Value: hierarchical.RootSubnet.String(),
+			Value: address.RootSubnet.String(),
 		},
 		&cli.IntFlag{
 			Name:  "epoch",
@@ -86,11 +86,11 @@ var validateCheckpoints = &cli.Command{
 
 		// If subnet not set use root. Otherwise, use flag value
 		var subnet string
-		if cctx.String("subnet") != hierarchical.RootSubnet.String() {
+		if cctx.String("subnet") != address.RootSubnet.String() {
 			subnet = cctx.String("subnet")
 		}
 
-		ch, err := api.ValidateCheckpoint(ctx, hierarchical.SubnetID(subnet), abi.ChainEpoch(cctx.Int("epoch")))
+		ch, err := api.ValidateCheckpoint(ctx, address.SubnetID(subnet), abi.ChainEpoch(cctx.Int("epoch")))
 		if err != nil {
 			fmt.Println("Verified KO!")
 			return err

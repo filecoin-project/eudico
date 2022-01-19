@@ -7,7 +7,6 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/chain/actors"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
@@ -21,7 +20,7 @@ import (
 
 func (s *SubnetMgr) SubmitSignedCheckpoint(
 	ctx context.Context, wallet address.Address,
-	id hierarchical.SubnetID, ch *schema.Checkpoint) (cid.Cid, error) {
+	id address.SubnetID, ch *schema.Checkpoint) (cid.Cid, error) {
 
 	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.RLock()
@@ -72,7 +71,7 @@ func (s *SubnetMgr) SubmitSignedCheckpoint(
 }
 
 func (s *SubnetMgr) ListCheckpoints(
-	ctx context.Context, id hierarchical.SubnetID, num int) ([]*schema.Checkpoint, error) {
+	ctx context.Context, id address.SubnetID, num int) ([]*schema.Checkpoint, error) {
 
 	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.RLock()
@@ -129,7 +128,7 @@ func (s *SubnetMgr) ListCheckpoints(
 }
 
 func (s *SubnetMgr) ValidateCheckpoint(
-	ctx context.Context, id hierarchical.SubnetID, epoch abi.ChainEpoch) (*schema.Checkpoint, error) {
+	ctx context.Context, id address.SubnetID, epoch abi.ChainEpoch) (*schema.Checkpoint, error) {
 
 	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.RLock()

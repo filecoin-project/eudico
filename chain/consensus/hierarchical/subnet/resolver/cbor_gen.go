@@ -8,7 +8,7 @@ import (
 	"math"
 	"sort"
 
-	hierarchical "github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	address "github.com/filecoin-project/go-address"
 	cid "github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	xerrors "golang.org/x/xerrors"
@@ -32,7 +32,7 @@ func (t *ResolveMsg) MarshalCBOR(w io.Writer) error {
 
 	scratch := make([]byte, 9)
 
-	// t.From (hierarchical.SubnetID) (string)
+	// t.From (address.SubnetID) (string)
 	if len(t.From) > cbg.MaxLength {
 		return xerrors.Errorf("Value in field t.From was too long")
 	}
@@ -81,7 +81,7 @@ func (t *ResolveMsg) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.From (hierarchical.SubnetID) (string)
+	// t.From (address.SubnetID) (string)
 
 	{
 		sval, err := cbg.ReadStringBuf(br, scratch)
@@ -89,7 +89,7 @@ func (t *ResolveMsg) UnmarshalCBOR(r io.Reader) error {
 			return err
 		}
 
-		t.From = hierarchical.SubnetID(sval)
+		t.From = address.SubnetID(sval)
 	}
 	// t.Type (resolver.MsgType) (uint64)
 

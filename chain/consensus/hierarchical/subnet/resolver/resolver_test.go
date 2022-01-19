@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	ltypes "github.com/filecoin-project/lotus/chain/types"
 	tutil "github.com/filecoin-project/specs-actors/v6/support/testing"
@@ -34,7 +34,7 @@ func TestGetSet(t *testing.T) {
 		Params:     nil,
 	}
 	out := &sca.CrossMsgs{Msgs: []ltypes.Message{msg}}
-	r := NewResolver(h.ID(), ds, ps, hierarchical.RootSubnet)
+	r := NewResolver(h.ID(), ds, ps, address.RootSubnet)
 	out1, found, err := r.getLocal(msg.Cid())
 	require.NoError(t, err)
 	require.False(t, found)
@@ -66,14 +66,14 @@ func TestResolve(t *testing.T) {
 		Params:     nil,
 	}
 	out := &sca.CrossMsgs{Msgs: []ltypes.Message{msg}}
-	r := NewResolver(h.ID(), ds, ps, hierarchical.RootSubnet)
+	r := NewResolver(h.ID(), ds, ps, address.RootSubnet)
 	c, _ := out.Cid()
-	_, found, err := r.ResolveCrossMsgs(c, hierarchical.RootSubnet)
+	_, found, err := r.ResolveCrossMsgs(c, address.RootSubnet)
 	require.NoError(t, err)
 	require.False(t, found)
 	err = r.setLocal(c, out)
 	require.NoError(t, err)
-	pulled, found, err := r.ResolveCrossMsgs(c, hierarchical.RootSubnet)
+	pulled, found, err := r.ResolveCrossMsgs(c, address.RootSubnet)
 	require.NoError(t, err)
 	require.True(t, found)
 	require.Equal(t, len(pulled), 1)
@@ -99,11 +99,11 @@ func TestWaitResolve(t *testing.T) {
 		Params:     nil,
 	}
 	out := &sca.CrossMsgs{Msgs: []ltypes.Message{msg}}
-	r := NewResolver(h.ID(), ds, ps, hierarchical.RootSubnet)
+	r := NewResolver(h.ID(), ds, ps, address.RootSubnet)
 	c, _ := out.Cid()
 
 	// Wait for resolution.
-	found := r.WaitCrossMsgsResolved(context.TODO(), c, hierarchical.RootSubnet)
+	found := r.WaitCrossMsgsResolved(context.TODO(), c, address.RootSubnet)
 	go func() {
 		// Wait one second, and store cross-msgs locally
 		time.Sleep(1 * time.Second)
