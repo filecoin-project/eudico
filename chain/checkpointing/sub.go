@@ -415,7 +415,7 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 
 	threshold := (len(idsStrings) / 2) + 1
 	n := NewNetwork(c.sub, c.topic)
-	f := frost.KeygenTaproot(id, ids, threshold)
+	f := frost.KeygenTaprootGennaro(id, ids, threshold)
 
 	handler, err := protocol.NewMultiHandler(f, []byte{1, 2, 3})
 	if err != nil {
