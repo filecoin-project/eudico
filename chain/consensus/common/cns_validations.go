@@ -282,13 +282,13 @@ func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.St
 	// If subnet manager is not set we are in the root chain and we don't need to get parentSCA
 	// state
 	if submgr != nil {
-		parentSCA, pstore, err = getSCAState(ctx, sm, submgr, netName.Parent())
+		parentSCA, pstore, err = getSCAState(ctx, sm, submgr, netName.Parent(), baseTs)
 		if err != nil {
 			return err
 		}
 	}
 	// Get SCA state in subnet.
-	snSCA, snstore, err = getSCAState(ctx, sm, submgr, netName)
+	snSCA, snstore, err = getSCAState(ctx, sm, submgr, netName, baseTs)
 	if err != nil {
 		return err
 	}

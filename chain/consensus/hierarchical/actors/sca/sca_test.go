@@ -793,7 +793,10 @@ func TestApplyMsg(t *testing.T) {
 	sh, found := h.getSubnet(rt, h.sn)
 	require.True(h.t, found)
 	require.Equal(h.t, sh.CircSupply, big.Sub(init, big.Mul(big.NewInt(6), value)))
-
+	// Trying to release over the circulating supply
+	rt.ExpectAbort(exitcode.ErrIllegalState, func() {
+		h.applyReleaseMsg(rt, releaser, init, 2)
+	})
 	// Applying already used nonces or non-subsequent should fail
 	rt.ExpectAbort(exitcode.ErrIllegalState, func() {
 		h.applyReleaseMsg(rt, releaser, value, 10)

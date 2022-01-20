@@ -71,7 +71,13 @@ func applyRelease(rt runtime.Runtime, msg types.Message) {
 		sh, has, err := st.GetSubnet(adt.AsStore(rt), snFrom)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching subnet state")
 		if !has {
-			rt.Abortf(exitcode.ErrIllegalArgument, "subnet for actor hasn't been registered yet")
+			rt.Abortf(exitcode.ErrIllegalState, "subnet for actor hasn't been registered yet")
+		}
+		// Even if the actor has balance, we shouldn't allow releasing more than
+		// the current circulating supply, as it would mean that we are
+		// releasing funds from the collateral.
+		if sh.CircSupply.LessThan(msg.Value) {
+			rt.Abortf(exitcode.ErrIllegalState, "wtf! we can't release funds below the circulating supply. Something went wrong!")
 		}
 		sh.CircSupply = big.Sub(sh.CircSupply, msg.Value)
 		st.flushSubnet(rt, sh)

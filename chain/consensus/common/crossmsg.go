@@ -58,7 +58,7 @@ func checkBottomUpMsg(ctx context.Context, r *resolver.Resolver, snstore blockad
 		return xerrors.Errorf("getting bottomup msgmeta: %w", err)
 	}
 	if !found {
-		xerrors.Errorf("No BottomUp meta found for nonce in SCA: %d", msg.Nonce)
+		return xerrors.Errorf("No BottomUp meta found for nonce in SCA: %d", msg.Nonce)
 	}
 
 	// Wait to resolve bottom-up messages for meta
@@ -246,12 +246,12 @@ func applyMsg(ctx context.Context, vmi *vm.VM, em stmgr.ExecMonitor,
 	return nil
 }
 
-func getSCAState(ctx context.Context, sm *stmgr.StateManager, submgr subnet.SubnetMgr, id address.SubnetID) (*sca.SCAState, blockadt.Store, error) {
+func getSCAState(ctx context.Context, sm *stmgr.StateManager, submgr subnet.SubnetMgr, id address.SubnetID, ts *types.TipSet) (*sca.SCAState, blockadt.Store, error) {
 
 	var st sca.SCAState
 	// if submgr == nil we are in root, so we can load the actor using the state manager.
 	if submgr == nil {
-		ts := sm.ChainStore().GetHeaviestTipSet()
+		// Getting SCA state for the base tipset being checked/validated in the current chain
 		subnetAct, err := sm.LoadActor(ctx, hierarchical.SubnetCoordActorAddr, ts)
 		if err != nil {
 			return nil, nil, xerrors.Errorf("loading actor state: %w", err)
@@ -262,5 +262,7 @@ func getSCAState(ctx context.Context, sm *stmgr.StateManager, submgr subnet.Subn
 		return &st, sm.ChainStore().ActorStore(ctx), nil
 	}
 
+	// For subnets getting SCA state for the current baseTs is worthless.
+	// We get it the standard way.
 	return submgr.GetSCAState(ctx, id)
 }
