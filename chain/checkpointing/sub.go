@@ -648,8 +648,8 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 		// it signed and replace it with it. Config is not saved, neither when new DKG is done.
 		c.pubkey = genCheckpointPublicKeyTaproot(c.config.PublicKey, cidBytes)
 
-		//address, _ := pubkeyToTapprootAddress(c.pubkey)
-		//fmt.Println(address)
+		address, _ := pubkeyToTapprootAddress(c.pubkey)
+		fmt.Println(address)
 
 		// Save tweaked value
 		merkleRoot := hashMerkleRoot(c.config.PublicKey, cidBytes)
