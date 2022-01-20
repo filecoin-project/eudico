@@ -79,3 +79,8 @@ func (a *HierarchicalAPI) ReleaseFunds(ctx context.Context, wallet address.Addre
 	id address.SubnetID, value abi.TokenAmount) (cid.Cid, error) {
 	return a.Sub.ReleaseFunds(ctx, wallet, id, value)
 }
+
+func (a *HierarchicalAPI) CrossMsgResolve(ctx context.Context, id address.SubnetID,
+	c cid.Cid, from address.SubnetID) ([]types.Message, error) {
+	return a.Sub.CrossMsgResolve(ctx, id, c, from)
+}

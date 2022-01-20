@@ -556,6 +556,8 @@ type HierarchicalCnsStruct struct {
 	Internal struct {
 		AddSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 address.Address) (address.Address, error) `perm:"write"`
 
+		CrossMsgResolve func(p0 context.Context, p1 address.SubnetID, p2 cid.Cid, p3 address.SubnetID) ([]types.Message, error) `perm:"read"`
+
 		FundSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) `perm:"write"`
 
 		GetCrossMsgsPool func(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) ([]*types.Message, error) `perm:"read"`
@@ -3425,6 +3427,17 @@ func (s *HierarchicalCnsStruct) AddSubnet(p0 context.Context, p1 address.Address
 
 func (s *HierarchicalCnsStub) AddSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 address.Address) (address.Address, error) {
 	return *new(address.Address), ErrNotSupported
+}
+
+func (s *HierarchicalCnsStruct) CrossMsgResolve(p0 context.Context, p1 address.SubnetID, p2 cid.Cid, p3 address.SubnetID) ([]types.Message, error) {
+	if s.Internal.CrossMsgResolve == nil {
+		return *new([]types.Message), ErrNotSupported
+	}
+	return s.Internal.CrossMsgResolve(p0, p1, p2, p3)
+}
+
+func (s *HierarchicalCnsStub) CrossMsgResolve(p0 context.Context, p1 address.SubnetID, p2 cid.Cid, p3 address.SubnetID) ([]types.Message, error) {
+	return *new([]types.Message), ErrNotSupported
 }
 
 func (s *HierarchicalCnsStruct) FundSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) {

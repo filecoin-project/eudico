@@ -877,6 +877,21 @@ func (mr *MockFullNodeMockRecorder) CreateBackup(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateBackup", reflect.TypeOf((*MockFullNode)(nil).CreateBackup), arg0, arg1)
 }
 
+// CrossMsgResolve mocks base method.
+func (m *MockFullNode) CrossMsgResolve(arg0 context.Context, arg1 address.SubnetID, arg2 cid.Cid, arg3 address.SubnetID) ([]types.Message, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CrossMsgResolve", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].([]types.Message)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CrossMsgResolve indicates an expected call of CrossMsgResolve.
+func (mr *MockFullNodeMockRecorder) CrossMsgResolve(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CrossMsgResolve", reflect.TypeOf((*MockFullNode)(nil).CrossMsgResolve), arg0, arg1, arg2, arg3)
+}
+
 // Discover mocks base method.
 func (m *MockFullNode) Discover(arg0 context.Context) (apitypes.OpenRPCDocument, error) {
 	m.ctrl.T.Helper()

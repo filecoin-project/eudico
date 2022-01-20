@@ -23,4 +23,5 @@ type HierarchicalCns interface {
 	GetCrossMsgsPool(ctx context.Context, id address.SubnetID, height abi.ChainEpoch) ([]*types.Message, error)            // perm:read
 	FundSubnet(ctx context.Context, wallet address.Address, id address.SubnetID, value abi.TokenAmount) (cid.Cid, error)   // perm:write
 	ReleaseFunds(ctx context.Context, wallet address.Address, id address.SubnetID, value abi.TokenAmount) (cid.Cid, error) // perm:write
+	CrossMsgResolve(ctx context.Context, id address.SubnetID, c cid.Cid, from address.SubnetID) ([]types.Message, error)   // perm:read
 }

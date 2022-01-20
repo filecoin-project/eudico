@@ -708,12 +708,13 @@ func (s *SubnetMgr) GetSCAState(ctx context.Context, id address.SubnetID) (*sca.
 	return &st, blockadt.WrapStore(ctx, pcst), nil
 }
 
-func (s *SubnetMgr) CrossMsgResolve(ctx context.Context, id address.SubnetID, c cid.Cid, from address.SubnetID) ([]types.Message, bool, error) {
+func (s *SubnetMgr) CrossMsgResolve(ctx context.Context, id address.SubnetID, c cid.Cid, from address.SubnetID) ([]types.Message, error) {
 	r := s.r
 	if !s.isRoot(id) {
 		r = s.subnets[id].r
 	}
-	return r.ResolveCrossMsgs(c, address.SubnetID(from))
+	msgs, _, err := r.ResolveCrossMsgs(c, address.SubnetID(from))
+	return msgs, err
 }
 
 func (s *SubnetMgr) WaitCrossMsgResolved(ctx context.Context, id address.SubnetID, c cid.Cid, from address.SubnetID) chan error {
