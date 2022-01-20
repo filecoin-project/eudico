@@ -251,7 +251,7 @@ func (v *Validator) Validate(ctx context.Context, pid peer.ID, msg *pubsub.Messa
 	// TODO: Any additional check?
 
 	// Pass validated request.
-	msg.ValidatorData = rmsg
+	// msg.ValidatorData = rmsg
 
 	return pubsub.ValidationAccept
 }

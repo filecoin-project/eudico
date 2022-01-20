@@ -198,8 +198,8 @@ func getBottomUpMsgMeta(crossMsgs *adt.Array, nonce uint64) (*schema.CrossMsgMet
 	return &out, true, nil
 }
 
-// TopDownMsgFromNonce gets the latest topDownMessages from a specific nonce
-// (including the one of the specified nonce, i.e. [nonce, latest], both limits
+// BottomUpMsgFromNonce gets the latest bottomUpMetas from a specific nonce
+// (including the one specified, i.e. [nonce, latest], both limits
 // included).
 func (st *SCAState) BottomUpMsgFromNonce(s adt.Store, nonce uint64) ([]*schema.CrossMsgMeta, error) {
 	crossMsgs, err := adt.AsArray(s, st.BottomUpMsgsMeta, CrossMsgsAMTBitwidth)

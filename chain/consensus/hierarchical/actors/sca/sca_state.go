@@ -118,7 +118,7 @@ func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, e
 		Checkpoints:          emptyCheckpointsMapCid,
 		CheckMsgsRegistry:    emptyMsgsMetaMapCid,
 		BottomUpMsgsMeta:     emptyBottomUpMsgsAMT,
-		AppliedBottomUpNonce: MaxNonce, // We need inital nonce+1 to be 0 in the way msgs are applied.
+		AppliedBottomUpNonce: MaxNonce, // We need inital nonce+1 to be 0 due to how msgs are applied.
 	}, nil
 }
 

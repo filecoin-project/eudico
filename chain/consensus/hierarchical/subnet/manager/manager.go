@@ -144,12 +144,6 @@ func NewSubnetMgr(
 		r:            r,
 	}
 
-	// Instantiate new cross-msg resolver
-	// s.r, err = resolver.NewResolver(ctx, self, s, ds, pubsub, address.RootSubnet)
-	// if err != nil {
-	//         return nil, err
-	// }
-
 	s.api = &API{
 		commonapi,
 		netapi,
@@ -706,23 +700,6 @@ func (s *SubnetMgr) GetSCAState(ctx context.Context, id address.SubnetID) (*sca.
 		return nil, nil, xerrors.Errorf("getting actor state: %w", err)
 	}
 	return &st, blockadt.WrapStore(ctx, pcst), nil
-}
-
-func (s *SubnetMgr) CrossMsgResolve(ctx context.Context, id address.SubnetID, c cid.Cid, from address.SubnetID) ([]types.Message, error) {
-	r := s.r
-	if !s.isRoot(id) {
-		r = s.subnets[id].r
-	}
-	msgs, _, err := r.ResolveCrossMsgs(c, address.SubnetID(from))
-	return msgs, err
-}
-
-func (s *SubnetMgr) WaitCrossMsgResolved(ctx context.Context, id address.SubnetID, c cid.Cid, from address.SubnetID) chan error {
-	r := s.r
-	if !s.isRoot(id) {
-		r = s.subnets[id].r
-	}
-	return r.WaitCrossMsgsResolved(ctx, c, address.SubnetID(from))
 }
 
 var _ subiface.SubnetMgr = &SubnetMgr{}

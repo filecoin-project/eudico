@@ -10,6 +10,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/specs-actors/actors/util/adt"
 	"github.com/ipfs/go-cid"
@@ -318,10 +319,7 @@ func (s *SubnetMgr) getBottomUpPool(ctx context.Context, id address.SubnetID, he
 	}
 
 	// Get resolver for subnet
-	r := s.r
-	if !s.isRoot(id) {
-		r = s.subnets[id].r
-	}
+	r := s.getSubnetResolver(id)
 
 	out := make([]*types.Message, 0)
 	isFound := make(map[uint64][]types.Message)
@@ -370,4 +368,23 @@ func (s *SubnetMgr) getBottomUpPool(ctx context.Context, id address.SubnetID, he
 	}
 
 	return out, nil
+}
+
+func (s *SubnetMgr) getSubnetResolver(id address.SubnetID) *resolver.Resolver {
+	r := s.r
+	if !s.isRoot(id) {
+		r = s.subnets[id].r
+	}
+	return r
+}
+
+func (s *SubnetMgr) CrossMsgResolve(ctx context.Context, id address.SubnetID, c cid.Cid, from address.SubnetID) ([]types.Message, error) {
+	r := s.getSubnetResolver(id)
+	msgs, _, err := r.ResolveCrossMsgs(c, address.SubnetID(from))
+	return msgs, err
+}
+
+func (s *SubnetMgr) WaitCrossMsgResolved(ctx context.Context, id address.SubnetID, c cid.Cid, from address.SubnetID) chan error {
+	r := s.getSubnetResolver(id)
+	return r.WaitCrossMsgsResolved(ctx, c, address.SubnetID(from))
 }
