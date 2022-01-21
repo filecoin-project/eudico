@@ -3,8 +3,12 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
+	abciserver "github.com/tendermint/tendermint/abci/server"
+	tendermintLogger "github.com/tendermint/tendermint/libs/log"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
 
@@ -41,6 +45,7 @@ var tendermintCmd = &cli.Command{
 	Subcommands: []*cli.Command{
 		tendermintGenesisCmd,
 		tendermintMinerCmd,
+		tendermintApplicationCmd,
 
 		daemonCmd(node.Options(
 			node.Override(new(consensus.Consensus), NewRootTendermintConsensus),
@@ -120,5 +125,38 @@ var tendermintMinerCmd = &cli.Command{
 
 		log.Infow("Starting mining with miner", "miner", miner)
 		return tendermint.Mine(ctx, miner, api)
+	},
+}
+
+var tendermintApplicationCmd = &cli.Command{
+	Name: "application",
+	Usage: "run tendermint consensus application",
+	Flags: []cli.Flag {
+		&cli.StringFlag{
+			Name: "addr",
+			Value: "tcp://127.0.0.1:26658",
+			Usage: "socket address",
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+		app, err := tendermint.NewApplication()
+		if err != nil {
+			return err
+		}
+
+		logger := tendermintLogger.MustNewDefaultLogger(tendermintLogger.LogFormatPlain, tendermintLogger.LogLevelInfo, false)
+		server := abciserver.NewSocketServer(cctx.String("addr"), app)
+		server.SetLogger(logger)
+
+		if err := server.Start(); err != nil {
+			return err
+		}
+		defer server.Stop()
+
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+		<-c
+		os.Exit(0)
+		return nil
 	},
 }

@@ -215,7 +215,7 @@ func (tendermint *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBl
 	}
 
 
-	height := int64(h.Height)+1 //TODO: overflow check?
+	height := int64(h.Height)+1
 	tendermintBlock, err := tendermint.client.Block(ctx, &height)
 	if err != nil {
 		return xerrors.Errorf("unable to get the Tendermint block by height %d", height)
@@ -251,6 +251,7 @@ func getTendermintTransactionHash(block *tenderminttypes.Block) ([32]byte, error
 }
 
 func isBlockSealed(fb *types.FullBlock, tb *tenderminttypes.Block) (bool, error) {
+	return true, nil
 	filecoinHeaderBytes, err := fb.Header.Serialize()
 	if err != nil {
 		return false, xerrors.Errorf("unable to serialize a block header: %w", err)

@@ -1,10 +1,9 @@
 package tendermint
 
 import (
+	"crypto/sha256"
 	"fmt"
-	"math/rand"
 	"os"
-	"strconv"
 	"time"
 
 	logger "github.com/go-kit/kit/log"
@@ -114,55 +113,29 @@ func (a *Application) BeginBlock(req tendermintabci.RequestBeginBlock) (resp ten
 	return tendermintabci.ResponseBeginBlock{}
 }
 
-func rnd(min, max int) int {
-	return rand.Intn(max - min) + min
-}
-
 func (a *Application) CheckTx(req tendermintabci.RequestCheckTx) (resp tendermintabci.ResponseCheckTx) {
-	filecoinBlockHeader, err := types.DecodeBlock(req.Tx)
+	a.logger.Log(req.GetTx())
+	_, err := types.DecodeSignedMessage(req.GetTx())
 	if err != nil {
-		a.logger.Log("CheckTx decoding Tx error:", err)
+		a.logger.Log("CheckTx_decoding_Tx_error:", err)
 		return tendermintabci.ResponseCheckTx{
 			Code: codeBadRequest,
-			Log: fmt.Sprintf("unable to decode a filecoin block header: %s", err.Error()),
+			Log:  fmt.Sprintf("unable to decode a Filecoin message: %s", err.Error()),
 		}
 	}
 
-	height := filecoinBlockHeader.Height
-	miner := filecoinBlockHeader.Miner
-
-	fault := rnd(1, 6)
-	if fault > 3 {
-		a.logger.Log("CheckTx error: random fault")
+	id :=sha256.Sum256(req.Tx)
+	ok := a.mempool.ExistTx(id)
+	if ok {
 		return tendermintabci.ResponseCheckTx{
 			Code: codeBadRequest,
-			Log:  fmt.Sprintf("fault while mining block with %d  height", height),
+			Log: fmt.Sprintf("tx already added: %s", id),
 		}
 	}
-
-	id := strconv.Itoa(int(height))
-
-	_, found := a.mempool.GetBlock(id)
-	if found {
-		a.logger.Log("CheckTx error: found in mempool while getting block")
-		return tendermintabci.ResponseCheckTx{
-			Code: codeBadRequest,
-			Log:  fmt.Sprintf("block with height %d already in mempool", height),
-		}
-	}
-
-	if err := a.mempool.AddBlock(id, req.Tx); err != nil {
-		a.logger.Log("CheckTx error while adding block to mempool: " + err.Error() )
-		return tendermintabci.ResponseCheckTx{
-			Code: codeStateFailure,
-			Log:  err.Error(),
-		}
-	}
+	a.mempool.AddTx(id)
 
 	level.Debug(a.logger).Log(
 		"abci", "CheckTx",
-		"filecoin Block Height", height,
-		"filecoin Block Miner", miner,
 		"tx len", len(req.Tx),
 		"ok", resp.IsOK(),
 		"code", resp.Code,
@@ -178,36 +151,23 @@ func (a *Application) CheckTx(req tendermintabci.RequestCheckTx) (resp tendermin
 }
 
 func (a *Application) DeliverTx(req tendermintabci.RequestDeliverTx) (resp tendermintabci.ResponseDeliverTx) {
-	filecoinBlockHeader, err := types.DecodeBlock(req.Tx)
+	_, err := types.DecodeSignedMessage(req.Tx)
 	if err != nil {
 		return tendermintabci.ResponseDeliverTx{
 			Code: codeBadRequest,
 			Log:  err.Error(),
 		}
 	}
-	height := filecoinBlockHeader.Height
-	id := strconv.Itoa(int(height))
-	miner := filecoinBlockHeader.Miner
 
 	defer func() {
 		level.Debug(a.logger).Log(
 			"abci", "DeliverTx",
-			"filecoin Block Height", height,
-			"filecoin Block Miner", miner,
-			"blockID", id,
 			"ok", resp.IsOK(),
 			"code", resp.Code,
 			"log", resp.Log,
 			"info", resp.Info,
 		)
 	}()
-
-	if err := a.consensus.AddBlock(id, req.Tx); err != nil {
-		return tendermintabci.ResponseDeliverTx{
-			Code: codeStateFailure,
-			Log:  err.Error(),
-		}
-	}
 
 	return tendermintabci.ResponseDeliverTx{
 		Code: tendermintabci.CodeTypeOK,
@@ -240,7 +200,6 @@ func (a *Application) Commit() (resp tendermintabci.ResponseCommit) {
 	}
 
 	copyState(a.mempool, a.consensus)
-
 
 	return tendermintabci.ResponseCommit{
 		Data: a.consensus.GetLastBlockHash(),

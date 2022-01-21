@@ -1,27 +1,32 @@
 package tendermint
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"time"
 
-	"github.com/filecoin-project/go-address"
-	"github.com/ipfs/go-cid"
+	httptendermintrpcclient "github.com/tendermint/tendermint/rpc/client/http"
 	tenderminttypes "github.com/tendermint/tendermint/types"
 	"golang.org/x/xerrors"
 
-	"github.com/filecoin-project/go-state-types/crypto"
+	"github.com/filecoin-project/go-address"
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/build"
-	"github.com/filecoin-project/lotus/chain/consensus"
+	"github.com/filecoin-project/lotus/chain/consensus/common"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
+var sent = make(map[[32]byte]bool)
+
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {
+	tendermintClient, err := httptendermintrpcclient.New(TendermintNodeAddr())
+	if err != nil {
+		log.Fatalf("unable to create a Tendermint client: %s", err)
+	}
+
 	head, err := api.ChainHead(ctx)
 	if err != nil {
 		return xerrors.Errorf("getting head: %w", err)
@@ -45,9 +50,37 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 
 		log.Info("try tendermint mining at @", base.Height())
 
+
 		msgs, err := api.MpoolSelect(ctx, base.Key(), 1)
 		if err != nil {
-			log.Errorw("selecting messages failed", "error", err)
+			log.Errorw("unable to select messages from mempool", "error", err)
+		}
+
+		log.Infof("selected %d messages from mempool", len(msgs))
+		for _, msg := range msgs {
+			log.Info("sent map:", sent)
+			tx, err := msg.Serialize()
+			if err != nil {
+				log.Error(err)
+			}
+			log.Info(tx)
+
+			// Workaround for this bug: https://github.com/tendermint/tendermint/issues/7185
+			log.Info("hash:", sha256.Sum256(tx))
+			_, ok := sent[sha256.Sum256(tx)]
+			if !ok {
+				sent[sha256.Sum256(tx)] = true
+
+				res, err := tendermintClient.BroadcastTxSync(ctx, tenderminttypes.Tx(tx))
+				log.Info("after BroadcastTxSync")
+				if err != nil {
+					log.Error("unable to send message to Tendermint error:", err)
+				}
+				log.Info(res)
+				log.Info("successfully sent msg to Tendermint")
+			} else {
+				log.Info("tx has been already sent")
+			}
 		}
 
 		// Get cross-message pool from subnet.
@@ -62,12 +95,12 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		log.Debugf("CrossMsgs being proposed in block @%s: %d", base.Height()+1, len(crossmsgs))
 
 		bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
-			Miner:            miner, //TODO: use real Tendermint ID, check that that is correct.
+			Miner:            miner,
 			Parents:          base.Key(),
-			Ticket:           nil, //TODO: define the value if needed
+			Ticket:           nil,
 			Eproof:           nil,
 			BeaconValues:     nil,
-			Messages:         msgs,
+			Messages:         nil,
 			Epoch:            base.Height() + 1,
 			Timestamp:        base.MinTimestamp() + build.BlockDelaySecs,
 			WinningPoStProof: nil,
@@ -81,7 +114,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			continue
 		}
 
-		log.Info("try Tendermint mining at @", base.Height(), base.String())
+		log.Info("try syncing Tendermint block at @", base.Height(), base.String())
 
 		err = api.SyncSubmitBlock(ctx, &types.BlockMsg{
 			Header:        bh.Header,
@@ -97,261 +130,72 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	}
 }
 
-func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.BlockTemplate) (*types.FullBlock, error) {
-	log.Infof("starting creating block in epoch %d", bt.Epoch)
-	defer log.Infof("stopping creating block in epoch %d", bt.Epoch)
-
-	pts, err := tendermint.sm.ChainStore().LoadTipSet(bt.Parents)
-	if err != nil {
-		return nil, xerrors.Errorf("failed to load parent tipset: %w", err)
-	}
-
-	st, recpts, err := tendermint.sm.TipSetState(ctx, pts)
-	if err != nil {
-		return nil, xerrors.Errorf("failed to load tipset state: %w", err)
-	}
-
-	next := &types.BlockHeader{
-		Miner:         bt.Miner, //TODO: define miner value
-		Parents:       bt.Parents.Cids(),
-		Ticket:        bt.Ticket,
-		ElectionProof: bt.Eproof,
-
-		BeaconEntries:         bt.BeaconValues,
-		Height:                bt.Epoch,
-		Timestamp:             bt.Timestamp,
-		WinPoStProof:          bt.WinningPoStProof,
-		ParentStateRoot:       st,
-		ParentMessageReceipts: recpts,
-	}
-
-	log.Infof("Next block is %+v", next)
-
-	var blsMessages []*types.Message
-	var secpkMessages []*types.SignedMessage
-
-	var blsMsgCids, secpkMsgCids, crossMsgCids []cid.Cid
-	var blsSigs []crypto.Signature
-	for _, msg := range bt.Messages {
-		if msg.Signature.Type == crypto.SigTypeBLS {
-			blsSigs = append(blsSigs, msg.Signature)
-			blsMessages = append(blsMessages, &msg.Message)
-
-			c, err := tendermint.sm.ChainStore().PutMessage(&msg.Message)
-			if err != nil {
-				return nil, err
-			}
-
-			blsMsgCids = append(blsMsgCids, c)
-		} else {
-			c, err := tendermint.sm.ChainStore().PutMessage(msg)
-			if err != nil {
-				return nil, err
-			}
-
-			secpkMsgCids = append(secpkMsgCids, c)
-			secpkMessages = append(secpkMessages, msg)
-		}
-	}
-
-	for _, msg := range bt.CrossMessages {
-		c, err := tendermint.sm.ChainStore().PutMessage(msg)
+func parseTendermintBlock(b *tenderminttypes.Block) []*types.SignedMessage {
+	var msgs []*types.SignedMessage
+	for _, tx := range b.Txs {
+		stx := tx.String()
+		txo := stx[3 : len(stx)-1]
+		txoData, err := hex.DecodeString(txo)
 		if err != nil {
-			return nil, err
+			log.Error("unable to decode string while parsing Tx:", err)
+			continue
 		}
-
-		crossMsgCids = append(crossMsgCids, c)
+		msg, err := types.DecodeSignedMessage(txoData)
+		if err != nil {
+			log.Error("unable to decode SignedMessage while parsing Tx:", err)
+			continue
+		}
+		log.Info("Received Tx:", msg)
+		msgs = append(msgs, msg)
 	}
+	return msgs
+}
 
-	store := tendermint.sm.ChainStore().ActorStore(ctx)
-	blsmsgroot, err := consensus.ToMessagesArray(store, blsMsgCids)
-	if err != nil {
-		return nil, xerrors.Errorf("building bls amt: %w", err)
-	}
-	secpkmsgroot, err := consensus.ToMessagesArray(store, secpkMsgCids)
-	if err != nil {
-		return nil, xerrors.Errorf("building secpk amt: %w", err)
-	}
-	crossmsgroot, err := consensus.ToMessagesArray(store, crossMsgCids)
-	if err != nil {
-		return nil, xerrors.Errorf("building cross amt: %w", err)
-	}
-
-	mmcid, err := store.Put(store.Context(), &types.MsgMeta{
-		BlsMessages:   blsmsgroot,
-		SecpkMessages: secpkmsgroot,
-		CrossMessages: crossmsgroot,
-	})
-	if err != nil {
-		return nil, err
-	}
-	next.Messages = mmcid
-
-	aggSig, err := consensus.AggregateSignatures(blsSigs)
-	if err != nil {
-		return nil, err
-	}
-
-	next.BLSAggregate = aggSig
-	pweight, err := tendermint.sm.ChainStore().Weight(ctx, pts)
-	if err != nil {
-		return nil, err
-	}
-	next.ParentWeight = pweight
-
-	baseFee, err := tendermint.sm.ChainStore().ComputeBaseFee(ctx, pts)
-	if err != nil {
-		return nil, xerrors.Errorf("computing base fee: %w", err)
-	}
-	next.ParentBaseFee = baseFee
-
-	nosigbytes, err := next.SigningBytes()
-	if err != nil {
-		return nil, xerrors.Errorf("failed to get signing bytes for block: %w", err)
-	}
-
-	sig, err := w.WalletSign(ctx, bt.Miner, nosigbytes, lapi.MsgMeta{
-		Type: lapi.MTBlock,
-	})
-	if err != nil {
-		return nil, xerrors.Errorf("failed to sign new block: %w", err)
-	}
-
-	next.BlockSig = sig
-
-	fullBlock := &types.FullBlock{
-		Header:        next,
-		BlsMessages:   blsMessages,
-		SecpkMessages: secpkMessages,
-		CrossMessages: bt.CrossMessages,
-	}
-
-	fullBlockHeaderBytes, err := fullBlock.Header.Serialize()
-	if err != nil {
-		return nil, xerrors.Errorf("unable to serialize a block: %w", err)
-	}
-	fullBlockHeaderHash := sha256.Sum256(fullBlockHeaderBytes)
-
-	errChan := make(chan error)
-	result := make(chan *types.FullBlock)
-	quitChan := make(chan struct{})
-	createQuitChan := make(chan struct{})
+func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.BlockTemplate) (*types.FullBlock, error) {
+	log.Infof("starting creating block for epoch %d", bt.Epoch)
+	defer log.Infof("stopping creating block for epoch %d", bt.Epoch)
 
 	ticker := time.NewTicker(1000 * time.Millisecond)
 	defer ticker.Stop()
 
-	timer := time.After(5 * time.Second)
+	orderedMsgsChan := make(chan []*types.SignedMessage)
+	height := int64(bt.Epoch) + 1
 
 	go func() {
-		log.Infof("starting Tendermint receiving goroutine in epoch %d", bt.Epoch)
-		defer log.Infof("stopping Tendermint receiving goroutine in epoch %d", bt.Epoch)
 		for {
 			select {
-			case <-quitChan:
-				return
 			case <-ctx.Done():
-				log.Info("No block was mined in Tendermint due to closing context")
-				return
-			//TODO: fix this. it stops after 10 sec
-			case <-timer:
-				log.Info("No block was mined in Tendermint due to reaching timeout")
-				log.Info("Checking the last block in Tendermint ...")
-				tendermintLastBlock, err := tendermint.client.Block(ctx, nil)
-				if err != nil {
-					log.Info("unable to get the last Tendermint block: %s", err)
-				}
-				log.Infof("Tendermint block height: %d", tendermintLastBlock.Block.Height)
-				log.Infof("Tendermint block last commit: %d", tendermintLastBlock.Block.LastCommit.Height)
-				errChan <- xerrors.New("unable to create a block due to reaching timeout")
+				orderedMsgsChan <- nil
 				return
 			case <-ticker.C:
-				log.Info("Ticker delivered")
-				height := int64(bt.Epoch)+1
-				tendermintTargetBlock, err := tendermint.client.Block(ctx, nil)
+				res, err := tendermint.client.Block(ctx, &height)
+				log.Infof("Got block %d from Tendermint", res.Block.Height)
 				if err != nil {
-					log.Info("unable to get the target Tendermint block %d: %s", height, err)
-					return
-				}
-				if tendermintTargetBlock.Block.Height < height {
-					close(createQuitChan)
-					return
-				}
-				tx := tendermintTargetBlock.Block.Txs[0].String()
-				txo := tx[3 : len(tx)-1]
-				txoData, err := hex.DecodeString(txo)
-				if err != nil {
-					errChan <- err
-					return
-				}
-				receivedTxHash := sha256.Sum256(txoData)
-				log.Infof("tendermint event commit block height: %d, mined block height: %d\n",
-					tendermintTargetBlock.Block.Height, bt.Epoch)
-				log.Infof("Tendermint receivedTxHash: %x, fullBlockHeaderHash: %x",
-					receivedTxHash, fullBlockHeaderHash)
-				if tendermintTargetBlock.Block.Height == int64(bt.Epoch)+1 &&
-					bytes.Equal(receivedTxHash[:], fullBlockHeaderHash[:]) {
-					result <- fullBlock
-					return
-				} else {
-					close(createQuitChan)
-					return
-				}
-
-			case e := <-tendermint.events:
-				continue
-				log.Info("Received an event from Tendermint")
-				block, ok := e.Data.(tenderminttypes.EventDataNewBlock)
-				if !ok {
+					log.Info("unable to get the last Tendermint block @%d: %s", height, err)
 					continue
-				}
-				log.Infof("Received an event block %d", block.Block.Height)
-				if len(block.Block.Txs) != 1 || len(block.Block.Txs[0]) < len("Tx{}") {
-					errChan <- xerrors.New("received an incorrect event from Tendermint")
-					return
-				}
-
-				tx := block.Block.Txs[0].String()
-				txo := tx[3 : len(tx)-1]
-				log.Infof("received Tendermint event with height %d", block.Block.Height)
-				txoData, err := hex.DecodeString(txo)
-				if err != nil {
-					errChan <- err
-					return
-				}
-				receivedTxHash := sha256.Sum256(txoData)
-				log.Infof("tendermint event commit block height: %d, mined block height: %d\n",
-					block.Block.LastCommit.Height, bt.Epoch)
-				log.Infof("receivedTxHash: %x, fullBlockHeaderHash: %x",
-					receivedTxHash, fullBlockHeaderHash)
-				if block.Block.Height == int64(bt.Epoch)+1 &&
-					bytes.Equal(receivedTxHash[:], fullBlockHeaderHash[:]) {
-					result <- fullBlock
-					return
-				} else  {
-					log.Info("received a block from tendermint that we didn't send")
-					close(createQuitChan)
-					return
+				} else {
+					orderedMsgsChan <- parseTendermintBlock(res.Block)
 				}
 			}
 		}
 	}()
+	log.Info("before orderedChannel")
+	msgs := <-orderedMsgsChan
+	log.Info("received msgs from orderedChannel:", len(msgs))
 
-	log.Info("Broadcast TX to Tendermint")
-	_, err = tendermint.client.BroadcastTxSync(ctx, tenderminttypes.Tx(fullBlockHeaderBytes))
+	bt.Messages = msgs
+
+	b, err := common.PrepareBlockForSignature(ctx, tendermint.sm, bt)
 	if err != nil {
-		log.Error("broadcast error:", err)
-		close(quitChan)
-		return nil, xerrors.Errorf("broadcasting a block as a TX to Tendermint: %w", err)
+		log.Info(err)
+		return nil, err
 	}
+	log.Info("after common.PrepareBlockForSignature")
 
-	for {
-		select {
-		case <- createQuitChan:
-			return nil, xerrors.New("Another block was mined")
-		case err := <-errChan:
-			return nil, err
-		case block := <-result:
-			return block, nil
-		}
+	err = common.SignBlock(ctx, w, b)
+	if err != nil {
+		log.Info(err)
+		return nil, err
 	}
+	return b, nil
 }

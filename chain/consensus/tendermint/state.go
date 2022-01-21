@@ -10,14 +10,30 @@ import (
 type State struct {
 	m              sync.Mutex
 	filecoinBlocks map[string][]byte
+	tx map[[32]byte]bool
 	commitCount    int64
 }
 
 func NewState() *State {
 	return &State{
-		filecoinBlocks: map[string][]byte{},
+		filecoinBlocks: make(map[string][]byte),
+		tx: make(map[[32]byte]bool),
 		commitCount:    0,
 	}
+}
+
+func (s *State) ExistTx(id [32]byte) bool {
+	s.m.Lock()
+	defer s.m.Unlock()
+
+	_, ok := s.tx[id]
+	return ok
+}
+
+func (s *State) AddTx(id [32]byte) {
+	s.m.Lock()
+	defer s.m.Unlock()
+	s.tx[id] = true
 }
 
 func (s *State) GetBlock(id string) ([]byte, bool) {

@@ -97,8 +97,7 @@ eudico: $(BUILD_DEPS)
 .PHONY: eudico
 BINS+=eudico
 
-tendermint:  GOFLAGS+=-tags=debug
-tendermint: $(BUILD_DEPS)
+tendermint:
 	rm -f ./tendermint
 	$(GOCC) build $(GOFLAGS) -o tendermint ./cmd/tendermint
 

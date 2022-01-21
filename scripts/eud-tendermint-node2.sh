@@ -22,5 +22,7 @@ tmux new-session -d -s "tendermint2" \; \
    ./eudico wait-api;
    ./eudico net connect $PEER;
    ./eudico net peers;
-   ./eudico wallet import ./testdata/$NODE_KEY.key; sleep 2; ./eudico tendermint miner $NODE_KEY" Enter \; \
+   ./eudico wallet import ./testdata/$NODE_KEY.key; sleep 2;
+   ./eudico set-default t1sj56f45kttzepbo7rq3mxlvn3alwc6sp4h2jbmi;
+   ./eudico tendermint miner $NODE_KEY" Enter \; \
   attach-session -t "tendermint2:0.0"
