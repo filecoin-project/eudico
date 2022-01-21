@@ -416,7 +416,10 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 
 	threshold := (len(idsStrings) / 2) + 1
 	n := NewNetwork(c.sub, c.topic)
-	f := frost.KeygenTaprootGennaro(id, ids, threshold)
+
+	// Keygen with Gennaro porotocol if failing
+	//f := frost.KeygenTaprootGennaro(id, ids, threshold)
+	f := frost.KeygenTaproot(id, ids, threshold)
 
 	handler, err := protocol.NewMultiHandler(f, []byte{1, 2, 3})
 	if err != nil {
@@ -648,6 +651,7 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 		// it signed and replace it with it. Config is not saved, neither when new DKG is done.
 		c.pubkey = genCheckpointPublicKeyTaproot(c.config.PublicKey, cidBytes)
 
+		// Get the taproot address used in taproot.sh
 		address, _ := pubkeyToTapprootAddress(c.pubkey)
 		fmt.Println(address)
 
