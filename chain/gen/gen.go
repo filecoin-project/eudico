@@ -256,7 +256,9 @@ func NewGeneratorWithSectorsAndUpgradeSchedule(numSectors int, us stmgr.UpgradeS
 	//return nil, xerrors.Errorf("creating drand beacon: %w", err)
 	//}
 
-	sm, err := stmgr.NewStateManager(cs, filcns.NewTipSetExecutor(), sys, us, beac)
+	// TODO: No cross-msgs in genesis, we can use a nil resolver
+	// sh.r = resolver.NewResolver(s.self, sh.ds, sh.pubsub, sh.ID)
+	sm, err := stmgr.NewStateManager(cs, filcns.NewTipSetExecutor(), nil, sys, us, beac)
 	if err != nil {
 		return nil, xerrors.Errorf("initing stmgr: %w", err)
 	}

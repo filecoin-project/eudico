@@ -16,7 +16,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/vm"
-	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 	"golang.org/x/xerrors"
 )
@@ -142,10 +141,10 @@ func checkTopDownMsg(pstore blockadt.Store, parentSCA, snSCA *sca.SCAState, msg 
 
 func ApplyCrossMsg(ctx context.Context, vmi *vm.VM, submgr subnet.SubnetMgr,
 	em stmgr.ExecMonitor, msg *types.Message,
-	ts *types.TipSet, netName dtypes.NetworkName) error {
+	ts *types.TipSet) error {
 	switch hierarchical.GetMsgType(msg) {
 	case hierarchical.Fund:
-		return applyFundMsg(ctx, vmi, submgr, em, msg, ts, netName)
+		return applyFundMsg(ctx, vmi, submgr, em, msg, ts)
 	case hierarchical.Release:
 		// Release messages can be applied right-away, without
 		// any pre-processing.
@@ -158,8 +157,7 @@ func ApplyCrossMsg(ctx context.Context, vmi *vm.VM, submgr subnet.SubnetMgr,
 }
 
 func applyFundMsg(ctx context.Context, vmi *vm.VM, submgr subnet.SubnetMgr,
-	em stmgr.ExecMonitor, msg *types.Message, ts *types.TipSet,
-	netName dtypes.NetworkName) error {
+	em stmgr.ExecMonitor, msg *types.Message, ts *types.TipSet) error {
 	// sanity-check: the root chain doesn't support topDown messages,
 	// so return an error if submgr is nil.
 	if submgr == nil {
@@ -172,8 +170,11 @@ func applyFundMsg(ctx context.Context, vmi *vm.VM, submgr subnet.SubnetMgr,
 		return err
 	}
 	// Get SECPK address for ID from parent chain included in message.
-	id := address.SubnetID(netName)
-	api, err := submgr.GetSubnetAPI(id.Parent())
+	subFrom, err := msg.From.Subnet()
+	if err != nil {
+		return xerrors.Errorf("getting subnet from msg: %w", err)
+	}
+	api, err := submgr.GetSubnetAPI(subFrom)
 	if err != nil {
 		return xerrors.Errorf("getting subnet API: %w", err)
 	}
@@ -210,7 +211,7 @@ func applyMsg(ctx context.Context, vmi *vm.VM, em stmgr.ExecMonitor,
 		Params:     serparams,
 	}
 
-	// Before applying the message in subnget, if the destination
+	// Before applying the message in subnet, if the destination
 	// account hasn't been initialized, init the account actor.
 	// TODO: When handling arbitrary cross-messages, we should check if
 	// we need to trigger the state change in this subnet, if not we may not

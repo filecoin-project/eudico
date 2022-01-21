@@ -201,8 +201,11 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 	// figure out if it works.
 	sh.bs = blockstore.FromDatastore(s.ds)
 
+	// Instantiate new cross-msg resolver
+	sh.r = resolver.NewResolver(s.self, sh.ds, sh.pubsub, sh.ID)
+
 	// Select the right TipSetExecutor for the consensus algorithms chosen.
-	tsExec := common.TipSetExecutor(s, dtypes.NetworkName(id))
+	tsExec := common.TipSetExecutor(s)
 	weight, err := subcns.Weight(consensus)
 	if err != nil {
 		log.Errorw("Error getting weight for consensus", "subnetID", id, "err", err)
@@ -210,7 +213,7 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 	}
 
 	sh.ch = store.NewChainStore(sh.bs, sh.bs, sh.ds, weight, s.j)
-	sh.sm, err = stmgr.NewStateManager(sh.ch, tsExec, s.syscalls, s.us, s.beacon)
+	sh.sm, err = stmgr.NewStateManager(sh.ch, tsExec, sh.r, s.syscalls, s.us, s.beacon)
 	if err != nil {
 		log.Errorw("Error creating state manager for subnet", "subnetID", id, "err", err)
 		return err
@@ -223,8 +226,6 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 		log.Errorw("Error loading genesis bootstrap for subnet", "subnetID", id, "err", err)
 		return err
 	}
-	// Instantiate new cross-msg resolver
-	sh.r = resolver.NewResolver(s.self, sh.ds, sh.pubsub, sh.ID)
 	// Instantiate consensus
 	sh.cons, err = subcns.New(consensus, sh.sm, s, s.beacon, sh.r, s.verifier, gen, dtypes.NetworkName(id))
 	if err != nil {

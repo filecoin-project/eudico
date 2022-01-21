@@ -4,13 +4,12 @@ import (
 	"context"
 	"sync/atomic"
 
-	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/network"
 	"github.com/filecoin-project/lotus/chain/consensus/actors/registry"
 	"github.com/filecoin-project/lotus/chain/consensus/actors/reward"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/rand"
-	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"go.opencensus.io/stats"
@@ -51,25 +50,21 @@ func DefaultUpgradeSchedule() stmgr.UpgradeSchedule {
 
 type tipSetExecutor struct {
 	submgr subnet.SubnetMgr
-	// To avoid having to get it from the state manager
-	// for every message, we store this info here from the
-	// beginning (this potentially never changes).
-	netName dtypes.NetworkName
 }
 
 func (t *tipSetExecutor) NewActorRegistry() *vm.ActorRegistry {
 	return registry.NewActorRegistry()
 }
 
-func TipSetExecutor(submgr subnet.SubnetMgr, netName dtypes.NetworkName) stmgr.Executor {
-	return &tipSetExecutor{submgr, netName}
+func TipSetExecutor(submgr subnet.SubnetMgr) stmgr.Executor {
+	return &tipSetExecutor{submgr}
 }
 
 func RootTipSetExecutor() stmgr.Executor {
-	return &tipSetExecutor{nil, dtypes.NetworkName(address.RootSubnet)}
+	return &tipSetExecutor{nil}
 }
 
-func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager, parentEpoch abi.ChainEpoch, pstate cid.Cid, bms []store.BlockMessages, epoch abi.ChainEpoch, r vm.Rand, em stmgr.ExecMonitor, baseFee abi.TokenAmount, ts *types.TipSet) (cid.Cid, cid.Cid, error) {
+func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager, cr *resolver.Resolver, parentEpoch abi.ChainEpoch, pstate cid.Cid, bms []store.BlockMessages, epoch abi.ChainEpoch, r vm.Rand, em stmgr.ExecMonitor, baseFee abi.TokenAmount, ts *types.TipSet) (cid.Cid, cid.Cid, error) {
 
 	done := metrics.Timer(ctx, metrics.VMApplyBlocksTotal)
 	defer done()
@@ -191,7 +186,8 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 				continue
 			}
 			log.Infof("Executing cross message: %v", crossm)
-			if err := ApplyCrossMsg(ctx, vmi, t.submgr, em, m, ts, t.netName); err != nil {
+
+			if err := ApplyCrossMsg(ctx, vmi, t.submgr, em, m, ts); err != nil {
 				return cid.Undef, cid.Undef, xerrors.Errorf("cross messsage application failed: %w", err)
 			}
 			processedMsgs[m.Cid()] = struct{}{}
@@ -227,7 +223,7 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 	return st, rectroot, nil
 }
 
-func (t *tipSetExecutor) ExecuteTipSet(ctx context.Context, sm *stmgr.StateManager, ts *types.TipSet, em stmgr.ExecMonitor) (stateroot cid.Cid, rectsroot cid.Cid, err error) {
+func (t *tipSetExecutor) ExecuteTipSet(ctx context.Context, sm *stmgr.StateManager, cr *resolver.Resolver, ts *types.TipSet, em stmgr.ExecMonitor) (stateroot cid.Cid, rectsroot cid.Cid, err error) {
 	ctx, span := trace.StartSpan(ctx, "computeTipSetState")
 	defer span.End()
 
@@ -263,7 +259,7 @@ func (t *tipSetExecutor) ExecuteTipSet(ctx context.Context, sm *stmgr.StateManag
 
 	baseFee := blks[0].ParentBaseFee
 
-	return t.ApplyBlocks(ctx, sm, parentEpoch, pstate, blkmsgs, blks[0].Height, r, em, baseFee, ts)
+	return t.ApplyBlocks(ctx, sm, cr, parentEpoch, pstate, blkmsgs, blks[0].Height, r, em, baseFee, ts)
 }
 
 var _ stmgr.Executor = &tipSetExecutor{}
