@@ -262,7 +262,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 					return false, nil, err
 
 				}
-				log.Infow("We have a checkpoint up to height : ", ts.Height())
+				log.Infow("We have a checkpoint up to height : ", "height", ts.Height())
 				c.synced = true
 				c.height = ts.Height()
 			} else {
@@ -297,7 +297,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 		}
 
 		// Activate checkpointing every 25 blocks
-		log.Infow("Height:", newTs.Height().String())
+		log.Infow("Height:", "height", newTs.Height().String())
 		fmt.Println("Height:", newTs.Height())
 		// NOTES: this will only work in delegated consensus
 		// Wait for more tipset to valid the height and be sure it is valid
@@ -408,7 +408,7 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	idsStrings := participants
 	sort.Strings(idsStrings)
 
-	log.Infow("participants list :", idsStrings)
+	log.Infow("participants list :", "participants", idsStrings)
 
 	ids := c.formIDSlice(idsStrings)
 
@@ -431,7 +431,7 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 		// if a participant is mibehaving the DKG entirely fail (no fallback)
 		return err
 	}
-	log.Infow("result :", r)
+	log.Infow("result :", "result", r)
 
 	var ok bool
 	c.newconfig, ok = r.(*keygen.TaprootConfig)
@@ -462,8 +462,8 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 	}
 
 	idsStrings := c.orderParticipantsList()
-	log.Infow("participants list :", idsStrings)
-	log.Infow("precedent tx", c.ptxid)
+	log.Infow("participants list :", "participants", idsStrings)
+	log.Infow("precedent tx", "txid", c.ptxid)
 	ids := c.formIDSlice(idsStrings)
 
 	if c.ptxid == "" {
@@ -482,7 +482,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 			return err
 		}
 		c.ptxid = ptxid
-		log.Infow("found precedent txid:", c.ptxid)
+		log.Infow("found precedent txid:", "txid", c.ptxid)
 	}
 
 	index := 0
@@ -534,7 +534,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 	if err != nil {
 		return err
 	}
-	log.Infow("result :", r)
+	log.Infow("result :", "result", r)
 
 	// if signing is a success we register the new value
 	merkleRoot := hashMerkleRoot(pubkey, cp)
@@ -560,7 +560,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 
 	/* Need to keep this to build next one */
 	newtxid := result["result"].(string)
-	log.Infow("new Txid:", newtxid)
+	log.Infow("new Txid:", "newtxid", newtxid)
 	c.ptxid = newtxid
 
 	return nil
