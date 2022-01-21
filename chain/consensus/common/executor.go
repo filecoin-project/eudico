@@ -2,6 +2,7 @@ package common
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 
 	"github.com/filecoin-project/go-state-types/network"
@@ -172,21 +173,25 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 			return cid.Undef, cid.Undef, xerrors.Errorf("reward application message failed (exit %d): %s", ret.ExitCode, ret.ActorErr)
 		}
 
+		// Sort cross-messages before applying them
+		crossm, err := sortCrossMsgs(ctx, sm, cr, b.CrossMessages, ts)
+		if err != nil {
+			return cid.Undef, cid.Undef, xerrors.Errorf("error sorting cross-msgs: %w", err)
+		}
+
 		processedMsgs = make(map[cid.Cid]struct{})
-		for _, crossm := range b.CrossMessages {
-			m := crossm.VMMessage()
+		for _, m := range crossm {
+			// m := crossm.VMMessage()
 			// additional sanity-check to avoid processing a message
 			// included in a block twice (although this is already checked
 			// by SCA, and there are a few more additional checks, so this
 			// may not be needed).
-			// TODO: We may need to sort nonces to avoid applying them in the
-			// wrong order (in case they haven't been included in order in the
-			// block)
 			if _, found := processedMsgs[m.Cid()]; found {
 				continue
 			}
 			log.Infof("Executing cross message: %v", crossm)
 
+			fmt.Println(">>>>>>>>>>>>>>>>>>>> Applying crossmsg", m)
 			if err := ApplyCrossMsg(ctx, vmi, t.submgr, em, m, ts); err != nil {
 				return cid.Undef, cid.Undef, xerrors.Errorf("cross messsage application failed: %w", err)
 			}

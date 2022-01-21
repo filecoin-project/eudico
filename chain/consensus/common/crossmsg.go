@@ -2,6 +2,7 @@ package common
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	"github.com/filecoin-project/go-address"
@@ -266,4 +267,57 @@ func getSCAState(ctx context.Context, sm *stmgr.StateManager, submgr subnet.Subn
 	// For subnets getting SCA state for the current baseTs is worthless.
 	// We get it the standard way.
 	return submgr.GetSCAState(ctx, id)
+}
+
+func sortCrossMsgs(ctx context.Context, sm *stmgr.StateManager, r *resolver.Resolver, msgs []types.ChainMsg, ts *types.TipSet) ([]*types.Message, error) {
+	buApply := map[uint64][]*types.Message{}
+	out := make([]*types.Message, len(msgs))
+
+	// Get messages that require sorting and organize them by duplicate nonce
+	i := 0
+	for _, cm := range msgs {
+		m := cm.VMMessage()
+		switch hierarchical.GetMsgType(m) {
+		// Bottom-up messages are the ones that require exhaustive ordering
+		// top-down already come in order of nonce.
+		case hierarchical.Release, hierarchical.Cross:
+			_, ok := buApply[m.Nonce]
+			if !ok {
+				buApply[m.Nonce] = make([]*types.Message, 0)
+			}
+			buApply[m.Nonce] = append(buApply[m.Nonce], m)
+			// Append top-down messages as they can be ordered directly.
+		case hierarchical.Fund:
+			out[i] = m
+			i++
+		}
+	}
+
+	// Sort meta nonces
+	j := 0
+	metaNonces := make(NonceArray, len(buApply))
+	for k := range buApply {
+		metaNonces[j] = k
+		j++
+	}
+	sort.Sort(metaNonces)
+
+	// GetSCA to get bottomUp messages for nonce. We don't need
+	// subnet-specific information here.
+	sca, store, err := getSCAState(ctx, sm, nil, address.UndefSubnetID, ts)
+	if err != nil {
+		return []*types.Message{}, err
+	}
+	// For each meta nonce, get all messages and sort them
+	// by nonce.
+	for _, n := range metaNonces {
+		mabu, err := sortByOriginalNonce(r, n, sca, store, buApply[n])
+		if err != nil {
+			return []*types.Message{}, err
+		}
+		copy(out[i:], mabu)
+		i += len(mabu)
+	}
+	return out, nil
+
 }
