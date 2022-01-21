@@ -297,7 +297,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 		}
 
 		// Activate checkpointing every 25 blocks
-		log.Infow("Height:", newTs.Height())
+		log.Infow("Height:", newTs.Height().String())
 		fmt.Println("Height:", newTs.Height())
 		// NOTES: this will only work in delegated consensus
 		// Wait for more tipset to valid the height and be sure it is valid
