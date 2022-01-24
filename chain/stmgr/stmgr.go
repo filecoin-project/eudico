@@ -412,7 +412,3 @@ func (sm *StateManager) GetRandomnessFromTickets(ctx context.Context, personaliz
 
 	return r.GetChainRandomnessV1(ctx, personalization, randEpoch, entropy)
 }
-
-func (sm *StateManager) CrossMsgResolver() *resolver.Resolver {
-	return sm.cr
-}

@@ -343,8 +343,8 @@ func (s *SubnetMgr) getBottomUpPool(ctx context.Context, id address.SubnetID, he
 
 	// We return from AppliedBottomUpNonce all the metas that have been resolved
 	// successfully. They need to be applied sequentially, so the moment we find
-	// and unresolved meta we return.
-	// NOTE: This approach may affect the liveliness of hierarchical consensus.
+	// an unresolved meta we return.
+	// FIXME: This approach may affect the liveliness of hierarchical consensus.
 	// Assuming data availability and honest nodes we should include a fallback
 	// scheme to prevent the protocol from stalling.
 	for i := toApply; i < toApply+uint64(len(metas)); i++ {

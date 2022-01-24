@@ -28,7 +28,7 @@ func TestPoolTopDown(t *testing.T) {
 
 	// After the finality threshold we are free to re-propose previous ones if needed.
 	// (state changes would probably have propagated already).
-	height += finalityThreshold
+	height += finalityWait
 	cm.applyTopDown(nonce+3, id, height)
 	require.False(t, cm.isTopDownApplied(nonce+2, id, height))
 	require.False(t, cm.isTopDownApplied(nonce+3, id, height))
@@ -56,7 +56,7 @@ func TestPoolBottomUp(t *testing.T) {
 
 	// After the finality threshold we are free to re-propose previous ones if needed.
 	// (state changes would probably have propagated already).
-	height += finalityThreshold
+	height += finalityWait
 	cm.applyBottomUp(nonce+3, id, height)
 	require.False(t, cm.isBottomUpApplied(nonce+2, id, height))
 	require.False(t, cm.isBottomUpApplied(nonce+3, id, height))

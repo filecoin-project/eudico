@@ -303,7 +303,7 @@ func (r *Resolver) processPush(rmsg *ResolveMsg) (pubsub.ValidationResult, error
 	}
 
 	// TODO: Introduce checks here to ensure that push messages come from the right
-	// source? How can we know this?
+	// source?
 	return pubsub.ValidationAccept, nil
 }
 
@@ -364,7 +364,7 @@ func (r *Resolver) setLocal(c cid.Cid, msgs *sca.CrossMsgs) error {
 	return r.ds.Put(datastore.NewKey(c.String()), w.Bytes())
 }
 
-func (r *Resolver) pushMsg(m *ResolveMsg, id address.SubnetID) error {
+func (r *Resolver) publishMsg(m *ResolveMsg, id address.SubnetID) error {
 	b, err := EncodeResolveMsg(m)
 	if err != nil {
 		return xerrors.Errorf("error serializing resolveMsg: %v", err)
@@ -463,7 +463,7 @@ func (r *Resolver) PushCrossMsgs(msgs sca.CrossMsgs, id address.SubnetID, isResp
 	if isResponse {
 		m.Type = Response
 	}
-	return r.pushMsg(m, id)
+	return r.publishMsg(m, id)
 }
 
 func (r *Resolver) PushMsgFromCheckpoint(ch *schema.Checkpoint, st *sca.SCAState, store adt.Store) error {
@@ -495,5 +495,5 @@ func (r *Resolver) PullCrossMsgs(c cid.Cid, id address.SubnetID) error {
 		From: r.netName,
 		Cid:  c,
 	}
-	return r.pushMsg(m, id)
+	return r.publishMsg(m, id)
 }

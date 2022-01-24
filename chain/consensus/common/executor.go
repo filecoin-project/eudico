@@ -146,17 +146,22 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 			processedMsgs[m.Cid()] = struct{}{}
 		}
 
-		// FIXME: This is the reward for a miner.
+		// FIXME: Here we send rewards for miners.
 		// Rewards are only applied in the root, for subnets
-		// rewards are disabled at this point.
+		// rewards are disabled at this point and miners only get
+		// the gas reward.
 		// if t.submgr == nil we are in root net.
+		reward := gasReward
+		// In root consensus, there is currently a static reward of 1FIL per block.
+		// (this is mainly for testing purposes).
 		if t.submgr == nil {
-			if err := applyMiningRewards(ctx, vmi, em, b, epoch, ts); err != nil {
-				return cid.Undef, cid.Undef, err
-			}
+			reward = big.Add(reward, types.FromFil(1))
+		}
+		if err := applyMiningRewards(ctx, vmi, em, b, epoch, ts, reward); err != nil {
+			return cid.Undef, cid.Undef, err
 		}
 
-		// Sort cross-messages before applying them
+		// Sort cross-messages deterministically before applying them
 		crossm, err := sortCrossMsgs(ctx, sm, cr, b.CrossMessages, ts)
 		if err != nil {
 			return cid.Undef, cid.Undef, xerrors.Errorf("error sorting cross-msgs: %w", err)
@@ -210,12 +215,12 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 	return st, rectroot, nil
 }
 
-func applyMiningRewards(ctx context.Context, vmi *vm.VM, em stmgr.ExecMonitor, b store.BlockMessages, epoch abi.ChainEpoch, ts *types.TipSet) error {
+func applyMiningRewards(ctx context.Context, vmi *vm.VM, em stmgr.ExecMonitor, b store.BlockMessages, epoch abi.ChainEpoch, ts *types.TipSet, value abi.TokenAmount) error {
 	rwMsg := &types.Message{
 		From:       reward.RewardActorAddr,
 		To:         b.Miner,
 		Nonce:      uint64(epoch),
-		Value:      types.FromFil(1), // FIXME: always reward 1 fil
+		Value:      value,
 		GasFeeCap:  types.NewInt(0),
 		GasPremium: types.NewInt(0),
 		GasLimit:   1 << 30,
