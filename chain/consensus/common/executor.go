@@ -2,7 +2,6 @@ package common
 
 import (
 	"context"
-	"fmt"
 	"sync/atomic"
 
 	"github.com/filecoin-project/go-state-types/network"
@@ -147,30 +146,14 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 			processedMsgs[m.Cid()] = struct{}{}
 		}
 
-		// TODO: This is the reward for a miner, we should maybe remove it
-		// in subnets
-		rwMsg := &types.Message{
-			From:       reward.RewardActorAddr,
-			To:         b.Miner,
-			Nonce:      uint64(epoch),
-			Value:      types.FromFil(1), // always reward 1 fil
-			GasFeeCap:  types.NewInt(0),
-			GasPremium: types.NewInt(0),
-			GasLimit:   1 << 30,
-			Method:     0,
-		}
-		ret, actErr := vmi.ApplyImplicitMessage(ctx, rwMsg)
-		if actErr != nil {
-			return cid.Undef, cid.Undef, xerrors.Errorf("failed to apply reward message for miner %s: %w", b.Miner, actErr)
-		}
-		if em != nil {
-			if err := em.MessageApplied(ctx, ts, rwMsg.Cid(), rwMsg, ret, true); err != nil {
-				return cid.Undef, cid.Undef, xerrors.Errorf("callback failed on reward message: %w", err)
+		// FIXME: This is the reward for a miner.
+		// Rewards are only applied in the root, for subnets
+		// rewards are disabled at this point.
+		// if t.submgr == nil we are in root net.
+		if t.submgr == nil {
+			if err := applyMiningRewards(ctx, vmi, em, b, epoch, ts); err != nil {
+				return cid.Undef, cid.Undef, err
 			}
-		}
-
-		if ret.ExitCode != 0 {
-			return cid.Undef, cid.Undef, xerrors.Errorf("reward application message failed (exit %d): %s", ret.ExitCode, ret.ActorErr)
 		}
 
 		// Sort cross-messages before applying them
@@ -191,7 +174,6 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 			}
 			log.Infof("Executing cross message: %v", crossm)
 
-			fmt.Println(">>>>>>>>>>>>>>>>>>>> Applying crossmsg", m)
 			if err := ApplyCrossMsg(ctx, vmi, t.submgr, em, m, ts); err != nil {
 				return cid.Undef, cid.Undef, xerrors.Errorf("cross messsage application failed: %w", err)
 			}
@@ -226,6 +208,33 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 		metrics.VMApplied.M(int64(atomic.LoadUint64(&vm.StatApplied))))
 
 	return st, rectroot, nil
+}
+
+func applyMiningRewards(ctx context.Context, vmi *vm.VM, em stmgr.ExecMonitor, b store.BlockMessages, epoch abi.ChainEpoch, ts *types.TipSet) error {
+	rwMsg := &types.Message{
+		From:       reward.RewardActorAddr,
+		To:         b.Miner,
+		Nonce:      uint64(epoch),
+		Value:      types.FromFil(1), // FIXME: always reward 1 fil
+		GasFeeCap:  types.NewInt(0),
+		GasPremium: types.NewInt(0),
+		GasLimit:   1 << 30,
+		Method:     0,
+	}
+	ret, actErr := vmi.ApplyImplicitMessage(ctx, rwMsg)
+	if actErr != nil {
+		return xerrors.Errorf("failed to apply reward message for miner %s: %w", b.Miner, actErr)
+	}
+	if em != nil {
+		if err := em.MessageApplied(ctx, ts, rwMsg.Cid(), rwMsg, ret, true); err != nil {
+			return xerrors.Errorf("callback failed on reward message: %w", err)
+		}
+	}
+
+	if ret.ExitCode != 0 {
+		return xerrors.Errorf("reward application message failed (exit %d): %s", ret.ExitCode, ret.ActorErr)
+	}
+	return nil
 }
 
 func (t *tipSetExecutor) ExecuteTipSet(ctx context.Context, sm *stmgr.StateManager, cr *resolver.Resolver, ts *types.TipSet, em stmgr.ExecMonitor) (stateroot cid.Cid, rectsroot cid.Cid, err error) {

@@ -21,7 +21,7 @@ import (
 // finalityWait is the number of epochs that we will wait
 // before being able to re-propose a cross-msg. This is used to
 // wait for all the state changes to be propagated.
-const finalityWait = 5
+const finalityWait = 15
 
 func newCrossMsgPool() *crossMsgPool {
 	return &crossMsgPool{pool: make(map[address.SubnetID]*lastApplied)}
@@ -347,7 +347,7 @@ func (s *SubnetMgr) getBottomUpPool(ctx context.Context, id address.SubnetID, he
 	// NOTE: This approach may affect the liveliness of hierarchical consensus.
 	// Assuming data availability and honest nodes we should include a fallback
 	// scheme to prevent the protocol from stalling.
-	for i := toApply; i < uint64(len(metas)); i++ {
+	for i := toApply; i < toApply+uint64(len(metas)); i++ {
 		cross, ok := isFound[i]
 		// If not found, return
 		if !ok {

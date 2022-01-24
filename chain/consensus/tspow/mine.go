@@ -88,7 +88,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			continue
 		}
 
-		log.Info("try PpW mining at @", base.Height(), base.String())
+		log.Info("try PoW mining at @", base.Height(), base.String())
 
 		err = api.SyncSubmitBlock(ctx, &types.BlockMsg{
 			Header:        bh.Header,

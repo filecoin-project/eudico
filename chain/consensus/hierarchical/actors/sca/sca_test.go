@@ -560,6 +560,33 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 		prevs[mm.To] = mm
 	}
 
+	t.Log("commit checkpoint with more cross-msgs for subnet")
+	epoch = abi.ChainEpoch(13)
+	rt.SetCaller(SubnetActorAddr, actors.SubnetActorCodeID)
+	// Only subnet actors can call.
+	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
+	rt.SetEpoch(epoch)
+	ch = newCheckpoint(sh.ID, epoch+6)
+	// Msgs to this subnet
+	addMsgMeta(ch, sh.ID, address.RootSubnet, "r2")
+	addMsgMeta(ch, sh.ID, address.RootSubnet, "r3")
+	ch.SetPrevious(prevcid)
+	prevcid, _ = ch.Cid()
+
+	b, err = ch.MarshalBinary()
+	require.NoError(t, err)
+	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+	rt.Verify()
+
+	// Check that the BottomUpMsgs to be applied are added with the right nonce.
+	st = getState(rt)
+	_, found, err = st.GetBottomUpMsgMeta(adt.AsStore(rt), 2)
+	require.NoError(t, err)
+	require.True(t, found)
+	_, found, err = st.GetBottomUpMsgMeta(adt.AsStore(rt), 3)
+	require.NoError(t, err)
+	require.True(t, found)
+
 	t.Log("commit second checkpoint with overlapping metas")
 	rt.SetCaller(SubnetActorAddr, actors.SubnetActorCodeID)
 	// Only subnet actors can call.
