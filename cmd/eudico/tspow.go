@@ -12,6 +12,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/gen/slashfilter"
 	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
@@ -30,9 +31,9 @@ import (
 	"github.com/filecoin-project/lotus/node"
 )
 
-func NewRootTSPoWConsensus(sm *stmgr.StateManager, beacon beacon.Schedule,
+func NewRootTSPoWConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
 	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
-	return tspow.NewTSPoWConsensus(sm, nil, beacon, verifier, genesis, netName)
+	return tspow.NewTSPoWConsensus(sm, nil, beacon, r, verifier, genesis, netName)
 }
 
 var tpowCmd = &cli.Command{
@@ -85,7 +86,7 @@ var tpowGenesisCmd = &cli.Command{
 
 		// TODO: Make configurable
 		checkPeriod := sca.DefaultCheckpointPeriod
-		if err := subnet.WriteGenesis(hierarchical.RootSubnet, hierarchical.PoW, address.Undef, vreg, rem, checkPeriod, uint64(time.Now().Unix()), f); err != nil {
+		if err := subnet.WriteGenesis(address.RootSubnet, hierarchical.PoW, address.Undef, vreg, rem, checkPeriod, uint64(time.Now().Unix()), f); err != nil {
 			return xerrors.Errorf("write genesis car: %w", err)
 		}
 

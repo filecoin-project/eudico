@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"io"
 
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/ipfs/go-cid"
 	ipld "github.com/ipld/go-ipld-prime"
@@ -85,7 +85,7 @@ type ChildCheck struct {
 type CrossMsgMeta struct {
 	From    string // Determines the source of the messages being propagated in MsgsCid
 	To      string // Determines the destination of the messages included in MsgsCid
-	MsgsCid []byte // cid.Cid
+	MsgsCid []byte // cid.Cid of the msgMeta with the list of msgs.
 	Nonce   int    // Nonce of the msgMeta
 }
 
@@ -200,7 +200,7 @@ func noStoreLinkSystem() ipld.LinkSystem {
 //
 // This is the template returned by the SCA actor for the miners to include
 // the corresponding information and sign before commitment.
-func NewRawCheckpoint(source hierarchical.SubnetID, epoch abi.ChainEpoch) *Checkpoint {
+func NewRawCheckpoint(source address.SubnetID, epoch abi.ChainEpoch) *Checkpoint {
 	return &Checkpoint{
 		Data: CheckData{
 			Source:       source.String(),
@@ -211,7 +211,7 @@ func NewRawCheckpoint(source hierarchical.SubnetID, epoch abi.ChainEpoch) *Check
 
 }
 
-func NewCrossMsgMeta(from, to hierarchical.SubnetID) *CrossMsgMeta {
+func NewCrossMsgMeta(from, to address.SubnetID) *CrossMsgMeta {
 	return &CrossMsgMeta{
 		From:  from.String(),
 		To:    to.String(),
@@ -240,8 +240,8 @@ func (c *Checkpoint) PreviousCheck() (cid.Cid, error) {
 	return cid, err
 }
 
-func (c *Checkpoint) Source() hierarchical.SubnetID {
-	return hierarchical.SubnetID(c.Data.Source)
+func (c *Checkpoint) Source() address.SubnetID {
+	return address.SubnetID(c.Data.Source)
 }
 
 func (c *Checkpoint) MarshalBinary() ([]byte, error) {
@@ -305,12 +305,12 @@ func (cm *CrossMsgMeta) Cid() (cid.Cid, error) {
 	return c, err
 }
 
-func (cm *CrossMsgMeta) GetFrom() hierarchical.SubnetID {
-	return hierarchical.SubnetID(cm.From)
+func (cm *CrossMsgMeta) GetFrom() address.SubnetID {
+	return address.SubnetID(cm.From)
 }
 
-func (cm *CrossMsgMeta) GetTo() hierarchical.SubnetID {
-	return hierarchical.SubnetID(cm.To)
+func (cm *CrossMsgMeta) GetTo() address.SubnetID {
+	return address.SubnetID(cm.To)
 }
 
 func (cm *CrossMsgMeta) SetCid(c cid.Cid) {
@@ -415,7 +415,7 @@ func (c *ChildCheck) hasCheck(cid cid.Cid) int {
 	return -1
 }
 
-func (c *Checkpoint) HasChildSource(source hierarchical.SubnetID) int {
+func (c *Checkpoint) HasChildSource(source address.SubnetID) int {
 	for i, ch := range c.Data.Childs {
 		if ch.Source == source.String() {
 			return i
@@ -428,7 +428,7 @@ func (c *Checkpoint) LenChilds() int {
 	return len(c.Data.Childs)
 }
 
-func (c *Checkpoint) GetSourceChilds(source hierarchical.SubnetID) ChildCheck {
+func (c *Checkpoint) GetSourceChilds(source address.SubnetID) ChildCheck {
 	i := c.HasChildSource(source)
 	return c.GetChilds()[i]
 }
@@ -456,7 +456,7 @@ func (c *Checkpoint) CrossMsgs() []CrossMsgMeta {
 
 // CrossMsgMeta returns the MsgMeta from and to a subnet from a checkpoint
 // and the index the crossMsgMeta is in the slice
-func (c *Checkpoint) CrossMsgMeta(from, to hierarchical.SubnetID) (int, *CrossMsgMeta) {
+func (c *Checkpoint) CrossMsgMeta(from, to address.SubnetID) (int, *CrossMsgMeta) {
 	for i, m := range c.Data.CrossMsgs {
 		if m.From == from.String() && m.To == to.String() {
 			return i, &m
@@ -487,7 +487,7 @@ func (c *Checkpoint) SetMsgMetaCid(i int, cd cid.Cid) {
 }
 
 // CrossMsgsTo returns the crossMsgsMeta directed to a specific subnet
-func (c *Checkpoint) CrossMsgsTo(to hierarchical.SubnetID) []CrossMsgMeta {
+func (c *Checkpoint) CrossMsgsTo(to address.SubnetID) []CrossMsgMeta {
 	out := make([]CrossMsgMeta, 0)
 	for _, m := range c.Data.CrossMsgs {
 		if m.To == to.String() {

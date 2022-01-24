@@ -121,6 +121,7 @@ const (
 	SetApiEndpointKey
 
 	StartSubnetMgrKey
+	StartCrossMsgResolverMgrKey
 
 	_nInvokes // keep this last
 )

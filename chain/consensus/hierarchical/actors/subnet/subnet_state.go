@@ -56,7 +56,7 @@ type SubnetState struct {
 	// Human-readable name of the subnet.
 	Name string
 	// ID of the parent subnet
-	ParentID hierarchical.SubnetID
+	ParentID address.SubnetID
 	// Type of Consensus algorithm.
 	Consensus hierarchical.ConsensusType
 	// Minimum stake required for an address to join the subnet
@@ -132,7 +132,7 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to persist empty array")
 	*/
 
-	parentID := hierarchical.SubnetID(params.NetworkName)
+	parentID := address.SubnetID(params.NetworkName)
 
 	return &SubnetState{
 		ParentID:      parentID,

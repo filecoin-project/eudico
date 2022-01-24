@@ -5,8 +5,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	checkTypes "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/types"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/utils"
@@ -19,7 +19,7 @@ import (
 func TestMarshalCheckpoint(t *testing.T) {
 	c1, _ := schema.Linkproto.Sum([]byte("a"))
 	epoch := abi.ChainEpoch(1000)
-	ch := schema.NewRawCheckpoint(hierarchical.RootSubnet, epoch)
+	ch := schema.NewRawCheckpoint(address.RootSubnet, epoch)
 	ch.SetPrevious(c1)
 
 	// Add child checkpoints
@@ -54,7 +54,7 @@ func TestMarshalCheckpoint(t *testing.T) {
 	// Check that Equals works.
 	c1, _ = schema.Linkproto.Sum([]byte("b"))
 	epoch = abi.ChainEpoch(1001)
-	ch = schema.NewRawCheckpoint(hierarchical.RootSubnet, epoch)
+	ch = schema.NewRawCheckpoint(address.RootSubnet, epoch)
 	ch.SetPrevious(c1)
 	eq, err = ch.Equals(ch2)
 	require.NoError(t, err)
@@ -84,7 +84,7 @@ func TestMarshalMsgMeta(t *testing.T) {
 
 func TestMarshalEmptyPrevious(t *testing.T) {
 	epoch := abi.ChainEpoch(1000)
-	ch := schema.NewRawCheckpoint(hierarchical.RootSubnet, epoch)
+	ch := schema.NewRawCheckpoint(address.RootSubnet, epoch)
 	pr, _ := ch.PreviousCheck()
 	require.Equal(t, pr, schema.NoPreviousCheck)
 

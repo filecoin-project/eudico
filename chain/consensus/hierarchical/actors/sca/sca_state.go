@@ -1,8 +1,6 @@
 package sca
 
 import (
-	"math"
-
 	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
@@ -34,7 +32,7 @@ const (
 	// MaxNonce supported in cross messages
 	// Bear in mind that we cast to Int64 when marshalling in
 	// some places
-	MaxNonce = math.MaxInt64
+	MaxNonce = ^uint64(0)
 )
 
 var (
@@ -58,7 +56,7 @@ const (
 // SCAState represents the state of the Subnet Coordinator Actor
 type SCAState struct {
 	// ID of the current network
-	NetworkName hierarchical.SubnetID
+	NetworkName address.SubnetID
 	// Total subnets below this one.
 	TotalSubnets uint64
 	// Minimum stake to create a new subnet
@@ -74,10 +72,10 @@ type SCAState struct {
 	// CheckMsgMetaRegistry
 	// Stores information about the list of messages and child msgMetas being
 	// propagated in checkpoints to the top of the hierarchy.
-	CheckMsgsMetaRegistry cid.Cid // HAMT[cid]CrossMsgMeta
-	Nonce                 uint64  // Latest nonce of cross message sent from subnet.
-	BottomUpNonce         uint64  // BottomUpNonce of down top messages for msgMeta received from checkpoints (probably redundant)
-	BottomUpMsgsMeta      cid.Cid // AMT[schema.CrossMsgMeta] from child subnets to apply.
+	CheckMsgsRegistry cid.Cid // HAMT[cid]CrossMsgs
+	Nonce             uint64  // Latest nonce of cross message sent from subnet.
+	BottomUpNonce     uint64  // BottomUpNonce of bottomup messages for msgMeta received from checkpoints (probably redundant)
+	BottomUpMsgsMeta  cid.Cid // AMT[schema.CrossMsgs] from child subnets to apply.
 
 	// AppliedNonces
 	//
@@ -104,7 +102,7 @@ func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, e
 		return nil, xerrors.Errorf("failed to create empty AMT: %w", err)
 	}
 
-	nn := hierarchical.SubnetID(params.NetworkName)
+	nn := address.SubnetID(params.NetworkName)
 	// Don't allow really small checkpoint periods for now.
 	period := abi.ChainEpoch(params.CheckpointPeriod)
 	if period < MinCheckpointPeriod {
@@ -112,19 +110,20 @@ func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, e
 	}
 
 	return &SCAState{
-		NetworkName:           nn,
-		TotalSubnets:          0,
-		MinStake:              MinSubnetStake,
-		Subnets:               emptySubnetsMapCid,
-		CheckPeriod:           period,
-		Checkpoints:           emptyCheckpointsMapCid,
-		CheckMsgsMetaRegistry: emptyMsgsMetaMapCid,
-		BottomUpMsgsMeta:      emptyBottomUpMsgsAMT,
+		NetworkName:          nn,
+		TotalSubnets:         0,
+		MinStake:             MinSubnetStake,
+		Subnets:              emptySubnetsMapCid,
+		CheckPeriod:          period,
+		Checkpoints:          emptyCheckpointsMapCid,
+		CheckMsgsRegistry:    emptyMsgsMetaMapCid,
+		BottomUpMsgsMeta:     emptyBottomUpMsgsAMT,
+		AppliedBottomUpNonce: MaxNonce, // We need inital nonce+1 to be 0 due to how msgs are applied.
 	}, nil
 }
 
 // GetSubnet gets a subnet from the actor state.
-func (st *SCAState) GetSubnet(s adt.Store, id hierarchical.SubnetID) (*Subnet, bool, error) {
+func (st *SCAState) GetSubnet(s adt.Store, id address.SubnetID) (*Subnet, bool, error) {
 	subnets, err := adt.AsMap(s, st.Subnets, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, false, xerrors.Errorf("failed to load subnets: %w", err)
@@ -132,9 +131,9 @@ func (st *SCAState) GetSubnet(s adt.Store, id hierarchical.SubnetID) (*Subnet, b
 	return getSubnet(subnets, id)
 }
 
-func getSubnet(subnets *adt.Map, id hierarchical.SubnetID) (*Subnet, bool, error) {
+func getSubnet(subnets *adt.Map, id address.SubnetID) (*Subnet, bool, error) {
 	var out Subnet
-	found, err := subnets.Get(id, &out)
+	found, err := subnets.Get(hierarchical.SubnetKey(id), &out)
 	if err != nil {
 		return nil, false, xerrors.Errorf("failed to get subnet with id %v: %w", id, err)
 	}
@@ -148,7 +147,7 @@ func (st *SCAState) flushSubnet(rt runtime.Runtime, sh *Subnet) {
 	// Update subnet in the list of subnets.
 	subnets, err := adt.AsMap(adt.AsStore(rt), st.Subnets, builtin.DefaultHamtBitwidth)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state for subnets")
-	err = subnets.Put(sh.ID, sh)
+	err = subnets.Put(hierarchical.SubnetKey(sh.ID), sh)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put new subnet in subnet map")
 	// Flush subnets
 	st.Subnets, err = subnets.Root()
@@ -237,11 +236,11 @@ func (st *SCAState) flushCheckpoint(rt runtime.Runtime, ch *schema.Checkpoint) {
 
 // Get subnet from its subnet actor address.
 func (st *SCAState) getSubnetFromActorAddr(s adt.Store, addr address.Address) (*Subnet, bool, error) {
-	shid := hierarchical.NewSubnetID(st.NetworkName, addr)
+	shid := address.NewSubnetID(st.NetworkName, addr)
 	return st.GetSubnet(s, shid)
 }
 
-func (st *SCAState) registerSubnet(rt runtime.Runtime, shid hierarchical.SubnetID, stake big.Int) {
+func (st *SCAState) registerSubnet(rt runtime.Runtime, shid address.SubnetID, stake big.Int) {
 	emptyFundBalances, err := adt.StoreEmptyMap(adt.AsStore(rt), adt.BalanceTableBitwidth)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create empty funds balance table")
 	emptyTopDownMsgsAMT, err := adt.StoreEmptyArray(adt.AsStore(rt), CrossMsgsAMTBitwidth)

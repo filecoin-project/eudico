@@ -11,7 +11,6 @@ import (
 	"github.com/filecoin-project/lotus/api/v1api"
 	common "github.com/filecoin-project/lotus/chain/consensus/common"
 	param "github.com/filecoin-project/lotus/chain/consensus/common/params"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/types"
 	"golang.org/x/xerrors"
 )
@@ -64,7 +63,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		if err != nil {
 			return err
 		}
-		crossmsgs, err := api.GetCrossMsgsPool(ctx, hierarchical.SubnetID(nn), base.Height()+1)
+		crossmsgs, err := api.GetCrossMsgsPool(ctx, address.SubnetID(nn), base.Height()+1)
 		if err != nil {
 			log.Errorw("selecting cross-messages failed", "error", err)
 		}
@@ -89,7 +88,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			continue
 		}
 
-		log.Info("try PpW mining at @", base.Height(), base.String())
+		log.Info("try PoW mining at @", base.Height(), base.String())
 
 		err = api.SyncSubmitBlock(ctx, &types.BlockMsg{
 			Header:        bh.Header,

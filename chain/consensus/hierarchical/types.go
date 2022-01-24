@@ -2,6 +2,7 @@ package hierarchical
 
 import (
 	address "github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/types"
 )
@@ -23,15 +24,33 @@ const (
 	Fund MsgType = iota
 	Release
 	Cross
+	Unknown
 )
 
 // MsgType returns the
 func GetMsgType(msg *types.Message) MsgType {
-	if msg.From == msg.To {
+	t := Unknown
+
+	// Get raw addresses
+	rfrom, err := msg.From.RawAddr()
+	if err != nil {
+		return t
+	}
+	rto, err := msg.To.RawAddr()
+	if err != nil {
+		return t
+	}
+
+	// FIXME: Add additional checks using subnet prefix from
+	// the address. Cross-msgs should always include a HAAddress.
+
+	// FUND: If same raw address in from and to
+	if rfrom == rto {
 		return Fund
 	}
 
-	if msg.From == builtin.BurntFundsActorAddr {
+	// RELEASE: Coming from the burntAddress
+	if rfrom == builtin.BurntFundsActorAddr {
 		return Release
 	}
 	return Cross
@@ -49,3 +68,13 @@ var SubnetCoordActorAddr = func() address.Address {
 	}
 	return a
 }()
+
+// Implement keyer interface so it can be used as a
+// key for maps
+type SubnetKey address.SubnetID
+
+var _ abi.Keyer = SubnetKey("")
+
+func (id SubnetKey) Key() string {
+	return string(id)
+}

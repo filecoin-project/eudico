@@ -21,7 +21,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/paych"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/extern/sector-storage/fsutil"
@@ -555,25 +554,29 @@ type GatewayStub struct {
 
 type HierarchicalCnsStruct struct {
 	Internal struct {
-		AddSubnet func(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 address.Address) (address.Address, error) `perm:"write"`
+		AddSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 address.Address) (address.Address, error) `perm:"write"`
 
-		FundSubnet func(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) `perm:"write"`
+		CrossMsgResolve func(p0 context.Context, p1 address.SubnetID, p2 cid.Cid, p3 address.SubnetID) ([]types.Message, error) `perm:"read"`
 
-		GetCrossMsgsPool func(p0 context.Context, p1 hierarchical.SubnetID, p2 abi.ChainEpoch) ([]*types.Message, error) `perm:"read"`
+		FundSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) `perm:"write"`
 
-		JoinSubnet func(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 hierarchical.SubnetID) (cid.Cid, error) `perm:"write"`
+		GetCrossMsgsPool func(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) ([]*types.Message, error) `perm:"read"`
 
-		KillSubnet func(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID) (cid.Cid, error) `perm:"write"`
+		JoinSubnet func(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 address.SubnetID) (cid.Cid, error) `perm:"write"`
 
-		LeaveSubnet func(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID) (cid.Cid, error) `perm:"write"`
+		KillSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID) (cid.Cid, error) `perm:"write"`
 
-		ListCheckpoints func(p0 context.Context, p1 hierarchical.SubnetID, p2 int) ([]*schema.Checkpoint, error) `perm:"read"`
+		LeaveSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID) (cid.Cid, error) `perm:"write"`
 
-		MineSubnet func(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 bool) error `perm:"read"`
+		ListCheckpoints func(p0 context.Context, p1 address.SubnetID, p2 int) ([]*schema.Checkpoint, error) `perm:"read"`
 
-		SyncSubnet func(p0 context.Context, p1 hierarchical.SubnetID, p2 bool) error `perm:"write"`
+		MineSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 bool) error `perm:"read"`
 
-		ValidateCheckpoint func(p0 context.Context, p1 hierarchical.SubnetID, p2 abi.ChainEpoch) (*schema.Checkpoint, error) `perm:"read"`
+		ReleaseFunds func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) `perm:"write"`
+
+		SyncSubnet func(p0 context.Context, p1 address.SubnetID, p2 bool) error `perm:"write"`
+
+		ValidateCheckpoint func(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) (*schema.Checkpoint, error) `perm:"read"`
 	}
 }
 
@@ -3415,113 +3418,135 @@ func (s *GatewayStub) WalletBalance(p0 context.Context, p1 address.Address) (typ
 	return *new(types.BigInt), ErrNotSupported
 }
 
-func (s *HierarchicalCnsStruct) AddSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 address.Address) (address.Address, error) {
+func (s *HierarchicalCnsStruct) AddSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 address.Address) (address.Address, error) {
 	if s.Internal.AddSubnet == nil {
 		return *new(address.Address), ErrNotSupported
 	}
 	return s.Internal.AddSubnet(p0, p1, p2, p3, p4, p5, p6, p7)
 }
 
-func (s *HierarchicalCnsStub) AddSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 address.Address) (address.Address, error) {
+func (s *HierarchicalCnsStub) AddSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 address.Address) (address.Address, error) {
 	return *new(address.Address), ErrNotSupported
 }
 
-func (s *HierarchicalCnsStruct) FundSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) {
+func (s *HierarchicalCnsStruct) CrossMsgResolve(p0 context.Context, p1 address.SubnetID, p2 cid.Cid, p3 address.SubnetID) ([]types.Message, error) {
+	if s.Internal.CrossMsgResolve == nil {
+		return *new([]types.Message), ErrNotSupported
+	}
+	return s.Internal.CrossMsgResolve(p0, p1, p2, p3)
+}
+
+func (s *HierarchicalCnsStub) CrossMsgResolve(p0 context.Context, p1 address.SubnetID, p2 cid.Cid, p3 address.SubnetID) ([]types.Message, error) {
+	return *new([]types.Message), ErrNotSupported
+}
+
+func (s *HierarchicalCnsStruct) FundSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) {
 	if s.Internal.FundSubnet == nil {
 		return *new(cid.Cid), ErrNotSupported
 	}
 	return s.Internal.FundSubnet(p0, p1, p2, p3)
 }
 
-func (s *HierarchicalCnsStub) FundSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) {
+func (s *HierarchicalCnsStub) FundSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) {
 	return *new(cid.Cid), ErrNotSupported
 }
 
-func (s *HierarchicalCnsStruct) GetCrossMsgsPool(p0 context.Context, p1 hierarchical.SubnetID, p2 abi.ChainEpoch) ([]*types.Message, error) {
+func (s *HierarchicalCnsStruct) GetCrossMsgsPool(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) ([]*types.Message, error) {
 	if s.Internal.GetCrossMsgsPool == nil {
 		return *new([]*types.Message), ErrNotSupported
 	}
 	return s.Internal.GetCrossMsgsPool(p0, p1, p2)
 }
 
-func (s *HierarchicalCnsStub) GetCrossMsgsPool(p0 context.Context, p1 hierarchical.SubnetID, p2 abi.ChainEpoch) ([]*types.Message, error) {
+func (s *HierarchicalCnsStub) GetCrossMsgsPool(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) ([]*types.Message, error) {
 	return *new([]*types.Message), ErrNotSupported
 }
 
-func (s *HierarchicalCnsStruct) JoinSubnet(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 hierarchical.SubnetID) (cid.Cid, error) {
+func (s *HierarchicalCnsStruct) JoinSubnet(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 address.SubnetID) (cid.Cid, error) {
 	if s.Internal.JoinSubnet == nil {
 		return *new(cid.Cid), ErrNotSupported
 	}
 	return s.Internal.JoinSubnet(p0, p1, p2, p3)
 }
 
-func (s *HierarchicalCnsStub) JoinSubnet(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 hierarchical.SubnetID) (cid.Cid, error) {
+func (s *HierarchicalCnsStub) JoinSubnet(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 address.SubnetID) (cid.Cid, error) {
 	return *new(cid.Cid), ErrNotSupported
 }
 
-func (s *HierarchicalCnsStruct) KillSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID) (cid.Cid, error) {
+func (s *HierarchicalCnsStruct) KillSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID) (cid.Cid, error) {
 	if s.Internal.KillSubnet == nil {
 		return *new(cid.Cid), ErrNotSupported
 	}
 	return s.Internal.KillSubnet(p0, p1, p2)
 }
 
-func (s *HierarchicalCnsStub) KillSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID) (cid.Cid, error) {
+func (s *HierarchicalCnsStub) KillSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID) (cid.Cid, error) {
 	return *new(cid.Cid), ErrNotSupported
 }
 
-func (s *HierarchicalCnsStruct) LeaveSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID) (cid.Cid, error) {
+func (s *HierarchicalCnsStruct) LeaveSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID) (cid.Cid, error) {
 	if s.Internal.LeaveSubnet == nil {
 		return *new(cid.Cid), ErrNotSupported
 	}
 	return s.Internal.LeaveSubnet(p0, p1, p2)
 }
 
-func (s *HierarchicalCnsStub) LeaveSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID) (cid.Cid, error) {
+func (s *HierarchicalCnsStub) LeaveSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID) (cid.Cid, error) {
 	return *new(cid.Cid), ErrNotSupported
 }
 
-func (s *HierarchicalCnsStruct) ListCheckpoints(p0 context.Context, p1 hierarchical.SubnetID, p2 int) ([]*schema.Checkpoint, error) {
+func (s *HierarchicalCnsStruct) ListCheckpoints(p0 context.Context, p1 address.SubnetID, p2 int) ([]*schema.Checkpoint, error) {
 	if s.Internal.ListCheckpoints == nil {
 		return *new([]*schema.Checkpoint), ErrNotSupported
 	}
 	return s.Internal.ListCheckpoints(p0, p1, p2)
 }
 
-func (s *HierarchicalCnsStub) ListCheckpoints(p0 context.Context, p1 hierarchical.SubnetID, p2 int) ([]*schema.Checkpoint, error) {
+func (s *HierarchicalCnsStub) ListCheckpoints(p0 context.Context, p1 address.SubnetID, p2 int) ([]*schema.Checkpoint, error) {
 	return *new([]*schema.Checkpoint), ErrNotSupported
 }
 
-func (s *HierarchicalCnsStruct) MineSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 bool) error {
+func (s *HierarchicalCnsStruct) MineSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 bool) error {
 	if s.Internal.MineSubnet == nil {
 		return ErrNotSupported
 	}
 	return s.Internal.MineSubnet(p0, p1, p2, p3)
 }
 
-func (s *HierarchicalCnsStub) MineSubnet(p0 context.Context, p1 address.Address, p2 hierarchical.SubnetID, p3 bool) error {
+func (s *HierarchicalCnsStub) MineSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 bool) error {
 	return ErrNotSupported
 }
 
-func (s *HierarchicalCnsStruct) SyncSubnet(p0 context.Context, p1 hierarchical.SubnetID, p2 bool) error {
+func (s *HierarchicalCnsStruct) ReleaseFunds(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) {
+	if s.Internal.ReleaseFunds == nil {
+		return *new(cid.Cid), ErrNotSupported
+	}
+	return s.Internal.ReleaseFunds(p0, p1, p2, p3)
+}
+
+func (s *HierarchicalCnsStub) ReleaseFunds(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) {
+	return *new(cid.Cid), ErrNotSupported
+}
+
+func (s *HierarchicalCnsStruct) SyncSubnet(p0 context.Context, p1 address.SubnetID, p2 bool) error {
 	if s.Internal.SyncSubnet == nil {
 		return ErrNotSupported
 	}
 	return s.Internal.SyncSubnet(p0, p1, p2)
 }
 
-func (s *HierarchicalCnsStub) SyncSubnet(p0 context.Context, p1 hierarchical.SubnetID, p2 bool) error {
+func (s *HierarchicalCnsStub) SyncSubnet(p0 context.Context, p1 address.SubnetID, p2 bool) error {
 	return ErrNotSupported
 }
 
-func (s *HierarchicalCnsStruct) ValidateCheckpoint(p0 context.Context, p1 hierarchical.SubnetID, p2 abi.ChainEpoch) (*schema.Checkpoint, error) {
+func (s *HierarchicalCnsStruct) ValidateCheckpoint(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) (*schema.Checkpoint, error) {
 	if s.Internal.ValidateCheckpoint == nil {
 		return nil, ErrNotSupported
 	}
 	return s.Internal.ValidateCheckpoint(p0, p1, p2)
 }
 
-func (s *HierarchicalCnsStub) ValidateCheckpoint(p0 context.Context, p1 hierarchical.SubnetID, p2 abi.ChainEpoch) (*schema.Checkpoint, error) {
+func (s *HierarchicalCnsStub) ValidateCheckpoint(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) (*schema.Checkpoint, error) {
 	return nil, ErrNotSupported
 }
 

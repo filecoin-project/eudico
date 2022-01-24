@@ -7,10 +7,9 @@ import (
 	"github.com/filecoin-project/go-state-types/network"
 	"github.com/filecoin-project/lotus/chain/consensus/actors/registry"
 	"github.com/filecoin-project/lotus/chain/consensus/actors/reward"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/rand"
-	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"go.opencensus.io/stats"
@@ -51,25 +50,21 @@ func DefaultUpgradeSchedule() stmgr.UpgradeSchedule {
 
 type tipSetExecutor struct {
 	submgr subnet.SubnetMgr
-	// To avoid having to get it from the state manager
-	// for every message, we store this info here from the
-	// beginning (this potentially never changes).
-	netName dtypes.NetworkName
 }
 
 func (t *tipSetExecutor) NewActorRegistry() *vm.ActorRegistry {
 	return registry.NewActorRegistry()
 }
 
-func TipSetExecutor(submgr subnet.SubnetMgr, netName dtypes.NetworkName) stmgr.Executor {
-	return &tipSetExecutor{submgr, netName}
+func TipSetExecutor(submgr subnet.SubnetMgr) stmgr.Executor {
+	return &tipSetExecutor{submgr}
 }
 
 func RootTipSetExecutor() stmgr.Executor {
-	return &tipSetExecutor{nil, dtypes.NetworkName(hierarchical.RootSubnet)}
+	return &tipSetExecutor{nil}
 }
 
-func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager, parentEpoch abi.ChainEpoch, pstate cid.Cid, bms []store.BlockMessages, epoch abi.ChainEpoch, r vm.Rand, em stmgr.ExecMonitor, baseFee abi.TokenAmount, ts *types.TipSet) (cid.Cid, cid.Cid, error) {
+func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager, cr *resolver.Resolver, parentEpoch abi.ChainEpoch, pstate cid.Cid, bms []store.BlockMessages, epoch abi.ChainEpoch, r vm.Rand, em stmgr.ExecMonitor, baseFee abi.TokenAmount, ts *types.TipSet) (cid.Cid, cid.Cid, error) {
 
 	done := metrics.Timer(ctx, metrics.VMApplyBlocksTotal)
 	defer done()
@@ -151,47 +146,40 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 			processedMsgs[m.Cid()] = struct{}{}
 		}
 
-		// TODO: This is the reward for a miner, we should maybe remove it
-		// in subnets
-		rwMsg := &types.Message{
-			From:       reward.RewardActorAddr,
-			To:         b.Miner,
-			Nonce:      uint64(epoch),
-			Value:      types.FromFil(1), // always reward 1 fil
-			GasFeeCap:  types.NewInt(0),
-			GasPremium: types.NewInt(0),
-			GasLimit:   1 << 30,
-			Method:     0,
+		// FIXME: Here we send rewards for miners.
+		// Rewards are only applied in the root, for subnets
+		// rewards are disabled at this point and miners only get
+		// the gas reward.
+		// if t.submgr == nil we are in root net.
+		reward := gasReward
+		// In root consensus, there is currently a static reward of 1FIL per block.
+		// (this is mainly for testing purposes).
+		if t.submgr == nil {
+			reward = big.Add(reward, types.FromFil(1))
 		}
-		ret, actErr := vmi.ApplyImplicitMessage(ctx, rwMsg)
-		if actErr != nil {
-			return cid.Undef, cid.Undef, xerrors.Errorf("failed to apply reward message for miner %s: %w", b.Miner, actErr)
-		}
-		if em != nil {
-			if err := em.MessageApplied(ctx, ts, rwMsg.Cid(), rwMsg, ret, true); err != nil {
-				return cid.Undef, cid.Undef, xerrors.Errorf("callback failed on reward message: %w", err)
-			}
+		if err := applyMiningRewards(ctx, vmi, em, b, epoch, ts, reward); err != nil {
+			return cid.Undef, cid.Undef, err
 		}
 
-		if ret.ExitCode != 0 {
-			return cid.Undef, cid.Undef, xerrors.Errorf("reward application message failed (exit %d): %s", ret.ExitCode, ret.ActorErr)
+		// Sort cross-messages deterministically before applying them
+		crossm, err := sortCrossMsgs(ctx, sm, cr, b.CrossMessages, ts)
+		if err != nil {
+			return cid.Undef, cid.Undef, xerrors.Errorf("error sorting cross-msgs: %w", err)
 		}
 
 		processedMsgs = make(map[cid.Cid]struct{})
-		for _, crossm := range b.CrossMessages {
-			m := crossm.VMMessage()
+		for _, m := range crossm {
+			// m := crossm.VMMessage()
 			// additional sanity-check to avoid processing a message
 			// included in a block twice (although this is already checked
 			// by SCA, and there are a few more additional checks, so this
 			// may not be needed).
-			// TODO: We may need to sort nonces to avoid applying them in the
-			// wrong order (in case they haven't been included in order in the
-			// block)
 			if _, found := processedMsgs[m.Cid()]; found {
 				continue
 			}
 			log.Infof("Executing cross message: %v", crossm)
-			if err := ApplyCrossMsg(ctx, vmi, t.submgr, em, m, ts, t.netName); err != nil {
+
+			if err := ApplyCrossMsg(ctx, vmi, t.submgr, em, m, ts); err != nil {
 				return cid.Undef, cid.Undef, xerrors.Errorf("cross messsage application failed: %w", err)
 			}
 			processedMsgs[m.Cid()] = struct{}{}
@@ -227,7 +215,34 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 	return st, rectroot, nil
 }
 
-func (t *tipSetExecutor) ExecuteTipSet(ctx context.Context, sm *stmgr.StateManager, ts *types.TipSet, em stmgr.ExecMonitor) (stateroot cid.Cid, rectsroot cid.Cid, err error) {
+func applyMiningRewards(ctx context.Context, vmi *vm.VM, em stmgr.ExecMonitor, b store.BlockMessages, epoch abi.ChainEpoch, ts *types.TipSet, value abi.TokenAmount) error {
+	rwMsg := &types.Message{
+		From:       reward.RewardActorAddr,
+		To:         b.Miner,
+		Nonce:      uint64(epoch),
+		Value:      value,
+		GasFeeCap:  types.NewInt(0),
+		GasPremium: types.NewInt(0),
+		GasLimit:   1 << 30,
+		Method:     0,
+	}
+	ret, actErr := vmi.ApplyImplicitMessage(ctx, rwMsg)
+	if actErr != nil {
+		return xerrors.Errorf("failed to apply reward message for miner %s: %w", b.Miner, actErr)
+	}
+	if em != nil {
+		if err := em.MessageApplied(ctx, ts, rwMsg.Cid(), rwMsg, ret, true); err != nil {
+			return xerrors.Errorf("callback failed on reward message: %w", err)
+		}
+	}
+
+	if ret.ExitCode != 0 {
+		return xerrors.Errorf("reward application message failed (exit %d): %s", ret.ExitCode, ret.ActorErr)
+	}
+	return nil
+}
+
+func (t *tipSetExecutor) ExecuteTipSet(ctx context.Context, sm *stmgr.StateManager, cr *resolver.Resolver, ts *types.TipSet, em stmgr.ExecMonitor) (stateroot cid.Cid, rectsroot cid.Cid, err error) {
 	ctx, span := trace.StartSpan(ctx, "computeTipSetState")
 	defer span.End()
 
@@ -263,7 +278,7 @@ func (t *tipSetExecutor) ExecuteTipSet(ctx context.Context, sm *stmgr.StateManag
 
 	baseFee := blks[0].ParentBaseFee
 
-	return t.ApplyBlocks(ctx, sm, parentEpoch, pstate, blkmsgs, blks[0].Height, r, em, baseFee, ts)
+	return t.ApplyBlocks(ctx, sm, cr, parentEpoch, pstate, blkmsgs, blks[0].Height, r, em, baseFee, ts)
 }
 
 var _ stmgr.Executor = &tipSetExecutor{}

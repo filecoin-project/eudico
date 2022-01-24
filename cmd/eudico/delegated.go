@@ -20,6 +20,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	lcli "github.com/filecoin-project/lotus/cli"
@@ -27,9 +28,9 @@ import (
 	"github.com/filecoin-project/lotus/node"
 )
 
-func NewRootDelegatedConsensus(sm *stmgr.StateManager, beacon beacon.Schedule,
+func NewRootDelegatedConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
 	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
-	return delegcns.NewDelegatedConsensus(sm, nil, beacon, verifier, genesis, netName)
+	return delegcns.NewDelegatedConsensus(sm, nil, beacon, r, verifier, genesis, netName)
 }
 
 var delegatedCmd = &cli.Command{
@@ -86,7 +87,7 @@ var delegatedGenesisCmd = &cli.Command{
 
 		// TODO: Make configurable
 		checkPeriod := sca.DefaultCheckpointPeriod
-		if err := subnet.WriteGenesis(hierarchical.RootSubnet, hierarchical.Delegated, miner, vreg, rem, checkPeriod, uint64(time.Now().Unix()), f); err != nil {
+		if err := subnet.WriteGenesis(address.RootSubnet, hierarchical.Delegated, miner, vreg, rem, checkPeriod, uint64(time.Now().Unix()), f); err != nil {
 			return xerrors.Errorf("write genesis car: %w", err)
 		}
 

@@ -58,7 +58,7 @@ func TestRegister(t *testing.T) {
 	ret := rt.Call(h.SubnetCoordActor.Register, nil)
 	res, ok := ret.(*actor.SubnetIDParam)
 	require.True(t, ok)
-	shid := hierarchical.SubnetID("/root/f0101")
+	shid := address.SubnetID("/root/f0101")
 	// Verify the return value is correct.
 	require.Equal(t, res.ID, shid.String())
 	rt.Verify()
@@ -108,7 +108,7 @@ func TestRegister(t *testing.T) {
 	ret = rt.Call(h.SubnetCoordActor.Register, nil)
 	res, ok = ret.(*actor.SubnetIDParam)
 	require.True(t, ok)
-	shid = hierarchical.SubnetID("/root/f0102")
+	shid = address.SubnetID("/root/f0102")
 	// Verify the return value is correct.
 	require.Equal(t, res.ID, shid.String())
 	rt.Verify()
@@ -164,7 +164,7 @@ func TestAddStake(t *testing.T) {
 	// Only subnet actors can call.
 	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
 	rt.Call(h.SubnetCoordActor.AddStake, nil)
-	sh, found := h.getSubnet(rt, hierarchical.SubnetID(res.ID))
+	sh, found := h.getSubnet(rt, address.SubnetID(res.ID))
 	require.True(h.t, found)
 	require.Equal(t, sh.Stake, big.Add(value, value))
 	require.Equal(t, sh.Status, actor.Active)
@@ -221,7 +221,7 @@ func TestReleaseStake(t *testing.T) {
 	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
 	rt.ExpectSend(SubnetActorAddr, builtin.MethodSend, nil, releaseVal, nil, exitcode.Ok)
 	rt.Call(h.SubnetCoordActor.ReleaseStake, params)
-	sh, found := h.getSubnet(rt, hierarchical.SubnetID(res.ID))
+	sh, found := h.getSubnet(rt, address.SubnetID(res.ID))
 	require.True(h.t, found)
 	require.Equal(t, sh.Stake, big.Sub(value, releaseVal))
 	require.Equal(t, sh.Status, actor.Active)
@@ -236,7 +236,7 @@ func TestReleaseStake(t *testing.T) {
 	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
 	rt.ExpectSend(SubnetActorAddr, builtin.MethodSend, nil, releaseVal, nil, exitcode.Ok)
 	rt.Call(h.SubnetCoordActor.ReleaseStake, params)
-	sh, found = h.getSubnet(rt, hierarchical.SubnetID(res.ID))
+	sh, found = h.getSubnet(rt, address.SubnetID(res.ID))
 	require.True(h.t, found)
 	require.Equal(t, sh.Stake, big.Sub(currStake, releaseVal))
 	require.Equal(t, sh.Status, actor.Inactive)
@@ -297,7 +297,7 @@ func TestCheckpoints(t *testing.T) {
 	ret := rt.Call(h.SubnetCoordActor.Register, nil)
 	res, ok := ret.(*actor.SubnetIDParam)
 	require.True(t, ok)
-	shid := hierarchical.SubnetID("/root/f0101")
+	shid := address.SubnetID("/root/f0101")
 	// Verify the return value is correct.
 	require.Equal(t, res.ID, shid.String())
 	rt.Verify()
@@ -321,7 +321,7 @@ func TestCheckpoints(t *testing.T) {
 	ret = rt.Call(h.SubnetCoordActor.Register, nil)
 	res, ok = ret.(*actor.SubnetIDParam)
 	require.True(t, ok)
-	shid = hierarchical.SubnetID("/root/f0102")
+	shid = address.SubnetID("/root/f0102")
 	// Verify the return value is correct.
 	require.Equal(t, res.ID, shid.String())
 	rt.Verify()
@@ -490,7 +490,7 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 	ret := rt.Call(h.SubnetCoordActor.Register, nil)
 	res, ok := ret.(*actor.SubnetIDParam)
 	require.True(t, ok)
-	shid := hierarchical.SubnetID("/root/f0101")
+	shid := address.SubnetID("/root/f0101")
 	// Verify the return value is correct.
 	require.Equal(t, res.ID, shid.String())
 	rt.Verify()
@@ -511,15 +511,15 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 	rt.SetEpoch(epoch)
 	ch := newCheckpoint(sh.ID, epoch+9)
 	// Add msgMeta directed to other subnets
-	addMsgMeta(ch, sh.ID, hierarchical.SubnetID("/root/f0102/child1"), "rand1")
+	addMsgMeta(ch, sh.ID, address.SubnetID("/root/f0102/child1"), "rand1")
 	// By not adding a random string we are checking that nothing fails when to MsgMeta
 	// for different subnets are propagating the same CID. This will probably never be the
 	// case for honest peers, but it is an attack vector.
-	addMsgMeta(ch, sh.ID, hierarchical.SubnetID("/root/f0102/child2"), "")
-	addMsgMeta(ch, sh.ID, hierarchical.SubnetID("/root/f0102/child3"), "")
+	addMsgMeta(ch, sh.ID, address.SubnetID("/root/f0102/child2"), "")
+	addMsgMeta(ch, sh.ID, address.SubnetID("/root/f0102/child3"), "")
 	// And to this subnet
-	addMsgMeta(ch, sh.ID, hierarchical.RootSubnet, "")
-	addMsgMeta(ch, sh.ID, hierarchical.RootSubnet, "rand")
+	addMsgMeta(ch, sh.ID, address.RootSubnet, "")
+	addMsgMeta(ch, sh.ID, address.RootSubnet, "rand")
 	prevcid, _ := ch.Cid()
 
 	b, err := ch.MarshalBinary()
@@ -548,17 +548,44 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 
 	// Check msgMeta to other subnets are aggregated
 	m := windowCh.CrossMsgs()
-	subs := []hierarchical.SubnetID{"/root/f0102/child1", "/root/f0102/child2", "/root/f0102/child3"}
+	subs := []address.SubnetID{"/root/f0102/child1", "/root/f0102/child2", "/root/f0102/child3"}
 	require.Equal(t, len(m), 3)
 	prevs := make(map[string]schema.CrossMsgMeta)
 	for i, mm := range m {
 		// Check that from has been renamed
-		require.Equal(t, mm.From, hierarchical.RootSubnet.String())
+		require.Equal(t, mm.From, address.RootSubnet.String())
 		// Check the to is kept
 		require.Equal(t, len(windowCh.CrossMsgsTo(subs[i])), 1)
 		// Append for the future
 		prevs[mm.To] = mm
 	}
+
+	t.Log("commit checkpoint with more cross-msgs for subnet")
+	epoch = abi.ChainEpoch(13)
+	rt.SetCaller(SubnetActorAddr, actors.SubnetActorCodeID)
+	// Only subnet actors can call.
+	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
+	rt.SetEpoch(epoch)
+	ch = newCheckpoint(sh.ID, epoch+6)
+	// Msgs to this subnet
+	addMsgMeta(ch, sh.ID, address.RootSubnet, "r2")
+	addMsgMeta(ch, sh.ID, address.RootSubnet, "r3")
+	ch.SetPrevious(prevcid)
+	prevcid, _ = ch.Cid()
+
+	b, err = ch.MarshalBinary()
+	require.NoError(t, err)
+	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+	rt.Verify()
+
+	// Check that the BottomUpMsgs to be applied are added with the right nonce.
+	st = getState(rt)
+	_, found, err = st.GetBottomUpMsgMeta(adt.AsStore(rt), 2)
+	require.NoError(t, err)
+	require.True(t, found)
+	_, found, err = st.GetBottomUpMsgMeta(adt.AsStore(rt), 3)
+	require.NoError(t, err)
+	require.True(t, found)
 
 	t.Log("commit second checkpoint with overlapping metas")
 	rt.SetCaller(SubnetActorAddr, actors.SubnetActorCodeID)
@@ -568,10 +595,10 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 	ch = newCheckpoint(sh.ID, epoch+9)
 	ch.SetPrevious(prevcid)
 	// Add msgMeta directed to other subnets
-	addMsgMeta(ch, sh.ID, hierarchical.SubnetID("/root/f0102/child1"), "")
-	addMsgMeta(ch, sh.ID, hierarchical.SubnetID("/root/f0102/child2"), "")
-	addMsgMeta(ch, sh.ID, hierarchical.SubnetID("/root/f0102/child3"), "")
-	addMsgMeta(ch, sh.ID, hierarchical.SubnetID("/root/f0102/child4"), "")
+	addMsgMeta(ch, sh.ID, address.SubnetID("/root/f0102/child1"), "")
+	addMsgMeta(ch, sh.ID, address.SubnetID("/root/f0102/child2"), "")
+	addMsgMeta(ch, sh.ID, address.SubnetID("/root/f0102/child3"), "")
+	addMsgMeta(ch, sh.ID, address.SubnetID("/root/f0102/child4"), "")
 
 	b, err = ch.MarshalBinary()
 	require.NoError(t, err)
@@ -590,11 +617,11 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 
 	// Check msgMeta to other subnets are aggregated
 	m = windowCh.CrossMsgs()
-	subs = []hierarchical.SubnetID{"/root/f0102/child1", "/root/f0102/child2", "/root/f0102/child3", "/root/f0102/child4"}
+	subs = []address.SubnetID{"/root/f0102/child1", "/root/f0102/child2", "/root/f0102/child3", "/root/f0102/child4"}
 	require.Equal(t, len(m), 4)
 	for i, mm := range m {
 		// Check that from has been renamed
-		require.Equal(t, mm.From, hierarchical.RootSubnet.String())
+		require.Equal(t, mm.From, address.RootSubnet.String())
 		// Check the to is kept
 		require.Equal(t, len(windowCh.CrossMsgsTo(subs[i])), 1)
 		// Get current msgMetas
@@ -643,7 +670,7 @@ func TestCheckpointInactive(t *testing.T) {
 	ret := rt.Call(h.SubnetCoordActor.Register, nil)
 	res, ok := ret.(*actor.SubnetIDParam)
 	require.True(t, ok)
-	shid := hierarchical.SubnetID("/root/f0101")
+	shid := address.SubnetID("/root/f0101")
 	// Verify the return value is correct.
 	require.Equal(t, res.ID, shid.String())
 	rt.Verify()
@@ -703,7 +730,7 @@ func TestFund(t *testing.T) {
 	ret := rt.Call(h.SubnetCoordActor.Register, nil)
 	res, ok := ret.(*actor.SubnetIDParam)
 	require.True(t, ok)
-	shid := hierarchical.SubnetID("/root/f0101")
+	shid := address.SubnetID("/root/f0101")
 	// Verify the return value is correct.
 	require.Equal(t, res.ID, shid.String())
 	rt.Verify()
@@ -739,7 +766,7 @@ func TestReleaseFunds(t *testing.T) {
 	h := newHarness(t)
 	builder := mock.NewBuilder(builtin.StoragePowerActorAddr).WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
 	rt := builder.Build(t)
-	shid := hierarchical.SubnetID("/root/f0101")
+	shid := address.SubnetID("/root/f0101")
 	h.constructAndVerifyWithNetworkName(rt, shid)
 
 	t.Log("release some funds from subnet")
@@ -754,19 +781,60 @@ func TestApplyMsg(t *testing.T) {
 	h := newHarness(t)
 	builder := mock.NewBuilder(builtin.StoragePowerActorAddr).WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
 	rt := builder.Build(t)
-	shid := hierarchical.SubnetID("/root/f0101")
-	h.constructAndVerifyWithNetworkName(rt, shid)
+	h.constructAndVerify(rt)
+	h.registerSubnet(rt, address.RootSubnet)
 	funder := tutil.NewIDAddr(h.t, 1000)
-	value := abi.NewTokenAmount(1)
+
+	// Inject some funds to test circSupply
+	t.Log("inject some funds in subnet")
+	init := abi.NewTokenAmount(1e18)
+	fund(h, rt, h.sn, funder, init, 1, init, init)
+	value := abi.NewTokenAmount(1e17)
 
 	t.Log("apply fund messages")
 	for i := 0; i < 5; i++ {
-		h.applyFundMsg(rt, funder, value, uint64(i))
+		h.applyFundMsg(rt, funder, value, uint64(i), false)
 	}
+	// Applying already used nonces or non-subsequent should fail
+	rt.ExpectAbort(exitcode.ErrIllegalState, func() {
+		h.applyFundMsg(rt, funder, value, 10, true)
+	})
+	rt.ExpectAbort(exitcode.ErrIllegalState, func() {
+		h.applyFundMsg(rt, funder, value, 1, true)
+	})
+
+	// Register subnet for update in circulating supply
+	releaser, err := address.NewHAddress(h.sn.Parent(), funder)
+	require.NoError(t, err)
+
+	t.Log("apply release messages")
+	// Three messages with the same nonce
+	for i := 0; i < 3; i++ {
+		h.applyReleaseMsg(rt, releaser, value, uint64(0))
+	}
+	// The following with increasing nonces
+	for i := 0; i < 3; i++ {
+		h.applyReleaseMsg(rt, releaser, value, uint64(i))
+	}
+	// Check that circ supply is updated successfully.
+	sh, found := h.getSubnet(rt, h.sn)
+	require.True(h.t, found)
+	require.Equal(h.t, sh.CircSupply, big.Sub(init, big.Mul(big.NewInt(6), value)))
+	// Trying to release over the circulating supply
+	rt.ExpectAbort(exitcode.ErrIllegalState, func() {
+		h.applyReleaseMsg(rt, releaser, init, 2)
+	})
+	// Applying already used nonces or non-subsequent should fail
+	rt.ExpectAbort(exitcode.ErrIllegalState, func() {
+		h.applyReleaseMsg(rt, releaser, value, 10)
+	})
+	rt.ExpectAbort(exitcode.ErrIllegalState, func() {
+		h.applyReleaseMsg(rt, releaser, value, 1)
+	})
 
 }
 
-func (h *shActorHarness) applyFundMsg(rt *mock.Runtime, addr address.Address, value big.Int, nonce uint64) {
+func (h *shActorHarness) applyFundMsg(rt *mock.Runtime, addr address.Address, value big.Int, nonce uint64, abort bool) {
 	rt.SetCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
 	params := &actor.ApplyParams{
 		Msg: ltypes.Message{
@@ -786,19 +854,52 @@ func (h *shActorHarness) applyFundMsg(rt *mock.Runtime, addr address.Address, va
 		Value: value,
 	}
 	rt.ExpectValidateCallerAddr(builtin.SystemActorAddr)
-	rt.ExpectSend(reward.RewardActorAddr, reward.Methods.ExternalFunding, rewParams, big.Zero(), nil, exitcode.Ok)
+	if !abort {
+		rt.ExpectSend(reward.RewardActorAddr, reward.Methods.ExternalFunding, rewParams, big.Zero(), nil, exitcode.Ok)
+	}
 	rt.Call(h.SubnetCoordActor.ApplyMessage, params)
 	rt.Verify()
 	st := getState(rt)
 	require.Equal(h.t, st.AppliedTopDownNonce, nonce+1)
 }
 
-func release(h *shActorHarness, rt *mock.Runtime, shid hierarchical.SubnetID, releaser address.Address, value big.Int, nonce uint64, prevMeta cid.Cid) cid.Cid {
+func (h *shActorHarness) applyReleaseMsg(rt *mock.Runtime, addr address.Address, value big.Int, nonce uint64) {
+	rt.SetCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
+	rt.SetBalance(value)
+	from, err := address.NewHAddress(h.sn, builtin.BurntFundsActorAddr)
+	require.NoError(h.t, err)
+	testSecp := tutil.NewSECP256K1Addr(h.t, "asd")
+	params := &actor.ApplyParams{
+		Msg: ltypes.Message{
+			To:         testSecp,
+			From:       from,
+			Value:      value,
+			Nonce:      nonce,
+			GasLimit:   1 << 30, // This is will be applied as an implicit msg, add enough gas
+			GasFeeCap:  ltypes.NewInt(0),
+			GasPremium: ltypes.NewInt(0),
+			Params:     nil,
+		},
+	}
+
+	rt.ExpectValidateCallerAddr(builtin.SystemActorAddr)
+	rt.ExpectSend(testSecp, builtin.MethodSend, nil, value, nil, exitcode.Ok)
+	rt.Call(h.SubnetCoordActor.ApplyMessage, params)
+	rt.Verify()
+	st := getState(rt)
+	require.Equal(h.t, st.AppliedBottomUpNonce, nonce)
+}
+
+func release(h *shActorHarness, rt *mock.Runtime, shid address.SubnetID, releaser address.Address, value big.Int, nonce uint64, prevMeta cid.Cid) cid.Cid {
+	// Test SECP to use for calling
+	testSecp := tutil.NewSECP256K1Addr(h.t, "asd")
 	rt.SetReceived(value)
 	rt.SetBalance(value)
 	rt.SetCaller(releaser, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
 	rt.ExpectSend(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, value, nil, exitcode.Ok)
+	// Expect a send to get pkey
+	rt.ExpectSend(releaser, builtin.MethodsAccount.PubkeyAddress, nil, big.Zero(), &testSecp, exitcode.Ok)
 	rt.Call(h.SubnetCoordActor.Release, nil)
 	rt.Verify()
 
@@ -812,8 +913,16 @@ func release(h *shActorHarness, rt *mock.Runtime, shid hierarchical.SubnetID, re
 	require.True(h.t, found)
 	require.Equal(h.t, len(meta.Msgs), int(nonce+1))
 	msg := meta.Msgs[nonce]
-	require.Equal(h.t, msg.From, builtin.BurntFundsActorAddr)
-	require.Equal(h.t, msg.To, releaser)
+
+	// Comes from child
+	from, err := address.NewHAddress(shid, builtin.BurntFundsActorAddr)
+	require.NoError(h.t, err)
+	// Goes to parent
+	to, err := address.NewHAddress(shid.Parent(), testSecp)
+	require.NoError(h.t, err)
+	require.Equal(h.t, msg.From, from)
+	// The "to" should have been updated to the secp addr
+	require.Equal(h.t, msg.To, to)
 	require.Equal(h.t, msg.Value, value)
 	require.Equal(h.t, msg.Nonce, nonce)
 	// check previous meta is removed
@@ -826,7 +935,7 @@ func release(h *shActorHarness, rt *mock.Runtime, shid hierarchical.SubnetID, re
 
 }
 
-func fund(h *shActorHarness, rt *mock.Runtime, sn hierarchical.SubnetID, funder address.Address, value abi.TokenAmount,
+func fund(h *shActorHarness, rt *mock.Runtime, sn address.SubnetID, funder address.Address, value abi.TokenAmount,
 	expectedNonce uint64, expectedCircSupply big.Int, expectedAddrFunds abi.TokenAmount) {
 	rt.SetReceived(value)
 	params := &actor.SubnetIDParam{ID: sn.String()}
@@ -844,8 +953,14 @@ func fund(h *shActorHarness, rt *mock.Runtime, sn hierarchical.SubnetID, funder 
 	require.True(h.t, found)
 	// TODO: Add additional checks over msg?
 	require.Equal(h.t, msg.Value, value)
-	require.Equal(h.t, msg.From, funder)
-	require.Equal(h.t, msg.To, funder)
+	// Comes from parent network.
+	from, err := address.NewHAddress(sh.ID.Parent(), funder)
+	require.NoError(h.t, err)
+	// Goes to subnet with same address
+	to, err := address.NewHAddress(sh.ID, funder)
+	require.NoError(h.t, err)
+	require.Equal(h.t, msg.From, from)
+	require.Equal(h.t, msg.To, to)
 	require.Equal(h.t, msg.Nonce, expectedNonce-1)
 }
 
@@ -876,13 +991,14 @@ func TestKill(t *testing.T) {
 	rt.Call(h.SubnetCoordActor.Kill, nil)
 	rt.Verify()
 	// The subnet has been removed.
-	_, found := h.getSubnet(rt, hierarchical.SubnetID(res.ID))
+	_, found := h.getSubnet(rt, address.SubnetID(res.ID))
 	require.False(h.t, found)
 }
 
 type shActorHarness struct {
 	actor.SubnetCoordActor
-	t *testing.T
+	t  *testing.T
+	sn address.SubnetID
 }
 
 func newHarness(t *testing.T) *shActorHarness {
@@ -893,11 +1009,11 @@ func newHarness(t *testing.T) *shActorHarness {
 }
 
 func (h *shActorHarness) constructAndVerify(rt *mock.Runtime) {
-	shid := hierarchical.RootSubnet
+	shid := address.RootSubnet
 	h.constructAndVerifyWithNetworkName(rt, shid)
 }
 
-func (h *shActorHarness) constructAndVerifyWithNetworkName(rt *mock.Runtime, shid hierarchical.SubnetID) {
+func (h *shActorHarness) constructAndVerifyWithNetworkName(rt *mock.Runtime, shid address.SubnetID) {
 	rt.ExpectValidateCallerAddr(builtin.SystemActorAddr)
 	ret := rt.Call(h.SubnetCoordActor.Constructor, &actor.ConstructorParams{NetworkName: shid.String(), CheckpointPeriod: 100})
 	assert.Nil(h.t, ret)
@@ -910,7 +1026,7 @@ func (h *shActorHarness) constructAndVerifyWithNetworkName(rt *mock.Runtime, shi
 	assert.Equal(h.t, st.NetworkName, shid)
 	assert.Equal(h.t, st.CheckPeriod, abi.ChainEpoch(100))
 	verifyEmptyMap(h.t, rt, st.Subnets)
-	verifyEmptyMap(h.t, rt, st.CheckMsgsMetaRegistry)
+	verifyEmptyMap(h.t, rt, st.CheckMsgsRegistry)
 	verifyEmptyMap(h.t, rt, st.Checkpoints)
 }
 
@@ -922,26 +1038,48 @@ func verifyEmptyMap(t testing.TB, rt *mock.Runtime, cid cid.Cid) {
 	assert.Empty(t, keys)
 }
 
+func (h *shActorHarness) registerSubnet(rt *mock.Runtime, parent address.SubnetID) {
+	SubnetActorAddr := tutil.NewIDAddr(h.t, 101)
+	h.t.Log("register new subnet successfully")
+	// Send 2FIL of stake
+	value := abi.NewTokenAmount(2e18)
+	rt.SetCaller(SubnetActorAddr, actors.SubnetActorCodeID)
+	rt.SetReceived(value)
+	rt.SetBalance(value)
+	// Only subnet actors can call.
+	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
+	// Call Register function
+	ret := rt.Call(h.SubnetCoordActor.Register, nil)
+	res, ok := ret.(*actor.SubnetIDParam)
+	require.True(h.t, ok)
+	shid := address.NewSubnetID(parent, SubnetActorAddr)
+	// Verify the return value is correct.
+	require.Equal(h.t, res.ID, shid.String())
+	rt.Verify()
+	require.Equal(h.t, getState(rt).TotalSubnets, uint64(1))
+	h.sn = shid
+}
+
 func getState(rt *mock.Runtime) *actor.SCAState {
 	var st actor.SCAState
 	rt.GetState(&st)
 	return &st
 }
 
-func (h *shActorHarness) getSubnet(rt *mock.Runtime, id hierarchical.SubnetID) (*actor.Subnet, bool) {
+func (h *shActorHarness) getSubnet(rt *mock.Runtime, id address.SubnetID) (*actor.Subnet, bool) {
 	var st actor.SCAState
 	rt.GetState(&st)
 
 	subnets, err := adt.AsMap(adt.AsStore(rt), st.Subnets, builtin.DefaultHamtBitwidth)
 	require.NoError(h.t, err)
 	var out actor.Subnet
-	found, err := subnets.Get(id, &out)
+	found, err := subnets.Get(hierarchical.SubnetKey(id), &out)
 	require.NoError(h.t, err)
 
 	return &out, found
 }
 
-func (h *shActorHarness) getPrevChildCheckpoint(rt *mock.Runtime, source hierarchical.SubnetID) (*schema.Checkpoint, bool) {
+func (h *shActorHarness) getPrevChildCheckpoint(rt *mock.Runtime, source address.SubnetID) (*schema.Checkpoint, bool) {
 	sh, found := h.getSubnet(rt, source)
 	if !found {
 		return nil, false
@@ -960,7 +1098,7 @@ func currWindowCheckpoint(rt *mock.Runtime, epoch abi.ChainEpoch) *schema.Checkp
 	return ch
 }
 
-func newCheckpoint(source hierarchical.SubnetID, epoch abi.ChainEpoch) *schema.Checkpoint {
+func newCheckpoint(source address.SubnetID, epoch abi.ChainEpoch) *schema.Checkpoint {
 	cb := cid.V1Builder{Codec: cid.DagCBOR, MhType: multihash.BLAKE2B_MIN + 31}
 	ch := schema.NewRawCheckpoint(source, epoch)
 	c1, _ := cb.Sum([]byte("a"))
@@ -971,7 +1109,7 @@ func newCheckpoint(source hierarchical.SubnetID, epoch abi.ChainEpoch) *schema.C
 	return ch
 }
 
-func addMsgMeta(ch *schema.Checkpoint, from, to hierarchical.SubnetID, rand string) *schema.CrossMsgMeta {
+func addMsgMeta(ch *schema.Checkpoint, from, to address.SubnetID, rand string) *schema.CrossMsgMeta {
 	cb := cid.V1Builder{Codec: cid.DagCBOR, MhType: multihash.BLAKE2B_MIN + 31}
 	c, _ := cb.Sum([]byte(from.String() + rand))
 	m := schema.NewCrossMsgMeta(from, to)
@@ -988,13 +1126,13 @@ func getFunds(t *testing.T, rt *mock.Runtime, sh *actor.Subnet, addr address.Add
 	return out
 }
 
-func (h *shActorHarness) getMsgMeta(rt *mock.Runtime, c cid.Cid) (*actor.CrossMsgMeta, bool) {
+func (h *shActorHarness) getMsgMeta(rt *mock.Runtime, c cid.Cid) (*actor.CrossMsgs, bool) {
 	var st actor.SCAState
 	rt.GetState(&st)
 
-	metas, err := adt.AsMap(adt.AsStore(rt), st.CheckMsgsMetaRegistry, builtin.DefaultHamtBitwidth)
+	metas, err := adt.AsMap(adt.AsStore(rt), st.CheckMsgsRegistry, builtin.DefaultHamtBitwidth)
 	require.NoError(h.t, err)
-	var out actor.CrossMsgMeta
+	var out actor.CrossMsgs
 	found, err := metas.Get(abi.CidKey(c), &out)
 	require.NoError(h.t, err)
 

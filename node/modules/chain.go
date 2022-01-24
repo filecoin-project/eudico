@@ -120,7 +120,9 @@ func NetworkName(mctx helpers.MetricsCtx,
 
 	ctx := helpers.LifecycleCtx(mctx, lc)
 
-	sm, err := stmgr.NewStateManager(cs, tsexec, syscalls, us, nil)
+	// The statemanager is initialized here only get the network name
+	// so we can use a nil resolver
+	sm, err := stmgr.NewStateManager(cs, tsexec, nil, syscalls, us, nil)
 	if err != nil {
 		return "", err
 	}

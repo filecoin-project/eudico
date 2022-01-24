@@ -97,7 +97,7 @@ func (st *SubnetState) initGenesis(rt runtime.Runtime, params *ConstructParams) 
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed parsin rem addr")
 
 	// Getting actor ID from recceiver.
-	netName := hierarchical.NewSubnetID(hierarchical.SubnetID(params.NetworkName), rt.Receiver())
+	netName := address.NewSubnetID(address.SubnetID(params.NetworkName), rt.Receiver())
 	err = WriteGenesis(netName, st.Consensus, params.DelegMiner, vreg, rem,
 		params.CheckPeriod, rt.ValueReceived().Uint64(), buf)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed genesis")
@@ -220,7 +220,7 @@ func (st *SubnetState) verifyCheck(rt runtime.Runtime, ch *schema.Checkpoint) ad
 	}
 
 	// Check that the source is correct.
-	shid := hierarchical.NewSubnetID(st.ParentID, rt.Receiver())
+	shid := address.NewSubnetID(st.ParentID, rt.Receiver())
 	if ch.Source() != shid {
 		rt.Abortf(exitcode.ErrIllegalArgument, "submitting a checkpoint with the wrong source")
 	}
