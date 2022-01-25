@@ -7,7 +7,7 @@ lines = f.readlines()
 
 participants = []
 count = 0
-command = 'eudico send --from t1d2xrzcslx7xlbbylc5c3d5lvandqw4iwl6epxba --method 2 --params-json "{\"Miners\":['
+command = 'eudico send --from t1d2xrzcslx7xlbbylc5c3d5lvandqw4iwl6epxba --method 2 --params-json "{\\"Miners\\":['
 for line in lines:
     count += 1
     participant = line.split('/')[-1].rstrip()
