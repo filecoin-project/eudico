@@ -22,9 +22,6 @@ import (
 //
 // NOTE: Maybe we should consider using another CID proto
 // for checkpoints so they can be identified uniquely.
-// This may fix the error faced when using Links in the
-// Checkpoint schema. We had to hide checkpoints behind []byte
-// so they're not interpreted as links from the state tree.
 var Linkproto = cidlink.LinkPrototype{
 	Prefix: cid.Prefix{
 		Version:  1,
@@ -40,7 +37,6 @@ var (
 
 	// NoPreviousCheck is a work-around to avoid undefined CIDs,
 	// that results in unexpected errors when marshalling.
-	// This needs a fix in go-ipld-prime::bindnode
 	NoPreviousCheck cid.Cid
 
 	// EmptyCheckpoint is an empty checkpoint that can be Marshalled
@@ -72,8 +68,9 @@ type ChildCheck struct {
 	// []cid.Cid, but we are hiding it behind a bunch
 	// of bytes to prevent the VM from trying to fetch the
 	// cid from the state tree. We still want to use IPLD
-	// for now. We may be able to remove this problem
-	// if we use cbor-gen directly.
+	// for now. We could fix this by setting an empty AMT
+	// with the list of Cids, but it may be too complex just
+	// for the sake of using CBOR.
 	Checks [][]byte //[]cid.Cid
 }
 
@@ -94,10 +91,11 @@ type CheckData struct {
 	Source string
 	TipSet []byte // NOTE: For simplicity we add TipSetKey. We could include full TipSet
 	Epoch  int
-	// NOTE: Under these bytes there's a cid.Cid. The reason for doing this is
+	// FIXME: Under these bytes there's a cid.Cid. The reason for doing this is
 	// to prevent the VM from interpreting it as a CID from the state
 	// tree trying to fetch it and failing because it can't find anything, so we
-	// are "hiding" them behing a byte type
+	// are "hiding" them behing a byte type. We could choose to use an EmptyCid
+	// and use cbor-gen.
 	PrevCheckCid []byte
 	Childs       []ChildCheck   // List of child checks
 	CrossMsgs    []CrossMsgMeta // List with meta of msgs being propagated.
