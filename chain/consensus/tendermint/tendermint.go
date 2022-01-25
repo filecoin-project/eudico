@@ -1,12 +1,10 @@
 package tendermint
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"os"
 	"strings"
 
@@ -33,6 +31,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/beacon"
 	"github.com/filecoin-project/lotus/chain/consensus"
+	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	"github.com/filecoin-project/lotus/chain/state"
@@ -270,50 +269,41 @@ func getTendermintTransactionHash(block *tenderminttypes.Block) ([32]byte, error
 
 }
 
-func isBlockSealed(fb *types.FullBlock, tb *tenderminttypes.Block) (bool, error) {
-	return true, nil
-	filecoinHeaderBytes, err := fb.Header.Serialize()
-	if err != nil {
-		return false, xerrors.Errorf("unable to serialize a block header: %w", err)
+func getMessageMapFromTendermintBlock(tb *tenderminttypes.Block) (map[[32]byte]bool, error) {
+	msgs := make(map[[32]byte]bool)
+	for _, msg := range tb.Txs {
+		tx := msg.String()
+		txo := tx[3:len(tx)-1]
+		txoData, err := hex.DecodeString(txo)
+		if err != nil {
+			return nil, err
+		}
+		id := sha256.Sum256(txoData)
+		msgs[id] = true
 	}
-	filecoinHash := sha256.Sum256(filecoinHeaderBytes)
-	tendermintHash, err := getTendermintTransactionHash(tb)
+	return msgs, nil
+}
+
+// isBlockSealed checks that all messages from Filecoin block are contained in the Tendermint block.
+// Checking messages from the blocks are same doesn't work because some messages might be filtered.
+func isBlockSealed(fb *types.FullBlock, tb *tenderminttypes.Block) (bool, error) {
+	fbMsgs := fb.BlsMessages
+	tbMsgs, err := getMessageMapFromTendermintBlock(tb)
 	if err != nil {
 		return false, err
 	}
-
-	if bytes.Equal(filecoinHash[:], tendermintHash[:]) && int64(fb.Header.Height)+1 == tb.Height {
-		return true, nil
+	for _, msg := range fbMsgs {
+		bs, err := msg.Serialize()
+		if err != nil {
+			return false, err
+		}
+		id := sha256.Sum256(bs)
+		_, found := tbMsgs[id]
+		if !found {
+			return false, nil
+		}
 	}
-	return false, nil
-}
-
-func blockSanityChecks(h *types.BlockHeader) error {
-	/*	if h.ElectionProof != nil {
-		return xerrors.Errorf("block must have nil election proof")
-	}*/
-
-	if h.Ticket != nil {
-		return xerrors.Errorf("block must have nil ticket: ", h.Ticket)
-	}
-
-	if h.BlockSig == nil {
-		return xerrors.Errorf("block had nil signature")
-	}
-
-	if h.BLSAggregate == nil {
-		return xerrors.Errorf("block had nil bls aggregate signature")
-	}
-
-	if h.Miner.Protocol() != address.SECP256K1 {
-		return xerrors.Errorf("block had non-secp miner address")
-	}
-
-	if len(h.Parents) != 1 {
-		return xerrors.Errorf("must have 1 parents")
-	}
-
-	return nil
+	return true, nil
 }
 
 // TODO: We should extract this somewhere else and make the message pool and miner use the same logic
