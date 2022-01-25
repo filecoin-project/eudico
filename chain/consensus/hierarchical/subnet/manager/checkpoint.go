@@ -185,8 +185,8 @@ func (s *SubnetMgr) ValidateCheckpoint(
 		return nil, err
 	}
 
-	if pchc, _ := ch.PreviousCheck(); prevCid != pchc {
-		return ch, xerrors.Errorf("verification failed, previous checkpoints not equal: %s, %s", prevCid, pchc)
+	if prevCid != ch.PreviousCheck() {
+		return ch, xerrors.Errorf("verification failed, previous checkpoints not equal: %s, %s", prevCid, ch.PreviousCheck())
 	}
 
 	if ch.Epoch() != epoch {

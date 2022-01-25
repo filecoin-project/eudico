@@ -326,11 +326,7 @@ func (s *SubnetMgr) getBottomUpPool(ctx context.Context, id address.SubnetID, he
 	// Resolve CrossMsgs behind meta or send pull message.
 	for _, mt := range metas {
 		// Resolve CrossMsgs behind meta.
-		c, err := mt.Cid()
-		if err != nil {
-			return nil, err
-		}
-		cross, found, err := r.ResolveCrossMsgs(c, address.SubnetID(mt.From))
+		cross, found, err := r.ResolveCrossMsgs(mt.Cid(), address.SubnetID(mt.From))
 		if err != nil {
 			return nil, err
 		}

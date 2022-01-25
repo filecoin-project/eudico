@@ -264,7 +264,7 @@ func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *Chec
 		// Check that the previous Cid is consistent with the committed one.
 		prevCid, err := prevCom.Cid()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error computing checkpoint's Cid")
-		if pr, _ := commit.PreviousCheck(); prevCid != pr {
+		if prevCid != commit.PreviousCheck() {
 			rt.Abortf(exitcode.ErrIllegalArgument, "new checkpoint not consistent with previous one")
 		}
 

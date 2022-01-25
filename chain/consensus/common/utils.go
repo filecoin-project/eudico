@@ -53,8 +53,7 @@ func recoverOriginalNonce(r *resolver.Resolver, n uint64, sca *sca.SCAState,
 	if !found {
 		return []*types.Message{}, xerrors.Errorf("No BottomUp meta found for nonce in SCA: %d", n)
 	}
-	c, _ := meta.Cid()
-	orig, _, err := r.ResolveCrossMsgs(c, address.SubnetID(meta.From))
+	orig, _, err := r.ResolveCrossMsgs(meta.Cid(), address.SubnetID(meta.From))
 
 	for _, o := range orig {
 		for _, m := range msg {

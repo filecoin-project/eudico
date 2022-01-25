@@ -53,9 +53,8 @@ var listCheckpoints = &cli.Command{
 		}
 		for _, ch := range chs {
 			chcid, _ := ch.Cid()
-			prev, _ := ch.PreviousCheck()
 			lc := len(ch.CrossMsgs()) > 0
-			fmt.Printf("epoch: %d - cid=%s, previous=%v, childs=%v, crossmsgs=%v\n", ch.Epoch(), chcid, prev, ch.LenChilds(), lc)
+			fmt.Printf("epoch: %d - cid=%s, previous=%v, childs=%v, crossmsgs=%v\n", ch.Epoch(), chcid, ch.PreviousCheck(), ch.LenChilds(), lc)
 		}
 		return nil
 	},
@@ -96,9 +95,8 @@ var validateCheckpoints = &cli.Command{
 			return err
 		}
 		chcid, _ := ch.Cid()
-		prev, _ := ch.PreviousCheck()
 		fmt.Println("Verified OK!")
-		fmt.Printf("epoch: %d - cid=%s, previous=%v, childs=%v\n", ch.Epoch(), chcid, prev, ch.LenChilds())
+		fmt.Printf("epoch: %d - cid=%s, previous=%v, childs=%v\n", ch.Epoch(), chcid, ch.PreviousCheck(), ch.LenChilds())
 
 		return nil
 	},

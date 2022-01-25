@@ -133,7 +133,6 @@ func (s *SubnetMgr) matchSCAChildCommit(ctx context.Context, api *API, oldTs, ne
 	}
 
 	var oldSt, newSt sca.SCAState
-	diff.childChecks = make(map[string][]cid.Cid)
 
 	bs := blockstore.NewAPIBlockstore(api)
 	cst := cbor.NewCborStore(bs)
@@ -170,7 +169,7 @@ func (s *SubnetMgr) matchSCAChildCommit(ctx context.Context, api *API, oldTs, ne
 	newChilds := newCheck.GetChilds()
 
 	// Check changes in child changes
-	chngChilds := make(map[string][][]byte)
+	chngChilds := make(map[string][]cid.Cid)
 	for _, ch := range newChilds {
 		chngChilds[ch.Source] = ch.Checks
 	}
@@ -186,17 +185,11 @@ func (s *SubnetMgr) matchSCAChildCommit(ctx context.Context, api *API, oldTs, ne
 			i := chngChilds[ch.Source][len(chngChilds[ch.Source])-1]
 			delete(chngChilds, ch.Source)
 			// And just add the last one added
-			chngChilds[ch.Source] = [][]byte{i}
+			chngChilds[ch.Source] = []cid.Cid{i}
 		}
 	}
 
-	for k, out := range chngChilds {
-		cs, err := schema.ByteSliceToCidList(out)
-		if err != nil {
-			return false, err
-		}
-		diff.childChecks[k] = cs
-	}
+	diff.childChecks = chngChilds
 
 	return len(diff.childChecks) > 0, nil
 }

@@ -63,14 +63,16 @@ func TestMarshalCheckpoint(t *testing.T) {
 }
 
 func TestMarshalMsgMeta(t *testing.T) {
+	c, err := abi.CidBuilder.Sum([]byte("asdg"))
+	require.NoError(t, err)
 	ch := &schema.CrossMsgMeta{
 		From:    "asedf",
 		To:      "sfg",
-		MsgsCid: []byte("asdg"),
+		MsgsCid: c,
 	}
 	// Marshal
 	var buf bytes.Buffer
-	err := ch.MarshalCBOR(&buf)
+	err = ch.MarshalCBOR(&buf)
 	require.NoError(t, err)
 
 	// Unmarshal and check equal
@@ -85,7 +87,7 @@ func TestMarshalMsgMeta(t *testing.T) {
 func TestMarshalEmptyPrevious(t *testing.T) {
 	epoch := abi.ChainEpoch(1000)
 	ch := schema.NewRawCheckpoint(address.RootSubnet, epoch)
-	pr, _ := ch.PreviousCheck()
+	pr := ch.PreviousCheck()
 	require.Equal(t, pr, schema.NoPreviousCheck)
 
 	// Add child checkpoints

@@ -62,16 +62,12 @@ func checkBottomUpMsg(ctx context.Context, r *resolver.Resolver, snstore blockad
 	}
 
 	// Wait to resolve bottom-up messages for meta
-	c, err := comMeta.Cid()
-	if err != nil {
-		return err
-	}
 	// Adding a 30 seconds time out for block resolution.
 	// FIXME: We may need to figure out what to do if we never find the msgs
 	// to check.
 	ctx, cancel := context.WithTimeout(ctx, crossMsgResolutionTimeout)
 	defer cancel()
-	out := r.WaitCrossMsgsResolved(ctx, c, address.SubnetID(comMeta.From))
+	out := r.WaitCrossMsgsResolved(ctx, comMeta.Cid(), address.SubnetID(comMeta.From))
 	select {
 	case <-ctx.Done():
 		return xerrors.Errorf("context timeout")
@@ -82,7 +78,7 @@ func checkBottomUpMsg(ctx context.Context, r *resolver.Resolver, snstore blockad
 	}
 
 	// Get cross-messages
-	cross, found, err := r.ResolveCrossMsgs(c, address.SubnetID(comMeta.From))
+	cross, found, err := r.ResolveCrossMsgs(comMeta.Cid(), address.SubnetID(comMeta.From))
 	if err != nil {
 		return xerrors.Errorf("Error resolving messages: %v", err)
 	}

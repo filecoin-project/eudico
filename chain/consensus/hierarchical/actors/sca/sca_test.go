@@ -347,7 +347,7 @@ func TestCheckpoints(t *testing.T) {
 	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
 	rt.Verify()
 	windowCh := currWindowCheckpoint(rt, epoch)
-	require.Equal(t, windowCh.Data.Epoch, 100)
+	require.Equal(t, windowCh.Data.Epoch, abi.ChainEpoch(100))
 	// Check that child was added.
 	require.GreaterOrEqual(t, windowCh.HasChildSource(nn1), 0)
 	// Check previous checkpoint added
@@ -383,7 +383,7 @@ func TestCheckpoints(t *testing.T) {
 	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
 	rt.Verify()
 	windowCh = currWindowCheckpoint(rt, epoch)
-	require.Equal(t, windowCh.Data.Epoch, 100)
+	require.Equal(t, windowCh.Data.Epoch, abi.ChainEpoch(100))
 	// Check that child was appended for subnet.
 	require.GreaterOrEqual(t, windowCh.HasChildSource(nn1), 0)
 	require.Equal(t, len(windowCh.GetSourceChilds(nn1).Checks), 2)
@@ -459,10 +459,10 @@ func TestCheckpoints(t *testing.T) {
 	st = getState(rt)
 	raw, err = actor.RawCheckpoint(st, adt.AsStore(rt), epoch)
 	require.NoError(t, err)
-	require.Equal(t, raw.Data.Epoch, 100)
+	require.Equal(t, raw.Data.Epoch, abi.ChainEpoch(100))
 	require.GreaterOrEqual(t, raw.HasChildSource(nn2), 0)
 	require.Equal(t, raw.LenChilds(), 2)
-	pr, err := raw.PreviousCheck()
+	pr := raw.PreviousCheck()
 	require.NoError(t, err)
 	require.Equal(t, pr, schema.NoPreviousCheck)
 
@@ -527,7 +527,7 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
 	rt.Verify()
 	windowCh := currWindowCheckpoint(rt, epoch)
-	require.Equal(t, windowCh.Data.Epoch, 100)
+	require.Equal(t, windowCh.Data.Epoch, abi.ChainEpoch(100))
 	// Check that child was added.
 	require.GreaterOrEqual(t, windowCh.HasChildSource(sh.ID), 0)
 	// Check previous checkpoint added
@@ -605,7 +605,7 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
 	rt.Verify()
 	windowCh = currWindowCheckpoint(rt, epoch)
-	require.Equal(t, windowCh.Data.Epoch, 100)
+	require.Equal(t, windowCh.Data.Epoch, abi.ChainEpoch(100))
 	// Check that child was added.
 	require.GreaterOrEqual(t, windowCh.HasChildSource(sh.ID), 0)
 	// Check previous checkpoint added
@@ -625,13 +625,11 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 		// Check the to is kept
 		require.Equal(t, len(windowCh.CrossMsgsTo(subs[i])), 1)
 		// Get current msgMetas
-		mcid, _ := mm.Cid()
-		msgmeta, found := h.getMsgMeta(rt, mcid)
+		msgmeta, found := h.getMsgMeta(rt, mm.Cid())
 		require.True(t, found)
 		prev, ok := prevs[mm.To]
 		if ok {
-			prevCid, _ := prev.Cid()
-			_, found := h.getMsgMeta(rt, prevCid)
+			_, found := h.getMsgMeta(rt, prev.Cid())
 			// The one subnet updated should have removed the previous
 			if mm.To == subs[0].String() {
 				require.False(h.t, found)
@@ -907,8 +905,7 @@ func release(h *shActorHarness, rt *mock.Runtime, shid address.SubnetID, release
 	windowCh := currWindowCheckpoint(rt, 0)
 	_, chmeta := windowCh.CrossMsgMeta(shid, shid.Parent())
 	require.NotNil(h.t, chmeta)
-	cidmeta, err := chmeta.Cid()
-	require.NoError(h.t, err)
+	cidmeta := chmeta.Cid()
 	meta, found := h.getMsgMeta(rt, cidmeta)
 	require.True(h.t, found)
 	require.Equal(h.t, len(meta.Msgs), int(nonce+1))

@@ -59,7 +59,7 @@ func (cm *CrossMsgs) Cid() (cid.Cid, error) {
 		// if err != nil {
 		// 	return cid.Undef, err
 		// }
-		mc, err := abi.CidBuilder.Sum([]byte(string(m.MsgsCid) + m.From + m.To))
+		mc, err := abi.CidBuilder.Sum([]byte(m.MsgsCid.String() + m.From + m.To))
 		if err != nil {
 			return cid.Undef, err
 		}
@@ -150,7 +150,7 @@ func (st *SCAState) releaseMsg(rt runtime.Runtime, value big.Int, to address.Add
 }
 
 func (st *SCAState) storeBottomUpMsgMeta(rt runtime.Runtime, meta schema.CrossMsgMeta) {
-	meta.Nonce = int(st.BottomUpNonce)
+	meta.Nonce = st.BottomUpNonce
 	crossMsgs, err := adt.AsArray(adt.AsStore(rt), st.BottomUpMsgsMeta, CrossMsgsAMTBitwidth)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load cross-messages")
 	// Set message in AMT
@@ -246,9 +246,8 @@ func (st *SCAState) aggChildMsgMeta(rt runtime.Runtime, ch *schema.Checkpoint, a
 		}
 
 		// If there is already a msgMeta for that to/from update with new message
-		if len(msgMeta.MsgsCid) != 0 {
-			_, prevMetaCid, err := cid.CidFromBytes(msgMeta.MsgsCid)
-			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to compute Cid for msgMeta")
+		if msgMeta.MsgsCid != cid.Undef {
+			prevMetaCid := msgMeta.MsgsCid
 			metaCid := st.appendMetasToMeta(rt, prevMetaCid, mm)
 			// Update msgMeta in checkpoint
 			ch.SetMsgMetaCid(metaIndex, metaCid)
@@ -263,7 +262,7 @@ func (st *SCAState) aggChildMsgMeta(rt runtime.Runtime, ch *schema.Checkpoint, a
 			st.CheckMsgsRegistry, err = msgMetas.Root()
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush msgMeta registry")
 			// Append msgMeta to registry
-			msgMeta.MsgsCid = metaCid.Bytes()
+			msgMeta.MsgsCid = metaCid
 			ch.AppendMsgMeta(msgMeta)
 		}
 	}
@@ -279,9 +278,8 @@ func (st *SCAState) storeCheckMsg(rt runtime.Runtime, msg ltypes.Message, from, 
 	}
 
 	// If there is already a msgMeta for that to/from update with new message
-	if len(msgMeta.MsgsCid) != 0 {
-		_, prevMetaCid, err := cid.CidFromBytes(msgMeta.MsgsCid)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to compute Cid for msgMeta")
+	if msgMeta.MsgsCid != cid.Undef {
+		prevMetaCid := msgMeta.MsgsCid
 		metaCid := st.appendMsgToMeta(rt, prevMetaCid, msg)
 		// Update msgMeta in checkpoint
 		ch.SetMsgMetaCid(metaIndex, metaCid)
@@ -296,7 +294,7 @@ func (st *SCAState) storeCheckMsg(rt runtime.Runtime, msg ltypes.Message, from, 
 		st.CheckMsgsRegistry, err = msgMetas.Root()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush msgMeta registry")
 		// Append msgMeta to registry
-		msgMeta.MsgsCid = metaCid.Bytes()
+		msgMeta.MsgsCid = metaCid
 		ch.AppendMsgMeta(msgMeta)
 	}
 

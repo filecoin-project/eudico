@@ -414,12 +414,8 @@ func (r *Resolver) ResolveCrossMsgs(c cid.Cid, from address.SubnetID) ([]types.M
 		foundAll := true
 		// If there is some msgMeta to resolve, resolve it
 		for _, mt := range cross.Metas {
-			c, err := mt.Cid()
-			if err != nil {
-				return []types.Message{}, false, nil
-			}
 			// Recursively resolve crossMsg for meta
-			cross, found, err := r.ResolveCrossMsgs(c, address.SubnetID(mt.From))
+			cross, found, err := r.ResolveCrossMsgs(mt.Cid(), address.SubnetID(mt.From))
 			if err != nil {
 				return []types.Message{}, false, nil
 			}
@@ -470,16 +466,12 @@ func (r *Resolver) PushMsgFromCheckpoint(ch *schema.Checkpoint, st *sca.SCAState
 	// For each crossMsgMeta
 	for _, meta := range ch.CrossMsgs() {
 		// Get the crossMsgs behind Cid from SCA state and push it.
-		c, err := meta.Cid()
-		if err != nil {
-			return err
-		}
-		msgs, found, err := st.GetCrossMsgs(store, c)
+		msgs, found, err := st.GetCrossMsgs(store, meta.Cid())
 		if err != nil {
 			return err
 		}
 		if !found {
-			return xerrors.Errorf("couldn't found crossmsgs for msgMeta with cid: %s", c)
+			return xerrors.Errorf("couldn't found crossmsgs for msgMeta with cid: %s", meta.Cid())
 		}
 		// Push cross-msgs to subnet
 		if err = r.PushCrossMsgs(*msgs, address.SubnetID(meta.To), false); err != nil {
