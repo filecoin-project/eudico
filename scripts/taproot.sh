@@ -28,7 +28,7 @@ curl -u satoshi:amiens -X POST \
 # This initial key is constructed based on the keys of Alice, Bob, Charlie 
 # and a commitment to the Eudico genesis block.
 # If the hash of the genesis block changes this key needs to be re-generated.
-# (To double-check: This hash is defined in eudico delegated consensus: eudico/chain/gen/genesis/genesis.go.)
+# (This hash is defined in eudico delegated consensus: ./eudico delegated genesis t1d2xrzcslx7xlbbylc5c3d5lvandqw4iwl6epxba gen.gen)
 # In order to compute the initial key, we can uncomment the following lines in the 
 # checkpointing/sub.go file:
 #       address, _ := pubkeyToTapprootAddress(c.pubkey)
