@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"sync"
 	"time"
 
 	httptendermintrpcclient "github.com/tendermint/tendermint/rpc/client/http"
@@ -11,6 +12,7 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/build"
@@ -19,7 +21,38 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
-var sent = make(map[[32]byte]bool)
+// finalityWait is the number of epochs that we will wait
+// before being able to re-propose a msg.
+const finalityWait = 100
+
+func newMessagePool() *msgPool {
+	return &msgPool{pool: make(map[[32]byte]abi.ChainEpoch)}
+}
+
+type msgPool struct {
+	lk   sync.RWMutex
+	pool map[[32]byte]abi.ChainEpoch
+}
+
+func (p *msgPool) addMessage(tx []byte, epoch abi.ChainEpoch) {
+	p.lk.Lock()
+	defer p.lk.Unlock()
+
+	id := sha256.Sum256(tx)
+	p.pool[id] = epoch
+}
+
+func (p *msgPool) shouldSubmitMessage(tx []byte, currentEpoch abi.ChainEpoch) bool {
+	p.lk.RLock()
+	defer p.lk.RUnlock()
+
+	id := sha256.Sum256(tx)
+	proposedAt, proposed := p.pool[id]
+
+	return !proposed || proposedAt + finalityWait < currentEpoch
+}
+
+var pool = newMessagePool()
 
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {
 	tendermintClient, err := httptendermintrpcclient.New(TendermintNodeAddr())
@@ -50,7 +83,6 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 
 		log.Info("try tendermint mining at @", base.Height())
 
-
 		msgs, err := api.MpoolSelect(ctx, base.Key(), 1)
 		if err != nil {
 			log.Errorw("unable to select messages from mempool", "error", err)
@@ -58,28 +90,28 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 
 		log.Infof("selected %d messages from mempool", len(msgs))
 		for _, msg := range msgs {
-			log.Info("sent map:", sent)
 			tx, err := msg.Serialize()
 			if err != nil {
 				log.Error(err)
+				continue
 			}
 			log.Info(tx)
 
-			// Workaround for this bug: https://github.com/tendermint/tendermint/issues/7185
-			log.Info("hash:", sha256.Sum256(tx))
-			_, ok := sent[sha256.Sum256(tx)]
-			if !ok {
-				sent[sha256.Sum256(tx)] = true
+			// LRU cache is used to store the messages that have already been sent.
+			// It is also a workaround for this bug: https://github.com/tendermint/tendermint/issues/7185.
+			id := sha256.Sum256(tx)
+			log.Info("message hash:", id)
 
+			if pool.shouldSubmitMessage(tx, base.Height()) {
 				res, err := tendermintClient.BroadcastTxSync(ctx, tenderminttypes.Tx(tx))
-				log.Info("after BroadcastTxSync")
 				if err != nil {
 					log.Error("unable to send message to Tendermint error:", err)
+					continue
+				} else {
+					pool.addMessage(tx, base.Height())
+					log.Info(res)
+					log.Info("successfully sent msg to Tendermint:", id)
 				}
-				log.Info(res)
-				log.Info("successfully sent msg to Tendermint")
-			} else {
-				log.Info("tx has been already sent")
 			}
 		}
 
@@ -185,17 +217,23 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 
 	bt.Messages = msgs
 
-	b, err := common.PrepareBlockForSignature(ctx, tendermint.sm, bt)
+	b, err := common.SanitizeMessagesAndPrepareBlockForSignature(ctx, tendermint.sm, bt)
 	if err != nil {
 		log.Info(err)
 		return nil, err
 	}
-	log.Info("after common.PrepareBlockForSignature")
 
 	err = common.SignBlock(ctx, w, b)
 	if err != nil {
 		log.Info(err)
 		return nil, err
 	}
+
+	err = tendermint.ValidateBlock(ctx, b)
+	if err != nil {
+		log.Info(err)
+		return nil, err
+	}
+
 	return b, nil
 }

@@ -7,7 +7,7 @@ rm -rvf ~/.eudico
 rm -rvf ~/.tendermint/data
 
 rm -rf ./tendermint
-make tendermint
+#make tendermint
 #tendermint init validator
 mkdir ~/.tendermint/data
 cp ~/.tendermint/priv_validator_state.json ~/.tendermint/data

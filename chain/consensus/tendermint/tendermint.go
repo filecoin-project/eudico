@@ -64,6 +64,26 @@ var (
 	_ consensus.Consensus = &Tendermint{}
 )
 
+func GetTendermintID() (address.Address, error){
+	client, err := httptendermintrpcclient.New(TendermintSidecar)
+	if err != nil {
+		// TODO: Tendermint: don't use panic
+		panic("unable to access a tendermint client")
+	}
+	info, err := client.Status(context.TODO())
+	if err != nil {
+		// TODO: Tendermint: don't use panic
+		panic(err)
+	}
+	id := string(info.NodeInfo.NodeID)
+	addr, err := address.NewFromString(id)
+	if err != nil {
+		// TODO: Tendermint: don't use panic
+		panic(err)
+	}
+	return addr, nil
+}
+
 type Tendermint struct {
 	// The interface for accessing and putting tipsets into local storage
 	store *store.ChainStore

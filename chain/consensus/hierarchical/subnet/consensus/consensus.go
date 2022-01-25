@@ -2,9 +2,6 @@ package consensus
 
 import (
 	"context"
-	"github.com/filecoin-project/lotus/chain/consensus/tendermint"
-	httptendermintrpcclient "github.com/tendermint/tendermint/rpc/client/http"
-
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/chain"
@@ -13,6 +10,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
+	"github.com/filecoin-project/lotus/chain/consensus/tendermint"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
@@ -71,7 +69,7 @@ func Mine(ctx context.Context, api v1api.FullNode, cnsType hierarchical.Consensu
 		}
 		go tspow.Mine(ctx, miner, api)
 	case hierarchical.Tendermint:
-		miner, err := getTendermintID(ctx)
+		miner, err := tendermint.GetTendermintID()
 		if err != nil {
 			log.Errorw("unable to get Tendermint ID", "err", err)
 			return err
@@ -81,26 +79,6 @@ func Mine(ctx context.Context, api v1api.FullNode, cnsType hierarchical.Consensu
 		return xerrors.New("consensus type not suported")
 	}
 	return nil
-}
-
-func getTendermintID(ctx context.Context) (address.Address, error){
-	client, err := httptendermintrpcclient.New(tendermint.TendermintSidecar)
-	if err != nil {
-		// TODO: Tendermint: don't use panic
-		panic("unable to access a tendermint client")
-	}
-	info, err := client.Status(ctx)
-	if err != nil {
-		// TODO: Tendermint: don't use panic
-		panic(err)
-	}
-	id := string(info.NodeInfo.NodeID)
-	addr, err := address.NewFromString(id)
-	if err != nil {
-		// TODO: Tendermint: don't use panic
-		panic(err)
-	}
-	return addr, nil
 }
 
 // Get an identity from the peer's wallet.
