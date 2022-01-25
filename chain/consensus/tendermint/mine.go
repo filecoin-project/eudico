@@ -223,13 +223,30 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 		return nil, err
 	}
 
+	h := b.Header
+	baseTs, err := tendermint.store.LoadTipSet(types.NewTipSetKey(h.Parents...))
+	if err != nil {
+		return nil, xerrors.Errorf("load parent tipset failed (%s): %w", h.Parents, err)
+	}
+
+	validMsgs, err := common.FilterBlockMessages(ctx, tendermint.store, tendermint.sm, tendermint.subMgr, tendermint.netName, b, baseTs)
+	if validMsgs.BLSMessages != nil {
+		b.BlsMessages = validMsgs.BLSMessages
+	}
+	if validMsgs.SecpkMessages != nil {
+		b.SecpkMessages = validMsgs.SecpkMessages
+	}
+	if validMsgs.CrossMsg != nil {
+		b.CrossMessages = validMsgs.CrossMsg
+	}
+
 	err = common.SignBlock(ctx, w, b)
 	if err != nil {
 		log.Info(err)
 		return nil, err
 	}
 
-	err = tendermint.ValidateBlock(ctx, b)
+	err = tendermint.validateBlock(ctx, b)
 	if err != nil {
 		log.Info(err)
 		return nil, err

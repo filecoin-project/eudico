@@ -252,6 +252,106 @@ func (tendermint *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBl
 	return nil
 }
 
+func (tendermint *Tendermint) validateBlock(ctx context.Context, b *types.FullBlock) (err error) {
+	log.Infof("STARTED ADDITIONAL VALIDATION FOR BLOCK %d", b.Header.Height)
+	defer log.Infof("FINISHED ADDITIONAL VALIDATION FOR  %d", b.Header.Height)
+
+	if err := common.BlockSanityChecks(hierarchical.Tendermint, b.Header); err != nil {
+		return xerrors.Errorf("incoming header failed basic sanity checks: %w", err)
+	}
+
+	h := b.Header
+
+	baseTs, err := tendermint.store.LoadTipSet(types.NewTipSetKey(h.Parents...))
+	if err != nil {
+		return xerrors.Errorf("load parent tipset failed (%s): %w", h.Parents, err)
+	}
+
+	// fast checks first
+	if h.Height != baseTs.Height()+1 {
+		return xerrors.Errorf("block height not parent height+1: %d != %d", h.Height, baseTs.Height()+1)
+	}
+
+	now := uint64(build.Clock.Now().Unix())
+	if h.Timestamp > now+build.AllowableClockDriftSecs {
+		return xerrors.Errorf("block was from the future (now=%d, blk=%d): %w", now, h.Timestamp, consensus.ErrTemporal)
+	}
+	if h.Timestamp > now {
+		log.Warn("Got block from the future, but within threshold", h.Timestamp, build.Clock.Now().Unix())
+	}
+
+	msgsChecks := common.CheckMsgs(ctx, tendermint.store, tendermint.sm, tendermint.subMgr, tendermint.netName, b, baseTs)
+
+	minerCheck := async.Err(func() error {
+		if err := tendermint.minerIsValid(b.Header.Miner); err != nil {
+			return xerrors.Errorf("minerIsValid failed: %w", err)
+		}
+		return nil
+	})
+
+	pweight, err := Weight(context.TODO(), nil, baseTs)
+	if err != nil {
+		return xerrors.Errorf("getting parent weight: %w", err)
+	}
+
+	if types.BigCmp(pweight, b.Header.ParentWeight) != 0 {
+		return xerrors.Errorf("parrent weight different: %s (header) != %s (computed)",
+			b.Header.ParentWeight, pweight)
+	}
+
+	stateRootCheck := common.CheckStateRoot(ctx, tendermint.store, tendermint.sm, b, baseTs)
+
+	await := []async.ErrorFuture{
+		minerCheck,
+		stateRootCheck,
+	}
+
+	await = append(await, msgsChecks...)
+
+	var merr error
+	for _, fut := range await {
+		if err := fut.AwaitContext(ctx); err != nil {
+			merr = multierror.Append(merr, err)
+		}
+	}
+	if merr != nil {
+		mulErr := merr.(*multierror.Error)
+		mulErr.ErrorFormat = func(es []error) string {
+			if len(es) == 1 {
+				return fmt.Sprintf("1 error occurred:\n\t* %+v\n\n", es[0])
+			}
+
+			points := make([]string, len(es))
+			for i, err := range es {
+				points[i] = fmt.Sprintf("* %+v", err)
+			}
+
+			return fmt.Sprintf(
+				"%d errors occurred:\n\t%s\n\n",
+				len(es), strings.Join(points, "\n\t"))
+		}
+		return mulErr
+	}
+
+
+	height := int64(h.Height)+1
+	tendermintBlock, err := tendermint.client.Block(ctx, &height)
+	if err != nil {
+		return xerrors.Errorf("unable to get the Tendermint block by height %d", height)
+	}
+
+	sealed, err := isBlockSealed(b, tendermintBlock.Block)
+	if err != nil {
+		log.Infof("block sealed err: %s", err.Error())
+		return err
+	}
+	if !sealed {
+		log.Infof("block is not sealed %d", b.Header.Height)
+		return xerrors.New("block is not sealed")
+	}
+	return nil
+}
+
 func getTendermintTransactionHash(block *tenderminttypes.Block) ([32]byte, error) {
 	lenTx := len(block.Txs)
 	if lenTx !=1 {

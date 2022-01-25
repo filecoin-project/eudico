@@ -125,6 +125,8 @@ func PrepareBlockForSignature(ctx context.Context, sm *stmgr.StateManager, bt *l
 
 }
 
+// SanitizeMessagesAndPrepareBlockForSignature checks and removes invalid messages from the block fixture
+// and return the bock with valid messages.
 func SanitizeMessagesAndPrepareBlockForSignature(ctx context.Context, sm *stmgr.StateManager, bt *lapi.BlockTemplate) (*types.FullBlock, error) {
 	pts, err := sm.ChainStore().LoadTipSet(bt.Parents)
 	if err != nil {
@@ -158,7 +160,7 @@ func SanitizeMessagesAndPrepareBlockForSignature(ctx context.Context, sm *stmgr.
 	for _, msg := range bt.Messages {
 		err := sigs.Verify(&msg.Signature, msg.Message.From, msg.Message.Cid().Bytes())
 		if err != nil {
-			log.Info("invalid SignedMessage has been filtered")
+			log.Info("invalid signed message was filtered")
 			continue
 		}
 
