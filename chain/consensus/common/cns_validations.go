@@ -390,8 +390,8 @@ func FilterBlockMessages(
 	}
 
 	 */
-	var validBLSMessages []*types.Message
-	var validsecpkMessages []*types.SignedMessage
+	var validBlsMessages []*types.Message
+	var validSecpkMessages []*types.SignedMessage
 
 	nonces := make(map[address.Address]uint64)
 
@@ -479,7 +479,7 @@ func FilterBlockMessages(
 			log.Infof("failed to put bls message at index %d: %w", i, err)
 			continue
 		}
-		validBLSMessages = append(validBLSMessages, m)
+		validBlsMessages = append(validBlsMessages, m)
 	}
 
 	smArr := blockadt.MakeEmptyArray(tmpstore)
@@ -512,7 +512,7 @@ func FilterBlockMessages(
 			log.Infof("failed to put secpk message at index %d: %w", i, err)
 			continue
 		}
-		validsecpkMessages = append(validsecpkMessages, m)
+		validSecpkMessages = append(validSecpkMessages, m)
 	}
 
 	crossArr := blockadt.MakeEmptyArray(tmpstore)
@@ -605,8 +605,8 @@ func FilterBlockMessages(
 	}
 
 	return &ValidatedMessages{
-		BLSMessages: validBLSMessages,
-		SecpkMessages: validsecpkMessages,
+		BLSMessages: validBlsMessages,
+		SecpkMessages: validSecpkMessages,
 		CrossMsg: validCrossMsg,
 	}, nil
 }

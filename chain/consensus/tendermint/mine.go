@@ -15,7 +15,6 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
-	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -55,7 +54,7 @@ func (p *msgPool) shouldSubmitMessage(tx []byte, currentEpoch abi.ChainEpoch) bo
 var pool = newMessagePool()
 
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {
-	tendermintClient, err := httptendermintrpcclient.New(TendermintNodeAddr())
+	tendermintClient, err := httptendermintrpcclient.New(NodeAddr())
 	if err != nil {
 		log.Fatalf("unable to create a Tendermint client: %s", err)
 	}
@@ -129,12 +128,11 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
 			Miner:            miner,
 			Parents:          base.Key(),
-			Ticket:           nil,
-			Eproof:           nil,
 			BeaconValues:     nil,
+			Ticket:           nil,
 			Messages:         nil,
 			Epoch:            base.Height() + 1,
-			Timestamp:        base.MinTimestamp() + build.BlockDelaySecs,
+			Timestamp:        uint64(time.Now().Unix()),
 			WinningPoStProof: nil,
 			CrossMessages:    crossmsgs,
 		})
