@@ -25,17 +25,15 @@ const crossMsgResolutionTimeout = 30 * time.Second
 
 func checkCrossMsg(ctx context.Context, r *resolver.Resolver, pstore, snstore blockadt.Store, parentSCA, snSCA *sca.SCAState, msg *types.Message) error {
 	switch hierarchical.GetMsgType(msg) {
-	case hierarchical.Fund:
+	case hierarchical.TopDown:
 		// sanity-check: the root chain doesn't support topDown messages,
 		// so return an error if parentSCA is nil and we are here.
 		if parentSCA == nil {
 			return xerrors.Errorf("root chains (id=%v) does not support topDown cross msgs", snSCA.NetworkName)
 		}
 		return checkTopDownMsg(pstore, parentSCA, snSCA, msg)
-	case hierarchical.Release:
+	case hierarchical.BottomUp:
 		return checkBottomUpMsg(ctx, r, snstore, snSCA, msg)
-	case hierarchical.Cross:
-		panic("Not implemented")
 	}
 
 	return xerrors.Errorf("Unknown cross-msg type")
@@ -77,7 +75,7 @@ func checkBottomUpMsg(ctx context.Context, r *resolver.Resolver, snstore blockad
 		return xerrors.Errorf("context timeout")
 	case err := <-out:
 		if err != nil {
-			return xerrors.Errorf("error fully resolving messages", err)
+			return xerrors.Errorf("error fully resolving messages: %s", err)
 		}
 	}
 
@@ -144,56 +142,18 @@ func ApplyCrossMsg(ctx context.Context, vmi *vm.VM, submgr subnet.SubnetMgr,
 	em stmgr.ExecMonitor, msg *types.Message,
 	ts *types.TipSet) error {
 	switch hierarchical.GetMsgType(msg) {
-	case hierarchical.Fund:
-		return applyFundMsg(ctx, vmi, submgr, em, msg, ts)
-	case hierarchical.Release:
-		// Release messages can be applied right-away, without
-		// any pre-processing.
+	case hierarchical.TopDown, hierarchical.BottomUp:
+		// At this point, both messages are applied in the same way
 		return applyMsg(ctx, vmi, em, msg, ts)
-	case hierarchical.Cross:
-		panic("Not implemented")
 	}
 
 	return xerrors.Errorf("Unknown cross-msg type")
 }
 
-func applyFundMsg(ctx context.Context, vmi *vm.VM, submgr subnet.SubnetMgr,
-	em stmgr.ExecMonitor, msg *types.Message, ts *types.TipSet) error {
-	// sanity-check: the root chain doesn't support topDown messages,
-	// so return an error if submgr is nil.
-	if submgr == nil {
-		return xerrors.Errorf("Root chain doesn't have parent and doesn't support topDown cross msgs")
-	}
-
-	// Get raw address
-	rfrom, err := msg.From.RawAddr()
-	if err != nil {
-		return err
-	}
-	// Get SECPK address for ID from parent chain included in message.
-	subFrom, err := msg.From.Subnet()
-	if err != nil {
-		return xerrors.Errorf("getting subnet from msg: %w", err)
-	}
-	api, err := submgr.GetSubnetAPI(subFrom)
-	if err != nil {
-		return xerrors.Errorf("getting subnet API: %w", err)
-	}
-	secpaddr, err := api.StateAccountKey(ctx, rfrom, types.EmptyTSK)
-	if err != nil {
-		return xerrors.Errorf("getting secp address: %w", err)
-	}
-	// Translating parent actor ID of address to SECPK for its application
-	// in subnet.
-	msg.From = secpaddr
-	msg.To = secpaddr
-	return applyMsg(ctx, vmi, em, msg, ts)
-}
-
 func applyMsg(ctx context.Context, vmi *vm.VM, em stmgr.ExecMonitor,
 	msg *types.Message, ts *types.TipSet) error {
 	// Serialize params
-	params := &sca.ApplyParams{
+	params := &sca.CrossMsgParams{
 		Msg: *msg,
 	}
 	serparams, aerr := actors.SerializeParams(params)
@@ -280,14 +240,14 @@ func sortCrossMsgs(ctx context.Context, sm *stmgr.StateManager, r *resolver.Reso
 		switch hierarchical.GetMsgType(m) {
 		// Bottom-up messages are the ones that require exhaustive ordering
 		// top-down already come in order of nonce.
-		case hierarchical.Release, hierarchical.Cross:
+		case hierarchical.BottomUp:
 			_, ok := buApply[m.Nonce]
 			if !ok {
 				buApply[m.Nonce] = make([]*types.Message, 0)
 			}
 			buApply[m.Nonce] = append(buApply[m.Nonce], m)
 			// Append top-down messages as they can be ordered directly.
-		case hierarchical.Fund:
+		case hierarchical.TopDown:
 			out[i] = m
 			i++
 		}

@@ -18,10 +18,7 @@ func (ma MessageArray) Len() int {
 }
 
 func (ma MessageArray) Less(i, j int) bool {
-	if ma[i].Nonce <= ma[j].Nonce {
-		return true
-	}
-	return false
+	return ma[i].Nonce <= ma[j].Nonce
 }
 
 func (ma MessageArray) Swap(i, j int) {
@@ -55,6 +52,9 @@ func recoverOriginalNonce(r *resolver.Resolver, n uint64, sca *sca.SCAState,
 	}
 	c, _ := meta.Cid()
 	orig, _, err := r.ResolveCrossMsgs(c, address.SubnetID(meta.From))
+	if err != nil {
+		return []*types.Message{}, xerrors.Errorf("error resolving cross-msgs: %w", err)
+	}
 
 	for _, o := range orig {
 		for _, m := range msg {

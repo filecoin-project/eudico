@@ -783,12 +783,14 @@ func TestApplyMsg(t *testing.T) {
 	rt := builder.Build(t)
 	h.constructAndVerify(rt)
 	h.registerSubnet(rt, address.RootSubnet)
-	funder := tutil.NewIDAddr(h.t, 1000)
+	funder, err := address.NewHAddress(h.sn.Parent(), tutil.NewSECP256K1Addr(h.t, "asd"))
+	require.NoError(h.t, err)
+	funderID := tutil.NewIDAddr(h.t, 1000)
 
 	// Inject some funds to test circSupply
 	t.Log("inject some funds in subnet")
 	init := abi.NewTokenAmount(1e18)
-	fund(h, rt, h.sn, funder, init, 1, init, init)
+	fund(h, rt, h.sn, funderID, init, 1, init, init)
 	value := abi.NewTokenAmount(1e17)
 
 	t.Log("apply fund messages")
@@ -804,8 +806,8 @@ func TestApplyMsg(t *testing.T) {
 	})
 
 	// Register subnet for update in circulating supply
-	releaser, err := address.NewHAddress(h.sn.Parent(), funder)
-	require.NoError(t, err)
+	releaser, err := address.NewHAddress(h.sn.Parent(), tutil.NewSECP256K1Addr(h.t, "asd"))
+	require.NoError(h.t, err)
 
 	t.Log("apply release messages")
 	// Three messages with the same nonce
@@ -836,12 +838,13 @@ func TestApplyMsg(t *testing.T) {
 
 func (h *shActorHarness) applyFundMsg(rt *mock.Runtime, addr address.Address, value big.Int, nonce uint64, abort bool) {
 	rt.SetCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
-	params := &actor.ApplyParams{
+	params := &actor.CrossMsgParams{
 		Msg: ltypes.Message{
 			To:         addr,
 			From:       addr,
 			Value:      value,
 			Nonce:      nonce,
+			Method:     builtin.MethodSend,
 			GasLimit:   1 << 30, // This is will be applied as an implicit msg, add enough gas
 			GasFeeCap:  ltypes.NewInt(0),
 			GasPremium: ltypes.NewInt(0),
@@ -850,12 +853,15 @@ func (h *shActorHarness) applyFundMsg(rt *mock.Runtime, addr address.Address, va
 	}
 
 	rewParams := &reward.FundingParams{
-		Addr:  addr,
+		Addr:  hierarchical.SubnetCoordActorAddr,
 		Value: value,
 	}
 	rt.ExpectValidateCallerAddr(builtin.SystemActorAddr)
 	if !abort {
 		rt.ExpectSend(reward.RewardActorAddr, reward.Methods.ExternalFunding, rewParams, big.Zero(), nil, exitcode.Ok)
+		raddr, err := addr.RawAddr()
+		require.NoError(h.t, err)
+		rt.ExpectSend(raddr, params.Msg.Method, nil, params.Msg.Value, nil, exitcode.Ok)
 	}
 	rt.Call(h.SubnetCoordActor.ApplyMessage, params)
 	rt.Verify()
@@ -868,10 +874,9 @@ func (h *shActorHarness) applyReleaseMsg(rt *mock.Runtime, addr address.Address,
 	rt.SetBalance(value)
 	from, err := address.NewHAddress(h.sn, builtin.BurntFundsActorAddr)
 	require.NoError(h.t, err)
-	testSecp := tutil.NewSECP256K1Addr(h.t, "asd")
-	params := &actor.ApplyParams{
+	params := &actor.CrossMsgParams{
 		Msg: ltypes.Message{
-			To:         testSecp,
+			To:         addr,
 			From:       from,
 			Value:      value,
 			Nonce:      nonce,
@@ -883,7 +888,9 @@ func (h *shActorHarness) applyReleaseMsg(rt *mock.Runtime, addr address.Address,
 	}
 
 	rt.ExpectValidateCallerAddr(builtin.SystemActorAddr)
-	rt.ExpectSend(testSecp, builtin.MethodSend, nil, value, nil, exitcode.Ok)
+	rto, err := addr.RawAddr()
+	require.NoError(h.t, err)
+	rt.ExpectSend(rto, builtin.MethodSend, nil, value, nil, exitcode.Ok)
 	rt.Call(h.SubnetCoordActor.ApplyMessage, params)
 	rt.Verify()
 	st := getState(rt)
@@ -937,10 +944,13 @@ func release(h *shActorHarness, rt *mock.Runtime, shid address.SubnetID, release
 
 func fund(h *shActorHarness, rt *mock.Runtime, sn address.SubnetID, funder address.Address, value abi.TokenAmount,
 	expectedNonce uint64, expectedCircSupply big.Int, expectedAddrFunds abi.TokenAmount) {
+	testSecp := tutil.NewSECP256K1Addr(h.t, "asd")
 	rt.SetReceived(value)
 	params := &actor.SubnetIDParam{ID: sn.String()}
 	rt.SetCaller(funder, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
+	// Expect a send to get pkey
+	rt.ExpectSend(funder, builtin.MethodsAccount.PubkeyAddress, nil, big.Zero(), &testSecp, exitcode.Ok)
 	rt.Call(h.SubnetCoordActor.Fund, params)
 	rt.Verify()
 	sh, found := h.getSubnet(rt, sn)
@@ -954,10 +964,10 @@ func fund(h *shActorHarness, rt *mock.Runtime, sn address.SubnetID, funder addre
 	// TODO: Add additional checks over msg?
 	require.Equal(h.t, msg.Value, value)
 	// Comes from parent network.
-	from, err := address.NewHAddress(sh.ID.Parent(), funder)
+	from, err := address.NewHAddress(sh.ID.Parent(), testSecp)
 	require.NoError(h.t, err)
 	// Goes to subnet with same address
-	to, err := address.NewHAddress(sh.ID, funder)
+	to, err := address.NewHAddress(sh.ID, testSecp)
 	require.NoError(h.t, err)
 	require.Equal(h.t, msg.From, from)
 	require.Equal(h.t, msg.To, to)

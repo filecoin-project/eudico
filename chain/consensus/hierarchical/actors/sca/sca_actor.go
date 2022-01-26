@@ -30,8 +30,9 @@ var Methods = struct {
 	CommitChildCheckpoint abi.MethodNum
 	Fund                  abi.MethodNum
 	Release               abi.MethodNum
+	SendCross             abi.MethodNum
 	ApplyMessage          abi.MethodNum
-}{builtin0.MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9}
+}{builtin0.MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 
 type SubnetIDParam struct {
 	ID string
@@ -49,7 +50,8 @@ func (a SubnetCoordActor) Exports() []interface{} {
 		6:                         a.CommitChildCheckpoint,
 		7:                         a.Fund,
 		8:                         a.Release,
-		9:                         a.ApplyMessage,
+		9:                         a.SendCross,
+		10:                        a.ApplyMessage,
 	}
 }
 
@@ -384,6 +386,11 @@ func (a SubnetCoordActor) Fund(rt runtime.Runtime, params *SubnetIDParam) *abi.E
 		rt.Abortf(exitcode.ErrIllegalArgument, "no funds included in transaction")
 	}
 
+	// Get SECP/BLS publickey to know the specific actor ID in the target subnet to
+	// whom the funds need to be sent.
+	// Funds are sent to the ID that controls the actor account in the destination subnet.
+	secpAddr := SecpBLSAddr(rt, rt.Caller())
+
 	// Increment stake locked for subnet.
 	var st SCAState
 	rt.StateTransaction(&st, func() {
@@ -398,7 +405,7 @@ func (a SubnetCoordActor) Fund(rt runtime.Runtime, params *SubnetIDParam) *abi.E
 		// Freeze funds
 		sh.freezeFunds(rt, rt.Caller(), value)
 		// Create fund message and add to the HAMT (increase nonce, etc)
-		sh.addFundMsg(rt, value)
+		sh.addFundMsg(rt, secpAddr, value)
 		// Flush subnet.
 		st.flushSubnet(rt, sh)
 
@@ -451,8 +458,49 @@ func SecpBLSAddr(rt runtime.Runtime, raw address.Address) address.Address {
 	return pubkey
 }
 
-// ApplyParams determines the cross message to apply.
-type ApplyParams struct {
+// SendCross sends an arbitrary cross-message to other subnet in the hierarchy.
+//
+// If the message includes any funds they need to be burnt (like in Release)
+// before being propagated to the corresponding subnet.
+// The circulating supply in each subnet needs to be updated as the message passes through them.
+func (a SubnetCoordActor) SendCross(rt runtime.Runtime, param *CrossMsgParams) *abi.EmptyValue {
+	// Any account in the subnet is allowed to trigger a cross message.
+	rt.ValidateImmediateCallerAcceptAny()
+
+	panic("not implemented yet")
+	/*
+		// Create the message
+
+
+		// Check if the transaction includes funds
+		value := rt.ValueReceived()
+		if value.LessThanEqual(big.NewInt(0)) {
+			rt.Abortf(exitcode.ErrIllegalArgument, "no funds included in transaction")
+		}
+
+		// Burn from subnet funds being sent.
+		code := rt.Send(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, rt.ValueReceived(), &builtin.Discard{})
+		if !code.IsSuccess() {
+			rt.Abortf(exitcode.ErrIllegalState,
+				"failed to send release funds to the burnt funds actor, code: %v", code)
+		}
+
+		// Get SECP/BLS publickey to know the specific actor ID in the target subnet to
+		// whom the funds need to be sent.
+		// Funds are sent to the ID that controls the actor account in the destination subnet.
+		secpAddr := SecpBLSAddr(rt, rt.Caller())
+
+		var st SCAState
+		rt.StateTransaction(&st, func() {
+			// Create releaseMsg and include in currentwindow checkpoint
+			st.releaseMsg(rt, value, secpAddr)
+		})
+		return nil
+	*/
+}
+
+// CrossMsgParams determines the cross message to apply.
+type CrossMsgParams struct {
 	Msg types.Message
 }
 
@@ -464,19 +512,19 @@ type ApplyParams struct {
 // - Determines the type of cross-message.
 // - Performs the corresponding state changes.
 // - And updated the latest nonce applied for future checks.
-func (a SubnetCoordActor) ApplyMessage(rt runtime.Runtime, params *ApplyParams) *abi.EmptyValue {
+func (a SubnetCoordActor) ApplyMessage(rt runtime.Runtime, params *CrossMsgParams) *abi.EmptyValue {
 	// Only system actor can trigger this function.
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
 
 	switch hierarchical.GetMsgType(&params.Msg) {
-	case hierarchical.Fund:
+	case hierarchical.TopDown:
 		// Fund messages are applied in the SCA of the subnet to which
 		// the TopDown message is directed.
-		applyFund(rt, params.Msg)
-	case hierarchical.Release:
-		applyRelease(rt, params.Msg)
-	case hierarchical.Cross:
-		rt.Abortf(exitcode.ErrIllegalArgument, "Not implemented yet")
+		applyTopDown(rt, params.Msg)
+	case hierarchical.BottomUp:
+		applyBottomUp(rt, params.Msg)
+	default:
+		rt.Abortf(exitcode.ErrIllegalArgument, "Wrong cross-message type")
 	}
 	return nil
 }

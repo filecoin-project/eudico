@@ -951,14 +951,14 @@ func (t *MetaTag) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufApplyParams = []byte{129}
+var lengthBufCrossMsgParams = []byte{129}
 
-func (t *ApplyParams) MarshalCBOR(w io.Writer) error {
+func (t *CrossMsgParams) MarshalCBOR(w io.Writer) error {
 	if t == nil {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufApplyParams); err != nil {
+	if _, err := w.Write(lengthBufCrossMsgParams); err != nil {
 		return err
 	}
 
@@ -969,8 +969,8 @@ func (t *ApplyParams) MarshalCBOR(w io.Writer) error {
 	return nil
 }
 
-func (t *ApplyParams) UnmarshalCBOR(r io.Reader) error {
-	*t = ApplyParams{}
+func (t *CrossMsgParams) UnmarshalCBOR(r io.Reader) error {
+	*t = CrossMsgParams{}
 
 	br := cbg.GetPeeker(r)
 	scratch := make([]byte, 8)

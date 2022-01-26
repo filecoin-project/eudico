@@ -6,6 +6,7 @@ import (
 	"github.com/filecoin-project/go-state-types/exitcode"
 	rtt "github.com/filecoin-project/go-state-types/rt"
 	"github.com/filecoin-project/lotus/chain/consensus/actors/reward"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	types "github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
@@ -21,12 +22,12 @@ func fromToRawAddr(rt runtime.Runtime, from, to address.Address) (address.Addres
 	return from, to
 }
 
-func applyFund(rt runtime.Runtime, msg types.Message) {
+func applyTopDown(rt runtime.Runtime, msg types.Message) {
 	var st SCAState
-	rfrom, rto := fromToRawAddr(rt, msg.From, msg.To)
-	// Check that msg.From == msg.To (this is what determines that it is a funding message).
-	if rfrom != rto {
-		rt.Abortf(exitcode.ErrIllegalArgument, "msg passed as argument not a funding message (msg != from)")
+	_, rto := fromToRawAddr(rt, msg.From, msg.To)
+
+	if hierarchical.GetMsgType(&msg) != hierarchical.TopDown {
+		rt.Abortf(exitcode.ErrIllegalArgument, "msg passed as argument not topDown")
 	}
 
 	rt.StateTransaction(&st, func() {
@@ -42,26 +43,36 @@ func applyFund(rt runtime.Runtime, msg types.Message) {
 		incrementNonce(rt, &st.AppliedTopDownNonce)
 	})
 
+	// Mint funds for SCA so it can direct them accordingly as part of the message.
 	params := &reward.FundingParams{
-		Addr:  rto,
+		Addr:  hierarchical.SubnetCoordActorAddr,
 		Value: msg.Value,
 	}
 	code := rt.Send(reward.RewardActorAddr, reward.Methods.ExternalFunding, params, big.Zero(), &builtin.Discard{})
 	if !code.IsSuccess() {
 		noop(rt, code)
+		return
+	}
+
+	// Send the cross-message
+	// FIXME: We are currently discarding the output, this will change once we
+	// support calling arbitrary actors. And we don't support params. We'll need a way
+	// to support arbitrary calls.
+	code = rt.Send(rto, msg.Method, nil, msg.Value, &builtin.Discard{})
+	if !code.IsSuccess() {
+		noop(rt, code)
 	}
 }
 
-func applyRelease(rt runtime.Runtime, msg types.Message) {
+func applyBottomUp(rt runtime.Runtime, msg types.Message) {
 	var st SCAState
 
-	rfrom, rto := fromToRawAddr(rt, msg.From, msg.To)
+	_, rto := fromToRawAddr(rt, msg.From, msg.To)
 	snFrom, err := msg.From.Subnet()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting subnet from HAddress")
 
-	// Check that msg.From == BurntRewardsActorAddr, this determines that is a release message
-	if rfrom != builtin.BurntFundsActorAddr {
-		rt.Abortf(exitcode.ErrIllegalArgument, "msg passed as argument not a funding message (from != burtnRewardActorAddr)")
+	if hierarchical.GetMsgType(&msg) != hierarchical.BottomUp {
+		rt.Abortf(exitcode.ErrIllegalArgument, "msg passed as argument not bottomUp")
 	}
 
 	rt.StateTransaction(&st, func() {
@@ -84,7 +95,9 @@ func applyRelease(rt runtime.Runtime, msg types.Message) {
 	})
 
 	// Release funds to the destination address.
-	code := rt.Send(rto, builtin.MethodSend, nil, msg.Value, &builtin.Discard{})
+	// FIXME: We currently don't support sending messages with arbitrary params. We should
+	// support this.
+	code := rt.Send(rto, msg.Method, nil, msg.Value, &builtin.Discard{})
 	if !code.IsSuccess() {
 		noop(rt, code)
 	}

@@ -69,18 +69,12 @@ func (sh *Subnet) freezeFunds(rt runtime.Runtime, source address.Address, value 
 	sh.CircSupply = big.Add(sh.CircSupply, value)
 }
 
-func (sh *Subnet) addFundMsg(rt runtime.Runtime, value big.Int) {
-	// Source
-	// NOTE: We are including here the ID address from the source, but the user
-	// may have a completely different ID address in the subnet. Nodes will have
-	// to translate this ID address to the right SECP/BLS address that owns the
-	// account
-	source := rt.Caller()
+func (sh *Subnet) addFundMsg(rt runtime.Runtime, secp address.Address, value big.Int) {
 
 	// Transform To and From to HAddresses
-	to, err := address.NewHAddress(sh.ID, source)
+	to, err := address.NewHAddress(sh.ID, secp)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
-	from, err := address.NewHAddress(sh.ID.Parent(), source)
+	from, err := address.NewHAddress(sh.ID.Parent(), secp)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
 
 	// Build message.
@@ -90,6 +84,7 @@ func (sh *Subnet) addFundMsg(rt runtime.Runtime, value big.Int) {
 		To:         to,
 		From:       from,
 		Value:      value,
+		Method:     builtin.MethodSend,
 		Nonce:      sh.Nonce,
 		GasLimit:   1 << 30, // This is will be applied as an implicit msg, add enough gas
 		GasFeeCap:  ltypes.NewInt(0),
