@@ -456,7 +456,8 @@ func SecpBLSAddr(rt runtime.Runtime, raw address.Address) address.Address {
 // SendCross sends an arbitrary cross-message to other subnet in the hierarchy.
 //
 // If the message includes any funds they need to be burnt (like in Release)
-// before being propagated to the
+// before being propagated to the corresponding subnet.
+// The circulating supply in each subnet needs to be updated as the message passes through them.
 func (a SubnetCoordActor) SendCross(rt runtime.Runtime, param *MsgParams) *abi.EmptyValue {
 	panic("not implemented yet")
 	/*

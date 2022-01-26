@@ -145,7 +145,7 @@ func ApplyCrossMsg(ctx context.Context, vmi *vm.VM, submgr subnet.SubnetMgr,
 	case hierarchical.TopDown:
 		return applyTopDownMsg(ctx, vmi, submgr, em, msg, ts)
 	case hierarchical.BottomUp:
-		// Release messages can be applied right-away, without
+		// Bottomup messages can be applied right-away, without
 		// any pre-processing.
 		return applyMsg(ctx, vmi, em, msg, ts)
 	}
