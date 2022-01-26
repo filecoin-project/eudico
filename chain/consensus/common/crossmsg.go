@@ -75,7 +75,7 @@ func checkBottomUpMsg(ctx context.Context, r *resolver.Resolver, snstore blockad
 		return xerrors.Errorf("context timeout")
 	case err := <-out:
 		if err != nil {
-			return xerrors.Errorf("error fully resolving messages", err)
+			return xerrors.Errorf("error fully resolving messages: %s", err)
 		}
 	}
 

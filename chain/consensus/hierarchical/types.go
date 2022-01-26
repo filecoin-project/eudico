@@ -73,9 +73,7 @@ func CommonParent(from, to address.SubnetID) (address.SubnetID, int) {
 	s1 := strings.Split(from.String(), "/")
 	s2 := strings.Split(to.String(), "/")
 	if len(s1) < len(s2) {
-		a := s1
-		s1 = s2
-		s2 = a
+		s1, s2 = s2, s1
 	}
 	out := "/"
 	l := 0
@@ -90,7 +88,7 @@ func CommonParent(from, to address.SubnetID) (address.SubnetID, int) {
 	return address.SubnetID(out), l
 }
 
-func isParent(curr, from, to address.SubnetID) bool {
+func IsParent(curr, from, to address.SubnetID) bool {
 	parent, _ := CommonParent(from, to)
 	return parent == curr
 }
@@ -98,8 +96,5 @@ func isParent(curr, from, to address.SubnetID) bool {
 func IsBottomUp(from, to address.SubnetID) bool {
 	_, l := CommonParent(from, to)
 	sfrom := strings.Split(from.String(), "/")
-	if len(sfrom)-1 <= l {
-		return false
-	}
-	return true
+	return len(sfrom)-1 > l
 }

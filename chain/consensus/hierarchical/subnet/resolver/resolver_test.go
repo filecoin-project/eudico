@@ -110,8 +110,7 @@ func TestWaitResolve(t *testing.T) {
 		err = r.setLocal(c, out)
 		require.NoError(t, err)
 	}()
-	select {
-	case err := <-found:
-		require.NoError(t, err)
-	}
+
+	err = <-found
+	require.NoError(t, err)
 }
