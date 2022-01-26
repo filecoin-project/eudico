@@ -783,7 +783,8 @@ func TestApplyMsg(t *testing.T) {
 	rt := builder.Build(t)
 	h.constructAndVerify(rt)
 	h.registerSubnet(rt, address.RootSubnet)
-	funder := tutil.NewIDAddr(h.t, 1000)
+	funder, err := address.NewHAddress(h.sn, tutil.NewIDAddr(h.t, 1000))
+	require.NoError(t, err)
 
 	// Inject some funds to test circSupply
 	t.Log("inject some funds in subnet")
@@ -836,12 +837,13 @@ func TestApplyMsg(t *testing.T) {
 
 func (h *shActorHarness) applyFundMsg(rt *mock.Runtime, addr address.Address, value big.Int, nonce uint64, abort bool) {
 	rt.SetCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
-	params := &actor.ApplyParams{
+	params := &actor.MsgParams{
 		Msg: ltypes.Message{
 			To:         addr,
 			From:       addr,
 			Value:      value,
 			Nonce:      nonce,
+			Method:     builtin.MethodSend,
 			GasLimit:   1 << 30, // This is will be applied as an implicit msg, add enough gas
 			GasFeeCap:  ltypes.NewInt(0),
 			GasPremium: ltypes.NewInt(0),
@@ -850,12 +852,15 @@ func (h *shActorHarness) applyFundMsg(rt *mock.Runtime, addr address.Address, va
 	}
 
 	rewParams := &reward.FundingParams{
-		Addr:  addr,
+		Addr:  hierarchical.SubnetCoordActorAddr,
 		Value: value,
 	}
 	rt.ExpectValidateCallerAddr(builtin.SystemActorAddr)
 	if !abort {
 		rt.ExpectSend(reward.RewardActorAddr, reward.Methods.ExternalFunding, rewParams, big.Zero(), nil, exitcode.Ok)
+		raddr, err := addr.RawAddr()
+		require.NoError(h.t, err)
+		rt.ExpectSend(raddr, params.Msg.Method, nil, params.Msg.Value, nil, exitcode.Ok)
 	}
 	rt.Call(h.SubnetCoordActor.ApplyMessage, params)
 	rt.Verify()
@@ -868,8 +873,9 @@ func (h *shActorHarness) applyReleaseMsg(rt *mock.Runtime, addr address.Address,
 	rt.SetBalance(value)
 	from, err := address.NewHAddress(h.sn, builtin.BurntFundsActorAddr)
 	require.NoError(h.t, err)
-	testSecp := tutil.NewSECP256K1Addr(h.t, "asd")
-	params := &actor.ApplyParams{
+	testSecp, err := address.NewHAddress(h.sn.Parent(), tutil.NewSECP256K1Addr(h.t, "asd"))
+	require.NoError(h.t, err)
+	params := &actor.MsgParams{
 		Msg: ltypes.Message{
 			To:         testSecp,
 			From:       from,
@@ -883,7 +889,9 @@ func (h *shActorHarness) applyReleaseMsg(rt *mock.Runtime, addr address.Address,
 	}
 
 	rt.ExpectValidateCallerAddr(builtin.SystemActorAddr)
-	rt.ExpectSend(testSecp, builtin.MethodSend, nil, value, nil, exitcode.Ok)
+	rto, err := testSecp.RawAddr()
+	require.NoError(h.t, err)
+	rt.ExpectSend(rto, builtin.MethodSend, nil, value, nil, exitcode.Ok)
 	rt.Call(h.SubnetCoordActor.ApplyMessage, params)
 	rt.Verify()
 	st := getState(rt)

@@ -133,6 +133,7 @@ func (st *SCAState) releaseMsg(rt runtime.Runtime, value big.Int, to address.Add
 		From:       from,
 		Value:      value,
 		Nonce:      st.Nonce,
+		Method:     builtin.MethodSend,
 		GasLimit:   1 << 30, // This is will be applied as an implicit msg, add enough gas
 		GasFeeCap:  ltypes.NewInt(0),
 		GasPremium: ltypes.NewInt(0),

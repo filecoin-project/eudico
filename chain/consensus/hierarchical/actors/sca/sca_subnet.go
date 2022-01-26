@@ -90,6 +90,7 @@ func (sh *Subnet) addFundMsg(rt runtime.Runtime, value big.Int) {
 		To:         to,
 		From:       from,
 		Value:      value,
+		Method:     builtin.MethodSend,
 		Nonce:      sh.Nonce,
 		GasLimit:   1 << 30, // This is will be applied as an implicit msg, add enough gas
 		GasFeeCap:  ltypes.NewInt(0),

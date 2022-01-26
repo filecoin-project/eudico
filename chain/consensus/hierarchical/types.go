@@ -1,9 +1,11 @@
 package hierarchical
 
 import (
+	"path"
+	"strings"
+
 	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
@@ -21,39 +23,27 @@ type MsgType uint64
 
 // List of cross messages supported
 const (
-	Fund MsgType = iota
-	Release
-	Cross
-	Unknown
+	Unknown MsgType = iota
+	BottomUp
+	TopDown
 )
 
 // MsgType returns the
 func GetMsgType(msg *types.Message) MsgType {
 	t := Unknown
 
-	// Get raw addresses
-	rfrom, err := msg.From.RawAddr()
+	sto, err := msg.To.Subnet()
 	if err != nil {
 		return t
 	}
-	rto, err := msg.To.RawAddr()
+	sfrom, err := msg.From.Subnet()
 	if err != nil {
 		return t
 	}
-
-	// FIXME: Add additional checks using subnet prefix from
-	// the address. Cross-msgs should always include a HAAddress.
-
-	// FUND: If same raw address in from and to
-	if rfrom == rto {
-		return Fund
+	if IsBottomUp(sfrom, sto) {
+		return BottomUp
 	}
-
-	// RELEASE: Coming from the burntAddress
-	if rfrom == builtin.BurntFundsActorAddr {
-		return Release
-	}
-	return Cross
+	return TopDown
 }
 
 // SubnetCoordActorAddr is the address of the SCA actor
@@ -77,4 +67,39 @@ var _ abi.Keyer = SubnetKey("")
 
 func (id SubnetKey) Key() string {
 	return string(id)
+}
+
+func CommonParent(from, to address.SubnetID) (address.SubnetID, int) {
+	s1 := strings.Split(from.String(), "/")
+	s2 := strings.Split(to.String(), "/")
+	if len(s1) < len(s2) {
+		a := s1
+		s1 = s2
+		s2 = a
+	}
+	out := "/"
+	l := 0
+	for i, s := range s2 {
+		if s == s1[i] {
+			out = path.Join(out, s)
+			l = i
+		} else {
+			return address.SubnetID(out), l
+		}
+	}
+	return address.SubnetID(out), l
+}
+
+func isParent(curr, from, to address.SubnetID) bool {
+	parent, _ := CommonParent(from, to)
+	return parent == curr
+}
+
+func IsBottomUp(from, to address.SubnetID) bool {
+	_, l := CommonParent(from, to)
+	sfrom := strings.Split(from.String(), "/")
+	if len(sfrom)-1 <= l {
+		return false
+	}
+	return true
 }
