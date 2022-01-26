@@ -463,7 +463,7 @@ func SecpBLSAddr(rt runtime.Runtime, raw address.Address) address.Address {
 // If the message includes any funds they need to be burnt (like in Release)
 // before being propagated to the corresponding subnet.
 // The circulating supply in each subnet needs to be updated as the message passes through them.
-func (a SubnetCoordActor) SendCross(rt runtime.Runtime, param *MsgParams) *abi.EmptyValue {
+func (a SubnetCoordActor) SendCross(rt runtime.Runtime, param *CrossMsgParams) *abi.EmptyValue {
 	// Any account in the subnet is allowed to trigger a cross message.
 	rt.ValidateImmediateCallerAcceptAny()
 
@@ -499,8 +499,8 @@ func (a SubnetCoordActor) SendCross(rt runtime.Runtime, param *MsgParams) *abi.E
 	*/
 }
 
-// MsgParams determines the cross message to apply.
-type MsgParams struct {
+// CrossMsgParams determines the cross message to apply.
+type CrossMsgParams struct {
 	Msg types.Message
 }
 
@@ -512,7 +512,7 @@ type MsgParams struct {
 // - Determines the type of cross-message.
 // - Performs the corresponding state changes.
 // - And updated the latest nonce applied for future checks.
-func (a SubnetCoordActor) ApplyMessage(rt runtime.Runtime, params *MsgParams) *abi.EmptyValue {
+func (a SubnetCoordActor) ApplyMessage(rt runtime.Runtime, params *CrossMsgParams) *abi.EmptyValue {
 	// Only system actor can trigger this function.
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
 

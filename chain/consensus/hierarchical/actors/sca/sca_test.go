@@ -838,7 +838,7 @@ func TestApplyMsg(t *testing.T) {
 
 func (h *shActorHarness) applyFundMsg(rt *mock.Runtime, addr address.Address, value big.Int, nonce uint64, abort bool) {
 	rt.SetCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
-	params := &actor.MsgParams{
+	params := &actor.CrossMsgParams{
 		Msg: ltypes.Message{
 			To:         addr,
 			From:       addr,
@@ -874,7 +874,7 @@ func (h *shActorHarness) applyReleaseMsg(rt *mock.Runtime, addr address.Address,
 	rt.SetBalance(value)
 	from, err := address.NewHAddress(h.sn, builtin.BurntFundsActorAddr)
 	require.NoError(h.t, err)
-	params := &actor.MsgParams{
+	params := &actor.CrossMsgParams{
 		Msg: ltypes.Message{
 			To:         addr,
 			From:       from,

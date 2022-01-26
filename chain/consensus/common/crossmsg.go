@@ -153,7 +153,7 @@ func ApplyCrossMsg(ctx context.Context, vmi *vm.VM, submgr subnet.SubnetMgr,
 func applyMsg(ctx context.Context, vmi *vm.VM, em stmgr.ExecMonitor,
 	msg *types.Message, ts *types.TipSet) error {
 	// Serialize params
-	params := &sca.MsgParams{
+	params := &sca.CrossMsgParams{
 		Msg: *msg,
 	}
 	serparams, aerr := actors.SerializeParams(params)
