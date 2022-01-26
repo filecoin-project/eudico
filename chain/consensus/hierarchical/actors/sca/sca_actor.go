@@ -386,6 +386,11 @@ func (a SubnetCoordActor) Fund(rt runtime.Runtime, params *SubnetIDParam) *abi.E
 		rt.Abortf(exitcode.ErrIllegalArgument, "no funds included in transaction")
 	}
 
+	// Get SECP/BLS publickey to know the specific actor ID in the target subnet to
+	// whom the funds need to be sent.
+	// Funds are sent to the ID that controls the actor account in the destination subnet.
+	secpAddr := SecpBLSAddr(rt, rt.Caller())
+
 	// Increment stake locked for subnet.
 	var st SCAState
 	rt.StateTransaction(&st, func() {
@@ -400,7 +405,7 @@ func (a SubnetCoordActor) Fund(rt runtime.Runtime, params *SubnetIDParam) *abi.E
 		// Freeze funds
 		sh.freezeFunds(rt, rt.Caller(), value)
 		// Create fund message and add to the HAMT (increase nonce, etc)
-		sh.addFundMsg(rt, value)
+		sh.addFundMsg(rt, secpAddr, value)
 		// Flush subnet.
 		st.flushSubnet(rt, sh)
 
@@ -459,12 +464,13 @@ func SecpBLSAddr(rt runtime.Runtime, raw address.Address) address.Address {
 // before being propagated to the corresponding subnet.
 // The circulating supply in each subnet needs to be updated as the message passes through them.
 func (a SubnetCoordActor) SendCross(rt runtime.Runtime, param *MsgParams) *abi.EmptyValue {
+	// Any account in the subnet is allowed to trigger a cross message.
+	rt.ValidateImmediateCallerAcceptAny()
+
 	panic("not implemented yet")
 	/*
 		// Create the message
 
-		// Only account actors can release funds from a subnet (for now).
-		rt.ValidateImmediateCallerType(builtin.AccountActorCodeID)
 
 		// Check if the transaction includes funds
 		value := rt.ValueReceived()

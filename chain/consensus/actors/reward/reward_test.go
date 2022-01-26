@@ -7,10 +7,12 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
+	actors "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/filecoin-project/lotus/chain/consensus/actors/reward"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/support/mock"
 	tutil "github.com/filecoin-project/specs-actors/v6/support/testing"
@@ -85,11 +87,13 @@ func TestExternalFunding(t *testing.T) {
 	rt.SetBalance(abi.NewTokenAmount(1e18))
 	value := abi.NewTokenAmount(1)
 	params := &reward.FundingParams{Addr: addr, Value: value}
-	rt.ExpectValidateCallerAddr(builtin.SystemActorAddr)
+	rt.SetCaller(hierarchical.SubnetCoordActorAddr, actors.SubnetCoordActorCodeID)
+	rt.ExpectValidateCallerAddr(hierarchical.SubnetCoordActorAddr)
 	rt.ExpectSend(addr, builtin.MethodSend, nil, value, nil, 0)
 	rt.Call(actor.ExternalFunding, params)
 	rt.Verify()
 }
+
 func TestAwardBlockReward(t *testing.T) {
 	actor := rewardHarness{reward.Actor{}, t}
 	winner := tutil.NewIDAddr(t, 1000)

@@ -142,56 +142,12 @@ func ApplyCrossMsg(ctx context.Context, vmi *vm.VM, submgr subnet.SubnetMgr,
 	em stmgr.ExecMonitor, msg *types.Message,
 	ts *types.TipSet) error {
 	switch hierarchical.GetMsgType(msg) {
-	case hierarchical.TopDown:
-		return applyTopDownMsg(ctx, vmi, submgr, em, msg, ts)
-	case hierarchical.BottomUp:
-		// Bottomup messages can be applied right-away, without
-		// any pre-processing.
+	case hierarchical.TopDown, hierarchical.BottomUp:
+		// At this point, both messages are applied in the same way
 		return applyMsg(ctx, vmi, em, msg, ts)
 	}
 
 	return xerrors.Errorf("Unknown cross-msg type")
-}
-
-func applyTopDownMsg(ctx context.Context, vmi *vm.VM, submgr subnet.SubnetMgr,
-	em stmgr.ExecMonitor, msg *types.Message, ts *types.TipSet) error {
-	// sanity-check: the root chain doesn't support topDown messages,
-	// so return an error if submgr is nil.
-	if submgr == nil {
-		return xerrors.Errorf("Root chain doesn't have parent and doesn't support topDown cross msgs")
-	}
-
-	// Get raw address
-	rto, err := msg.To.RawAddr()
-	if err != nil {
-		return err
-	}
-	subTo, err := msg.To.Subnet()
-	if err != nil {
-		return xerrors.Errorf("getting subnet from msg: %w", err)
-	}
-	// Get SECPK address for ID from parent chain included in message.
-	subFrom, err := msg.From.Subnet()
-	if err != nil {
-		return xerrors.Errorf("getting subnet from msg: %w", err)
-	}
-	api, err := submgr.GetSubnetAPI(subFrom)
-	if err != nil {
-		return xerrors.Errorf("getting subnet API: %w", err)
-	}
-	// FIXME: What if the address is not an account key?
-	// This needs to be handled.
-	secpto, err := api.StateAccountKey(ctx, rto, types.EmptyTSK)
-	if err != nil {
-		return xerrors.Errorf("getting secp address: %w", err)
-	}
-	// Translating parent actor ID of address to SECPK for its application
-	// in subnet.
-	msg.To, err = address.NewHAddress(subTo, secpto)
-	if err != nil {
-		return xerrors.Errorf("generating hierarchical address: %w", err)
-	}
-	return applyMsg(ctx, vmi, em, msg, ts)
 }
 
 func applyMsg(ctx context.Context, vmi *vm.VM, em stmgr.ExecMonitor,
