@@ -178,7 +178,7 @@ func NewCheckpointSub(
 
 		config = &keygen.TaprootConfig{
 			ID:                 party.ID(host.ID().String()),
-			Threshold:          configTOML.Thershold,
+			Threshold:          configTOML.Threshold,
 			PrivateShare:       &privateShare,
 			PublicKey:          publickey,
 			VerificationShares: verificationShares,
@@ -303,15 +303,15 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 		// Wait for more tipset to valid the height and be sure it is valid
 		// NOTES: should retrieve list of signing miners using Power actor state (see Miners) and not through config instanciation
 		if newTs.Height()%25 == 0 && (c.config != nil || c.newconfig != nil) {
-			log.Infow("check point time")
+			log.Infow("Checkpoint time")
 
 			// Initiation and config should be happening at start
 			cp := oldTs.Key().Bytes()
 
 			// If we don't have a config we don't sign but update our config with key
-			// NOTES: `config` refers to config taproot as mentioned in the multi-party-sig lib
+			// NOTE: `config` refers to config taproot as mentioned in the multi-party-sig lib
 			if c.config == nil {
-				log.Infow("We dont have a config")
+				log.Infow("We don't have any config")
 				pubkey := c.newconfig.PublicKey
 
 				pubkeyShort := genCheckpointPublicKeyTaproot(pubkey, cp)
@@ -332,20 +332,20 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 				// This create the file that will be stored in minio (or any storage)
 				hash, err := CreateMinersConfig([]byte(minersConfig))
 				if err != nil {
-					log.Errorf("couldnt create miners config: %v", err)
+					log.Errorf("could not create miners config: %v", err)
 					return false, nil, err
 				}
 
 				// Push config to minio
 				err = StoreMinersConfig(ctx, c.minioClient, c.cpconfig.MinioBucketName, hex.EncodeToString(hash))
 				if err != nil {
-					log.Errorf("couldnt push miners config: %v", err)
+					log.Errorf("could not push miners config: %v", err)
 					return false, nil, err
 				}
 
 				err = c.CreateCheckpoint(ctx, cp, hash)
 				if err != nil {
-					log.Errorf("couldnt create checkpoint: %v", err)
+					log.Errorf("could not create checkpoint: %v", err)
 					return false, nil, err
 				}
 			}
@@ -354,7 +354,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 		// If Power Actors list has changed start DKG
 		// Changes detected so generate new key
 		if oldSt.MinerCount != newSt.MinerCount {
-			log.Infow("generate new config")
+			log.Infow("Generate new aggregated key")
 			err := c.GenerateNewKeys(ctx, newSt.Miners)
 			if err != nil {
 				log.Errorf("error while generating new key: %v", err)
@@ -391,7 +391,7 @@ func (c *CheckpointingSub) Start(ctx context.Context) error {
 	// and subscribe to it
 	// INCREASE THE BUFFER SIZE BECAUSE IT IS ONLY 32 ! AND IT IS DROPPING MESSAGES WHEN FULL
 	// https://github.com/libp2p/go-libp2p-pubsub/blob/v0.5.4/pubsub.go#L1222
-	// NOTES: 1000 has been choosen arbitraly there is no reason for this number beside it just work
+	// NOTE: 1000 has been choosen arbitraly there is no reason for this number besides it just works.
 	sub, err := topic.Subscribe(pubsub.WithBufferSize(1000))
 	if err != nil {
 		return err
@@ -461,6 +461,10 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		return err
 	}
 
+	// the list of participants is ordered
+	// we will chose the "first" half of participants
+	// in order to sign the transaction in the threshold signing.
+	// In later improvement we will choose them randomly.
 	idsStrings := c.orderParticipantsList()
 	log.Infow("participants list :", "participants", idsStrings)
 	log.Infow("precedent tx", "txid", c.ptxid)
@@ -589,9 +593,12 @@ func (c *CheckpointingSub) formIDSlice(ids []string) party.IDSlice {
 }
 
 /*
-	BuildCheckpointingSub is called after creating the checkpointing instance
-	It verify connectivity with the Bitcoin node and look for the first checkpoint
-	and if the node is a **participant** will pre-compute some values used in signing
+	BuildCheckpointingSub is called after creating the checkpointing instance.
+	It verifies connectivity with the Bitcoin node and retrieve the first checkpoint
+	(i.e. the hash of the eudico genesis block)
+	and if the node is a **participant** will pre-compute some values used in signing.
+	The initial checkpointing transaction is then created by the taproot.sh script using an address retrieved
+	manually.
 */
 func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *CheckpointingSub) {
 	ctx := helpers.LifecycleCtx(mctx, lc)
@@ -605,13 +612,13 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 
 	log.Infow("successfully pinged bitcoind")
 
-	// Get first checkpoint from block 0
+	// Get first checkpoint from eudico block 0
 	ts, err := c.api.ChainGetGenesis(ctx)
 	if err != nil {
 		log.Errorf("couldnt get genesis tipset: %v", err)
 		return
 	}
-	cidBytes := ts.Key().Bytes()
+	cidBytes := ts.Key().Bytes()// this is the checkpoint (i.e. hash of block)
 	publickey, err := hex.DecodeString(c.cpconfig.PublicKey)
 	if err != nil {
 		log.Errorf("couldnt decode public key: %v", err)
@@ -625,8 +632,8 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 		return
 	}
 
-	// Get the config in minio using the last checkpoint found through bitcoin
-	// NOTES: We should be able to get the config regarless of storage (minio, IPFS, KVS,....)
+	// Get the config in minio using the last checkpoint found through Bitcoin.
+	// NOTE: We should be able to get the config regarless of storage (minio, IPFS, KVS,....)
 	cp, err := GetMinersConfig(ctx, c.minioClient, c.cpconfig.MinioBucketName, btccp.cid)
 
 	if cp != "" {
@@ -647,7 +654,7 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 	// Pre-compute values from participants in the signing process
 	if c.config != nil {
 		// save public key taproot
-		// NOTES: cidBytes is the tipset key value (aka checkpoint) from the genesis block. When Eudico is stopped it should remember what was the last tipset key value
+		// NOTE: cidBytes is the tipset key value (aka checkpoint) from the genesis block. When Eudico is stopped it should remember what was the last tipset key value
 		// it signed and replace it with it. Config is not saved, neither when new DKG is done.
 		c.pubkey = genCheckpointPublicKeyTaproot(c.config.PublicKey, cidBytes)
 

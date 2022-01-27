@@ -1,0 +1,15 @@
+Treshold=2
+PrivateShare="68297d9dab2c0ba0f508eb30626eaca737951a70d7132dc7c7efaae3dd96db38"
+PublicKey="66a554b8af6719851a936b0afc29dc59c3678f0e3f0b7bb081c57c5b77ad48ff"
+
+[VerificationShares]
+
+[VerificationShares.12D3KooWMBbLLKTM9Voo89TXLd98w4MjkJUych6QvECptousGtR4]
+Share="02de7b1922283afa65adbacf74e543c0841fd84d948911d668d10835df07f5c203"
+
+[VerificationShares.12D3KooWNTyoBdMB9bpSkf7PVWR863ejGVPq9ssaaAipNvhPeQ4t]
+Share="03dda30f606203bfa25da11375eaac64f915401b8bfb8067b0241d467a1cdab681"
+
+[VerificationShares.12D3KooWF1aFCGUtsGEaqNks3QADLUDZxW7ot7jZPSoDiAFKJuM6]
+Share="034b172e82079d742c84c9ed0a6e4fc2d9172edae9507d81624446754f9eed709c"
+

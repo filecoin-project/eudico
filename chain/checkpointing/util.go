@@ -22,12 +22,17 @@ type VerificationShare struct {
 
 // Define what share.toml should look like
 type TaprootConfigTOML struct {
-	Thershold          int
+	Threshold          int
 	PrivateShare       string
 	PublicKey          string
 	VerificationShares map[string]VerificationShare
 }
 
+// Bitcoin uses tagged hashed for taproot output definition
+// see: https://en.bitcoin.it/wiki/BIP_0341
+// e.g. the tag can be "TapTweak" when tweaking the key
+// or "TapLeaf" or "TapBranch" when creating the output script
+// of the taproot output, etc
 func taggedHash(tag string, datas ...[]byte) []byte {
 	tagSum := sha256.Sum256([]byte(tag))
 
@@ -118,6 +123,7 @@ func applyTweakToPublicKeyTaproot(public []byte, tweak []byte) []byte {
 
 	Y_tweak := P.Add(p_tweak)
 	YSecp := Y_tweak.(*curve.Secp256k1Point)
+	// if the Y coordinate is odd, we need to "flip" its sign
 	if !YSecp.HasEvenY() {
 		s_tweak.Negate()
 		p_tweak := s_tweak.ActOnBase()
@@ -199,11 +205,12 @@ func parseUnspentTxOut(utxo []byte) (amount, script []byte) {
 	return utxo[0:8], utxo[9:]
 }
 
+// return details about specified utxo
 func getTxOut(url, txid string, index int) (float64, []byte) {
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"gettxout\", \"params\": [\"" + txid + "\", " + strconv.Itoa(index) + "]}"
 	result := jsonRPC(url, payload)
 	if result == nil {
-		panic("cant retrieve previous transaction")
+		panic("Cannot retrieve previous transaction.")
 	}
 	taprootTxOut := result["result"].(map[string]interface{})
 	scriptPubkey := taprootTxOut["scriptPubKey"].(map[string]interface{})
