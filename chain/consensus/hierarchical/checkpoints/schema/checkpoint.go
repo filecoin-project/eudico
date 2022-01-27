@@ -6,6 +6,7 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/ipfs/go-cid"
 	ipld "github.com/ipld/go-ipld-prime"
@@ -84,6 +85,7 @@ type CrossMsgMeta struct {
 	To      string // Determines the destination of the messages included in MsgsCid
 	MsgsCid []byte // cid.Cid of the msgMeta with the list of msgs.
 	Nonce   int    // Nonce of the msgMeta
+	Value   string // Token amount being propagated in MsgMeta
 }
 
 // CheckData is the data included in a Checkpoint.
@@ -127,6 +129,7 @@ func initCrossMsgMetaSchema() schema.Type {
 			schema.SpawnStructField("To", "String", false, false),
 			schema.SpawnStructField("MsgsCid", "Bytes", false, false),
 			schema.SpawnStructField("Nonce", "Int", false, false),
+			schema.SpawnStructField("Value", "String", false, false),
 		},
 		schema.SpawnStructRepresentationMap(map[string]string{}),
 	))
@@ -214,6 +217,7 @@ func NewCrossMsgMeta(from, to address.SubnetID) *CrossMsgMeta {
 		From:  from.String(),
 		To:    to.String(),
 		Nonce: -1,
+		Value: "0",
 	}
 }
 
@@ -342,6 +346,28 @@ func (cm *CrossMsgMeta) UnmarshalCBOR(r io.Reader) error {
 		return xerrors.Errorf("Unmarshalled node not of type CheckData")
 	}
 	*cm = *ch
+	return nil
+}
+
+func (cm *CrossMsgMeta) GetValue() (abi.TokenAmount, error) {
+	return big.FromString(cm.Value)
+}
+
+func (cm *CrossMsgMeta) AddValue(x abi.TokenAmount) error {
+	v, err := cm.GetValue()
+	if err != nil {
+		return err
+	}
+	cm.Value = big.Add(v, x).String()
+	return nil
+}
+
+func (cm *CrossMsgMeta) SubValue(x abi.TokenAmount) error {
+	v, err := cm.GetValue()
+	if err != nil {
+		return err
+	}
+	cm.Value = big.Sub(v, x).String()
 	return nil
 }
 
@@ -482,6 +508,14 @@ func (c *Checkpoint) AppendMsgMeta(meta *CrossMsgMeta) {
 
 func (c *Checkpoint) SetMsgMetaCid(i int, cd cid.Cid) {
 	c.Data.CrossMsgs[i].MsgsCid = cd.Bytes()
+}
+
+func (c *Checkpoint) AddValueMetaCid(i int, x abi.TokenAmount) error {
+	return c.Data.CrossMsgs[i].AddValue(x)
+}
+
+func (c *Checkpoint) SubValueMetaCid(i int, x abi.TokenAmount) error {
+	return c.Data.CrossMsgs[i].SubValue(x)
 }
 
 // CrossMsgsTo returns the crossMsgsMeta directed to a specific subnet

@@ -1,7 +1,6 @@
 package hierarchical
 
 import (
-	"path"
 	"strings"
 
 	address "github.com/filecoin-project/go-address"
@@ -69,32 +68,8 @@ func (id SubnetKey) Key() string {
 	return string(id)
 }
 
-func CommonParent(from, to address.SubnetID) (address.SubnetID, int) {
-	s1 := strings.Split(from.String(), "/")
-	s2 := strings.Split(to.String(), "/")
-	if len(s1) < len(s2) {
-		s1, s2 = s2, s1
-	}
-	out := "/"
-	l := 0
-	for i, s := range s2 {
-		if s == s1[i] {
-			out = path.Join(out, s)
-			l = i
-		} else {
-			return address.SubnetID(out), l
-		}
-	}
-	return address.SubnetID(out), l
-}
-
-func IsParent(curr, from, to address.SubnetID) bool {
-	parent, _ := CommonParent(from, to)
-	return parent == curr
-}
-
 func IsBottomUp(from, to address.SubnetID) bool {
-	_, l := CommonParent(from, to)
+	_, l := from.CommonParent(to)
 	sfrom := strings.Split(from.String(), "/")
 	return len(sfrom)-1 > l
 }

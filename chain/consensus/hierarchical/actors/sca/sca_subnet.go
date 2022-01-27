@@ -7,6 +7,7 @@ import (
 	"github.com/filecoin-project/go-state-types/exitcode"
 	schema "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	ltypes "github.com/filecoin-project/lotus/chain/types"
+	types "github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
@@ -69,34 +70,27 @@ func (sh *Subnet) freezeFunds(rt runtime.Runtime, source address.Address, value 
 	sh.CircSupply = big.Add(sh.CircSupply, value)
 }
 
-func (sh *Subnet) addFundMsg(rt runtime.Runtime, secp address.Address, value big.Int) {
+func fundMsg(rt runtime.Runtime, id address.SubnetID, secp address.Address, value big.Int) types.Message {
 
 	// Transform To and From to HAddresses
-	to, err := address.NewHAddress(sh.ID, secp)
+	to, err := address.NewHAddress(id, secp)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
-	from, err := address.NewHAddress(sh.ID.Parent(), secp)
+	from, err := address.NewHAddress(id.Parent(), secp)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
 
 	// Build message.
 	//
 	// Fund messages include the same to and from.
-	msg := &ltypes.Message{
+	return ltypes.Message{
 		To:         to,
 		From:       from,
 		Value:      value,
 		Method:     builtin.MethodSend,
-		Nonce:      sh.Nonce,
 		GasLimit:   1 << 30, // This is will be applied as an implicit msg, add enough gas
 		GasFeeCap:  ltypes.NewInt(0),
 		GasPremium: ltypes.NewInt(0),
 		Params:     nil,
 	}
-
-	// Store in the list of cross messages.
-	sh.storeTopDownMsg(rt, msg)
-
-	// Increase nonce.
-	incrementNonce(rt, &sh.Nonce)
 }
 
 func (sh *Subnet) storeTopDownMsg(rt runtime.Runtime, msg *ltypes.Message) {
