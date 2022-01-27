@@ -87,19 +87,19 @@ func applyBottomUp(rt runtime.Runtime, msg types.Message) {
 		rt.Abortf(exitcode.ErrIllegalArgument, "msg passed as argument not bottomUp")
 	}
 
-	// BottomUp transactions are
-	if sto != st.NetworkName {
-		// TODO: These are messages than need to be routed down the hierarchy from here.
-		// We need to commit a new top-down message from the current one.
-		// ?? Shoudl we have a way to track the original message that sent it?
-	}
-
 	rt.StateTransaction(&st, func() {
 		bottomUpStateTransition(rt, &st, msg)
 		st.releaseCircSupply(rt, sFrom, msg.Value)
+
+		if sto != st.NetworkName {
+			// If directed to a child we need to commit message as a
+			// top-down transaction to propagate it down.
+			commitTopDownMsg(rt, &st, msg)
+			return
+		}
 	})
 
-	// Release funds to the destination address.
+	// Release funds to the destination address if it is directed to the current network.
 	// FIXME: We currently don't support sending messages with arbitrary params. We should
 	// support this.
 	code := rt.Send(rto, msg.Method, nil, msg.Value, &builtin.Discard{})
