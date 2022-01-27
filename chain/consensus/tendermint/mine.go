@@ -13,6 +13,7 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/crypto"
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
@@ -28,6 +29,7 @@ func newMessagePool() *msgPool {
 	return &msgPool{pool: make(map[[32]byte]abi.ChainEpoch)}
 }
 
+//TODO: messages should be removed from the pool after some time
 type msgPool struct {
 	lk   sync.RWMutex
 	pool map[[32]byte]abi.ChainEpoch
@@ -126,13 +128,12 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		log.Debugf("CrossMsgs being proposed in block @%s: %d", base.Height()+1, len(crossmsgs))
 
 		bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
-			Miner:            miner,
 			Parents:          base.Key(),
 			BeaconValues:     nil,
 			Ticket:           nil,
 			Messages:         nil,
 			Epoch:            base.Height() + 1,
-			Timestamp:        uint64(time.Now().Unix()),
+			Timestamp:        0,
 			WinningPoStProof: nil,
 			CrossMessages:    crossmsgs,
 		})
@@ -181,6 +182,14 @@ func parseTendermintBlock(b *tenderminttypes.Block) []*types.SignedMessage {
 	return msgs
 }
 
+type tendermintBlockInfo struct {
+	timestamp uint64
+	messages []*types.SignedMessage
+	crossMsgs []*types.Message
+	minerAddr []byte
+	hash []byte
+}
+
 func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.BlockTemplate) (*types.FullBlock, error) {
 	log.Infof("starting creating block for epoch %d", bt.Epoch)
 	defer log.Infof("stopping creating block for epoch %d", bt.Epoch)
@@ -188,14 +197,15 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 	ticker := time.NewTicker(1000 * time.Millisecond)
 	defer ticker.Stop()
 
-	orderedMsgsChan := make(chan []*types.SignedMessage)
+	tendermintBlockInfoChan := make(chan *tendermintBlockInfo)
 	height := int64(bt.Epoch) + 1
 
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
-				orderedMsgsChan <- nil
+				// fixme: what should me send here?
+				tendermintBlockInfoChan <- nil
 				return
 			case <-ticker.C:
 				res, err := tendermint.client.Block(ctx, &height)
@@ -204,16 +214,28 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 					log.Info("unable to get the last Tendermint block @%d: %s", height, err)
 					continue
 				} else {
-					orderedMsgsChan <- parseTendermintBlock(res.Block)
+					info := tendermintBlockInfo{
+						messages: parseTendermintBlock(res.Block),
+						timestamp: uint64(res.Block.Time.Unix()),
+						minerAddr: res.Block.ProposerAddress.Bytes(),
+						hash: res.Block.Hash().Bytes(),
+					}
+					tendermintBlockInfoChan <- &info
 				}
 			}
 		}
 	}()
-	log.Info("before orderedChannel")
-	msgs := <-orderedMsgsChan
-	log.Info("received msgs from orderedChannel:", len(msgs))
+	tb := <-tendermintBlockInfoChan
 
-	bt.Messages = msgs
+	log.Info("received msgs from channel:", len(tb.messages))
+	addr, err :=  address.NewSecp256k1Address(tb.minerAddr)
+
+	if err != nil {
+		log.Info("unable to decode miner addr:", err)
+	}
+	bt.Messages = tb.messages
+	bt.Timestamp = tb.timestamp
+	bt.Miner = addr
 
 	b, err := common.SanitizeMessagesAndPrepareBlockForSignature(ctx, tendermint.sm, bt)
 	if err != nil {
@@ -234,13 +256,12 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 	if validMsgs.SecpkMessages != nil {
 		b.SecpkMessages = validMsgs.SecpkMessages
 	}
-	if validMsgs.CrossMsg != nil {
-		b.CrossMessages = validMsgs.CrossMsg
+	if validMsgs.CrossMsgs != nil {
+		b.CrossMessages = validMsgs.CrossMsgs
 	}
 
-	err = common.SignBlock(ctx, w, b)
+	err = signBlock(b, tb.hash)
 	if err != nil {
-		log.Info(err)
 		return nil, err
 	}
 
@@ -252,3 +273,14 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 
 	return b, nil
 }
+
+func signBlock(b *types.FullBlock, h []byte) error {
+	b.Header.BlockSig = &crypto.Signature{
+		//TODO: use this incorrect type to not modify "crypto/signature" upstream
+		Type: crypto.SigTypeSecp256k1,
+		Data: h,
+	}
+	return nil
+}
+
+

@@ -87,6 +87,7 @@ func CheckMsgs(ctx context.Context, store *store.ChainStore, sm *stmgr.StateMana
 		}
 		return nil
 	})
+
 	blockSigCheck := async.Err(func() error {
 		if err := sigs.CheckBlockSignature(ctx, h, b.Header.Miner); err != nil {
 			return xerrors.Errorf("check block signature failed: %w", err)
@@ -96,6 +97,33 @@ func CheckMsgs(ctx context.Context, store *store.ChainStore, sm *stmgr.StateMana
 
 	return []async.ErrorFuture{msgsCheck, baseFeeCheck, blockSigCheck}
 
+}
+
+func CheckMsgsWithoutBlockSig(ctx context.Context, store *store.ChainStore, sm *stmgr.StateManager, submgr subnet.SubnetMgr, netName hierarchical.SubnetID, b *types.FullBlock, baseTs *types.TipSet) []async.ErrorFuture {
+	msgsCheck := async.Err(func() error {
+		if b.Cid() == build.WhitelistedBlock {
+			return nil
+		}
+
+		if err := checkBlockMessages(ctx, store, sm, submgr, netName, b, baseTs); err != nil {
+			return xerrors.Errorf("block had invalid messages: %w", err)
+		}
+		return nil
+	})
+
+	baseFeeCheck := async.Err(func() error {
+		baseFee, err := store.ComputeBaseFee(ctx, baseTs)
+		if err != nil {
+			return xerrors.Errorf("computing base fee: %w", err)
+		}
+		if types.BigCmp(baseFee, b.Header.ParentBaseFee) != 0 {
+			return xerrors.Errorf("base fee doesn't match: %s (header) != %s (computed)",
+				b.Header.ParentBaseFee, baseFee)
+		}
+		return nil
+	})
+
+	return []async.ErrorFuture{msgsCheck, baseFeeCheck}
 }
 
 func BlockSanityChecks(ctype hierarchical.ConsensusType, h *types.BlockHeader) error {
@@ -357,7 +385,7 @@ func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.St
 type ValidatedMessages struct{
 	BLSMessages []*types.Message
 	SecpkMessages []*types.SignedMessage
-	CrossMsg []*types.Message
+	CrossMsgs []*types.Message
 }
 
 func FilterBlockMessages(
@@ -607,7 +635,7 @@ func FilterBlockMessages(
 	return &ValidatedMessages{
 		BLSMessages: validBlsMessages,
 		SecpkMessages: validSecpkMessages,
-		CrossMsg: validCrossMsg,
+		CrossMsgs: validCrossMsg,
 	}, nil
 }
 

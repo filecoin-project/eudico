@@ -1,6 +1,7 @@
 package tendermint
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -33,7 +34,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
-	"github.com/filecoin-project/lotus/lib/sigs"
 	"github.com/filecoin-project/lotus/metrics"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
@@ -116,6 +116,7 @@ func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon
 	}
 	//TODO: stop client on exit
 
+	//TODO: do we need this? Now all requests to Tendermint are made using plain HTTP
 	query := "tm.event = 'NewBlock'"
 	events, err := tendermintClient.Subscribe(context.TODO(), "test-client", query)
 	if err != nil {
@@ -172,7 +173,7 @@ func (tendermint *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBl
 		log.Warn("Got block from the future, but within threshold", h.Timestamp, build.Clock.Now().Unix())
 	}
 
-	msgsChecks := common.CheckMsgs(ctx, tendermint.store, tendermint.sm, tendermint.subMgr, tendermint.netName, b, baseTs)
+	msgsChecks := common.CheckMsgsWithoutBlockSig(ctx, tendermint.store, tendermint.sm, tendermint.subMgr, tendermint.netName, b, baseTs)
 
 	minerCheck := async.Err(func() error {
 		if err := tendermint.minerIsValid(b.Header.Miner); err != nil {
@@ -225,12 +226,12 @@ func (tendermint *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBl
 		return mulErr
 	}
 
-
+	// Tendermint specific checks.
 	height := int64(h.Height)+1
 	log.Infof("Try to access Tendermint RPC from ValidateBlock")
 	tendermintBlock, err := tendermint.client.Block(ctx, &height)
 	if err != nil {
-		return xerrors.Errorf("unable to get the Tendermint block by height %d", height)
+		return xerrors.Errorf("unable to get the Tendermint block at height %d", height)
 	}
 
 	sealed, err := isBlockSealed(b, tendermintBlock.Block)
@@ -242,6 +243,7 @@ func (tendermint *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBl
 		log.Infof("block is not sealed %d", b.Header.Height)
 		return xerrors.New("block is not sealed")
 	}
+
 	return nil
 }
 
@@ -273,7 +275,7 @@ func (tendermint *Tendermint) validateBlock(ctx context.Context, b *types.FullBl
 		log.Warn("Got block from the future, but within threshold", h.Timestamp, build.Clock.Now().Unix())
 	}
 
-	msgsChecks := common.CheckMsgs(ctx, tendermint.store, tendermint.sm, tendermint.subMgr, tendermint.netName, b, baseTs)
+	msgsChecks := common.CheckMsgsWithoutBlockSig(ctx, tendermint.store, tendermint.sm, tendermint.subMgr, tendermint.netName, b, baseTs)
 
 	minerCheck := async.Err(func() error {
 		if err := tendermint.minerIsValid(b.Header.Miner); err != nil {
@@ -325,7 +327,6 @@ func (tendermint *Tendermint) validateBlock(ctx context.Context, b *types.FullBl
 		}
 		return mulErr
 	}
-
 
 	height := int64(h.Height)+1
 	tendermintBlock, err := tendermint.client.Block(ctx, &height)
@@ -360,14 +361,16 @@ func getMessageMapFromTendermintBlock(tb *tenderminttypes.Block) (map[[32]byte]b
 	return msgs, nil
 }
 
-// isBlockSealed checks that all messages from the Filecoin block are contained in the Tendermint block.
-// Checking that messages from the blocks are equal doesn't work because some messages could be filtered.
+// isBlockSealed checks that the following conditions hold:
+//     - all messages from the Filecoin block are contained in the Tendermint block.
+//     - Tendermint block hash is equal to Filecoin BlockSig field.
 func isBlockSealed(fb *types.FullBlock, tb *tenderminttypes.Block) (bool, error) {
 	fbMsgs := fb.BlsMessages
 	tbMsgs, err := getMessageMapFromTendermintBlock(tb)
 	if err != nil {
 		return false, err
 	}
+
 	for _, msg := range fbMsgs {
 		bs, err := msg.Serialize()
 		if err != nil {
@@ -378,6 +381,11 @@ func isBlockSealed(fb *types.FullBlock, tb *tenderminttypes.Block) (bool, error)
 		if !found {
 			return false, nil
 		}
+	}
+
+	if !bytes.Equal(fb.Header.BlockSig.Data, tb.Hash().Bytes()) {
+		log.Infof("block tendermint hash is invalid %x", fb.Header.BlockSig.Data)
+		return false, xerrors.New("block tendermint hash is invalid")
 	}
 	return true, nil
 }
@@ -429,35 +437,10 @@ func (tendermint *Tendermint) ValidateBlockPubsub(ctx context.Context, self bool
 		return pubsub.ValidationReject, "invalid_block_meta"
 	}
 
-	reject, err := tendermint.validateBlockHeader(ctx, blk.Header)
-	if err != nil {
-		if reject == "" {
-			log.Warn("ignoring block msg: ", err)
-			return pubsub.ValidationIgnore, reject
-		}
-		recordFailureFlagPeer(reject)
-		return pubsub.ValidationReject, reject
-	}
-
 	// all good, accept the block
 	msg.ValidatorData = blk
 	stats.Record(ctx, metrics.BlockValidationSuccess.M(1))
 	return pubsub.ValidationAccept, ""
-}
-
-//TODO: do we need to check here something specific to Tendermint or not?
-func (tendermint *Tendermint) validateBlockHeader(ctx context.Context, b *types.BlockHeader) (rejectReason string, err error) {
-	if err := tendermint.minerIsValid(b.Miner); err != nil {
-		return err.Error(), err
-	}
-
-	err = sigs.CheckBlockSignature(ctx, b, b.Miner)
-	if err != nil {
-		log.Errorf("block signature verification failed: %s", err)
-		return "signature_verification_failed", err
-	}
-
-	return "", nil
 }
 
 func (tendermint *Tendermint) minerIsValid(maddr address.Address) error {
@@ -471,7 +454,7 @@ func (tendermint *Tendermint) minerIsValid(maddr address.Address) error {
 	return xerrors.Errorf("miner address must be a key")
 }
 
-// TODO: Tendermint: is that correct?
+// TODO: is that correct or should be adapted?
 // Blocks that are more than MaxHeightDrift epochs above
 // the theoretical max height based on systime are quickly rejected
 const MaxHeightDrift = 5
