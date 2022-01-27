@@ -310,6 +310,8 @@ func (st *SCAState) applyCheckMsgs(rt runtime.Runtime, windowCh *schema.Checkpoi
 			!hierarchical.IsBottomUp(st.NetworkName, address.SubnetID(mm.To)) {
 			// Add to BottomUpMsgMeta
 			st.storeBottomUpMsgMeta(rt, mm)
+			// FIXME: Circulating supply for directed message applied in application.
+			// Any good reason why not doing it here?
 		} else {
 			// Check if it comes from a valid child, i.e. we are their parent.
 			if address.SubnetID(mm.From).Parent() != st.NetworkName {

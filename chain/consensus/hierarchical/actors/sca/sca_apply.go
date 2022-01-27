@@ -78,16 +78,25 @@ func applyBottomUp(rt runtime.Runtime, msg types.Message) {
 	var st SCAState
 
 	_, rto := fromToRawAddr(rt, msg.From, msg.To)
-	snFrom, err := msg.From.Subnet()
+	sto, err := msg.To.Subnet()
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get subnet from HAddress")
+	sFrom, err := msg.From.Subnet()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting subnet from HAddress")
 
 	if hierarchical.GetMsgType(&msg) != hierarchical.BottomUp {
 		rt.Abortf(exitcode.ErrIllegalArgument, "msg passed as argument not bottomUp")
 	}
 
+	// BottomUp transactions are
+	if sto != st.NetworkName {
+		// TODO: These are messages than need to be routed down the hierarchy from here.
+		// We need to commit a new top-down message from the current one.
+		// ?? Shoudl we have a way to track the original message that sent it?
+	}
+
 	rt.StateTransaction(&st, func() {
 		bottomUpStateTransition(rt, &st, msg)
-		st.releaseCircSupply(rt, snFrom, msg.Value)
+		st.releaseCircSupply(rt, sFrom, msg.Value)
 	})
 
 	// Release funds to the destination address.
