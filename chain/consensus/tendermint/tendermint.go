@@ -353,9 +353,6 @@ func getMessageMapFromTendermintBlock(tb *tenderminttypes.Block) (map[[32]byte]b
 		// Transactions from Tendermint are in the Tx{} format. So we have to remove T,x, { and } characters.
 		// Then we have to remove last two characters that are message type.
 		txo := tx[3:len(tx)-3]
-		if len(txo) == 0 {
-			continue
-		}
 		txoData, err := hex.DecodeString(txo)
 		if err != nil {
 			return nil, err
@@ -383,7 +380,7 @@ func isBlockSealed(fb *types.FullBlock, tb *tenderminttypes.Block) (bool, error)
 		id := sha256.Sum256(bs)
 		_, found := tendermintMessagesHashes[id]
 		if !found {
-			log.Info("bls are not sealed")
+			log.Info("bls messages are not sealed")
 			return false, nil
 		}
 	}
@@ -396,7 +393,7 @@ func isBlockSealed(fb *types.FullBlock, tb *tenderminttypes.Block) (bool, error)
 		id := sha256.Sum256(bs)
 		_, found := tendermintMessagesHashes[id]
 		if !found {
-			log.Info("secpk are not sealed")
+			log.Info("secpk messages are not sealed")
 			return false, nil
 		}
 	}
@@ -409,7 +406,7 @@ func isBlockSealed(fb *types.FullBlock, tb *tenderminttypes.Block) (bool, error)
 		id := sha256.Sum256(bs)
 		_, found := tendermintMessagesHashes[id]
 		if !found {
-			log.Info("crossmessages are not sealed")
+			log.Info("cross messages are not sealed")
 			return false, nil
 		}
 	}

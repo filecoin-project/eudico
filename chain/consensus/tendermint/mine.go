@@ -203,6 +203,7 @@ func parseTendermintBlock(b *tenderminttypes.Block, dst *tendermintBlockInfo) {
 
 	for _, tx := range b.Txs {
 		stx := tx.String()
+		// Transactions from Tendermint are in the Tx{} format.
 		txo := stx[3 : len(stx)-1]
 		txoData, err := hex.DecodeString(txo)
 		if err != nil {
@@ -295,11 +296,11 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 	}
 
 	h := b.Header
-	baseTs, err := tendermint.store.LoadTipSet(types.NewTipSetKey(h.Parents...))
+	_, err = tendermint.store.LoadTipSet(types.NewTipSetKey(h.Parents...))
 	if err != nil {
 		return nil, xerrors.Errorf("load parent tipset failed (%s): %w", h.Parents, err)
 	}
-
+	/*
 	validMsgs, err := common.FilterBlockMessages(ctx, tendermint.store, tendermint.sm, tendermint.subMgr, tendermint.netName, b, baseTs)
 	if validMsgs.BLSMessages != nil {
 		b.BlsMessages = validMsgs.BLSMessages
@@ -310,6 +311,8 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 	if validMsgs.CrossMsgs != nil {
 		b.CrossMessages = validMsgs.CrossMsgs
 	}
+
+	 */
 
 	err = signBlock(b, tb.hash)
 	if err != nil {
