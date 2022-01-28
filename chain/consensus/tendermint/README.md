@@ -33,8 +33,11 @@ curl -s 'http://localhost:26657/broadcast_tx_sync?tx=0x828a0055017642efe6162dfc3
 
 ### Subnet
 ```azure
-./eudico subnet add --consensus 2 --name tndr
-./eudico subnet join --subnet=/root/t01001 10
-./eudico subnet fund --from=f1ozbo7zqwfx6d4tqb353qoq7sfp4qhycefx6ftgy --subnet=/root/t01001 2
-./eudico --subnet-api=/root/t01001 wallet list
+ ./eudico subnet add --consensus 2 --name tndr
+ ./eudico subnet join --subnet=/root/t01001 10
+ ./eudico subnet fund --from=f1ozbo7zqwfx6d4tqb353qoq7sfp4qhycefx6ftgy --subnet=/root/t01001 10
+ ./eudico --subnet-api=/root/t01001 wallet list
+ ./eudico subnet mine  --subnet=/root/t01001
+ 
+ ./eudico subnet list-subnets
 ```

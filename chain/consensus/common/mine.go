@@ -160,7 +160,7 @@ func SanitizeMessagesAndPrepareBlockForSignature(ctx context.Context, sm *stmgr.
 	for _, msg := range bt.Messages {
 		err := sigs.Verify(&msg.Signature, msg.Message.From, msg.Message.Cid().Bytes())
 		if err != nil {
-			log.Info("invalid signed message was filtered")
+			log.Warn("invalid signed message was filtered")
 			continue
 		}
 
@@ -186,6 +186,7 @@ func SanitizeMessagesAndPrepareBlockForSignature(ctx context.Context, sm *stmgr.
 	}
 
 	for _, msg := range bt.CrossMessages {
+		//TODO: do we need any additional validation here?
 		c, err := sm.ChainStore().PutMessage(msg)
 		if err != nil {
 			return nil, err

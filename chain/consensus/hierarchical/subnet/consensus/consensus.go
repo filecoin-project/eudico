@@ -69,9 +69,9 @@ func Mine(ctx context.Context, api v1api.FullNode, cnsType hierarchical.Consensu
 		}
 		go tspow.Mine(ctx, miner, api)
 	case hierarchical.Tendermint:
-		miner, err := tendermint.GetTendermintID()
+		miner, err := GetWallet(ctx, api)
 		if err != nil {
-			log.Errorw("unable to get Tendermint ID", "err", err)
+			log.Errorw("no valid identity found for Tendermint mining", "err", err)
 			return err
 		}
 		go tendermint.Mine(ctx, miner, api)

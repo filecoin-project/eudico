@@ -27,8 +27,8 @@ import (
 // before being able to re-propose a msg.
 const (
 	finalityWait = 100
-	SignedMessageType = 127
-	CrossMessageType = 128
+	SignedMessageType = 1
+	CrossMessageType = 2
 )
 
 func newMessagePool() *msgPool {
@@ -95,7 +95,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			log.Errorw("unable to select messages from mempool", "error", err)
 		}
 
-		log.Infof("Msgs being proposed in block @%s: %d", base.Height()+1, len(msgs))
+		log.Debugf("Msgs being proposed in block @%s: %d", base.Height()+1, len(msgs))
 
 		// Get cross-message pool from subnet.
 		nn, err := api.StateNetworkName(ctx)
@@ -114,12 +114,12 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 				log.Error(err)
 				continue
 			}
-			log.Info("next msg:", tx)
+			log.Debug("next msg:", tx)
 
 			// LRU cache is used to store the messages that have already been sent.
 			// It is also a workaround for this bug: https://github.com/tendermint/tendermint/issues/7185.
 			id := sha256.Sum256(tx)
-			log.Info("message hash:", id)
+			log.Debug("message hash:", id)
 
 			if pool.shouldSubmitMessage(tx, base.Height()) {
 				payload := append(tx, SignedMessageType)
@@ -146,7 +146,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			// LRU cache is used to store the messages that have already been sent.
 			// It is also a workaround for this bug: https://github.com/tendermint/tendermint/issues/7185.
 			id := sha256.Sum256(tx)
-			log.Info("!!! cross message hash:", id)
+			log.Info("!!!!! cross message hash:", id)
 
 			if pool.shouldSubmitMessage(tx, base.Height()) {
 				payload := append(tx, CrossMessageType)
@@ -206,12 +206,12 @@ func parseTendermintBlock(b *tenderminttypes.Block, dst *tendermintBlockInfo) {
 		txo := stx[3 : len(stx)-1]
 		txoData, err := hex.DecodeString(txo)
 		if err != nil {
-			log.Error("unable to decode string while parsing Tx:", err)
+			log.Error("unable to decode Tendermint messages:", err)
 			continue
 		}
 		msg, _, err := parseTx(txoData)
 		if err != nil {
-			log.Error("unable to decode message from Tendermint block:", err)
+			log.Error("unable to decode a message from Tendermint block:", err)
 			continue
 		}
 		log.Info("received Tx:", msg)
@@ -220,7 +220,6 @@ func parseTendermintBlock(b *tenderminttypes.Block, dst *tendermintBlockInfo) {
 		case *types.SignedMessage:
 			msgs = append(msgs, m)
 		case *types.Message:
-			log.Info("11111111")
 			crossMsgs = append(crossMsgs, m)
 		default:
 			log.Info("unknown message type")

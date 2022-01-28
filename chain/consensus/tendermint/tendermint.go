@@ -350,7 +350,12 @@ func getMessageMapFromTendermintBlock(tb *tenderminttypes.Block) (map[[32]byte]b
 	msgs := make(map[[32]byte]bool)
 	for _, msg := range tb.Txs {
 		tx := msg.String()
-		txo := tx[3:len(tx)-1]
+		// Transactions from Tendermint are in the Tx{} format. So we have to remove T,x, { and } characters.
+		// Then we have to remove last two characters that are message type.
+		txo := tx[3:len(tx)-3]
+		if len(txo) == 0 {
+			continue
+		}
 		txoData, err := hex.DecodeString(txo)
 		if err != nil {
 			return nil, err
@@ -365,20 +370,46 @@ func getMessageMapFromTendermintBlock(tb *tenderminttypes.Block) (map[[32]byte]b
 //     - all messages from the Filecoin block are contained in the Tendermint block.
 //     - Tendermint block hash is equal to Filecoin BlockSig field.
 func isBlockSealed(fb *types.FullBlock, tb *tenderminttypes.Block) (bool, error) {
-	fbMsgs := fb.BlsMessages
-	tbMsgs, err := getMessageMapFromTendermintBlock(tb)
+	tendermintMessagesHashes, err := getMessageMapFromTendermintBlock(tb)
 	if err != nil {
 		return false, err
 	}
 
-	for _, msg := range fbMsgs {
+	for _, msg := range fb.BlsMessages {
 		bs, err := msg.Serialize()
 		if err != nil {
 			return false, err
 		}
 		id := sha256.Sum256(bs)
-		_, found := tbMsgs[id]
+		_, found := tendermintMessagesHashes[id]
 		if !found {
+			log.Info("bls are not sealed")
+			return false, nil
+		}
+	}
+
+	for _, msg := range fb.SecpkMessages {
+		bs, err := msg.Serialize()
+		if err != nil {
+			return false, err
+		}
+		id := sha256.Sum256(bs)
+		_, found := tendermintMessagesHashes[id]
+		if !found {
+			log.Info("secpk are not sealed")
+			return false, nil
+		}
+	}
+
+	for _, msg := range fb.CrossMessages {
+		bs, err := msg.Serialize()
+		if err != nil {
+			return false, err
+		}
+		id := sha256.Sum256(bs)
+		_, found := tendermintMessagesHashes[id]
+		if !found {
+			log.Info("crossmessages are not sealed")
 			return false, nil
 		}
 	}

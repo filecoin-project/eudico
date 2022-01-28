@@ -565,7 +565,7 @@ func FilterBlockMessages(
 		return nil, err
 	}
 
-	var validCrossMsg []*types.Message
+	var validCrossMsgs []*types.Message
 	// Check cross messages
 	for i, m := range b.CrossMessages {
 		if err := checkCrossMsg(pstore, snstore, parentSCA, snSCA, m); err != nil {
@@ -595,7 +595,7 @@ func FilterBlockMessages(
 			log.Infof("failed to put cross message at index %d: %w", i, err)
 			continue
 		}
-		validCrossMsg = append(validCrossMsg, m)
+		validCrossMsgs = append(validCrossMsgs, m)
 	}
 
 	bmroot, err := bmArr.Root()
@@ -635,7 +635,7 @@ func FilterBlockMessages(
 	return &ValidatedMessages{
 		BLSMessages: validBlsMessages,
 		SecpkMessages: validSecpkMessages,
-		CrossMsgs: validCrossMsg,
+		CrossMsgs: validCrossMsgs,
 	}, nil
 }
 
