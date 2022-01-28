@@ -437,8 +437,8 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	// try nil --> it probably uses the hash of the participants list
 	// look at the library for DKG (taurus fork)
 	// for signing this is already updated
-	// for testing hjardcoded is ok to ensure everyone is on the same sessiopn
-	// but or production this needs to be updated.
+	// for testing hardcoded is ok to ensure everyone is on the same session
+	// but for production this needs to be updated.
 	handler, err := protocol.NewMultiHandler(f, []byte{1, 2, 3})
 	if err != nil {
 		return err

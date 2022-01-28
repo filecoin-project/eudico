@@ -98,7 +98,7 @@ func waitingMessages(ctx context.Context, h protocol.Handler, network *Network, 
 
 // This could be simplified
 // next and send very similar to next and publish in libp2p
-// the code could be simplified to use next and publish
+// the code could be simplified to use next and publish.s
 func LoopHandler(ctx context.Context, h protocol.Handler, network *Network) {
 	over := make(chan bool)
 
