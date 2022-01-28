@@ -30,3 +30,11 @@ curl -s 'localhost:26657/abci_query?data="1"'
 curl -s 'http://localhost:26657/broadcast_tx_sync?tx=0x828a0055017642efe6162dfc3e4e01df770743f22bf903e04455017642efe6162dfc3e4e01df770743f22bf903e0440049000de0b6b3a76400001a00084873450018aef1bd44000187c600405842018172eb88f4f9a59a1e0f0b820d69681403b69a129daed4831729336c6534036b701e4b22572f19c3e89a7341fc4e435ae8b7accf75cf7b3d1e1200108af7640c01'
 
 ```
+
+### Subnet
+```azure
+./eudico subnet add --consensus 2 --name tndr
+./eudico subnet join --subnet=/root/t01001 10
+./eudico subnet fund --from=f1ozbo7zqwfx6d4tqb353qoq7sfp4qhycefx6ftgy --subnet=/root/t01001 2
+./eudico --subnet-api=/root/t01001 wallet list
+```

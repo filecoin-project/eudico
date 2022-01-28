@@ -5,10 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	abci "github.com/tendermint/tendermint/abci/types"
 	"sync"
 	"time"
 
+	abci "github.com/tendermint/tendermint/abci/types"
 	httptendermintrpcclient "github.com/tendermint/tendermint/rpc/client/http"
 	tenderminttypes "github.com/tendermint/tendermint/types"
 	"golang.org/x/xerrors"
@@ -95,7 +95,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			log.Errorw("unable to select messages from mempool", "error", err)
 		}
 
-		log.Debugf("Msgs being proposed in block @%s: %d", base.Height()+1, len(msgs))
+		log.Infof("Msgs being proposed in block @%s: %d", base.Height()+1, len(msgs))
 
 		// Get cross-message pool from subnet.
 		nn, err := api.StateNetworkName(ctx)
@@ -106,7 +106,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		if err != nil {
 			log.Errorw("selecting cross-messages failed", "error", err)
 		}
-		log.Debugf("CrossMsgs being proposed in block @%s: %d", base.Height()+1, len(crossmsgs))
+		log.Infof("CrossMsgs being proposed in block @%s: %d", base.Height()+1, len(crossmsgs))
 
 		for _, msg := range msgs {
 			tx, err := msg.Serialize()
@@ -114,7 +114,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 				log.Error(err)
 				continue
 			}
-			log.Info(tx)
+			log.Info("next msg:", tx)
 
 			// LRU cache is used to store the messages that have already been sent.
 			// It is also a workaround for this bug: https://github.com/tendermint/tendermint/issues/7185.
@@ -141,12 +141,12 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 				log.Error(err)
 				continue
 			}
-			log.Info(tx)
+			log.Info("!!! next cross msg:", tx)
 
 			// LRU cache is used to store the messages that have already been sent.
 			// It is also a workaround for this bug: https://github.com/tendermint/tendermint/issues/7185.
 			id := sha256.Sum256(tx)
-			log.Info("cross message hash:", id)
+			log.Info("!!! cross message hash:", id)
 
 			if pool.shouldSubmitMessage(tx, base.Height()) {
 				payload := append(tx, CrossMessageType)
@@ -211,18 +211,19 @@ func parseTendermintBlock(b *tenderminttypes.Block, dst *tendermintBlockInfo) {
 		}
 		msg, _, err := parseTx(txoData)
 		if err != nil {
-			log.Error("unable to decode SignedMessage while parsing Tx:", err)
+			log.Error("unable to decode message from Tendermint block:", err)
 			continue
 		}
-		log.Info("Received Tx:", msg)
+		log.Info("received Tx:", msg)
 
 		switch m := msg.(type) {
 		case *types.SignedMessage:
 			msgs = append(msgs, m)
 		case *types.Message:
+			log.Info("11111111")
 			crossMsgs = append(crossMsgs, m)
 		default:
-			log.Info("tx unknown type")
+			log.Info("unknown message type")
 		}
 	}
 	dst.messages = msgs
@@ -283,6 +284,7 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 		log.Info("unable to decode miner addr:", err)
 	}
 	bt.Messages = tb.messages
+	bt.CrossMessages = tb.crossMsgs
 	bt.Timestamp = tb.timestamp
 	//TODO: what is the miner?
 	//bt.Miner = addr
