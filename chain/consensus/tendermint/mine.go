@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
+	abci "github.com/tendermint/tendermint/abci/types"
 	"sync"
 	"time"
 
@@ -23,7 +25,11 @@ import (
 
 // finalityWait is the number of epochs that we will wait
 // before being able to re-propose a msg.
-const finalityWait = 100
+const (
+	finalityWait = 100
+	SignedMessageType = 127
+	CrossMessageType = 128
+)
 
 func newMessagePool() *msgPool {
 	return &msgPool{pool: make(map[[32]byte]abi.ChainEpoch)}
@@ -89,7 +95,19 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			log.Errorw("unable to select messages from mempool", "error", err)
 		}
 
-		log.Infof("selected %d messages from mempool", len(msgs))
+		log.Debugf("Msgs being proposed in block @%s: %d", base.Height()+1, len(msgs))
+
+		// Get cross-message pool from subnet.
+		nn, err := api.StateNetworkName(ctx)
+		if err != nil {
+			return err
+		}
+		crossmsgs, err := api.GetCrossMsgsPool(ctx, hierarchical.SubnetID(nn), base.Height()+1)
+		if err != nil {
+			log.Errorw("selecting cross-messages failed", "error", err)
+		}
+		log.Debugf("CrossMsgs being proposed in block @%s: %d", base.Height()+1, len(crossmsgs))
+
 		for _, msg := range msgs {
 			tx, err := msg.Serialize()
 			if err != nil {
@@ -104,7 +122,8 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			log.Info("message hash:", id)
 
 			if pool.shouldSubmitMessage(tx, base.Height()) {
-				res, err := tendermintClient.BroadcastTxSync(ctx, tenderminttypes.Tx(tx))
+				payload := append(tx, SignedMessageType)
+				res, err := tendermintClient.BroadcastTxSync(ctx, payload)
 				if err != nil {
 					log.Error("unable to send message to Tendermint error:", err)
 					continue
@@ -116,18 +135,35 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			}
 		}
 
-		// Get cross-message pool from subnet.
-		nn, err := api.StateNetworkName(ctx)
-		if err != nil {
-			return err
+		for _, msg := range crossmsgs {
+			tx, err := msg.Serialize()
+			if err != nil {
+				log.Error(err)
+				continue
+			}
+			log.Info(tx)
+
+			// LRU cache is used to store the messages that have already been sent.
+			// It is also a workaround for this bug: https://github.com/tendermint/tendermint/issues/7185.
+			id := sha256.Sum256(tx)
+			log.Info("cross message hash:", id)
+
+			if pool.shouldSubmitMessage(tx, base.Height()) {
+				payload := append(tx, CrossMessageType)
+				res, err := tendermintClient.BroadcastTxSync(ctx, payload)
+				if err != nil {
+					log.Error("unable to send cross message to Tendermint error:", err)
+					continue
+				} else {
+					pool.addMessage(tx, base.Height())
+					log.Info(res)
+					log.Info("successfully sent cross msg to Tendermint:", id)
+				}
+			}
 		}
-		crossmsgs, err := api.GetCrossMsgsPool(ctx, hierarchical.SubnetID(nn), base.Height()+1)
-		if err != nil {
-			log.Errorw("selecting cross-messages failed", "error", err)
-		}
-		log.Debugf("CrossMsgs being proposed in block @%s: %d", base.Height()+1, len(crossmsgs))
 
 		bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
+			Miner: miner,
 			Parents:          base.Key(),
 			BeaconValues:     nil,
 			Ticket:           nil,
@@ -135,7 +171,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			Epoch:            base.Height() + 1,
 			Timestamp:        0,
 			WinningPoStProof: nil,
-			CrossMessages:    crossmsgs,
+			CrossMessages:    nil,
 		})
 		if err != nil {
 			log.Errorw("creating block failed", "error", err)
@@ -161,8 +197,10 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	}
 }
 
-func parseTendermintBlock(b *tenderminttypes.Block) []*types.SignedMessage {
+func parseTendermintBlock(b *tenderminttypes.Block, dst *tendermintBlockInfo) {
 	var msgs []*types.SignedMessage
+	var crossMsgs []*types.Message
+
 	for _, tx := range b.Txs {
 		stx := tx.String()
 		txo := stx[3 : len(stx)-1]
@@ -171,15 +209,24 @@ func parseTendermintBlock(b *tenderminttypes.Block) []*types.SignedMessage {
 			log.Error("unable to decode string while parsing Tx:", err)
 			continue
 		}
-		msg, err := types.DecodeSignedMessage(txoData)
+		msg, _, err := parseTx(txoData)
 		if err != nil {
 			log.Error("unable to decode SignedMessage while parsing Tx:", err)
 			continue
 		}
 		log.Info("Received Tx:", msg)
-		msgs = append(msgs, msg)
+
+		switch m := msg.(type) {
+		case *types.SignedMessage:
+			msgs = append(msgs, m)
+		case *types.Message:
+			crossMsgs = append(crossMsgs, m)
+		default:
+			log.Info("tx unknown type")
+		}
 	}
-	return msgs
+	dst.messages = msgs
+	dst.crossMsgs = crossMsgs
 }
 
 type tendermintBlockInfo struct {
@@ -208,18 +255,19 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 				tendermintBlockInfoChan <- nil
 				return
 			case <-ticker.C:
-				res, err := tendermint.client.Block(ctx, &height)
-				log.Infof("Got block %d from Tendermint", res.Block.Height)
+				resp, err := tendermint.client.Block(ctx, &height)
 				if err != nil {
-					log.Info("unable to get the last Tendermint block @%d: %s", height, err)
+					log.Infof("unable to get the last Tendermint block @%d: %s", height, err)
 					continue
 				} else {
+					log.Infof("Got block %d from Tendermint", resp.Block.Height)
 					info := tendermintBlockInfo{
-						messages: parseTendermintBlock(res.Block),
-						timestamp: uint64(res.Block.Time.Unix()),
-						minerAddr: res.Block.ProposerAddress.Bytes(),
-						hash: res.Block.Hash().Bytes(),
+						timestamp: uint64(resp.Block.Time.Unix()),
+						minerAddr: resp.Block.ProposerAddress.Bytes(),
+						hash: resp.Block.Hash().Bytes(),
 					}
+					parseTendermintBlock(resp.Block, &info)
+
 					tendermintBlockInfoChan <- &info
 				}
 			}
@@ -229,13 +277,15 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 
 	log.Info("received msgs from channel:", len(tb.messages))
 	addr, err :=  address.NewSecp256k1Address(tb.minerAddr)
+	log.Info(addr)
 
 	if err != nil {
 		log.Info("unable to decode miner addr:", err)
 	}
 	bt.Messages = tb.messages
 	bt.Timestamp = tb.timestamp
-	bt.Miner = addr
+	//TODO: what is the miner?
+	//bt.Miner = addr
 
 	b, err := common.SanitizeMessagesAndPrepareBlockForSignature(ctx, tendermint.sm, bt)
 	if err != nil {
@@ -284,3 +334,28 @@ func signBlock(b *types.FullBlock, h []byte) error {
 }
 
 
+func parseTx(tx []byte) (interface{}, uint32, error) {
+	ln := len(tx)
+	if ln <=2 {
+		return nil, codeBadRequest, fmt.Errorf("tx len %d is too small", ln)
+	}
+
+	var err error
+	var msg interface{}
+
+	lastByte := tx[ln-1]
+	switch lastByte {
+	case SignedMessageType:
+		msg, err = types.DecodeSignedMessage(tx[:ln-1])
+	case CrossMessageType:
+		msg, err = types.DecodeMessage(tx[:ln-1])
+	default:
+		err = fmt.Errorf("unknown message type %d", lastByte)
+	}
+
+	if err != nil {
+		return nil, codeBadRequest, err
+	}
+
+	return msg, abci.CodeTypeOK, nil
+}

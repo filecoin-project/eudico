@@ -17,6 +17,8 @@
 #./eudico delegated genesis f1ozbo7zqwfx6d4tqb353qoq7sfp4qhycefx6ftgy gen.gen
 ./eudico tendermint genesis  gen.gen
 ./eudico wallet import ./f1ozbo7zqwfx6d4tqb353qoq7sfp4qhycefx6ftgy.key
+./eudico send t1sj56f45kttzepbo7rq3mxlvn3alwc6sp4h2jbmi 1
+
 ```
 ### Tendermint
 ```
