@@ -13,6 +13,9 @@ type Network struct {
 	topic *pubsub.Topic
 }
 
+// this define new means of communication, not a network
+// we reuse the same network
+// in the taurus group, they called it new network
 func NewNetwork(sub *pubsub.Subscription, topic *pubsub.Topic) *Network {
 	c := &Network{
 		sub:   sub,
@@ -21,6 +24,8 @@ func NewNetwork(sub *pubsub.Subscription, topic *pubsub.Topic) *Network {
 	return c
 }
 
+// we could potentially re-use next.sub.net
+// protocol message est la structure 
 func (n *Network) Next(ctx context.Context) *protocol.Message {
 	msg, err := n.sub.Next(ctx)
 	if err == context.Canceled {
@@ -36,6 +41,7 @@ func (n *Network) Next(ctx context.Context) *protocol.Message {
 	// see https://pkg.go.dev/github.com/libp2p/go-libp2p-pubsub@v0.5.3/pb#Message
 	// https://pkg.go.dev/github.com/taurusgroup/multi-party-sig@v0.6.0-alpha-2021-09-21/pkg/protocol?utm_source=gopls#Message
 	var pmessage protocol.Message
+	// this part is very important
 	err = pmessage.UnmarshalBinary(msg.Data)
 	if err != nil {
 		panic(err)
@@ -90,6 +96,9 @@ func waitingMessages(ctx context.Context, h protocol.Handler, network *Network, 
 	}
 }
 
+// This could be simplified
+// next and send very similar to next and publish in libp2p
+// the code could be simplified to use next and publish
 func LoopHandler(ctx context.Context, h protocol.Handler, network *Network) {
 	over := make(chan bool)
 

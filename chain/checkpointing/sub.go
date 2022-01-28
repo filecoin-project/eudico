@@ -88,6 +88,9 @@ type CheckpointingSub struct {
 	synced bool
 	// height verified! (the height of the latest checkpoint)
 	height abi.ChainEpoch
+
+
+	// add intitial taproot address here
 }
 
 /*
@@ -100,6 +103,7 @@ func NewCheckpointSub(
 	host host.Host,
 	pubsub *pubsub.PubSub,
 	api impl.FullNodeAPI,
+	// add init taproot address and define it somewhere here
 ) (*CheckpointingSub, error) {
 
 	ctx := helpers.LifecycleCtx(mctx, lc)
@@ -361,7 +365,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 				// If generating new key failed, checkpointing should not be possible
 			}
 
-			return true, nil, nil
+			return true, nil, nil // true mean generate keys
 		}
 
 		return false, nil, nil
@@ -415,17 +419,31 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	id := party.ID(c.host.ID().String())
 
 	threshold := (len(idsStrings) / 2) + 1
+	//starting a new ceremony with the subscription and topic that were
+	// already defined 
+	//why not call the checkpointing sub directly?
 	n := NewNetwork(c.sub, c.topic)
 
-	// Keygen with Gennaro porotocol if failing
+	// Keygen with Gennaro protocol if failing
 	//f := frost.KeygenTaprootGennaro(id, ids, threshold)
 	f := frost.KeygenTaproot(id, ids, threshold)
 
+	//{1,2,3} is session ID, it is hardcoded
+	// change it for a unique identifier
+	// we only need this identifier to be the same for every participants
+	// it could be for example the hash of the checkpointed block
+	// or hash of participants list
+	// problem with 1,2,3: people on different sessions could be on the same execution
+	// try nil --> it probably uses the hash of the participants list
+	// look at the library for DKG (taurus fork)
+	// for signing this is already updated
+	// for testing hjardcoded is ok to ensure everyone is on the same sessiopn
+	// but or production this needs to be updated.
 	handler, err := protocol.NewMultiHandler(f, []byte{1, 2, 3})
 	if err != nil {
 		return err
 	}
-	LoopHandler(ctx, handler, n)
+	LoopHandler(ctx, handler, n)//use the new network, could be re-written
 	r, err := handler.Result()
 	if err != nil {
 		// if a participant is mibehaving the DKG entirely fail (no fallback)
@@ -529,6 +547,8 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 	log.Infow("starting signing")
 	f := frost.SignTaprootWithTweak(c.config, ids, hashedTx[:], c.tweakedValue[:])
 	n := NewNetwork(c.sub, c.topic)
+	// hashedTx[:] is the session id
+	// ensure everyone is on the same session id
 	handler, err := protocol.NewMultiHandler(f, hashedTx[:])
 	if err != nil {
 		return err
