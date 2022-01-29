@@ -154,6 +154,7 @@ func SanitizeMessagesAndPrepareBlockForSignature(ctx context.Context, sm *stmgr.
 
 	var blsMessages  []*types.Message
 	var secpkMessages []*types.SignedMessage
+	var crossMessages []*types.Message
 
 	var blsMsgCids, secpkMsgCids, crossMsgCids []cid.Cid
 	var blsSigs []crypto.Signature
@@ -191,6 +192,7 @@ func SanitizeMessagesAndPrepareBlockForSignature(ctx context.Context, sm *stmgr.
 		if err != nil {
 			return nil, err
 		}
+		crossMessages = append(crossMessages, msg)
 
 		crossMsgCids = append(crossMsgCids, c)
 	}
@@ -240,7 +242,7 @@ func SanitizeMessagesAndPrepareBlockForSignature(ctx context.Context, sm *stmgr.
 		Header:        next,
 		BlsMessages:   blsMessages,
 		SecpkMessages: secpkMessages,
-		CrossMessages: bt.CrossMessages,
+		CrossMessages: crossMessages,
 	}, nil
 
 }

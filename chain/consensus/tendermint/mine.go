@@ -276,17 +276,16 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 	}()
 	tb := <-tendermintBlockInfoChan
 
-	log.Info("received msgs from channel:", len(tb.messages))
 	addr, err :=  address.NewSecp256k1Address(tb.minerAddr)
-	log.Info(addr)
-
 	if err != nil {
 		log.Info("unable to decode miner addr:", err)
 	}
+	log.Info(addr)
+
 	bt.Messages = tb.messages
 	bt.CrossMessages = tb.crossMsgs
 	bt.Timestamp = tb.timestamp
-	//TODO: what is the miner?
+	//TODO: what is the miner addr?
 	//bt.Miner = addr
 
 	b, err := common.SanitizeMessagesAndPrepareBlockForSignature(ctx, tendermint.sm, bt)
@@ -296,11 +295,11 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 	}
 
 	h := b.Header
-	_, err = tendermint.store.LoadTipSet(types.NewTipSetKey(h.Parents...))
+	baseTs, err := tendermint.store.LoadTipSet(types.NewTipSetKey(h.Parents...))
 	if err != nil {
 		return nil, xerrors.Errorf("load parent tipset failed (%s): %w", h.Parents, err)
 	}
-	/*
+
 	validMsgs, err := common.FilterBlockMessages(ctx, tendermint.store, tendermint.sm, tendermint.subMgr, tendermint.netName, b, baseTs)
 	if validMsgs.BLSMessages != nil {
 		b.BlsMessages = validMsgs.BLSMessages
@@ -312,18 +311,20 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 		b.CrossMessages = validMsgs.CrossMsgs
 	}
 
-	 */
 
 	err = signBlock(b, tb.hash)
 	if err != nil {
 		return nil, err
 	}
 
+	/*
 	err = tendermint.validateBlock(ctx, b)
 	if err != nil {
 		log.Info(err)
 		return nil, err
 	}
+
+	 */
 
 	return b, nil
 }
