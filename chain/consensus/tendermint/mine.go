@@ -29,6 +29,7 @@ const (
 	finalityWait = 100
 	SignedMessageType = 1
 	CrossMessageType = 2
+	RegistrationMessageType = 3
 )
 
 func newMessagePool() *msgPool {
@@ -246,7 +247,7 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 	defer ticker.Stop()
 
 	tendermintBlockInfoChan := make(chan *tendermintBlockInfo)
-	height := int64(bt.Epoch) + 1
+	height := int64(bt.Epoch) + tendermint.offset
 
 	go func() {
 		for {
@@ -338,7 +339,9 @@ func signBlock(b *types.FullBlock, h []byte) error {
 	return nil
 }
 
-
+type RegistrationMessage struct {
+	name []byte
+}
 func parseTx(tx []byte) (interface{}, uint32, error) {
 	ln := len(tx)
 	if ln <=2 {
@@ -354,6 +357,10 @@ func parseTx(tx []byte) (interface{}, uint32, error) {
 		msg, err = types.DecodeSignedMessage(tx[:ln-1])
 	case CrossMessageType:
 		msg, err = types.DecodeMessage(tx[:ln-1])
+	case RegistrationMessageType:
+		msg, err = &RegistrationMessage{
+			name:tx[:ln-1],
+		}, nil
 	default:
 		err = fmt.Errorf("unknown message type %d", lastByte)
 	}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -95,20 +96,44 @@ type Tendermint struct {
 
 	client *httptendermintrpcclient.HTTP
 
+	offset int64
+
 	events <-chan coretypes.ResultEvent
+}
+
+func registrationMessage(name hierarchical.SubnetID) []byte {
+	b := []byte(name.String())
+	b = append(b, RegistrationMessageType)
+	return b
 }
 
 func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon.Schedule,
 	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
+
+	nn := hierarchical.SubnetID(netName)
+
 	tendermintClient, err := httptendermintrpcclient.New(NodeAddr())
 	if err != nil {
-		log.Fatalf("unable to create a Tendermint client: %s",err)
+		log.Fatalf("unable to create a Tendermint client: %s", err)
 	}
 	info, err := tendermintClient.Status(context.TODO())
 	if err != nil {
-		log.Fatalf("unable to connect to the Tendermint node: %s",err)
+		log.Fatalf("unable to connect to the Tendermint node: %s", err)
 	}
 	log.Info(info)
+
+	resp, err := tendermintClient.BroadcastTxCommit(context.TODO(), registrationMessage(nn))
+	if err != nil {
+		log.Fatalf("unable to register network: %s", err)
+	}
+
+	var offset int64
+	buf := bytes.NewBuffer(resp.DeliverTx.Data)
+	err = binary.Read(buf, binary.LittleEndian, &offset)
+	if err != nil {
+		log.Fatalf("unable to convert offset: %s", err.Error())
+	}
+	log.Warnf("!!!!! Tendermint offset for %s is %d", nn.String(), offset)
 
 	err = tendermintClient.Start()
 	if err != nil {
@@ -130,9 +155,10 @@ func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon
 		verifier: verifier,
 		genesis:  genesis,
 		subMgr:   submgr,
-		netName:  hierarchical.SubnetID(netName),
+		netName:  nn,
 		client: tendermintClient,
 		events: events,
+		offset: offset,
 	}
 }
 
@@ -227,7 +253,7 @@ func (tendermint *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBl
 	}
 
 	// Tendermint specific checks.
-	height := int64(h.Height)+1
+	height := int64(h.Height)+tendermint.offset
 	log.Infof("Try to access Tendermint RPC from ValidateBlock")
 	tendermintBlock, err := tendermint.client.Block(ctx, &height)
 	if err != nil {
@@ -263,7 +289,7 @@ func (tendermint *Tendermint) validateBlock(ctx context.Context, b *types.FullBl
 	}
 
 	// fast checks first
-	if h.Height != baseTs.Height()+1 {
+	if h.Height != baseTs.Height() {
 		return xerrors.Errorf("block height not parent height+1: %d != %d", h.Height, baseTs.Height()+1)
 	}
 
@@ -328,7 +354,7 @@ func (tendermint *Tendermint) validateBlock(ctx context.Context, b *types.FullBl
 		return mulErr
 	}
 
-	height := int64(h.Height)+1
+	height := int64(h.Height)+tendermint.offset
 	tendermintBlock, err := tendermint.client.Block(ctx, &height)
 	if err != nil {
 		return xerrors.Errorf("unable to get the Tendermint block by height %d", height)

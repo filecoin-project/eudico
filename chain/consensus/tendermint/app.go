@@ -1,6 +1,7 @@
 package tendermint
 
 import (
+	"encoding/binary"
 	"fmt"
 	"os"
 	"time"
@@ -134,12 +135,26 @@ func (a *Application) DeliverTx(req abci.RequestDeliverTx) (resp abci.ResponseDe
 	tx := req.GetTx()
 	a.logger.Log(tx)
 
-	_, code, err := parseTx(tx)
+	msg, code, err := parseTx(tx)
 	if err != nil {
 		return abci.ResponseDeliverTx{
 			Code: code,
 			Log:  err.Error(),
 		}
+	}
+
+	switch subnet := msg.(type) {
+	case *RegistrationMessage:
+		height := a.consensus.GetSubnetOffset(subnet.name)
+		log.Info("Height:", height)
+		b := make([]byte, 8)
+		binary.LittleEndian.PutUint64(b, uint64(height))
+
+		return abci.ResponseDeliverTx{
+			Code: abci.CodeTypeOK,
+			Data: b,
+		}
+	default:
 	}
 
 	defer func() {
@@ -158,6 +173,8 @@ func (a *Application) DeliverTx(req abci.RequestDeliverTx) (resp abci.ResponseDe
 }
 
 func (a *Application) EndBlock(req abci.RequestEndBlock) (resp abci.ResponseEndBlock) {
+	a.consensus.height = req.Height
+
 	defer func() {
 		level.Debug(a.logger).Log(
 			"abci", "EndBlock",
