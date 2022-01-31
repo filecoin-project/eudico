@@ -20,6 +20,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/consensus/tendermint"
 	"github.com/filecoin-project/lotus/chain/gen/genesis"
 	"github.com/filecoin-project/lotus/chain/gen/slashfilter"
@@ -34,9 +35,9 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
-func NewRootTendermintConsensus(sm *stmgr.StateManager, beacon beacon.Schedule,
+func NewRootTendermintConsensus(sm *stmgr.StateManager, beacon beacon.Schedule,  r *resolver.Resolver,
 	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
-	return tendermint.NewConsensus(sm, nil, beacon, verifier, genesis, netName)
+	return tendermint.NewConsensus(sm, nil, beacon, r, verifier, genesis, netName)
 }
 
 var tendermintCmd = &cli.Command{
@@ -90,7 +91,7 @@ var tendermintGenesisCmd = &cli.Command{
 
 		// TODO: Make configurable
 		checkPeriod := sca.DefaultCheckpointPeriod
-		if err := subnet.WriteGenesis(hierarchical.RootSubnet, hierarchical.Tendermint, address.Undef, vreg, rem, checkPeriod, uint64(time.Now().Unix()), f); err != nil {
+		if err := subnet.WriteGenesis(address.RootSubnet, hierarchical.Tendermint, address.Undef, vreg, rem, checkPeriod, uint64(time.Now().Unix()), f); err != nil {
 			return xerrors.Errorf("write genesis car: %w", err)
 		}
 

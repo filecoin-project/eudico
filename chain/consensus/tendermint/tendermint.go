@@ -25,6 +25,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -64,7 +65,9 @@ type Tendermint struct {
 
 	subMgr subnet.SubnetMgr
 
-	netName hierarchical.SubnetID
+	netName address.SubnetID
+
+	r *resolver.Resolver
 
 	client *httptendermintrpcclient.HTTP
 
@@ -73,10 +76,10 @@ type Tendermint struct {
 	events <-chan coretypes.ResultEvent
 }
 
-func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon.Schedule,
+func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon.Schedule, r *resolver.Resolver,
 	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
 
-	subnetID := hierarchical.SubnetID(netName)
+	subnetID := address.SubnetID(netName)
 
 	tendermintClient, err := httptendermintrpcclient.New(NodeAddr())
 	if err != nil {
@@ -159,7 +162,7 @@ func (tendermint *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBl
 		log.Warn("Got block from the future, but within threshold", h.Timestamp, build.Clock.Now().Unix())
 	}
 
-	msgsChecks := common.CheckMsgsWithoutBlockSig(ctx, tendermint.store, tendermint.sm, tendermint.subMgr, tendermint.netName, b, baseTs)
+	msgsChecks := common.CheckMsgsWithoutBlockSig(ctx, tendermint.store, tendermint.sm, tendermint.subMgr, tendermint.r, tendermint.netName, b, baseTs)
 
 	minerCheck := async.Err(func() error {
 		if err := tendermint.minerIsValid(b.Header.Miner); err != nil {
@@ -261,7 +264,7 @@ func (tendermint *Tendermint) validateBlock(ctx context.Context, b *types.FullBl
 		log.Warn("Got block from the future, but within threshold", h.Timestamp, build.Clock.Now().Unix())
 	}
 
-	msgsChecks := common.CheckMsgsWithoutBlockSig(ctx, tendermint.store, tendermint.sm, tendermint.subMgr, tendermint.netName, b, baseTs)
+	msgsChecks := common.CheckMsgsWithoutBlockSig(ctx, tendermint.store, tendermint.sm, tendermint.subMgr, tendermint.r, tendermint.netName, b, baseTs)
 
 	minerCheck := async.Err(func() error {
 		if err := tendermint.minerIsValid(b.Header.Miner); err != nil {

@@ -100,13 +100,13 @@ func CheckMsgs(ctx context.Context, store *store.ChainStore, sm *stmgr.StateMana
 
 }
 
-func CheckMsgsWithoutBlockSig(ctx context.Context, store *store.ChainStore, sm *stmgr.StateManager, submgr subnet.SubnetMgr, netName hierarchical.SubnetID, b *types.FullBlock, baseTs *types.TipSet) []async.ErrorFuture {
+func CheckMsgsWithoutBlockSig(ctx context.Context, store *store.ChainStore, sm *stmgr.StateManager, submgr subnet.SubnetMgr, r *resolver.Resolver, netName address.SubnetID, b *types.FullBlock, baseTs *types.TipSet) []async.ErrorFuture {
 	msgsCheck := async.Err(func() error {
 		if b.Cid() == build.WhitelistedBlock {
 			return nil
 		}
 
-		if err := checkBlockMessages(ctx, store, sm, submgr, netName, b, baseTs); err != nil {
+		if err := checkBlockMessages(ctx, store, sm, submgr, r, netName, b, baseTs); err != nil {
 			return xerrors.Errorf("block had invalid messages: %w", err)
 		}
 		return nil
@@ -394,7 +394,8 @@ func FilterBlockMessages(
 	str *store.ChainStore,
 	sm *stmgr.StateManager,
 	submgr subnet.SubnetMgr,
-	netName hierarchical.SubnetID,
+	r *resolver.Resolver,
+	netName address.SubnetID,
 	b *types.FullBlock,
 	baseTs *types.TipSet) (*ValidatedMessages, error) {
 	/*
@@ -555,13 +556,13 @@ func FilterBlockMessages(
 	// If subnet manager is not set we are in the root chain and we don't need to get parentSCA
 	// state
 	if submgr != nil {
-		parentSCA, pstore, err = getSCAState(ctx, sm, submgr, netName.Parent())
+		parentSCA, pstore, err = getSCAState(ctx, sm, submgr, netName.Parent(), baseTs)
 		if err != nil {
 			return nil, err
 		}
 	}
 	// Get SCA state in subnet.
-	snSCA, snstore, err = getSCAState(ctx, sm, submgr, netName)
+	snSCA, snstore, err = getSCAState(ctx, sm, submgr,  netName, baseTs)
 	if err != nil {
 		return nil, err
 	}
@@ -569,7 +570,7 @@ func FilterBlockMessages(
 	var validCrossMsgs []*types.Message
 	// Check cross messages
 	for i, m := range b.CrossMessages {
-		if err := checkCrossMsg(pstore, snstore, parentSCA, snSCA, m); err != nil {
+		if err := checkCrossMsg(ctx, r, pstore, snstore, parentSCA, snSCA, m); err != nil {
 			log.Infof("failed to check message %s: %w", m.Cid(), err)
 			continue
 		}

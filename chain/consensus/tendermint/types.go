@@ -2,10 +2,9 @@ package tendermint
 
 import (
 	"bytes"
+	"github.com/filecoin-project/go-address"
 
 	"github.com/filecoin-project/lotus/chain/types"
-
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 )
 
 const (
@@ -36,7 +35,7 @@ func (msg *RegistrationMessage) Serialize() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func NewRegistrationMessageBytes(name hierarchical.SubnetID) ([]byte, error) {
+func NewRegistrationMessageBytes(name address.SubnetID) ([]byte, error) {
 	msg := RegistrationMessage{
 		Name: []byte(name.String()),
 	}

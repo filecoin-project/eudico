@@ -12,7 +12,6 @@ import (
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
@@ -59,7 +58,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		if err != nil {
 			return err
 		}
-		crossMsgs, err := api.GetCrossMsgsPool(ctx, hierarchical.SubnetID(nn), base.Height()+1)
+		crossMsgs, err := api.GetCrossMsgsPool(ctx, address.SubnetID(nn), base.Height()+1)
 		if err != nil {
 			log.Errorw("selecting cross-messages failed", "error", err)
 		}
@@ -216,7 +215,7 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 		return nil, xerrors.Errorf("load parent tipset failed (%s): %w", h.Parents, err)
 	}
 
-	validMsgs, err := common.FilterBlockMessages(ctx, tendermint.store, tendermint.sm, tendermint.subMgr, tendermint.netName, b, baseTs)
+	validMsgs, err := common.FilterBlockMessages(ctx, tendermint.store, tendermint.sm, tendermint.subMgr, tendermint.r, tendermint.netName, b, baseTs)
 	if validMsgs.BLSMessages != nil {
 		b.BlsMessages = validMsgs.BLSMessages
 	}
