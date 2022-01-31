@@ -91,6 +91,17 @@ func (a Actor) RemoveMiners(rt Runtime, params *AddMinerParams) *abi.EmptyValue 
 		st.MinerCount -= int64(len(params.Miners))
 		// TODO: change this function to remove the list instead
 		st.Miners = append(st.Miners,params.Miners...)
+
+		//we remove the duplicates from the list (if any)
+		keys := make(map[string]bool)
+    	list := []string{}	
+    	for _, entry := range st.Miners {
+        	if _, value := keys[entry]; !value {
+            	keys[entry] = true
+            	list = append(list, entry)
+        }
+        st.Miners = list
+    }    
 	})
 	return nil
 }
