@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"reflect"
 
 	"github.com/BurntSushi/toml"
 	"github.com/Zondax/multi-party-sig/pkg/math/curve"
@@ -361,8 +362,8 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 
 		// If Power Actors list has changed start DKG
 		// Changes detected so generate new key
-		if oldSt.MinerCount != newSt.MinerCount {
-		//if oldSt.Miners != newSt.Miners {
+		//if oldSt.MinerCount != newSt.MinerCount {
+		if !reflect.DeepEqual(oldSt.Miners, newSt.Miners) {
 			log.Infow("Generate new aggregated key")
 			err := c.GenerateNewKeys(ctx, newSt.Miners)
 			if err != nil {
