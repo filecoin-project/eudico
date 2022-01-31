@@ -3,62 +3,18 @@ package tendermint
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/hex"
-	"fmt"
-	"sync"
 	"time"
 
-	abci "github.com/tendermint/tendermint/abci/types"
 	httptendermintrpcclient "github.com/tendermint/tendermint/rpc/client/http"
-	tenderminttypes "github.com/tendermint/tendermint/types"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/crypto"
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/types"
 )
-
-// finalityWait is the number of epochs that we will wait
-// before being able to re-propose a msg.
-const (
-	finalityWait = 100
-	SignedMessageType = 1
-	CrossMessageType = 2
-	RegistrationMessageType = 3
-)
-
-func newMessagePool() *msgPool {
-	return &msgPool{pool: make(map[[32]byte]abi.ChainEpoch)}
-}
-
-//TODO: messages should be removed from the pool after some time
-type msgPool struct {
-	lk   sync.RWMutex
-	pool map[[32]byte]abi.ChainEpoch
-}
-
-func (p *msgPool) addMessage(tx []byte, epoch abi.ChainEpoch) {
-	p.lk.Lock()
-	defer p.lk.Unlock()
-
-	id := sha256.Sum256(tx)
-	p.pool[id] = epoch
-}
-
-func (p *msgPool) shouldSubmitMessage(tx []byte, currentEpoch abi.ChainEpoch) bool {
-	p.lk.RLock()
-	defer p.lk.RUnlock()
-
-	id := sha256.Sum256(tx)
-	proposedAt, proposed := p.pool[id]
-
-	return !proposed || proposedAt + finalityWait < currentEpoch
-}
 
 var pool = newMessagePool()
 
@@ -103,11 +59,11 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		if err != nil {
 			return err
 		}
-		crossmsgs, err := api.GetCrossMsgsPool(ctx, hierarchical.SubnetID(nn), base.Height()+1)
+		crossMsgs, err := api.GetCrossMsgsPool(ctx, hierarchical.SubnetID(nn), base.Height()+1)
 		if err != nil {
 			log.Errorw("selecting cross-messages failed", "error", err)
 		}
-		log.Infof("CrossMsgs being proposed in block @%s: %d", base.Height()+1, len(crossmsgs))
+		log.Infof("CrossMsgs being proposed in block @%s: %d", base.Height()+1, len(crossMsgs))
 
 		for _, msg := range msgs {
 			tx, err := msg.Serialize()
@@ -136,7 +92,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			}
 		}
 
-		for _, msg := range crossmsgs {
+		for _, msg := range crossMsgs {
 			tx, err := msg.Serialize()
 			if err != nil {
 				log.Error(err)
@@ -164,7 +120,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		}
 
 		bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
-			Miner: miner,
+			Miner:            miner,
 			Parents:          base.Key(),
 			BeaconValues:     nil,
 			Ticket:           nil,
@@ -198,47 +154,6 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	}
 }
 
-func parseTendermintBlock(b *tenderminttypes.Block, dst *tendermintBlockInfo) {
-	var msgs []*types.SignedMessage
-	var crossMsgs []*types.Message
-
-	for _, tx := range b.Txs {
-		stx := tx.String()
-		// Transactions from Tendermint are in the Tx{} format.
-		txo := stx[3 : len(stx)-1]
-		txoData, err := hex.DecodeString(txo)
-		if err != nil {
-			log.Error("unable to decode Tendermint messages:", err)
-			continue
-		}
-		msg, _, err := parseTx(txoData)
-		if err != nil {
-			log.Error("unable to decode a message from Tendermint block:", err)
-			continue
-		}
-		log.Info("received Tx:", msg)
-
-		switch m := msg.(type) {
-		case *types.SignedMessage:
-			msgs = append(msgs, m)
-		case *types.Message:
-			crossMsgs = append(crossMsgs, m)
-		default:
-			log.Info("unknown message type")
-		}
-	}
-	dst.messages = msgs
-	dst.crossMsgs = crossMsgs
-}
-
-type tendermintBlockInfo struct {
-	timestamp uint64
-	messages []*types.SignedMessage
-	crossMsgs []*types.Message
-	minerAddr []byte
-	hash []byte
-}
-
 func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.BlockTemplate) (*types.FullBlock, error) {
 	log.Infof("starting creating block for epoch %d", bt.Epoch)
 	defer log.Infof("stopping creating block for epoch %d", bt.Epoch)
@@ -266,7 +181,7 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 					info := tendermintBlockInfo{
 						timestamp: uint64(resp.Block.Time.Unix()),
 						minerAddr: resp.Block.ProposerAddress.Bytes(),
-						hash: resp.Block.Hash().Bytes(),
+						hash:      resp.Block.Hash().Bytes(),
 					}
 					parseTendermintBlock(resp.Block, &info)
 
@@ -277,7 +192,7 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 	}()
 	tb := <-tendermintBlockInfoChan
 
-	addr, err :=  address.NewSecp256k1Address(tb.minerAddr)
+	addr, err := address.NewSecp256k1Address(tb.minerAddr)
 	if err != nil {
 		log.Info("unable to decode miner addr:", err)
 	}
@@ -289,7 +204,7 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 	//TODO: what is the miner addr?
 	//bt.Miner = addr
 
-	b, err := common.SanitizeMessagesAndPrepareBlockForSignature(ctx, tendermint.sm, bt)
+	b, err := sanitizeMessagesAndPrepareBlockForSignature(ctx, tendermint.sm, bt)
 	if err != nil {
 		log.Info(err)
 		return nil, err
@@ -312,62 +227,19 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 		b.CrossMessages = validMsgs.CrossMsgs
 	}
 
-
 	err = signBlock(b, tb.hash)
 	if err != nil {
 		return nil, err
 	}
 
 	/*
-	err = tendermint.validateBlock(ctx, b)
-	if err != nil {
-		log.Info(err)
-		return nil, err
-	}
+		err = tendermint.validateBlock(ctx, b)
+		if err != nil {
+			log.Info(err)
+			return nil, err
+		}
 
-	 */
+	*/
 
 	return b, nil
-}
-
-func signBlock(b *types.FullBlock, h []byte) error {
-	b.Header.BlockSig = &crypto.Signature{
-		//TODO: use this incorrect type to not modify "crypto/signature" upstream
-		Type: crypto.SigTypeSecp256k1,
-		Data: h,
-	}
-	return nil
-}
-
-type RegistrationMessage struct {
-	name []byte
-}
-func parseTx(tx []byte) (interface{}, uint32, error) {
-	ln := len(tx)
-	if ln <=2 {
-		return nil, codeBadRequest, fmt.Errorf("tx len %d is too small", ln)
-	}
-
-	var err error
-	var msg interface{}
-
-	lastByte := tx[ln-1]
-	switch lastByte {
-	case SignedMessageType:
-		msg, err = types.DecodeSignedMessage(tx[:ln-1])
-	case CrossMessageType:
-		msg, err = types.DecodeMessage(tx[:ln-1])
-	case RegistrationMessageType:
-		msg, err = &RegistrationMessage{
-			name:tx[:ln-1],
-		}, nil
-	default:
-		err = fmt.Errorf("unknown message type %d", lastByte)
-	}
-
-	if err != nil {
-		return nil, codeBadRequest, err
-	}
-
-	return msg, abci.CodeTypeOK, nil
 }

@@ -382,10 +382,10 @@ func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.St
 	return vm.Copy(ctx, tmpbs, str.ChainBlockstore(), mrcid)
 }
 
-type ValidatedMessages struct{
-	BLSMessages []*types.Message
+type ValidatedMessages struct {
+	BLSMessages   []*types.Message
 	SecpkMessages []*types.SignedMessage
-	CrossMsgs []*types.Message
+	CrossMsgs     []*types.Message
 }
 
 func FilterBlockMessages(
@@ -397,27 +397,27 @@ func FilterBlockMessages(
 	b *types.FullBlock,
 	baseTs *types.TipSet) (*ValidatedMessages, error) {
 	/*
-	{
-		var sigCids []cid.Cid // this is what we get for people not wanting the marshalcbor method on the cid type
-		var pubks [][]byte
+		{
+			var sigCids []cid.Cid // this is what we get for people not wanting the marshalcbor method on the cid type
+			var pubks [][]byte
 
-		for _, m := range b.BlsMessages {
-			sigCids = append(sigCids, m.Cid())
+			for _, m := range b.BlsMessages {
+				sigCids = append(sigCids, m.Cid())
 
-			pubk, err := sm.GetBlsPublicKey(ctx, m.From, baseTs)
-			if err != nil {
-				return xerrors.Errorf("failed to load bls public to validate block: %w", err)
+				pubk, err := sm.GetBlsPublicKey(ctx, m.From, baseTs)
+				if err != nil {
+					return xerrors.Errorf("failed to load bls public to validate block: %w", err)
+				}
+
+				pubks = append(pubks, pubk)
 			}
 
-			pubks = append(pubks, pubk)
+			if err := consensus.VerifyBlsAggregate(ctx, b.Header.BLSAggregate, sigCids, pubks); err != nil {
+				return xerrors.Errorf("bls aggregate signature was invalid: %w", err)
+			}
 		}
 
-		if err := consensus.VerifyBlsAggregate(ctx, b.Header.BLSAggregate, sigCids, pubks); err != nil {
-			return xerrors.Errorf("bls aggregate signature was invalid: %w", err)
-		}
-	}
-
-	 */
+	*/
 	var validBlsMessages []*types.Message
 	var validSecpkMessages []*types.SignedMessage
 
@@ -633,9 +633,9 @@ func FilterBlockMessages(
 	}
 
 	return &ValidatedMessages{
-		BLSMessages: validBlsMessages,
+		BLSMessages:   validBlsMessages,
 		SecpkMessages: validSecpkMessages,
-		CrossMsgs: validCrossMsgs,
+		CrossMsgs:     validCrossMsgs,
 	}, nil
 }
 

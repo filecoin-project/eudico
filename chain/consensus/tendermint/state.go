@@ -9,17 +9,17 @@ import (
 type State struct {
 	m              sync.Mutex
 	filecoinBlocks map[[32]byte][]byte
-	subnets map[[32]byte]int64
+	subnets        map[[32]byte]int64
 	commitCount    int64
-	height int64
+	height         int64
 }
 
 func NewState() *State {
 	return &State{
 		filecoinBlocks: make(map[[32]byte][]byte),
 		commitCount:    0,
-		height: 0,
-		subnets: make(map[[32]byte]int64),
+		height:         0,
+		subnets:        make(map[[32]byte]int64),
 	}
 }
 
@@ -32,7 +32,7 @@ func (s *State) GetBlock(id [32]byte) ([]byte, bool) {
 	return b, ok
 }
 
-func (s *State) AddSubnet(subnetName []byte)  {
+func (s *State) AddSubnet(subnetName []byte) {
 	s.m.Lock()
 	defer s.m.Unlock()
 
@@ -44,7 +44,7 @@ func (s *State) AddSubnet(subnetName []byte)  {
 	}
 }
 
-func (s *State) GetSubnetOffset(subnetName []byte) int64  {
+func (s *State) GetSubnetOffset(subnetName []byte) int64 {
 	s.m.Lock()
 	defer s.m.Unlock()
 
@@ -87,7 +87,6 @@ func (s *State) Commits() int64 {
 
 	return s.commitCount
 }
-
 
 func copyState(dst, src *State) {
 	src.m.Lock()

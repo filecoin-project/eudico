@@ -1,13 +1,8 @@
 package tendermint
 
 import (
-	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/binary"
-	"encoding/hex"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/Gurpartap/async"
@@ -16,7 +11,6 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	httptendermintrpcclient "github.com/tendermint/tendermint/rpc/client/http"
 	"github.com/tendermint/tendermint/rpc/coretypes"
-	tenderminttypes "github.com/tendermint/tendermint/types"
 	"go.opencensus.io/stats"
 	"golang.org/x/xerrors"
 
@@ -39,42 +33,20 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
+
 const (
 	Sidecar = "http://127.0.0.1:26657"
+
+	// TODO: is that correct or should be adapted?
+	// Blocks that are more than MaxHeightDrift epochs above
+	// the theoretical max height based on systime are quickly rejected
+	MaxHeightDrift = 5
 )
 
 var (
-	log = logging.Logger("tendermint-consensus")
-	_ consensus.Consensus = &Tendermint{}
+	log                     = logging.Logger("tendermint-consensus")
+	_   consensus.Consensus = &Tendermint{}
 )
-
-func NodeAddr() string {
-	addr := os.Getenv("TENDERMINT_NODE_ADDR")
-	if addr == "" {
-		return Sidecar
-	}
-	return addr
-}
-
-func GetTendermintID() (address.Address, error){
-	client, err := httptendermintrpcclient.New(Sidecar)
-	if err != nil {
-		// TODO: Tendermint: don't use panic
-		panic("unable to access a tendermint client")
-	}
-	info, err := client.Status(context.TODO())
-	if err != nil {
-		// TODO: Tendermint: don't use panic
-		panic(err)
-	}
-	id := string(info.NodeInfo.NodeID)
-	addr, err := address.NewFromString(id)
-	if err != nil {
-		// TODO: Tendermint: don't use panic
-		panic(err)
-	}
-	return addr, nil
-}
 
 type Tendermint struct {
 	// The interface for accessing and putting tipsets into local storage
@@ -101,16 +73,10 @@ type Tendermint struct {
 	events <-chan coretypes.ResultEvent
 }
 
-func registrationMessage(name hierarchical.SubnetID) []byte {
-	b := []byte(name.String())
-	b = append(b, RegistrationMessageType)
-	return b
-}
-
 func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon.Schedule,
 	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
 
-	nn := hierarchical.SubnetID(netName)
+	subnetID := hierarchical.SubnetID(netName)
 
 	tendermintClient, err := httptendermintrpcclient.New(NodeAddr())
 	if err != nil {
@@ -122,18 +88,21 @@ func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon
 	}
 	log.Info(info)
 
-	resp, err := tendermintClient.BroadcastTxCommit(context.TODO(), registrationMessage(nn))
+	regMsg, err := NewRegistrationMessageBytes(subnetID)
+	if err != nil {
+		log.Fatalf("unable to create a registration message: %s", err)
+	}
+	regResp, err := tendermintClient.BroadcastTxCommit(context.TODO(), regMsg)
 	if err != nil {
 		log.Fatalf("unable to register network: %s", err)
 	}
 
-	var offset int64
-	buf := bytes.NewBuffer(resp.DeliverTx.Data)
-	err = binary.Read(buf, binary.LittleEndian, &offset)
+	regSubnet, err := DecodeRegistrationMessage(regResp.DeliverTx.Data)
 	if err != nil {
-		log.Fatalf("unable to convert offset: %s", err.Error())
+		log.Fatalf("unable to decode registration response: %s", err.Error())
 	}
-	log.Warnf("!!!!! Tendermint offset for %s is %d", nn.String(), offset)
+
+	log.Warnf("!!!!! Tendermint offset for %s is %d", regSubnet.Name, regSubnet.Offset)
 
 	err = tendermintClient.Start()
 	if err != nil {
@@ -145,7 +114,7 @@ func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon
 	query := "tm.event = 'NewBlock'"
 	events, err := tendermintClient.Subscribe(context.TODO(), "test-client", query)
 	if err != nil {
-		log.Fatalf("unable to subscribe to the Tendermint events: %s",err)
+		log.Fatalf("unable to subscribe to the Tendermint events: %s", err)
 	}
 
 	return &Tendermint{
@@ -155,20 +124,11 @@ func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon
 		verifier: verifier,
 		genesis:  genesis,
 		subMgr:   submgr,
-		netName:  nn,
-		client: tendermintClient,
-		events: events,
-		offset: offset,
+		netName:  subnetID,
+		client:   tendermintClient,
+		events:   events,
+		offset:   regSubnet.Offset,
 	}
-}
-
-// Weight defines weight. TODO: Tendermint: define wieght for tendermint
-func Weight(ctx context.Context, stateBs bstore.Blockstore, ts *types.TipSet) (types.BigInt, error) {
-	if ts == nil {
-		return types.NewInt(0), nil
-	}
-
-	return big.NewInt(int64(ts.Height() + 1)), nil
 }
 
 func (tendermint *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBlock) (err error) {
@@ -253,7 +213,7 @@ func (tendermint *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBl
 	}
 
 	// Tendermint specific checks.
-	height := int64(h.Height)+tendermint.offset
+	height := int64(h.Height) + tendermint.offset
 	log.Infof("Try to access Tendermint RPC from ValidateBlock")
 	tendermintBlock, err := tendermint.client.Block(ctx, &height)
 	if err != nil {
@@ -354,7 +314,7 @@ func (tendermint *Tendermint) validateBlock(ctx context.Context, b *types.FullBl
 		return mulErr
 	}
 
-	height := int64(h.Height)+tendermint.offset
+	height := int64(h.Height) + tendermint.offset
 	tendermintBlock, err := tendermint.client.Block(ctx, &height)
 	if err != nil {
 		return xerrors.Errorf("unable to get the Tendermint block by height %d", height)
@@ -370,78 +330,6 @@ func (tendermint *Tendermint) validateBlock(ctx context.Context, b *types.FullBl
 		return xerrors.New("block is not sealed")
 	}
 	return nil
-}
-
-func getMessageMapFromTendermintBlock(tb *tenderminttypes.Block) (map[[32]byte]bool, error) {
-	msgs := make(map[[32]byte]bool)
-	for _, msg := range tb.Txs {
-		tx := msg.String()
-		// Transactions from Tendermint are in the Tx{} format. So we have to remove T,x, { and } characters.
-		// Then we have to remove last two characters that are message type.
-		txo := tx[3:len(tx)-3]
-		txoData, err := hex.DecodeString(txo)
-		if err != nil {
-			return nil, err
-		}
-		id := sha256.Sum256(txoData)
-		msgs[id] = true
-	}
-	return msgs, nil
-}
-
-// isBlockSealed checks that the following conditions hold:
-//     - all messages from the Filecoin block are contained in the Tendermint block.
-//     - Tendermint block hash is equal to Filecoin BlockSig field.
-func isBlockSealed(fb *types.FullBlock, tb *tenderminttypes.Block) (bool, error) {
-	tendermintMessagesHashes, err := getMessageMapFromTendermintBlock(tb)
-	if err != nil {
-		return false, err
-	}
-
-	for _, msg := range fb.BlsMessages {
-		bs, err := msg.Serialize()
-		if err != nil {
-			return false, err
-		}
-		id := sha256.Sum256(bs)
-		_, found := tendermintMessagesHashes[id]
-		if !found {
-			log.Info("bls messages are not sealed")
-			return false, nil
-		}
-	}
-
-	for _, msg := range fb.SecpkMessages {
-		bs, err := msg.Serialize()
-		if err != nil {
-			return false, err
-		}
-		id := sha256.Sum256(bs)
-		_, found := tendermintMessagesHashes[id]
-		if !found {
-			log.Info("secpk messages are not sealed")
-			return false, nil
-		}
-	}
-
-	for _, msg := range fb.CrossMessages {
-		bs, err := msg.Serialize()
-		if err != nil {
-			return false, err
-		}
-		id := sha256.Sum256(bs)
-		_, found := tendermintMessagesHashes[id]
-		if !found {
-			log.Info("cross messages are not sealed")
-			return false, nil
-		}
-	}
-
-	if !bytes.Equal(fb.Header.BlockSig.Data, tb.Hash().Bytes()) {
-		log.Infof("block tendermint hash is invalid %x", fb.Header.BlockSig.Data)
-		return false, xerrors.New("block tendermint hash is invalid")
-	}
-	return true, nil
 }
 
 func (tendermint *Tendermint) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
@@ -508,7 +396,12 @@ func (tendermint *Tendermint) minerIsValid(maddr address.Address) error {
 	return xerrors.Errorf("miner address must be a key")
 }
 
-// TODO: is that correct or should be adapted?
-// Blocks that are more than MaxHeightDrift epochs above
-// the theoretical max height based on systime are quickly rejected
-const MaxHeightDrift = 5
+// Weight defines weight.
+// TODO: should we adopt weight for tendermint?
+func Weight(ctx context.Context, stateBs bstore.Blockstore, ts *types.TipSet) (types.BigInt, error) {
+	if ts == nil {
+		return types.NewInt(0), nil
+	}
+
+	return big.NewInt(int64(ts.Height() + 1)), nil
+}

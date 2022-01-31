@@ -1,7 +1,6 @@
 package tendermint
 
 import (
-	"encoding/binary"
 	"fmt"
 	"os"
 	"time"
@@ -12,24 +11,24 @@ import (
 )
 
 const (
-	codeBadRequest = 513 // arbitrary non-zero
+	codeBadRequest   = 513 // arbitrary non-zero
 	codeStateFailure = 514
 )
 
 var (
-	version = "0.0.2"
-	_ abci.Application = (*Application)(nil)
+	version                  = "0.0.2"
+	_       abci.Application = (*Application)(nil)
 )
 
 type Application struct {
-	mempool *State
+	mempool   *State
 	consensus *State
 	logger    logger.Logger
 }
 
 func NewApplication() (*Application, error) {
 	return &Application{
-		mempool: NewState(),
+		mempool:   NewState(),
 		consensus: NewState(),
 		logger:    logger.NewLogfmtLogger(logger.NewSyncWriter(os.Stdout)),
 	}, nil
@@ -83,7 +82,7 @@ func (a *Application) Query(req abci.RequestQuery) (resp abci.ResponseQuery) {
 	}()
 
 	return abci.ResponseQuery{
-		Code:  abci.CodeTypeOK,
+		Code: abci.CodeTypeOK,
 	}
 }
 
@@ -145,14 +144,24 @@ func (a *Application) DeliverTx(req abci.RequestDeliverTx) (resp abci.ResponseDe
 
 	switch subnet := msg.(type) {
 	case *RegistrationMessage:
-		height := a.consensus.GetSubnetOffset(subnet.name)
+		height := a.consensus.GetSubnetOffset(subnet.Name)
 		log.Info("Height:", height)
-		b := make([]byte, 8)
-		binary.LittleEndian.PutUint64(b, uint64(height))
+		regResp := RegistrationMessage {
+			Name: subnet.Name,
+			Offset: height,
+		}
+
+		data, err := regResp.Serialize()
+		if err != nil {
+			return abci.ResponseDeliverTx{
+				Code: codeBadRequest,
+				Log:  err.Error(),
+			}
+		}
 
 		return abci.ResponseDeliverTx{
 			Code: abci.CodeTypeOK,
-			Data: b,
+			Data: data,
 		}
 	default:
 	}

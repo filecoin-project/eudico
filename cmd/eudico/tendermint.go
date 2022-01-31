@@ -129,11 +129,11 @@ var tendermintMinerCmd = &cli.Command{
 }
 
 var tendermintApplicationCmd = &cli.Command{
-	Name: "application",
+	Name:  "application",
 	Usage: "run tendermint consensus application",
-	Flags: []cli.Flag {
+	Flags: []cli.Flag{
 		&cli.StringFlag{
-			Name: "addr",
+			Name:  "addr",
 			Value: "tcp://127.0.0.1:26658",
 			Usage: "socket address",
 		},
