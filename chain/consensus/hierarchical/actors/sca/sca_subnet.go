@@ -5,7 +5,6 @@ import (
 	abi "github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
-	hierarchical "github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	schema "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	ltypes "github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
@@ -16,8 +15,8 @@ import (
 )
 
 type Subnet struct {
-	ID       hierarchical.SubnetID // human-readable name of the subnet ID (path in the hierarchy)
-	ParentID hierarchical.SubnetID
+	ID       address.SubnetID // human-readable name of the subnet ID (path in the hierarchy)
+	ParentID address.SubnetID
 	Stake    abi.TokenAmount
 	// The SCA doesn't keep track of the stake from miners, just locks the funds.
 	// Is up to the subnet actor to handle this and distribute the stake
@@ -70,21 +69,22 @@ func (sh *Subnet) freezeFunds(rt runtime.Runtime, source address.Address, value 
 	sh.CircSupply = big.Add(sh.CircSupply, value)
 }
 
-func (sh *Subnet) addFundMsg(rt runtime.Runtime, value big.Int) {
-	// Source
-	// NOTE: We are including here the ID address from the source, but the user
-	// may have a completely different ID address in the subnet. Nodes will have
-	// to translate this ID address to the right SECP/BLS address that owns the
-	// account
-	source := rt.Caller()
+func (sh *Subnet) addFundMsg(rt runtime.Runtime, secp address.Address, value big.Int) {
+
+	// Transform To and From to HAddresses
+	to, err := address.NewHAddress(sh.ID, secp)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
+	from, err := address.NewHAddress(sh.ID.Parent(), secp)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
 
 	// Build message.
 	//
 	// Fund messages include the same to and from.
 	msg := &ltypes.Message{
-		To:         source,
-		From:       source,
+		To:         to,
+		From:       from,
 		Value:      value,
+		Method:     builtin.MethodSend,
 		Nonce:      sh.Nonce,
 		GasLimit:   1 << 30, // This is will be applied as an implicit msg, add enough gas
 		GasFeeCap:  ltypes.NewInt(0),
@@ -135,7 +135,7 @@ func getTopDownMsg(crossMsgs *adt.Array, nonce uint64) (*ltypes.Message, bool, e
 }
 
 // TopDownMsgFromNonce gets the latest topDownMessages from a specific nonce
-// (including the one of the specified nonce, i.e. [nonce, latest], both limits
+// (including the one specified, i.e. [nonce, latest], both limits
 // included).
 func (sh *Subnet) TopDownMsgFromNonce(s adt.Store, nonce uint64) ([]*ltypes.Message, error) {
 	crossMsgs, err := adt.AsArray(s, sh.TopDownMsgs, CrossMsgsAMTBitwidth)

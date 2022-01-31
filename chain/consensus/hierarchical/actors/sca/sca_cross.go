@@ -3,11 +3,11 @@ package sca
 import (
 	"context"
 
+	address "github.com/filecoin-project/go-address"
 	abi "github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	bstore "github.com/filecoin-project/lotus/blockstore"
-	hierarchical "github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	schema "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	ltypes "github.com/filecoin-project/lotus/chain/types"
 	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
@@ -20,8 +20,8 @@ import (
 	xerrors "golang.org/x/xerrors"
 )
 
-// CrossMsgMeta aggregates all the information related to crossMsgs that need to be persisted
-type CrossMsgMeta struct {
+// CrossMsgs aggregates all the information related to crossMsgs that need to be persisted
+type CrossMsgs struct {
 	Msgs  []ltypes.Message      // Raw msgs from the subnet
 	Metas []schema.CrossMsgMeta // Metas propagated from child subnets
 }
@@ -33,8 +33,8 @@ type MetaTag struct {
 	MetasCid cid.Cid
 }
 
-// Cid computes the cid for the CrossMsgMeta
-func (cm *CrossMsgMeta) Cid() (cid.Cid, error) {
+// Cid computes the cid for the CrossMsg
+func (cm *CrossMsgs) Cid() (cid.Cid, error) {
 	cst := cbor.NewCborStore(bstore.NewMemory())
 	store := blockadt.WrapStore(context.TODO(), cst)
 	cArr := blockadt.MakeEmptyArray(store)
@@ -85,11 +85,11 @@ func (cm *CrossMsgMeta) Cid() (cid.Cid, error) {
 }
 
 // AddMsg adds a the Cid of a new message to MsgMeta
-func (cm *CrossMsgMeta) AddMsg(msg ltypes.Message) {
+func (cm *CrossMsgs) AddMsg(msg ltypes.Message) {
 	cm.Msgs = append(cm.Msgs, msg)
 }
 
-func (cm *CrossMsgMeta) hasEqualMeta(meta *schema.CrossMsgMeta) bool {
+func (cm *CrossMsgs) hasEqualMeta(meta *schema.CrossMsgMeta) bool {
 	for _, m := range cm.Metas {
 		if m.Equal(meta) {
 			return true
@@ -98,8 +98,8 @@ func (cm *CrossMsgMeta) hasEqualMeta(meta *schema.CrossMsgMeta) bool {
 	return false
 }
 
-// AddMetas adds a list of MsgMetas from child subnets to the CrossMsgMeta
-func (cm *CrossMsgMeta) AddMetas(metas []schema.CrossMsgMeta) {
+// AddMetas adds a list of MsgMetas from child subnets to the CrossMsgs
+func (cm *CrossMsgs) AddMetas(metas []schema.CrossMsgMeta) {
 	for _, m := range metas {
 		// If the same meta is already there don't include it.
 		if cm.hasEqualMeta(&m) {
@@ -111,22 +111,29 @@ func (cm *CrossMsgMeta) AddMetas(metas []schema.CrossMsgMeta) {
 
 // AddMsgMeta adds a the Cid of a msgMeta from a child subnet
 // to aggregate it and propagated in the checkpoint
-func (cm *CrossMsgMeta) AddMsgMeta(from, to hierarchical.SubnetID, meta schema.CrossMsgMeta) {
+func (cm *CrossMsgs) AddMsgMeta(from, to address.SubnetID, meta schema.CrossMsgMeta) {
 	cm.Metas = append(cm.Metas, meta)
 }
 
-func (st *SCAState) releaseMsg(rt runtime.Runtime, value big.Int) {
+func (st *SCAState) releaseMsg(rt runtime.Runtime, value big.Int, to address.Address) {
 	// The way we identify it is a release message from the subnet is by
 	// setting the burntFundsActor as the from of the message
 	// See hierarchical/types.go
 	source := builtin.BurntFundsActorAddr
 
+	// Transform To and From to HAddresses
+	to, err := address.NewHAddress(st.NetworkName.Parent(), to)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
+	from, err := address.NewHAddress(st.NetworkName, source)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
+
 	// Build message.
 	msg := ltypes.Message{
-		To:         rt.Caller(),
-		From:       source,
+		To:         to,
+		From:       from,
 		Value:      value,
 		Nonce:      st.Nonce,
+		Method:     builtin.MethodSend,
 		GasLimit:   1 << 30, // This is will be applied as an implicit msg, add enough gas
 		GasFeeCap:  ltypes.NewInt(0),
 		GasPremium: ltypes.NewInt(0),
@@ -158,7 +165,7 @@ func (st *SCAState) storeBottomUpMsgMeta(rt runtime.Runtime, meta schema.CrossMs
 	incrementNonce(rt, &st.BottomUpNonce)
 }
 
-func (st *SCAState) GetTopDownMsg(s adt.Store, id hierarchical.SubnetID, nonce uint64) (*ltypes.Message, bool, error) {
+func (st *SCAState) GetTopDownMsg(s adt.Store, id address.SubnetID, nonce uint64) (*ltypes.Message, bool, error) {
 	sh, found, err := st.GetSubnet(s, id)
 	if err != nil {
 		return nil, false, err
@@ -192,6 +199,29 @@ func getBottomUpMsgMeta(crossMsgs *adt.Array, nonce uint64) (*schema.CrossMsgMet
 	return &out, true, nil
 }
 
+// BottomUpMsgFromNonce gets the latest bottomUpMetas from a specific nonce
+// (including the one specified, i.e. [nonce, latest], both limits
+// included).
+func (st *SCAState) BottomUpMsgFromNonce(s adt.Store, nonce uint64) ([]*schema.CrossMsgMeta, error) {
+	crossMsgs, err := adt.AsArray(s, st.BottomUpMsgsMeta, CrossMsgsAMTBitwidth)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to load cross-msgs meta: %w", err)
+	}
+	// FIXME: Consider setting the length of the slice in advance
+	// to improve performance.
+	out := make([]*schema.CrossMsgMeta, 0)
+	for i := nonce; i < st.BottomUpNonce; i++ {
+		meta, found, err := getBottomUpMsgMeta(crossMsgs, i)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			out = append(out, meta)
+		}
+	}
+	return out, nil
+}
+
 // Using this approach to increment nonce to avoid code repetition.
 // We could probably do better and be more efficient if we had generics.
 func incrementNonce(rt runtime.Runtime, nonceCounter *uint64) {
@@ -211,9 +241,9 @@ func incrementNonce(rt runtime.Runtime, nonceCounter *uint64) {
 func (st *SCAState) aggChildMsgMeta(rt runtime.Runtime, ch *schema.Checkpoint, aux map[string][]schema.CrossMsgMeta) {
 	for to, mm := range aux {
 		// Get the cid of MsgMeta from this subnet (if any)
-		metaIndex, msgMeta := ch.CrossMsgMeta(st.NetworkName, hierarchical.SubnetID(to))
+		metaIndex, msgMeta := ch.CrossMsgMeta(st.NetworkName, address.SubnetID(to))
 		if msgMeta == nil {
-			msgMeta = schema.NewCrossMsgMeta(st.NetworkName, hierarchical.SubnetID(to))
+			msgMeta = schema.NewCrossMsgMeta(st.NetworkName, address.SubnetID(to))
 		}
 
 		// If there is already a msgMeta for that to/from update with new message
@@ -225,13 +255,13 @@ func (st *SCAState) aggChildMsgMeta(rt runtime.Runtime, ch *schema.Checkpoint, a
 			ch.SetMsgMetaCid(metaIndex, metaCid)
 		} else {
 			// if not populate a new one
-			meta := &CrossMsgMeta{Metas: mm}
-			msgMetas, err := adt.AsMap(adt.AsStore(rt), st.CheckMsgsMetaRegistry, builtin.DefaultHamtBitwidth)
+			meta := &CrossMsgs{Metas: mm}
+			msgMetas, err := adt.AsMap(adt.AsStore(rt), st.CheckMsgsRegistry, builtin.DefaultHamtBitwidth)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load msgMeta registry")
 			metaCid, err := putMsgMeta(msgMetas, meta)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put updates MsgMeta in registry")
 			// Flush registry
-			st.CheckMsgsMetaRegistry, err = msgMetas.Root()
+			st.CheckMsgsRegistry, err = msgMetas.Root()
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush msgMeta registry")
 			// Append msgMeta to registry
 			msgMeta.MsgsCid = metaCid.Bytes()
@@ -240,7 +270,7 @@ func (st *SCAState) aggChildMsgMeta(rt runtime.Runtime, ch *schema.Checkpoint, a
 	}
 }
 
-func (st *SCAState) storeCheckMsg(rt runtime.Runtime, msg ltypes.Message, from, to hierarchical.SubnetID) {
+func (st *SCAState) storeCheckMsg(rt runtime.Runtime, msg ltypes.Message, from, to address.SubnetID) {
 	// Get the checkpoint for the current window
 	ch := st.currWindowCheckpoint(rt)
 	// Get the cid of MsgMeta
@@ -258,13 +288,13 @@ func (st *SCAState) storeCheckMsg(rt runtime.Runtime, msg ltypes.Message, from, 
 		ch.SetMsgMetaCid(metaIndex, metaCid)
 	} else {
 		// if not populate a new one
-		meta := &CrossMsgMeta{Msgs: []ltypes.Message{msg}}
-		msgMetas, err := adt.AsMap(adt.AsStore(rt), st.CheckMsgsMetaRegistry, builtin.DefaultHamtBitwidth)
+		meta := &CrossMsgs{Msgs: []ltypes.Message{msg}}
+		msgMetas, err := adt.AsMap(adt.AsStore(rt), st.CheckMsgsRegistry, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load msgMeta registry")
 		metaCid, err := putMsgMeta(msgMetas, meta)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put updates MsgMeta in registry")
 		// Flush registry
-		st.CheckMsgsMetaRegistry, err = msgMetas.Root()
+		st.CheckMsgsRegistry, err = msgMetas.Root()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush msgMeta registry")
 		// Append msgMeta to registry
 		msgMeta.MsgsCid = metaCid.Bytes()
@@ -275,8 +305,25 @@ func (st *SCAState) storeCheckMsg(rt runtime.Runtime, msg ltypes.Message, from, 
 
 }
 
-func getMsgMeta(msgMetas *adt.Map, c cid.Cid) (*CrossMsgMeta, bool, error) {
-	var out CrossMsgMeta
+// GetCrossMsgs returns the crossmsgs from a CID in the registry.
+func (st *SCAState) GetCrossMsgs(store adt.Store, c cid.Cid) (*CrossMsgs, bool, error) {
+	msgMetas, err := adt.AsMap(store, st.CheckMsgsRegistry, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return nil, false, err
+	}
+	var out CrossMsgs
+	found, err := msgMetas.Get(abi.CidKey(c), &out)
+	if err != nil {
+		return nil, false, xerrors.Errorf("failed to get crossMsgMeta from registry with cid %v: %w", c, err)
+	}
+	if !found {
+		return nil, false, nil
+	}
+	return &out, true, nil
+}
+
+func getMsgMeta(msgMetas *adt.Map, c cid.Cid) (*CrossMsgs, bool, error) {
+	var out CrossMsgs
 	found, err := msgMetas.Get(abi.CidKey(c), &out)
 	if err != nil {
 		return nil, false, xerrors.Errorf("failed to get crossMsgMeta from registry with cid %v: %w", c, err)
@@ -288,7 +335,7 @@ func getMsgMeta(msgMetas *adt.Map, c cid.Cid) (*CrossMsgMeta, bool, error) {
 }
 
 // PutMsgMeta puts a new msgMeta in registry and returns the Cid of the MsgMeta
-func putMsgMeta(msgMetas *adt.Map, meta *CrossMsgMeta) (cid.Cid, error) {
+func putMsgMeta(msgMetas *adt.Map, meta *CrossMsgs) (cid.Cid, error) {
 	metaCid, err := meta.Cid()
 	if err != nil {
 		return cid.Undef, err
@@ -297,7 +344,7 @@ func putMsgMeta(msgMetas *adt.Map, meta *CrossMsgMeta) (cid.Cid, error) {
 }
 
 // Puts meta in registry, deletes previous one, and flushes updated registry
-func (st *SCAState) putDeleteFlushMeta(rt runtime.Runtime, msgMetas *adt.Map, prevMetaCid cid.Cid, meta *CrossMsgMeta) cid.Cid {
+func (st *SCAState) putDeleteFlushMeta(rt runtime.Runtime, msgMetas *adt.Map, prevMetaCid cid.Cid, meta *CrossMsgs) cid.Cid {
 	// Put updated msgMeta
 	metaCid, err := putMsgMeta(msgMetas, meta)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put updates MsgMeta in registry")
@@ -305,14 +352,14 @@ func (st *SCAState) putDeleteFlushMeta(rt runtime.Runtime, msgMetas *adt.Map, pr
 	err = msgMetas.Delete(abi.CidKey(prevMetaCid))
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to delete previous MsgMeta from registry")
 	// Flush registry
-	st.CheckMsgsMetaRegistry, err = msgMetas.Root()
+	st.CheckMsgsRegistry, err = msgMetas.Root()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush msgMeta registry")
 	return metaCid
 }
 
 // appendMsgToMsgMeta appends the message to MsgMeta in the registry and returns the updated Cid.
 func (st *SCAState) appendMsgToMeta(rt runtime.Runtime, prevMetaCid cid.Cid, msg ltypes.Message) cid.Cid {
-	msgMetas, err := adt.AsMap(adt.AsStore(rt), st.CheckMsgsMetaRegistry, builtin.DefaultHamtBitwidth)
+	msgMetas, err := adt.AsMap(adt.AsStore(rt), st.CheckMsgsRegistry, builtin.DefaultHamtBitwidth)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load msgMeta registry")
 
 	// Get previous meta
@@ -327,7 +374,7 @@ func (st *SCAState) appendMsgToMeta(rt runtime.Runtime, prevMetaCid cid.Cid, msg
 
 // appendMsgToMsgMeta appends the message to MsgMeta in the registry and returns the updated Cid.
 func (st *SCAState) appendMetasToMeta(rt runtime.Runtime, prevMetaCid cid.Cid, metas []schema.CrossMsgMeta) cid.Cid {
-	msgMetas, err := adt.AsMap(adt.AsStore(rt), st.CheckMsgsMetaRegistry, builtin.DefaultHamtBitwidth)
+	msgMetas, err := adt.AsMap(adt.AsStore(rt), st.CheckMsgsRegistry, builtin.DefaultHamtBitwidth)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load msgMeta registry")
 
 	// Get previous meta

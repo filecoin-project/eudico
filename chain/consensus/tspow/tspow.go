@@ -28,6 +28,7 @@ import (
 	param "github.com/filecoin-project/lotus/chain/consensus/common/params"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -91,23 +92,26 @@ type TSPoW struct {
 
 	subMgr subnet.SubnetMgr
 
-	netName hierarchical.SubnetID
+	r *resolver.Resolver
+
+	netName address.SubnetID
 }
 
 // Blocks that are more than MaxHeightDrift epochs above
 // the theoretical max height based on systime are quickly rejected
 const MaxHeightDrift = 5
 
-func NewTSPoWConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon.Schedule,
+func NewTSPoWConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon.Schedule, r *resolver.Resolver,
 	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
 	return &TSPoW{
 		store:    sm.ChainStore(),
 		beacon:   beacon,
+		r:        r,
 		sm:       sm,
 		verifier: verifier,
 		genesis:  genesis,
 		subMgr:   submgr,
-		netName:  hierarchical.SubnetID(netName),
+		netName:  address.SubnetID(netName),
 	}
 }
 
@@ -163,7 +167,7 @@ func (tsp *TSPoW) ValidateBlock(ctx context.Context, b *types.FullBlock) (err er
 		}
 	}
 
-	msgsChecks := common.CheckMsgs(ctx, tsp.store, tsp.sm, tsp.subMgr, tsp.netName, b, baseTs)
+	msgsChecks := common.CheckMsgs(ctx, tsp.store, tsp.sm, tsp.subMgr, tsp.r, tsp.netName, b, baseTs)
 
 	minerCheck := async.Err(func() error {
 		if err := tsp.minerIsValid(h.Miner); err != nil {

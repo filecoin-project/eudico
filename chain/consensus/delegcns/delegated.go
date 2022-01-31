@@ -23,6 +23,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -52,9 +53,11 @@ type Delegated struct {
 
 	subMgr subnet.SubnetMgr
 
+	r *resolver.Resolver
+
 	// We could get network name from state manager, but with this
 	// we avoid having fetch it for every block validation.
-	netName hierarchical.SubnetID
+	netName address.SubnetID
 }
 
 var producer = func() address.Address {
@@ -70,15 +73,17 @@ var producer = func() address.Address {
 const MaxHeightDrift = 5
 
 func NewDelegatedConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon.Schedule,
-	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
+	r *resolver.Resolver, verifier ffiwrapper.Verifier,
+	genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
 	return &Delegated{
 		store:    sm.ChainStore(),
 		beacon:   beacon,
+		r:        r,
 		sm:       sm,
 		verifier: verifier,
 		genesis:  genesis,
 		subMgr:   submgr,
-		netName:  hierarchical.SubnetID(netName),
+		netName:  address.SubnetID(netName),
 	}
 }
 
@@ -111,7 +116,7 @@ func (deleg *Delegated) ValidateBlock(ctx context.Context, b *types.FullBlock) (
 		log.Warn("Got block from the future, but within threshold", h.Timestamp, build.Clock.Now().Unix())
 	}
 
-	msgsChecks := common.CheckMsgs(ctx, deleg.store, deleg.sm, deleg.subMgr, deleg.netName, b, baseTs)
+	msgsChecks := common.CheckMsgs(ctx, deleg.store, deleg.sm, deleg.subMgr, deleg.r, deleg.netName, b, baseTs)
 
 	minerCheck := async.Err(func() error {
 		if err := deleg.minerIsValid(ctx, h.Miner, baseTs); err != nil {

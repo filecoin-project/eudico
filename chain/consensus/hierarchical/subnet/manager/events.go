@@ -17,6 +17,7 @@ import (
 	"github.com/filecoin-project/specs-actors/actors/util/adt"
 	"github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
+	"golang.org/x/xerrors"
 )
 
 // finalityThreshold determines the number of epochs to wait
@@ -53,7 +54,7 @@ type signingState struct {
 func (s *SubnetMgr) listenSubnetEvents(ctx context.Context, sh *Subnet) {
 	evs := s.events
 	api := s.api
-	id := hierarchical.RootSubnet
+	id := address.RootSubnet
 	root := true
 
 	// If subnet is nil, we are listening from the root chain.
@@ -338,7 +339,7 @@ func (sh *Subnet) populateCheckpoint(ctx context.Context, store adt.Store, st *s
 func (s *SubnetMgr) triggerChange(ctx context.Context, sh *Subnet, diff *diffInfo) (more bool, err error) {
 	// If there's a checkpoint to sign.
 	if diff.checkToSign != nil {
-		err := s.signCheckpoint(ctx, sh, diff.checkToSign)
+		err := s.signAndSubmitCheckpoint(ctx, sh, diff.checkToSign)
 		if err != nil {
 			log.Errorw("Error signing checkpoint for subnet", "subnetID", sh.ID, "err", err)
 			return true, err
@@ -357,7 +358,7 @@ func (s *SubnetMgr) triggerChange(ctx context.Context, sh *Subnet, diff *diffInf
 	return true, nil
 }
 
-func (s *SubnetMgr) signCheckpoint(ctx context.Context, sh *Subnet, info *signInfo) error {
+func (s *SubnetMgr) signAndSubmitCheckpoint(ctx context.Context, sh *Subnet, info *signInfo) error {
 	log.Infow("Signing checkpoint for subnet", "subnetID", info.checkpoint.Source().String())
 	// Using simple signature to sign checkpoint using the subnet wallet.
 	ver := checkpoint.NewSingleSigner()
@@ -366,9 +367,25 @@ func (s *SubnetMgr) signCheckpoint(ctx context.Context, sh *Subnet, info *signIn
 	if err != nil {
 		return err
 	}
+	// Sign checkpoint
 	_, err = s.SubmitSignedCheckpoint(ctx, info.addr, sh.ID, info.checkpoint)
-	return err
+	if err != nil {
+		return err
+	}
 
+	// Trying to push cross-msgs included in checkpoint to corresponding subnet.
+	log.Infow("Pushing cross-msgs from checkpoint", "subnetID", info.checkpoint.Source().String())
+	subAPI := s.getAPI(sh.ID)
+	if subAPI == nil {
+		xerrors.Errorf("Not listening to subnet")
+	}
+	st, store, err := s.GetSCAState(ctx, sh.ID)
+	if err != nil {
+		return err
+	}
+
+	// Pushing cross-msg in checkpoint to corresponding subnets.
+	return sh.r.PushMsgFromCheckpoint(info.checkpoint, st, store)
 }
 
 func (s *SubnetMgr) childCheckDetected(ctx context.Context, info map[string][]cid.Cid) error {

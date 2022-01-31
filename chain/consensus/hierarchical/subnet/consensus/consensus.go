@@ -11,6 +11,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	"github.com/filecoin-project/lotus/chain/consensus/tendermint"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
@@ -40,17 +41,17 @@ func Weight(consensus hierarchical.ConsensusType) (store.WeightFunc, error) {
 
 func New(consensus hierarchical.ConsensusType,
 	sm *stmgr.StateManager, snMgr subnet.SubnetMgr,
-	beacon beacon.Schedule,
+	beacon beacon.Schedule, r *resolver.Resolver,
 	verifier ffiwrapper.Verifier,
 	genesis chain.Genesis, netName dtypes.NetworkName) (consensus.Consensus, error) {
 
 	switch consensus {
 	case hierarchical.Delegated:
-		return delegcns.NewDelegatedConsensus(sm, snMgr, beacon, verifier, genesis, netName), nil
+		return delegcns.NewDelegatedConsensus(sm, snMgr, beacon, r, verifier, genesis, netName), nil
 	case hierarchical.PoW:
-		return tspow.NewTSPoWConsensus(sm, snMgr, beacon, verifier, genesis, netName), nil
+		return tspow.NewTSPoWConsensus(sm, snMgr, beacon, r, verifier, genesis, netName), nil
 	case hierarchical.Tendermint:
-		return tendermint.NewConsensus(sm, snMgr, beacon, verifier, genesis, netName), nil
+		return tendermint.NewConsensus(sm, snMgr, beacon, r, verifier, genesis, netName), nil
 	default:
 		return nil, xerrors.New("consensus type not suported")
 	}

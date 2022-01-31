@@ -163,6 +163,9 @@ require (
 	gotest.tools v2.2.0+incompatible
 )
 
+// Replacing with a fork that includes support to hierarchical consensus addresses.
+replace github.com/filecoin-project/go-address => github.com/adlrocha/go-address v0.0.7-0.20220119095559-54b3f8b3423e
+
 replace github.com/libp2p/go-libp2p-yamux => github.com/libp2p/go-libp2p-yamux v0.5.1
 
 replace github.com/filecoin-project/filecoin-ffi => ./extern/filecoin-ffi

@@ -1,8 +1,11 @@
 package hierarchical
 
 import (
+	"path"
+	"strings"
+
 	address "github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/lotus/chain/actors/builtin"
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
@@ -21,21 +24,27 @@ type MsgType uint64
 
 // List of cross messages supported
 const (
-	Fund MsgType = iota
-	Release
-	Cross
+	Unknown MsgType = iota
+	BottomUp
+	TopDown
 )
 
 // MsgType returns the
 func GetMsgType(msg *types.Message) MsgType {
-	if msg.From == msg.To {
-		return Fund
-	}
+	t := Unknown
 
-	if msg.From == builtin.BurntFundsActorAddr {
-		return Release
+	sto, err := msg.To.Subnet()
+	if err != nil {
+		return t
 	}
-	return Cross
+	sfrom, err := msg.From.Subnet()
+	if err != nil {
+		return t
+	}
+	if IsBottomUp(sfrom, sto) {
+		return BottomUp
+	}
+	return TopDown
 }
 
 // SubnetCoordActorAddr is the address of the SCA actor
@@ -50,3 +59,43 @@ var SubnetCoordActorAddr = func() address.Address {
 	}
 	return a
 }()
+
+// Implement keyer interface so it can be used as a
+// key for maps
+type SubnetKey address.SubnetID
+
+var _ abi.Keyer = SubnetKey("")
+
+func (id SubnetKey) Key() string {
+	return string(id)
+}
+
+func CommonParent(from, to address.SubnetID) (address.SubnetID, int) {
+	s1 := strings.Split(from.String(), "/")
+	s2 := strings.Split(to.String(), "/")
+	if len(s1) < len(s2) {
+		s1, s2 = s2, s1
+	}
+	out := "/"
+	l := 0
+	for i, s := range s2 {
+		if s == s1[i] {
+			out = path.Join(out, s)
+			l = i
+		} else {
+			return address.SubnetID(out), l
+		}
+	}
+	return address.SubnetID(out), l
+}
+
+func IsParent(curr, from, to address.SubnetID) bool {
+	parent, _ := CommonParent(from, to)
+	return parent == curr
+}
+
+func IsBottomUp(from, to address.SubnetID) bool {
+	_, l := CommonParent(from, to)
+	sfrom := strings.Split(from.String(), "/")
+	return len(sfrom)-1 > l
+}

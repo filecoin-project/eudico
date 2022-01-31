@@ -17,9 +17,11 @@ import (
 	act "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	subiface "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	subcns "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/consensus"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/messagepool"
 	"github.com/filecoin-project/lotus/chain/stmgr"
@@ -39,11 +41,13 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/helpers"
 	"github.com/filecoin-project/specs-actors/actors/builtin"
 	init_ "github.com/filecoin-project/specs-actors/actors/builtin/init"
+	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 	"github.com/ipfs/go-blockservice"
 	"github.com/ipfs/go-cid"
 	ds "github.com/ipfs/go-datastore"
 	nsds "github.com/ipfs/go-datastore/namespace"
 	offline "github.com/ipfs/go-ipfs-exchange-offline"
+	cbor "github.com/ipfs/go-ipld-cbor"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p-core/host"
 	peer "github.com/libp2p/go-libp2p-core/peer"
@@ -63,6 +67,7 @@ type SubnetMgr struct {
 	// api  *impl.FullNodeAPI
 	api  *API
 	host host.Host
+	self peer.ID
 
 	pubsub *pubsub.PubSub
 	// Root ds
@@ -76,8 +81,12 @@ type SubnetMgr struct {
 	bootstrapper dtypes.Bootstrapper
 
 	lk      sync.RWMutex
-	subnets map[hierarchical.SubnetID]*Subnet
-	cm      *crossMsgPool
+	subnets map[address.SubnetID]*Subnet
+
+	// Cross-msg general pool
+	cm *crossMsgPool
+	// Root cross-msg resolver. Each subnet has one.
+	r *resolver.Resolver
 
 	j journal.Journal
 }
@@ -111,14 +120,17 @@ func NewSubnetMgr(
 	netName dtypes.NetworkName,
 	syncapi full.SyncAPI,
 	beaconapi full.BeaconAPI,
+	r *resolver.Resolver,
 	j journal.Journal) (*SubnetMgr, error) {
 
-	var err error
 	ctx := helpers.LifecycleCtx(mctx, lc)
+	var err error
+
 	s := &SubnetMgr{
 		ctx:          ctx,
 		pubsub:       pubsub,
 		host:         host,
+		self:         self,
 		ds:           ds,
 		syscalls:     syscalls,
 		us:           us,
@@ -127,8 +139,9 @@ func NewSubnetMgr(
 		nodeServer:   nodeServer,
 		bootstrapper: bootstrapper,
 		verifier:     verifier,
-		subnets:      make(map[hierarchical.SubnetID]*Subnet),
+		subnets:      make(map[address.SubnetID]*Subnet),
 		cm:           newCrossMsgPool(),
+		r:            r,
 	}
 
 	s.api = &API{
@@ -159,7 +172,7 @@ func NewSubnetMgr(
 	return s, nil
 }
 
-func (s *SubnetMgr) startSubnet(id hierarchical.SubnetID,
+func (s *SubnetMgr) startSubnet(id address.SubnetID,
 	parentAPI *API, consensus hierarchical.ConsensusType,
 	genesis []byte) error {
 	var err error
@@ -188,8 +201,11 @@ func (s *SubnetMgr) startSubnet(id hierarchical.SubnetID,
 	// figure out if it works.
 	sh.bs = blockstore.FromDatastore(s.ds)
 
+	// Instantiate new cross-msg resolver
+	sh.r = resolver.NewResolver(s.self, sh.ds, sh.pubsub, sh.ID)
+
 	// Select the right TipSetExecutor for the consensus algorithms chosen.
-	tsExec := common.TipSetExecutor(s, dtypes.NetworkName(id))
+	tsExec := common.TipSetExecutor(s)
 	weight, err := subcns.Weight(consensus)
 	if err != nil {
 		log.Errorw("Error getting weight for consensus", "subnetID", id, "err", err)
@@ -197,7 +213,7 @@ func (s *SubnetMgr) startSubnet(id hierarchical.SubnetID,
 	}
 
 	sh.ch = store.NewChainStore(sh.bs, sh.bs, sh.ds, weight, s.j)
-	sh.sm, err = stmgr.NewStateManager(sh.ch, tsExec, s.syscalls, s.us, s.beacon)
+	sh.sm, err = stmgr.NewStateManager(sh.ch, tsExec, sh.r, s.syscalls, s.us, s.beacon)
 	if err != nil {
 		log.Errorw("Error creating state manager for subnet", "subnetID", id, "err", err)
 		return err
@@ -210,7 +226,8 @@ func (s *SubnetMgr) startSubnet(id hierarchical.SubnetID,
 		log.Errorw("Error loading genesis bootstrap for subnet", "subnetID", id, "err", err)
 		return err
 	}
-	sh.cons, err = subcns.New(consensus, sh.sm, s, s.beacon, s.verifier, gen, dtypes.NetworkName(id))
+	// Instantiate consensus
+	sh.cons, err = subcns.New(consensus, sh.sm, s, s.beacon, sh.r, s.verifier, gen, dtypes.NetworkName(id))
 	if err != nil {
 		log.Errorw("Error creating consensus", "subnetID", id, "err", err)
 		return err
@@ -243,6 +260,12 @@ func (s *SubnetMgr) startSubnet(id hierarchical.SubnetID,
 	if err != nil {
 		log.Errorw("Error creating message pool for subnet", "subnetID", id, "err", err)
 		return err
+	}
+
+	// Start listening to cross-msg resolve messages
+	err = sh.r.HandleMsgs(ctx, s)
+	if err != nil {
+		return xerrors.Errorf("error initializing cross-msg resolver: %s", err)
 	}
 
 	// This functions create a new pubsub topic for the subnet to start
@@ -314,7 +337,7 @@ func BuildSubnetMgr(mctx helpers.MetricsCtx, lc fx.Lifecycle, s *SubnetMgr) {
 
 func (s *SubnetMgr) AddSubnet(
 	ctx context.Context, wallet address.Address,
-	parent hierarchical.SubnetID, name string,
+	parent address.SubnetID, name string,
 	consensus uint64, minerStake abi.TokenAmount,
 	checkPeriod abi.ChainEpoch,
 	delegminer address.Address) (address.Address, error) {
@@ -376,7 +399,7 @@ func (s *SubnetMgr) AddSubnet(
 func (s *SubnetMgr) JoinSubnet(
 	ctx context.Context, wallet address.Address,
 	value abi.TokenAmount,
-	id hierarchical.SubnetID) (cid.Cid, error) {
+	id address.SubnetID) (cid.Cid, error) {
 
 	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.Lock()
@@ -434,7 +457,7 @@ func (s *SubnetMgr) JoinSubnet(
 	return smsg.Cid(), nil
 }
 
-func (s *SubnetMgr) syncSubnet(ctx context.Context, id hierarchical.SubnetID, parentAPI *API) error {
+func (s *SubnetMgr) syncSubnet(ctx context.Context, id address.SubnetID, parentAPI *API) error {
 	// Get actor from subnet ID
 	SubnetActor, err := id.Actor()
 	if err != nil {
@@ -455,7 +478,7 @@ func (s *SubnetMgr) syncSubnet(ctx context.Context, id hierarchical.SubnetID, pa
 }
 
 // SyncSubnet starts syncing with a subnet even if we are not an active participant.
-func (s *SubnetMgr) SyncSubnet(ctx context.Context, id hierarchical.SubnetID, stop bool) error {
+func (s *SubnetMgr) SyncSubnet(ctx context.Context, id address.SubnetID, stop bool) error {
 	if stop {
 		return s.stopSyncSubnet(ctx, id)
 	}
@@ -469,7 +492,7 @@ func (s *SubnetMgr) SyncSubnet(ctx context.Context, id hierarchical.SubnetID, st
 }
 
 // stopSyncSubnet stops syncing from a subnet
-func (s *SubnetMgr) stopSyncSubnet(ctx context.Context, id hierarchical.SubnetID) error {
+func (s *SubnetMgr) stopSyncSubnet(ctx context.Context, id address.SubnetID) error {
 	if sh, _ := s.getSubnet(id); sh != nil {
 		delete(s.subnets, id)
 		return sh.Close(ctx)
@@ -479,7 +502,7 @@ func (s *SubnetMgr) stopSyncSubnet(ctx context.Context, id hierarchical.SubnetID
 
 func (s *SubnetMgr) MineSubnet(
 	ctx context.Context, wallet address.Address,
-	id hierarchical.SubnetID, stop bool) error {
+	id address.SubnetID, stop bool) error {
 
 	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.RLock()
@@ -526,7 +549,7 @@ func (s *SubnetMgr) MineSubnet(
 
 func (s *SubnetMgr) LeaveSubnet(
 	ctx context.Context, wallet address.Address,
-	id hierarchical.SubnetID) (cid.Cid, error) {
+	id address.SubnetID) (cid.Cid, error) {
 
 	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.Lock()
@@ -578,7 +601,7 @@ func (s *SubnetMgr) LeaveSubnet(
 
 func (s *SubnetMgr) KillSubnet(
 	ctx context.Context, wallet address.Address,
-	id hierarchical.SubnetID) (cid.Cid, error) {
+	id address.SubnetID) (cid.Cid, error) {
 
 	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.RLock()
@@ -623,11 +646,11 @@ func (s *SubnetMgr) KillSubnet(
 }
 
 // isRoot checks if the
-func (s *SubnetMgr) isRoot(id hierarchical.SubnetID) bool {
+func (s *SubnetMgr) isRoot(id address.SubnetID) bool {
 	return id.String() == string(s.api.NetName)
 }
 
-func (s *SubnetMgr) getAPI(id hierarchical.SubnetID) *API {
+func (s *SubnetMgr) getAPI(id address.SubnetID) *API {
 	if s.isRoot(id) {
 		return s.api
 	}
@@ -638,7 +661,7 @@ func (s *SubnetMgr) getAPI(id hierarchical.SubnetID) *API {
 	return sh.api
 }
 
-func (s *SubnetMgr) getParentAPI(id hierarchical.SubnetID) (*API, error) {
+func (s *SubnetMgr) getParentAPI(id address.SubnetID) (*API, error) {
 	parentAPI := s.getAPI(id.Parent())
 	if parentAPI == nil {
 		return nil, xerrors.Errorf("not syncing with parent network")
@@ -646,7 +669,7 @@ func (s *SubnetMgr) getParentAPI(id hierarchical.SubnetID) (*API, error) {
 	return parentAPI, nil
 }
 
-func (s *SubnetMgr) getSubnet(id hierarchical.SubnetID) (*Subnet, error) {
+func (s *SubnetMgr) getSubnet(id address.SubnetID) (*Subnet, error) {
 	sh, ok := s.subnets[id]
 	if !ok {
 		return nil, xerrors.Errorf("Not part of subnet %v. Consider joining it", id)
@@ -654,12 +677,30 @@ func (s *SubnetMgr) getSubnet(id hierarchical.SubnetID) (*Subnet, error) {
 	return sh, nil
 }
 
-func (s *SubnetMgr) GetSubnetAPI(id hierarchical.SubnetID) (v1api.FullNode, error) {
+func (s *SubnetMgr) GetSubnetAPI(id address.SubnetID) (v1api.FullNode, error) {
 	api := s.getAPI(id)
 	if api == nil {
 		return nil, xerrors.Errorf("subnet manager not syncing with network")
 	}
 	return api, nil
+}
+
+func (s *SubnetMgr) GetSCAState(ctx context.Context, id address.SubnetID) (*sca.SCAState, blockadt.Store, error) {
+	api, err := s.GetSubnetAPI(id)
+	if err != nil {
+		return nil, nil, err
+	}
+	var st sca.SCAState
+	subnetAct, err := api.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, types.EmptyTSK)
+	if err != nil {
+		return nil, nil, xerrors.Errorf("loading actor state: %w", err)
+	}
+	pbs := blockstore.NewAPIBlockstore(api)
+	pcst := cbor.NewCborStore(pbs)
+	if err := pcst.Get(ctx, subnetAct.Head, &st); err != nil {
+		return nil, nil, xerrors.Errorf("getting actor state: %w", err)
+	}
+	return &st, blockadt.WrapStore(ctx, pcst), nil
 }
 
 var _ subiface.SubnetMgr = &SubnetMgr{}

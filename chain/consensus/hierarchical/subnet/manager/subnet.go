@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
@@ -13,6 +14,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	subcns "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/consensus"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/messagepool"
 	"github.com/filecoin-project/lotus/chain/stmgr"
@@ -34,7 +36,7 @@ import (
 type Subnet struct {
 	host host.Host
 	// SubnetID
-	ID hierarchical.SubnetID
+	ID address.SubnetID
 	// Metadata datastore.
 	ds dtypes.MetadataDS
 	// Exposed blockstore
@@ -79,6 +81,9 @@ type Subnet struct {
 	// Checkpointing signing state
 	checklk      sync.RWMutex
 	singingState *signingState
+
+	// Cross-msg resolver
+	r *resolver.Resolver
 }
 
 // LoadGenesis from serialized genesis bootstrap

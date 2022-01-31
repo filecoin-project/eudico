@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/rand"
 
 	"github.com/filecoin-project/lotus/chain/beacon"
@@ -58,7 +59,7 @@ type migration struct {
 
 type Executor interface {
 	NewActorRegistry() *vm.ActorRegistry
-	ExecuteTipSet(ctx context.Context, sm *StateManager, ts *types.TipSet, em ExecMonitor) (stateroot cid.Cid, rectsroot cid.Cid, err error)
+	ExecuteTipSet(ctx context.Context, sm *StateManager, cr *resolver.Resolver, ts *types.TipSet, em ExecMonitor) (stateroot cid.Cid, rectsroot cid.Cid, err error)
 }
 
 type StateManager struct {
@@ -95,6 +96,8 @@ type StateManager struct {
 	tsExec        Executor
 	tsExecMonitor ExecMonitor
 	beacon        beacon.Schedule
+
+	cr *resolver.Resolver
 }
 
 // Caches a single state tree
@@ -103,7 +106,7 @@ type treeCache struct {
 	tree *state.StateTree
 }
 
-func NewStateManager(cs *store.ChainStore, exec Executor, sys vm.SyscallBuilder, us UpgradeSchedule, beacon beacon.Schedule) (*StateManager, error) {
+func NewStateManager(cs *store.ChainStore, exec Executor, cr *resolver.Resolver, sys vm.SyscallBuilder, us UpgradeSchedule, beacon beacon.Schedule) (*StateManager, error) {
 	// If we have upgrades, make sure they're in-order and make sense.
 	if err := us.Validate(); err != nil {
 		return nil, err
@@ -147,6 +150,7 @@ func NewStateManager(cs *store.ChainStore, exec Executor, sys vm.SyscallBuilder,
 		newVM:             vm.NewVM,
 		Syscalls:          sys,
 		cs:                cs,
+		cr:                cr,
 		tsExec:            exec,
 		stCache:           make(map[string][]cid.Cid),
 		beacon:            beacon,
@@ -158,8 +162,8 @@ func NewStateManager(cs *store.ChainStore, exec Executor, sys vm.SyscallBuilder,
 	}, nil
 }
 
-func NewStateManagerWithUpgradeScheduleAndMonitor(cs *store.ChainStore, exec Executor, sys vm.SyscallBuilder, us UpgradeSchedule, b beacon.Schedule, em ExecMonitor) (*StateManager, error) {
-	sm, err := NewStateManager(cs, exec, sys, us, b)
+func NewStateManagerWithUpgradeScheduleAndMonitor(cs *store.ChainStore, exec Executor, cr *resolver.Resolver, sys vm.SyscallBuilder, us UpgradeSchedule, b beacon.Schedule, em ExecMonitor) (*StateManager, error) {
+	sm, err := NewStateManager(cs, exec, cr, sys, us, b)
 	if err != nil {
 		return nil, err
 	}

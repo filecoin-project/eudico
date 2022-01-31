@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync/atomic"
 
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/rand"
 
 	"github.com/ipfs/go-cid"
@@ -255,7 +256,7 @@ func (t *TipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 	return st, rectroot, nil
 }
 
-func (t *TipSetExecutor) ExecuteTipSet(ctx context.Context, sm *stmgr.StateManager, ts *types.TipSet, em stmgr.ExecMonitor) (stateroot cid.Cid, rectsroot cid.Cid, err error) {
+func (t *TipSetExecutor) ExecuteTipSet(ctx context.Context, sm *stmgr.StateManager, cr *resolver.Resolver, ts *types.TipSet, em stmgr.ExecMonitor) (stateroot cid.Cid, rectsroot cid.Cid, err error) {
 	ctx, span := trace.StartSpan(ctx, "computeTipSetState")
 	defer span.End()
 

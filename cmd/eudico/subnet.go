@@ -32,6 +32,7 @@ var subnetCmds = &cli.Command{
 		killCmd,
 		checkpointCmds,
 		fundCmd,
+		releaseCmd,
 	},
 }
 
@@ -74,7 +75,7 @@ var listSubnetsCmd = &cli.Command{
 			if sh.Status != 0 {
 				status = "Inactive"
 			}
-			fmt.Printf("%s: status=%v, stake=%v\n", sh.ID, status, types.FIL(sh.Stake))
+			fmt.Printf("%s: status=%v, stake=%v, circulating supply=%v\n", sh.ID, status, types.FIL(sh.Stake), types.FIL(sh.CircSupply))
 		}
 
 		return nil
@@ -145,9 +146,9 @@ var addCmd = &cli.Command{
 			return lcli.ShowHelp(cctx, fmt.Errorf("no name for subnet specified"))
 		}
 
-		parent := hierarchical.RootSubnet
+		parent := address.RootSubnet
 		if cctx.IsSet("parent") {
-			parent = hierarchical.SubnetID(cctx.String("parent"))
+			parent = address.SubnetID(cctx.String("parent"))
 		}
 
 		// FIXME: This is a horrible workaround to avoid delegminer from
@@ -170,7 +171,7 @@ var addCmd = &cli.Command{
 			return err
 		}
 
-		fmt.Printf("[*] subnet actor deployed as %v and new subnet availabe with ID=%v\n\n", actorAddr, hierarchical.NewSubnetID(parent, actorAddr))
+		fmt.Printf("[*] subnet actor deployed as %v and new subnet availabe with ID=%v\n\n", actorAddr, address.NewSubnetID(parent, actorAddr))
 		fmt.Printf("remember to join and register your subnet for it to be discoverable")
 		return nil
 	},
@@ -188,7 +189,7 @@ var joinCmd = &cli.Command{
 		&cli.StringFlag{
 			Name:  "subnet",
 			Usage: "specify the id of the subnet to join",
-			Value: hierarchical.RootSubnet.String(),
+			Value: address.RootSubnet.String(),
 		},
 	},
 	Action: func(cctx *cli.Context) error {
@@ -215,7 +216,7 @@ var joinCmd = &cli.Command{
 
 		// If subnet not set use root. Otherwise, use flag value
 		var subnet string
-		if cctx.String("subnet") != hierarchical.RootSubnet.String() {
+		if cctx.String("subnet") != address.RootSubnet.String() {
 			subnet = cctx.String("subnet")
 		}
 
@@ -224,7 +225,7 @@ var joinCmd = &cli.Command{
 			return lcli.ShowHelp(cctx, fmt.Errorf("failed to parse amount: %w", err))
 		}
 
-		c, err := api.JoinSubnet(ctx, addr, big.Int(val), hierarchical.SubnetID(subnet))
+		c, err := api.JoinSubnet(ctx, addr, big.Int(val), address.SubnetID(subnet))
 		if err != nil {
 			return err
 		}
@@ -241,7 +242,7 @@ var syncCmd = &cli.Command{
 		&cli.StringFlag{
 			Name:  "subnet",
 			Usage: "specify the id of the subnet to sync with",
-			Value: hierarchical.RootSubnet.String(),
+			Value: address.RootSubnet.String(),
 		},
 		&cli.BoolFlag{
 			Name:  "stop",
@@ -263,10 +264,10 @@ var syncCmd = &cli.Command{
 
 		// If subnet not set use root. Otherwise, use flag value
 		subnet := cctx.String("subnet")
-		if cctx.String("subnet") == hierarchical.RootSubnet.String() {
+		if cctx.String("subnet") == address.RootSubnet.String() {
 			return xerrors.Errorf("no valid subnet so sync with specified")
 		}
-		err = api.SyncSubnet(ctx, hierarchical.SubnetID(subnet), cctx.Bool("stop"))
+		err = api.SyncSubnet(ctx, address.SubnetID(subnet), cctx.Bool("stop"))
 		if err != nil {
 			return err
 		}
@@ -287,7 +288,7 @@ var mineCmd = &cli.Command{
 		&cli.StringFlag{
 			Name:  "subnet",
 			Usage: "specify the id of the subnet to mine",
-			Value: hierarchical.RootSubnet.String(),
+			Value: address.RootSubnet.String(),
 		},
 		&cli.BoolFlag{
 			Name:  "stop",
@@ -323,11 +324,11 @@ var mineCmd = &cli.Command{
 		}
 		// If subnet not set use root. Otherwise, use flag value
 		var subnet string
-		if cctx.String("subnet") != hierarchical.RootSubnet.String() {
+		if cctx.String("subnet") != address.RootSubnet.String() {
 			subnet = cctx.String("subnet")
 		}
 
-		err = api.MineSubnet(ctx, walletID, hierarchical.SubnetID(subnet), cctx.Bool("stop"))
+		err = api.MineSubnet(ctx, walletID, address.SubnetID(subnet), cctx.Bool("stop"))
 		if err != nil {
 			return err
 		}
@@ -348,7 +349,7 @@ var leaveCmd = &cli.Command{
 		&cli.StringFlag{
 			Name:  "subnet",
 			Usage: "specify the id of the subnet to mine",
-			Value: hierarchical.RootSubnet.String(),
+			Value: address.RootSubnet.String(),
 		},
 	},
 	Action: func(cctx *cli.Context) error {
@@ -375,11 +376,11 @@ var leaveCmd = &cli.Command{
 
 		// If subnet not set use root. Otherwise, use flag value
 		var subnet string
-		if cctx.String("subnet") != hierarchical.RootSubnet.String() {
+		if cctx.String("subnet") != address.RootSubnet.String() {
 			subnet = cctx.String("subnet")
 		}
 
-		c, err := api.LeaveSubnet(ctx, addr, hierarchical.SubnetID(subnet))
+		c, err := api.LeaveSubnet(ctx, addr, address.SubnetID(subnet))
 		if err != nil {
 			return err
 		}
@@ -400,7 +401,7 @@ var killCmd = &cli.Command{
 		&cli.StringFlag{
 			Name:  "subnet",
 			Usage: "specify the id of the subnet to mine",
-			Value: hierarchical.RootSubnet.String(),
+			Value: address.RootSubnet.String(),
 		},
 	},
 	Action: func(cctx *cli.Context) error {
@@ -427,15 +428,76 @@ var killCmd = &cli.Command{
 
 		// If subnet not set use root. Otherwise, use flag value
 		var subnet string
-		if cctx.String("subnet") != hierarchical.RootSubnet.String() {
+		if cctx.String("subnet") != address.RootSubnet.String() {
 			subnet = cctx.String("subnet")
 		}
 
-		c, err := api.KillSubnet(ctx, addr, hierarchical.SubnetID(subnet))
+		c, err := api.KillSubnet(ctx, addr, address.SubnetID(subnet))
 		if err != nil {
 			return err
 		}
 		fmt.Fprintf(cctx.App.Writer, "Successfully sent kill to subnet in message: %s\n", c)
+		return nil
+	},
+}
+
+var releaseCmd = &cli.Command{
+	Name:      "release",
+	Usage:     "Release funds from your ",
+	ArgsUsage: "[<value amount>]",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "from",
+			Usage: "optionally specify the account to send funds from",
+		},
+		&cli.StringFlag{
+			Name:  "subnet",
+			Usage: "specify the id of the subnet",
+			Value: address.RootSubnet.String(),
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+
+		if cctx.Args().Len() != 1 {
+			return lcli.ShowHelp(cctx, fmt.Errorf("'fund' expects the amount of FILs to inject to subnet, and a set of flags"))
+		}
+		api, closer, err := lcli.GetFullNodeAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+
+		ctx := lcli.ReqContext(cctx)
+
+		// Try to get default address first
+		addr, _ := api.WalletDefaultAddress(ctx)
+		if from := cctx.String("from"); from != "" {
+			addr, err = address.NewFromString(from)
+			if err != nil {
+				return err
+			}
+		}
+
+		// Releasing funds needs to be done in a subnet
+		var subnet string
+		if cctx.String("subnet") == address.RootSubnet.String() ||
+			cctx.String("subnet") == "" {
+			return xerrors.Errorf("only subnets can release funds, please set a valid subnet")
+		}
+
+		subnet = cctx.String("subnet")
+		val, err := types.ParseFIL(cctx.Args().Get(0))
+		if err != nil {
+			return lcli.ShowHelp(cctx, fmt.Errorf("failed to parse amount: %w", err))
+		}
+
+		c, err := api.ReleaseFunds(ctx, addr, address.SubnetID(subnet), big.Int(val))
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(cctx.App.Writer, "Successfully sent release message: %s\n", c)
+		fmt.Fprintf(cctx.App.Writer, "Cross-message should be propagated in the next checkpoint to: %s\n",
+			address.SubnetID(subnet).Parent())
 		return nil
 	},
 }
@@ -452,7 +514,7 @@ var fundCmd = &cli.Command{
 		&cli.StringFlag{
 			Name:  "subnet",
 			Usage: "specify the id of the subnet",
-			Value: hierarchical.RootSubnet.String(),
+			Value: address.RootSubnet.String(),
 		},
 	},
 	Action: func(cctx *cli.Context) error {
@@ -479,7 +541,7 @@ var fundCmd = &cli.Command{
 
 		// Injecting funds needs to be done in a subnet
 		var subnet string
-		if cctx.String("subnet") == hierarchical.RootSubnet.String() ||
+		if cctx.String("subnet") == address.RootSubnet.String() ||
 			cctx.String("subnet") == "" {
 			return xerrors.Errorf("only subnets can be fund with new tokens, please set a valid subnet")
 		}
@@ -490,7 +552,7 @@ var fundCmd = &cli.Command{
 			return lcli.ShowHelp(cctx, fmt.Errorf("failed to parse amount: %w", err))
 		}
 
-		c, err := api.FundSubnet(ctx, addr, hierarchical.SubnetID(subnet), big.Int(val))
+		c, err := api.FundSubnet(ctx, addr, address.SubnetID(subnet), big.Int(val))
 		if err != nil {
 			return err
 		}
