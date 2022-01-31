@@ -1,9 +1,7 @@
-#!/usr/bin/env bash
-
 rm -rf ./eudico
 make eudico
 rm -rvf ~/.eudico
-#rm -rvf ~/.tendermint/configmake
+#rm -rvf ~/.tendermint/config
 rm -rvf ~/.tendermint/data
 
 rm -rf ./tendermint
@@ -28,4 +26,3 @@ tmux new-session -d -s "tendermint" \; \
       ./eudico wallet set-default f1ozbo7zqwfx6d4tqb353qoq7sfp4qhycefx6ftgy;
       ./eudico tendermint miner f1ozbo7zqwfx6d4tqb353qoq7sfp4qhycefx6ftgy" Enter \; \
   attach-session -t "tendermint:0.1"
-

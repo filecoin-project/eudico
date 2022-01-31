@@ -18,7 +18,7 @@ var _ = cid.Undef
 var _ = math.E
 var _ = sort.Sort
 
-var lengthBufRegistrationMessage = []byte{130}
+var lengthBufRegistrationMessage = []byte{131}
 
 func (t *RegistrationMessage) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -41,6 +41,19 @@ func (t *RegistrationMessage) MarshalCBOR(w io.Writer) error {
 	}
 
 	if _, err := w.Write(t.Name[:]); err != nil {
+		return err
+	}
+
+	// t.Tag ([]uint8) (slice)
+	if len(t.Tag) > cbg.ByteArrayMaxLen {
+		return xerrors.Errorf("Byte array in field t.Tag was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajByteString, uint64(len(t.Tag))); err != nil {
+		return err
+	}
+
+	if _, err := w.Write(t.Tag[:]); err != nil {
 		return err
 	}
 
@@ -71,7 +84,7 @@ func (t *RegistrationMessage) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 2 {
+	if extra != 3 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -94,6 +107,27 @@ func (t *RegistrationMessage) UnmarshalCBOR(r io.Reader) error {
 	}
 
 	if _, err := io.ReadFull(br, t.Name[:]); err != nil {
+		return err
+	}
+	// t.Tag ([]uint8) (slice)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+
+	if extra > cbg.ByteArrayMaxLen {
+		return fmt.Errorf("t.Tag: byte array too large (%d)", extra)
+	}
+	if maj != cbg.MajByteString {
+		return fmt.Errorf("expected byte array")
+	}
+
+	if extra > 0 {
+		t.Tag = make([]uint8, extra)
+	}
+
+	if _, err := io.ReadFull(br, t.Tag[:]); err != nil {
 		return err
 	}
 	// t.Offset (int64) (int64)

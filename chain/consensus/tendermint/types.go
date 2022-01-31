@@ -2,6 +2,7 @@ package tendermint
 
 import (
 	"bytes"
+
 	"github.com/filecoin-project/go-address"
 
 	"github.com/filecoin-project/lotus/chain/types"
@@ -15,6 +16,7 @@ const (
 
 type RegistrationMessage struct {
 	Name   []byte
+	Tag []byte
 	Offset int64
 }
 
@@ -35,9 +37,10 @@ func (msg *RegistrationMessage) Serialize() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func NewRegistrationMessageBytes(name address.SubnetID) ([]byte, error) {
+func NewRegistrationMessageBytes(name address.SubnetID, tag []byte) ([]byte, error) {
 	msg := RegistrationMessage{
 		Name: []byte(name.String()),
+		Tag: tag,
 	}
 	b, err := msg.Serialize()
 	if err != nil {

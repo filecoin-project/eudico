@@ -148,6 +148,7 @@ func (a *Application) DeliverTx(req abci.RequestDeliverTx) (resp abci.ResponseDe
 		log.Info("Height:", height)
 		regResp := RegistrationMessage {
 			Name: subnet.Name,
+			Tag: subnet.Tag,
 			Offset: height,
 		}
 

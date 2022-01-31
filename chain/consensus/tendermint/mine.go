@@ -23,13 +23,25 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		log.Fatalf("unable to create a Tendermint client: %s", err)
 	}
 
+	nn, err := api.StateNetworkName(ctx)
+	if err != nil {
+		return err
+	}
+	log.Info("Network name:", nn)
+
+	subnetID := address.SubnetID(nn)
+	log.Info("Subnet ID name:", subnetID)
+
+	tag := sha256.Sum256([]byte(subnetID))
+	log.Info("tag:", tag[:4])
+
 	head, err := api.ChainHead(ctx)
 	if err != nil {
 		return xerrors.Errorf("getting head: %w", err)
 	}
 
-	log.Info("starting tendermint mining on @", head.Height())
-	defer log.Info("stopping tendermint mining on @", head.Height())
+	log.Infof("%s starting tendermint mining on @%d",subnetID, head.Height())
+	defer log.Info("%s stopping tendermint mining on @%d", subnetID, head.Height())
 
 	for {
 		select {
@@ -44,7 +56,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			continue
 		}
 
-		log.Info("try tendermint mining at @", base.Height())
+		log.Infof("%s try tendermint mining at @%d", subnetID, base.Height())
 
 		msgs, err := api.MpoolSelect(ctx, base.Key(), 1)
 		if err != nil {
@@ -78,7 +90,8 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			log.Debug("message hash:", id)
 
 			if pool.shouldSubmitMessage(tx, base.Height()) {
-				payload := append(tx, SignedMessageType)
+				payload := append(tx, tag[:4]...)
+				payload = append(payload, SignedMessageType)
 				res, err := tendermintClient.BroadcastTxSync(ctx, payload)
 				if err != nil {
 					log.Error("unable to send message to Tendermint error:", err)
@@ -105,7 +118,8 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			log.Info("!!!!! cross message hash:", id)
 
 			if pool.shouldSubmitMessage(tx, base.Height()) {
-				payload := append(tx, CrossMessageType)
+				payload := append(tx, tag[:4]...)
+				payload = append(payload, CrossMessageType)
 				res, err := tendermintClient.BroadcastTxSync(ctx, payload)
 				if err != nil {
 					log.Error("unable to send cross message to Tendermint error:", err)
@@ -137,7 +151,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			continue
 		}
 
-		log.Info("try syncing Tendermint block at @", base.Height(), base.String())
+		log.Infof("%s try syncing Tendermint block at @%d", subnetID, base.Height())
 
 		err = api.SyncSubmitBlock(ctx, &types.BlockMsg{
 			Header:        bh.Header,
@@ -149,7 +163,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			log.Errorw("submitting block failed", "error", err)
 		}
 
-		log.Info("Tendermint mined a block!!! ", bh.Cid())
+		log.Infof("Tendermint mined a block %v in %s:", bh.Cid(), subnetID)
 	}
 }
 
@@ -182,7 +196,7 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 						minerAddr: resp.Block.ProposerAddress.Bytes(),
 						hash:      resp.Block.Hash().Bytes(),
 					}
-					parseTendermintBlock(resp.Block, &info)
+					parseTendermintBlock(resp.Block, &info, tendermint.tag)
 
 					tendermintBlockInfoChan <- &info
 				}

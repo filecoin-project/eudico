@@ -2,6 +2,7 @@ package tendermint
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"strings"
 
@@ -73,6 +74,8 @@ type Tendermint struct {
 
 	offset int64
 
+	tag []byte
+
 	events <-chan coretypes.ResultEvent
 }
 
@@ -80,6 +83,9 @@ func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon
 	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
 
 	subnetID := address.SubnetID(netName)
+	log.Infof("New Tendermint consensus for %s subnet", subnetID )
+
+	tag := sha256.Sum256([]byte(subnetID))
 
 	tendermintClient, err := httptendermintrpcclient.New(NodeAddr())
 	if err != nil {
@@ -89,9 +95,9 @@ func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon
 	if err != nil {
 		log.Fatalf("unable to connect to the Tendermint node: %s", err)
 	}
-	log.Info(info)
+	log.Info("Tendermint validator:", info.ValidatorInfo.Address)
 
-	regMsg, err := NewRegistrationMessageBytes(subnetID)
+	regMsg, err := NewRegistrationMessageBytes(subnetID, tag[:4])
 	if err != nil {
 		log.Fatalf("unable to create a registration message: %s", err)
 	}
@@ -99,6 +105,7 @@ func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon
 	if err != nil {
 		log.Fatalf("unable to register network: %s", err)
 	}
+	log.Info("subnet registered")
 
 	regSubnet, err := DecodeRegistrationMessage(regResp.DeliverTx.Data)
 	if err != nil {
@@ -131,6 +138,7 @@ func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon
 		client:   tendermintClient,
 		events:   events,
 		offset:   regSubnet.Offset,
+		tag: tag[:4],
 	}
 }
 
