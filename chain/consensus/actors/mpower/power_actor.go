@@ -77,6 +77,16 @@ func (a Actor) AddMiners(rt Runtime, params *AddMinerParams) *abi.EmptyValue {
 		// Miners list is replaced with the one passed as parameters
 		st.MinerCount += int64(len(params.Miners))
 		st.Miners = append(st.Miners,params.Miners...)
+
+		//we remove the duplicates from the list (if any)
+		keys := make(map[string]bool)
+    	list := []string{}	
+    	for _, entry := range st.Miners {
+        	if _, value := keys[entry]; !value {
+            	keys[entry] = true
+            	list = append(list, entry)
+        }
+        st.Miners = list
 	})
 	return nil
 }
