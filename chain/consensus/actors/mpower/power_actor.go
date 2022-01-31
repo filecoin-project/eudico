@@ -75,9 +75,9 @@ func (a Actor) AddMiners(rt Runtime, params *AddMinerParams) *abi.EmptyValue {
 	var st State
 	rt.StateTransaction(&st, func() {
 		// Miners list is replaced with the one passed as parameters
-		st.MinerCount += int64(len(params.Miners))
 		st.Miners = append(st.Miners,params.Miners...)
     	st.Miners = unique(st.Miners)
+    	st.MinerCount = int64(len(st.Miners))
 	})
 	return nil
 }
@@ -89,9 +89,17 @@ func (a Actor) RemoveMiners(rt Runtime, params *AddMinerParams) *abi.EmptyValue 
 	var st State
 	rt.StateTransaction(&st, func() {
 		// Miners list is replaced with the one passed as parameters
-		st.MinerCount -= int64(len(params.Miners))
-		// TODO: change this function to remove the list instead
-		st.Miners = append(st.Miners,params.Miners...)  
+
+		for _, minerToRemove := range params.Miners{
+			for i, oldMiner := range st.Miners{
+				if minerToRemove == oldMiner{
+					st.Miners = append(st.Miners[:i], st.Miners[i+1:]...)
+					break
+				}
+			}
+
+		} 
+		st.MinerCount = int64(len(st.Miners))
 	})
 	return nil
 }
