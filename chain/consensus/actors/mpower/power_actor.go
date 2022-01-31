@@ -18,7 +18,7 @@ type Runtime = runtime.Runtime
 
 type Actor struct{}
 
-// Power Actor address is t065 (arbitrarly choosen)
+// Mocked Power Actor address is t065 (arbitrarly choosen)
 var PowerActorAddr = func() address.Address {
 	a, err := address.NewIDAddress(65)
 	if err != nil {
@@ -30,7 +30,8 @@ var PowerActorAddr = func() address.Address {
 func (a Actor) Exports() []interface{} {
 	return []interface{}{
 		builtin.MethodConstructor: a.Constructor, // Initialiazed the actor; always required
-		2:                         a.AddMiner,    // Add a miner to the list (specificaly crafted for checkpointing)
+		2:                         a.AddMiners,    // Add a miner to the list (specificaly crafted for checkpointing)
+		3:						   a.RemoveMiners, // Remove miners from the list
 	}
 }
 
@@ -67,15 +68,30 @@ type AddMinerParams struct {
 	Miners []string
 }
 
-// Adds or removes claimed power for the calling actor.
+// Adds claimed power for the calling actor.
 // May only be invoked by a miner actor.
-func (a Actor) AddMiner(rt Runtime, params *AddMinerParams) *abi.EmptyValue {
+func (a Actor) AddMiners(rt Runtime, params *AddMinerParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerAcceptAny()
 	var st State
 	rt.StateTransaction(&st, func() {
 		// Miners list is replaced with the one passed as parameters
-		st.MinerCount += 1
-		st.Miners = params.Miners
+		st.MinerCount += len(params.Miners)
+		st.Miners = append(st.Miners,params.Miners...)
 	})
 	return nil
 }
+
+// Removes claimed power for the calling actor.
+// May only be invoked by a miner actor.
+func (a Actor) RemoveMiners(rt Runtime, params *AddMinerParams) *abi.EmptyValue {
+	rt.ValidateImmediateCallerAcceptAny()
+	var st State
+	rt.StateTransaction(&st, func() {
+		// Miners list is replaced with the one passed as parameters
+		st.MinerCount -= len(params.Miners)
+		// TODO: change this function to remove the list instead
+		st.Miners = append(st.Miners,params.Miners...)
+	})
+	return nil
+}
+

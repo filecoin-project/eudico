@@ -94,8 +94,10 @@ type CheckpointingSub struct {
 }
 
 /*
-	Initiate checkpoint module
-	It will load config and inititate CheckpointingSub struct
+	Initiate checkpoint module.
+	It will load config and initiate CheckpointingSub struct
+	using some pre-generated data. (TO: change this and re-generate
+		the data locally each time)
 */
 func NewCheckpointSub(
 	mctx helpers.MetricsCtx,
@@ -188,6 +190,8 @@ func NewCheckpointSub(
 			VerificationShares: verificationShares,
 		}
 
+		// this is where we append the original list of signers
+		// note: they are not added in the mocked power actor (they probably should? TODO)
 		for id := range config.VerificationShares {
 			minerSigners = append(minerSigners, string(id))
 		}
@@ -307,7 +311,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 		// Wait for more tipset to valid the height and be sure it is valid
 		// NOTES: should retrieve list of signing miners using Power actor state (see Miners) and not through config instanciation
 		if newTs.Height()%25 == 0 && (c.config != nil || c.newconfig != nil) {
-			log.Infow("Checkpoint time")
+			log.Infow("Checkpointing time")
 
 			// Initiation and config should be happening at start
 			cp := oldTs.Key().Bytes()
@@ -358,6 +362,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 		// If Power Actors list has changed start DKG
 		// Changes detected so generate new key
 		if oldSt.MinerCount != newSt.MinerCount {
+		//if oldSt.Miners != newSt.Miners {
 			log.Infow("Generate new aggregated key")
 			err := c.GenerateNewKeys(ctx, newSt.Miners)
 			if err != nil {
