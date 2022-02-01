@@ -138,8 +138,8 @@ func BlockSanityChecks(ctype hierarchical.ConsensusType, h *types.BlockHeader) e
 			return xerrors.Errorf("block must have nil ticket")
 		}
 	case hierarchical.Tendermint:
-		if h.Ticket != nil {
-			return xerrors.Errorf("block must have nil ticket: ", h.Ticket)
+		if h.Ticket == nil {
+			return xerrors.Errorf("block must have a ticket: ", h.Ticket)
 		}
 	default:
 		// FIXME: We currently support PoW and delegated, thus the
@@ -148,10 +148,9 @@ func BlockSanityChecks(ctype hierarchical.ConsensusType, h *types.BlockHeader) e
 		if h.Ticket == nil {
 			return xerrors.Errorf("block must not have nil ticket")
 		}
-	}
-
-	if h.BlockSig == nil {
-		return xerrors.Errorf("block had nil signature")
+		if h.BlockSig == nil {
+			return xerrors.Errorf("block had nil signature")
+		}
 	}
 
 	if h.BLSAggregate == nil {

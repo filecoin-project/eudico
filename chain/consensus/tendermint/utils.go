@@ -13,7 +13,6 @@ import (
 	httptendermintrpcclient "github.com/tendermint/tendermint/rpc/client/http"
 	tenderminttypes "github.com/tendermint/tendermint/types"
 
-	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
@@ -64,16 +63,6 @@ func parseTendermintBlock(b *tenderminttypes.Block, dst *tendermintBlockInfo, ta
 	dst.messages = msgs
 	dst.crossMsgs = crossMsgs
 }
-
-func signBlock(b *types.FullBlock, h []byte) error {
-	b.Header.BlockSig = &crypto.Signature{
-		//TODO: use this incorrect type to not modify "crypto/signature" upstream
-		Type: crypto.SigTypeSecp256k1,
-		Data: h,
-	}
-	return nil
-}
-
 
 func getMessageMapFromTendermintBlock(tb *tenderminttypes.Block) (map[[32]byte]bool, error) {
 	msgs := make(map[[32]byte]bool)

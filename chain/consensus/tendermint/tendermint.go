@@ -359,7 +359,7 @@ func (tendermint *Tendermint) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
 
 func (tendermint *Tendermint) ValidateBlockPubsub(ctx context.Context, self bool, msg *pubsub.Message) (pubsub.ValidationResult, string) {
 	if self {
-		return common.ValidateLocalBlock(ctx, msg)
+		return validateLocalBlock(ctx, msg)
 	}
 
 	// track validation time
@@ -375,7 +375,7 @@ func (tendermint *Tendermint) ValidateBlockPubsub(ctx context.Context, self bool
 		panic(what)
 	}
 
-	blk, what, err := common.DecodeAndCheckBlock(msg)
+	blk, what, err := decodeAndCheckBlock(msg)
 	if err != nil {
 		log.Error("got invalid block over pubsub: ", err)
 		recordFailureFlagPeer(what)

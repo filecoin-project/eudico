@@ -4,6 +4,11 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"fmt"
+	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/metrics"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"go.opencensus.io/stats"
 
 	"github.com/ipfs/go-cid"
 	tenderminttypes "github.com/tendermint/tendermint/types"
@@ -187,9 +192,46 @@ func isBlockSealed(fb *types.FullBlock, tb *tenderminttypes.Block) (bool, error)
 		}
 	}
 
-	if !bytes.Equal(fb.Header.BlockSig.Data, tb.Hash().Bytes()) {
-		log.Infof("block tendermint hash is invalid %x", fb.Header.BlockSig.Data)
+	if !bytes.Equal(fb.Header.Ticket.VRFProof, tb.Hash().Bytes()) {
+		log.Infof("block tendermint hash is invalid %x", fb.Header.Ticket.VRFProof)
 		return false, xerrors.New("block tendermint hash is invalid")
 	}
 	return true, nil
+}
+
+func validateLocalBlock(ctx context.Context, msg *pubsub.Message) (pubsub.ValidationResult, string) {
+	stats.Record(ctx, metrics.BlockPublished.M(1))
+
+	if size := msg.Size(); size > 1<<20-1<<15 {
+		log.Errorf("ignoring oversize block (%dB)", size)
+		return pubsub.ValidationIgnore, "oversize_block"
+	}
+
+	blk, what, err := decodeAndCheckBlock(msg)
+	if err != nil {
+		log.Errorf("got invalid local block: %s", err)
+		return pubsub.ValidationIgnore, what
+	}
+
+	msg.ValidatorData = blk
+	stats.Record(ctx, metrics.BlockValidationSuccess.M(1))
+	return pubsub.ValidationAccept, ""
+}
+
+func decodeAndCheckBlock(msg *pubsub.Message) (*types.BlockMsg, string, error) {
+	blk, err := types.DecodeBlockMsg(msg.GetData())
+	if err != nil {
+		return nil, "invalid", xerrors.Errorf("error decoding block: %w", err)
+	}
+
+	if count := len(blk.BlsMessages) + len(blk.SecpkMessages); count > build.BlockMessageLimit {
+		return nil, "too_many_messages", fmt.Errorf("block contains too many messages (%d)", count)
+	}
+
+	// make sure we have a signature
+	if blk.Header.BlockSig != nil {
+		return nil, "missing_signature", fmt.Errorf("block with a signature")
+	}
+
+	return blk, "", nil
 }

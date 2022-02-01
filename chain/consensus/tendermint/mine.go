@@ -240,10 +240,7 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 		b.CrossMessages = validMsgs.CrossMsgs
 	}
 
-	err = signBlock(b, tb.hash)
-	if err != nil {
-		return nil, err
-	}
+	b.Header.Ticket = &types.Ticket{VRFProof: tb.hash}
 
 	/*
 		err = tendermint.validateBlock(ctx, b)
