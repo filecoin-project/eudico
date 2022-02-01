@@ -121,7 +121,7 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 		return nil, nil, xerrors.Errorf("set init actor: %w", err)
 	}
 
-	// Create empty power actor
+	// Create empty mocked power actor
 	spact, err := SetupStoragePowerActor(ctx, bs, av)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup storage power actor: %w", err)

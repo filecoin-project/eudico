@@ -89,8 +89,6 @@ type CheckpointingSub struct {
 	synced bool
 	// height verified! (the height of the latest checkpoint)
 	height abi.ChainEpoch
-	// mocked actor includes all the 
-	mockedState mpower.State
 
 
 	// add intitial taproot address here
@@ -207,14 +205,16 @@ func NewCheckpointSub(
 
 	}
 
-	// get the mocked power actor variable
-	//actor, err := api.StateGetActor(ctx, mpower.PowerActorAddr, oldTs.Key())
-	// if err != nil {
-	// 	return false, nil, err
+	// Initialize mocked actor --> move this to state tree at genesis
+	// params := &mpower.State{
+	// 	MinerCount:      int64(len(minerSigners)),
+	// 	Miners: minerSigners,
 	// }
-	var mockedState mpower.State
-	mockedState.Miners = minerSigners
-	mockedState.MinerCount = int64(len(minerSigners))
+	// mpoweract, err := SetupMPowerActor(ctx, bs, params)
+	// if err != nil {
+	// 	return nil, nil, err
+	// }
+
 
 	// Initialize minio client object
 	minioClient, err := minio.New(cpconfig.MinioHost, &minio.Options{
@@ -239,7 +239,6 @@ func NewCheckpointSub(
 		cpconfig:     &cpconfig,
 		minioClient:  minioClient,
 		synced:       synced,
-		mockedState: mockedState,
 	}, nil
 }
 
@@ -330,11 +329,12 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 		// NOTES: this will only work in delegated consensus
 		// Wait for more tipset to valid the height and be sure it is valid
 		// NOTE (lola): should retrieve list of signing miners using Power actor state (see Miners) and not through config instanciation
-		if newTs.Height()%15 == 0 && (c.taprootConfig != nil || c.newTaprootConfig != nil) {
+		// we are checking that the list of mocked actor is not empty
+		if newTs.Height()%15 == 0 && len(oldSt.Miners) > 0 && (c.taprootConfig != nil || c.newTaprootConfig != nil) {
 			log.Infow("Checkpointing time")
 
 			// Initiation and config should be happening at start
-			cp := oldTs.Key().Bytes()
+			cp := oldTs.Key().Bytes() // this is the checkpoint 
 
 			// If we don't have a taprootconfig we don't sign but update our config with key
 			// NOTE: `taprootconfig` refers to the config as mentioned in the multi-party-sig lib
@@ -351,11 +351,11 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 				c.newTaprootConfig = nil
 
 			} else {
-				// Change name to MinerConfig (checkpoint in hex and miners list)?
+				// Miners config is the data that will be stored for now in Minio, later on a eudico-KVS
 				var minersConfig string = hex.EncodeToString(cp) + "\n"
 				// c.orderParticipantsList() orders the miners from the taproot config --> to change
 				//for _, partyId := range c.orderParticipantsList() {
-				for _, partyId := range oldSt.Miners{
+				for _, partyId := range newSt.Miners{ // list of new miners
 					minersConfig += partyId + "\n"
 				}
 
@@ -375,7 +375,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 
 				// the checkpoint is created by the "previous" set of miners
 				// so that the new key is updated
-				err = c.CreateCheckpoint(ctx, cp, hash, c.mockedState.Miners)
+				err = c.CreateCheckpoint(ctx, cp, hash, oldSt.Miners)
 				if err != nil {
 					log.Errorf("could not create checkpoint: %v", err)
 					return false, nil, err
@@ -395,8 +395,6 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 				log.Errorf("error while generating new key: %v", err)
 				// If generating new key failed, checkpointing should not be possible
 			}
-
-			c.mockedState = newSt
 
 			return true, nil, nil // true mean generate keys
 		}
@@ -498,136 +496,146 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 
 func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte, participants []string) error {
 
-	taprootAddress, err := pubkeyToTapprootAddress(c.pubkey)
-	if err != nil {
-		return err
-	}
+	// check if self is included in the set of participants (e.g, if I'm a new miner that
+	// wasn't part of the last DKG, I don't sign because I don't have a share of the private key)
 
-	pubkey := c.taprootConfig.PublicKey
-	if c.newTaprootConfig != nil {
-		pubkey = c.newTaprootConfig.PublicKey
-	}
+	for _, participant := range(participants){
+		if participant == c.host.ID().String(){
+			taprootAddress, err := pubkeyToTapprootAddress(c.pubkey)
+			if err != nil {
+				return err
+			}
 
-	pubkeyShort := genCheckpointPublicKeyTaproot(pubkey, cp)
-	newTaprootAddress, err := pubkeyToTapprootAddress(pubkeyShort)
-	if err != nil {
-		return err
-	}
+			pubkey := c.taprootConfig.PublicKey
+			if c.newTaprootConfig != nil {
+				pubkey = c.newTaprootConfig.PublicKey
+			}
 
-	// the list of participants is ordered
-	// we will chose the "first" half of participants
-	// in order to sign the transaction in the threshold signing.
-	// In later improvement we will choose them randomly.
-	//idsStrings := c.orderParticipantsList() // this needs to be changed
-	// the ordered list should not be taken from the mocked actor, not the taproot config
+			pubkeyShort := genCheckpointPublicKeyTaproot(pubkey, cp)
+			newTaprootAddress, err := pubkeyToTapprootAddress(pubkeyShort)
+			if err != nil {
+				return err
+			}
 
-	// list from mocked power actor:
-	sort.Strings(participants)
-	idsStrings := participants
-	
-	log.Infow("participants list :", "participants", idsStrings)
-	log.Infow("precedent tx", "txid", c.ptxid)
-	ids := c.formIDSlice(idsStrings)
+			// the list of participants is ordered
+			// we will chose the "first" half of participants
+			// in order to sign the transaction in the threshold signing.
+			// In later improvement we will choose them randomly.
+			//idsStrings := c.orderParticipantsList() // this needs to be changed
+			// the ordered list should not be taken from the mocked actor, not the taproot config
 
-	if c.ptxid == "" {
-		log.Infow("missing precedent txid")
-		taprootScript := getTaprootScript(c.pubkey)
-		success := addTaprootToWallet(c.cpconfig.BitcoinHost, taprootScript)
-		if !success {
-			return xerrors.Errorf("failed to add taproot address to wallet")
+			// list from mocked power actor:
+			sort.Strings(participants)
+			idsStrings := participants
+			
+			log.Infow("participants list :", "participants", idsStrings)
+			log.Infow("precedent tx", "txid", c.ptxid)
+			ids := c.formIDSlice(idsStrings)
+
+			if c.ptxid == "" {
+				log.Infow("missing precedent txid")
+				taprootScript := getTaprootScript(c.pubkey)
+				success := addTaprootToWallet(c.cpconfig.BitcoinHost, taprootScript)
+				if !success {
+					return xerrors.Errorf("failed to add taproot address to wallet")
+				}
+
+				// sleep an arbitrary long time to be sure it has been scanned
+				time.Sleep(6 * time.Second)
+
+				ptxid, err := walletGetTxidFromAddress(c.cpconfig.BitcoinHost, taprootAddress)
+				if err != nil {
+					return err
+				}
+				c.ptxid = ptxid
+				log.Infow("found precedent txid:", "txid", c.ptxid)
+			}
+
+			index := 0
+			value, scriptPubkeyBytes := getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
+
+			if scriptPubkeyBytes[0] != 0x51 {
+				log.Infow("wrong txout")
+				index = 1
+				value, scriptPubkeyBytes = getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
+			}
+			newValue := value - c.cpconfig.Fee
+
+			payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.2f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
+			result := jsonRPC(c.cpconfig.BitcoinHost, payload)
+			if result == nil {
+				return xerrors.Errorf("cant create new transaction")
+			}
+
+			rawTransaction := result["result"].(string)
+
+			tx, err := hex.DecodeString(rawTransaction)
+			if err != nil {
+				return err
+			}
+
+			var buf [8]byte
+			binary.LittleEndian.PutUint64(buf[:], uint64(value*100000000))
+			utxo := append(buf[:], []byte{34}...)
+			utxo = append(utxo, scriptPubkeyBytes...)
+
+			hashedTx, err := TaprootSignatureHash(tx, utxo, 0x00)
+			if err != nil {
+				return err
+			}
+
+			/*
+			 * Orchestrate the signing message
+			 */
+
+			log.Infow("starting signing")
+			f := frost.SignTaprootWithTweak(c.taprootConfig, ids, hashedTx[:], c.tweakedValue[:])
+			n := NewNetwork(c.sub, c.topic)
+			// hashedTx[:] is the session id
+			// ensure everyone is on the same session id
+			handler, err := protocol.NewMultiHandler(f, hashedTx[:])
+			if err != nil {
+				return err
+			}
+			LoopHandler(ctx, handler, n)
+			r, err := handler.Result()
+			if err != nil {
+				return err
+			}
+			log.Infow("result :", "result", r)
+
+			// if signing is a success we register the new value
+			merkleRoot := hashMerkleRoot(pubkey, cp)
+			c.tweakedValue = hashTweakedValue(pubkey, merkleRoot)
+			c.pubkey = pubkeyShort
+
+			// If new config used
+			if c.newTaprootConfig != nil {
+				c.taprootConfig = c.newTaprootConfig
+				c.newTaprootConfig = nil
+			}
+
+			c.ptxid = ""
+
+			// Only first one broadcast the transaction ?
+			// Actually all participants can broadcast the transcation. It will be the same everywhere.
+			rawtx := prepareWitnessRawTransaction(rawTransaction, r.(taproot.Signature))
+
+			payload = "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendrawtransaction\", \"params\": [\"" + rawtx + "\"]}"
+			result = jsonRPC(c.cpconfig.BitcoinHost, payload)
+			if result["error"] != nil {
+				return xerrors.Errorf("failed to broadcast transaction")
+			}
+
+			/* Need to keep this to build next one */
+			newtxid := result["result"].(string)
+			log.Infow("new Txid:", "newtxid", newtxid)
+			c.ptxid = newtxid
+
+			break
 		}
-
-		// sleep an arbitrary long time to be sure it has been scanned
-		time.Sleep(6 * time.Second)
-
-		ptxid, err := walletGetTxidFromAddress(c.cpconfig.BitcoinHost, taprootAddress)
-		if err != nil {
-			return err
-		}
-		c.ptxid = ptxid
-		log.Infow("found precedent txid:", "txid", c.ptxid)
 	}
 
-	index := 0
-	value, scriptPubkeyBytes := getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
-
-	if scriptPubkeyBytes[0] != 0x51 {
-		log.Infow("wrong txout")
-		index = 1
-		value, scriptPubkeyBytes = getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
-	}
-	newValue := value - c.cpconfig.Fee
-
-	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.2f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
-	result := jsonRPC(c.cpconfig.BitcoinHost, payload)
-	if result == nil {
-		return xerrors.Errorf("cant create new transaction")
-	}
-
-	rawTransaction := result["result"].(string)
-
-	tx, err := hex.DecodeString(rawTransaction)
-	if err != nil {
-		return err
-	}
-
-	var buf [8]byte
-	binary.LittleEndian.PutUint64(buf[:], uint64(value*100000000))
-	utxo := append(buf[:], []byte{34}...)
-	utxo = append(utxo, scriptPubkeyBytes...)
-
-	hashedTx, err := TaprootSignatureHash(tx, utxo, 0x00)
-	if err != nil {
-		return err
-	}
-
-	/*
-	 * Orchestrate the signing message
-	 */
-
-	log.Infow("starting signing")
-	f := frost.SignTaprootWithTweak(c.taprootConfig, ids, hashedTx[:], c.tweakedValue[:])
-	n := NewNetwork(c.sub, c.topic)
-	// hashedTx[:] is the session id
-	// ensure everyone is on the same session id
-	handler, err := protocol.NewMultiHandler(f, hashedTx[:])
-	if err != nil {
-		return err
-	}
-	LoopHandler(ctx, handler, n)
-	r, err := handler.Result()
-	if err != nil {
-		return err
-	}
-	log.Infow("result :", "result", r)
-
-	// if signing is a success we register the new value
-	merkleRoot := hashMerkleRoot(pubkey, cp)
-	c.tweakedValue = hashTweakedValue(pubkey, merkleRoot)
-	c.pubkey = pubkeyShort
-
-	// If new config used
-	if c.newTaprootConfig != nil {
-		c.taprootConfig = c.newTaprootConfig
-		c.newTaprootConfig = nil
-	}
-
-	c.ptxid = ""
-
-	// Only first one broadcast the transaction ?
-	// Actually all participants can broadcast the transcation. It will be the same everywhere.
-	rawtx := prepareWitnessRawTransaction(rawTransaction, r.(taproot.Signature))
-
-	payload = "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendrawtransaction\", \"params\": [\"" + rawtx + "\"]}"
-	result = jsonRPC(c.cpconfig.BitcoinHost, payload)
-	if result["error"] != nil {
-		return xerrors.Errorf("failed to broadcast transaction")
-	}
-
-	/* Need to keep this to build next one */
-	newtxid := result["result"].(string)
-	log.Infow("new Txid:", "newtxid", newtxid)
-	c.ptxid = newtxid
 
 	return nil
 }
