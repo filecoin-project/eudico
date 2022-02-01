@@ -355,7 +355,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 				var minersConfig string = hex.EncodeToString(cp) + "\n"
 				// c.orderParticipantsList() orders the miners from the taproot config --> to change
 				//for _, partyId := range c.orderParticipantsList() {
-				for _, partyId := range newSt.Miners{
+				for _, partyId := range oldSt.Miners{
 					minersConfig += partyId + "\n"
 				}
 
@@ -375,7 +375,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 
 				// the checkpoint is created by the "previous" set of miners
 				// so that the new key is updated
-				err = c.CreateCheckpoint(ctx, cp, hash, oldSt.Miners)
+				err = c.CreateCheckpoint(ctx, cp, hash, c.mockedState.Miners)
 				if err != nil {
 					log.Errorf("could not create checkpoint: %v", err)
 					return false, nil, err
