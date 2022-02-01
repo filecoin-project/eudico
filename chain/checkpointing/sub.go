@@ -379,6 +379,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 					c.participants = newSt.Miners
 					fmt.Println("participants list updated")
 					fmt.Println(c.participants)
+					c.newDKGComplete = false
 				}
 			}
 		}
@@ -503,6 +504,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 
 	for _, participant := range(participants){
 		if participant == c.host.ID().String(){
+			fmt.Println("I'm a checkpointer")
 			taprootAddress, err := pubkeyToTapprootAddress(c.pubkey)
 			if err != nil {
 				return err
@@ -591,7 +593,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 			/*
 			 * Orchestrate the signing message
 			 */
-
+			fmt.Println("I'm starting the checkpointing")
 			log.Infow("starting signing")
 			f := frost.SignTaprootWithTweak(c.taprootConfig, ids, hashedTx[:], c.tweakedValue[:])
 			n := NewNetwork(c.sub, c.topic)
