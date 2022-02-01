@@ -345,6 +345,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 				c.tweakedValue = hashTweakedValue(pubkey, merkleRoot)
 				c.pubkey = pubkeyShort
 				c.newTaprootConfig = nil
+				c.participants = newSt.Miners
 
 			} else {
 				// Miners config is the data that will be stored for now in Minio, later on a eudico-KVS
