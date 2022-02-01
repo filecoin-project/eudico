@@ -71,6 +71,8 @@ type CheckpointingSub struct {
 	pubkey []byte
 	// Participants list identified with their libp2p cid
 	participants []string
+	// boolean to help us keep track of when the DKG has finished
+	newDKGComplete bool
 	// taproot config
 	taprootConfig *keygen.TaprootConfig
 	// new config generated
@@ -199,21 +201,10 @@ func NewCheckpointSub(
 		// note: they are not added in the mocked power actor (they probably should? TODO)
 		for id := range taprootConfig.VerificationShares {
 			minerSigners = append(minerSigners, string(id))
-			//todo: append to mocked actor here
 		}
 
 
 	}
-
-	// Initialize mocked actor --> move this to state tree at genesis
-	// params := &mpower.State{
-	// 	MinerCount:      int64(len(minerSigners)),
-	// 	Miners: minerSigners,
-	// }
-	// mpoweract, err := SetupMPowerActor(ctx, bs, params)
-	// if err != nil {
-	// 	return nil, nil, err
-	// }
 
 
 	// Initialize minio client object
@@ -225,6 +216,7 @@ func NewCheckpointSub(
 		return nil, err
 	}
 
+
 	return &CheckpointingSub{
 		pubsub:       pubsub,
 		topic:        nil,
@@ -235,6 +227,7 @@ func NewCheckpointSub(
 		ptxid:        "",
 		taprootConfig:       taprootConfig,
 		participants: minerSigners,
+		newDKGComplete: false,
 		newTaprootConfig:    nil,
 		cpconfig:     &cpconfig,
 		minioClient:  minioClient,
@@ -375,22 +368,29 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 
 				// the checkpoint is created by the "previous" set of miners
 				// so that the new key is updated
-				err = c.CreateCheckpoint(ctx, cp, hash, oldSt.Miners)
+				err = c.CreateCheckpoint(ctx, cp, hash, c.participants)
 				if err != nil {
 					log.Errorf("could not create checkpoint: %v", err)
 					return false, nil, err
+				}
+				// if there was a new configuration,
+				// replace the set of participants with new state of participant
+				if c.newDKGComplete {
+					c.participants = newSt.Miners
 				}
 			}
 		}
 
 		// If Power Actors list has changed start DKG
 		// Changes detected so generate new key
-		//if oldSt.MinerCount != newSt.MinerCount {
+		// will change this to be triggered only if the difference is greater than some param
 		if !reflect.DeepEqual(oldSt.Miners, newSt.Miners) {
 			log.Infow("Generate new aggregated key")
 			err := c.GenerateNewKeys(ctx, newSt.Miners)
 			// need to update participants list here as well otherwise checkpointing does
 			// not work after removing a participants --> this is done in the function
+			// c.newParticipants = newSt.Miners
+			//c.participants = oldSt.Miners
 			if err != nil {
 				log.Errorf("error while generating new key: %v", err)
 				// If generating new key failed, checkpointing should not be possible
@@ -489,7 +489,7 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 		return xerrors.Errorf("state change propagated is the wrong type")
 	}
 
-	c.participants = participants
+	c.newDKGComplete = true
 
 	return nil
 }
@@ -507,6 +507,8 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 			}
 
 			pubkey := c.taprootConfig.PublicKey
+
+			// if a new public key was generated (i.e. new miners), we use this key in the checkpoint
 			if c.newTaprootConfig != nil {
 				pubkey = c.newTaprootConfig.PublicKey
 			}
@@ -609,7 +611,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 			c.tweakedValue = hashTweakedValue(pubkey, merkleRoot)
 			c.pubkey = pubkeyShort
 
-			// If new config used
+			// If we have new config, we replace the previous config with this config
 			if c.newTaprootConfig != nil {
 				c.taprootConfig = c.newTaprootConfig
 				c.newTaprootConfig = nil
@@ -685,20 +687,20 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 	// Get first checkpoint from eudico block 0
 	ts, err := c.api.ChainGetGenesis(ctx)
 	if err != nil {
-		log.Errorf("couldnt get genesis tipset: %v", err)
+		log.Errorf("could not get genesis tipset: %v", err)
 		return
 	}
 	cidBytes := ts.Key().Bytes()// this is the checkpoint (i.e. hash of block)
 	publickey, err := hex.DecodeString(c.cpconfig.PublicKey)
 	if err != nil {
-		log.Errorf("couldnt decode public key: %v", err)
+		log.Errorf("could not decode public key: %v", err)
 		return
 	}
 
 	// Get the last checkpoint from the bitcoin node
 	btccp, err := GetLatestCheckpoint(c.cpconfig.BitcoinHost, publickey, cidBytes)
 	if err != nil {
-		log.Errorf("couldnt decode public key: %v", err)
+		log.Errorf("could not decode public key: %v", err)
 		return
 	}
 
@@ -710,13 +712,13 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 		// Decode hex checkpoint to bytes
 		cpBytes, err := hex.DecodeString(cp)
 		if err != nil {
-			log.Errorf("couldnt decode checkpoint: %v", err)
+			log.Errorf("could not decode checkpoint: %v", err)
 			return
 		}
 		// Cache latest checkpoint value from Bitcoin for when we sync and compare wit Eudico key tipset values
 		c.latestConfigCheckpoint, err = types.TipSetKeyFromBytes(cpBytes)
 		if err != nil {
-			log.Errorf("couldnt get tipset key from checkpoint: %v", err)
+			log.Errorf("could not get tipset key from checkpoint: %v", err)
 			return
 		}
 	}
@@ -740,7 +742,7 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 	// Start the checkpoint module
 	err = c.Start(ctx)
 	if err != nil {
-		log.Errorf("couldn't start checkpointing module: %v", err)
+		log.Errorf("could not start checkpointing module: %v", err)
 	}
 
 	lc.Append(fx.Hook{
