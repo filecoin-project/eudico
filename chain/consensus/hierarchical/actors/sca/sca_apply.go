@@ -29,11 +29,11 @@ func applyTopDown(rt runtime.Runtime, msg types.Message) {
 	sto, err := msg.To.Subnet()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get subnet from HAddress")
 
-	if hierarchical.GetMsgType(&msg) != hierarchical.TopDown {
-		rt.Abortf(exitcode.ErrIllegalArgument, "msg passed as argument not topDown")
-	}
-
 	rt.StateTransaction(&st, func() {
+		if bu, err := hierarchical.ApplyAsBottomUp(st.NetworkName, &msg); bu {
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error checking type of message to be applied")
+			rt.Abortf(exitcode.ErrIllegalArgument, "msg passed as argument not topDown")
+		}
 		// NOTE: Check if the nonce of the message being applied is the subsequent one (we could relax a bit this
 		// requirement, but it would mean that we need to determine how we want to handle gaps, and messages
 		// being validated out-of-order).
@@ -80,31 +80,29 @@ func applyBottomUp(rt runtime.Runtime, msg types.Message) {
 	_, rto := fromToRawAddr(rt, msg.From, msg.To)
 	sto, err := msg.To.Subnet()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get subnet from HAddress")
-	sFrom, err := msg.From.Subnet()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting subnet from HAddress")
-
-	if hierarchical.GetMsgType(&msg) != hierarchical.BottomUp {
-		rt.Abortf(exitcode.ErrIllegalArgument, "msg passed as argument not bottomUp")
-	}
 
 	rt.StateTransaction(&st, func() {
+		if bu, err := hierarchical.ApplyAsBottomUp(st.NetworkName, &msg); !bu {
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error checking type of message to be applied")
+			rt.Abortf(exitcode.ErrIllegalArgument, "msg passed as argument not bottomup")
+		}
 		bottomUpStateTransition(rt, &st, msg)
-		st.releaseCircSupply(rt, sFrom, msg.Value)
 
 		if sto != st.NetworkName {
 			// If directed to a child we need to commit message as a
 			// top-down transaction to propagate it down.
 			commitTopDownMsg(rt, &st, msg)
-			return
 		}
 	})
 
-	// Release funds to the destination address if it is directed to the current network.
-	// FIXME: We currently don't support sending messages with arbitrary params. We should
-	// support this.
-	code := rt.Send(rto, msg.Method, nil, msg.Value, &builtin.Discard{})
-	if !code.IsSuccess() {
-		noop(rt, code)
+	if sto == st.NetworkName {
+		// Release funds to the destination address if it is directed to the current network.
+		// FIXME: We currently don't support sending messages with arbitrary params. We should
+		// support this.
+		code := rt.Send(rto, msg.Method, nil, msg.Value, &builtin.Discard{})
+		if !code.IsSuccess() {
+			noop(rt, code)
+		}
 	}
 }
 

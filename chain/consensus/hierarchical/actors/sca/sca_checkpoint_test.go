@@ -262,6 +262,8 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 	// And to this subnet
 	addMsgMeta(ch, sh.ID, address.SubnetID(netName), "", big.Zero())
 	addMsgMeta(ch, sh.ID, address.SubnetID(netName), "rand", big.Zero())
+	// And to a child from other branch (with cross-net messages)
+	addMsgMeta(ch, sh.ID, address.SubnetID(netName+"/f02"), "rand", big.Zero())
 	prevcid, _ := ch.Cid()
 
 	b, err := ch.MarshalBinary()
@@ -281,12 +283,11 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 
 	// Check that the BottomUpMsgs to be applied are added
 	st := getState(rt)
-	_, found, err = st.GetBottomUpMsgMeta(adt.AsStore(rt), 0)
-	require.NoError(t, err)
-	require.True(t, found)
-	_, found, err = st.GetBottomUpMsgMeta(adt.AsStore(rt), 1)
-	require.NoError(t, err)
-	require.True(t, found)
+	for i := uint64(0); i < 3; i++ {
+		_, found, err = st.GetBottomUpMsgMeta(adt.AsStore(rt), i)
+		require.NoError(t, err)
+		require.True(t, found)
+	}
 
 	// Check msgMeta to other subnets are aggregated
 	m := windowCh.CrossMsgs()

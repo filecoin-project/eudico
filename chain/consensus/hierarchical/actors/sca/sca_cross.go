@@ -2,6 +2,7 @@ package sca
 
 import (
 	"context"
+	"fmt"
 
 	address "github.com/filecoin-project/go-address"
 	abi "github.com/filecoin-project/go-state-types/abi"
@@ -10,7 +11,6 @@ import (
 	bstore "github.com/filecoin-project/lotus/blockstore"
 	schema "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	ltypes "github.com/filecoin-project/lotus/chain/types"
-	types "github.com/filecoin-project/lotus/chain/types"
 	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
@@ -116,7 +116,7 @@ func (cm *CrossMsgs) AddMsgMeta(from, to address.SubnetID, meta schema.CrossMsgM
 	cm.Metas = append(cm.Metas, meta)
 }
 
-func (st *SCAState) releaseMsg(rt runtime.Runtime, value big.Int, to address.Address, nonce uint64) types.Message {
+func (st *SCAState) releaseMsg(rt runtime.Runtime, value big.Int, to address.Address, nonce uint64) ltypes.Message {
 	// The way we identify it is a release message from the subnet is by
 	// setting the burntFundsActor as the from of the message
 	// See hierarchical/types.go
@@ -154,6 +154,7 @@ func (st *SCAState) storeBottomUpMsgMeta(rt runtime.Runtime, meta schema.CrossMs
 	st.BottomUpMsgsMeta, err = crossMsgs.Root()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush cross-messages")
 
+	fmt.Println(">>> Storing bottom up message for application in subnet/nonce", st.NetworkName, meta.Nonce)
 	// Increase nonce.
 	incrementNonce(rt, &st.BottomUpNonce)
 }

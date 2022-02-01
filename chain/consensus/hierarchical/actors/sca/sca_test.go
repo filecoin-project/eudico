@@ -350,12 +350,11 @@ func verifyEmptyMap(t testing.TB, rt *mock.Runtime, cid cid.Cid) {
 	assert.Empty(t, keys)
 }
 
-func (h *shActorHarness) registerSubnet(rt *mock.Runtime, parent address.SubnetID) {
-	SubnetActorAddr := tutil.NewIDAddr(h.t, 101)
+func (h *shActorHarness) registerSubnet(rt *mock.Runtime, parent address.SubnetID, snAddr address.Address) {
 	h.t.Log("register new subnet successfully")
 	// Send 2FIL of stake
 	value := abi.NewTokenAmount(2e18)
-	rt.SetCaller(SubnetActorAddr, actors.SubnetActorCodeID)
+	rt.SetCaller(snAddr, actors.SubnetActorCodeID)
 	rt.SetReceived(value)
 	rt.SetBalance(value)
 	// Only subnet actors can call.
@@ -364,11 +363,10 @@ func (h *shActorHarness) registerSubnet(rt *mock.Runtime, parent address.SubnetI
 	ret := rt.Call(h.SubnetCoordActor.Register, nil)
 	res, ok := ret.(*actor.SubnetIDParam)
 	require.True(h.t, ok)
-	shid := address.NewSubnetID(parent, SubnetActorAddr)
+	shid := address.NewSubnetID(parent, snAddr)
 	// Verify the return value is correct.
 	require.Equal(h.t, res.ID, shid.String())
 	rt.Verify()
-	require.Equal(h.t, getState(rt).TotalSubnets, uint64(1))
 	h.sn = shid
 }
 

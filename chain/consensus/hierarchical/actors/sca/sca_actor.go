@@ -310,8 +310,6 @@ func (st *SCAState) applyCheckMsgs(rt runtime.Runtime, windowCh *schema.Checkpoi
 			!hierarchical.IsBottomUp(st.NetworkName, address.SubnetID(mm.To)) {
 			// Add to BottomUpMsgMeta
 			st.storeBottomUpMsgMeta(rt, mm)
-			// FIXME: Circulating supply for directed message applied in application.
-			// Any good reason why not doing it here?
 		} else {
 			// Check if it comes from a valid child, i.e. we are their parent.
 			if address.SubnetID(mm.From).Parent() != st.NetworkName {
@@ -328,12 +326,12 @@ func (st *SCAState) applyCheckMsgs(rt runtime.Runtime, windowCh *schema.Checkpoi
 				aux[mm.To] = append(aux[mm.To], mm)
 			}
 
-			// Value leaving in a crossMsgMeta needs to be burnt to update circ.supply
-			v, err := mm.GetValue()
-			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting value from meta")
-			burnValue = big.Add(burnValue, v)
-			st.releaseCircSupply(rt, address.SubnetID(mm.From), v)
 		}
+		// Value leaving in a crossMsgMeta needs to be burnt to update circ.supply
+		v, err := mm.GetValue()
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting value from meta")
+		burnValue = big.Add(burnValue, v)
+		st.releaseCircSupply(rt, address.SubnetID(mm.From), v)
 	}
 
 	// Aggregate all the msgsMeta directed to other subnets in the hierarchy
@@ -491,10 +489,9 @@ func (a SubnetCoordActor) Release(rt runtime.Runtime, _ *abi.EmptyValue) *abi.Em
 
 func commitBottomUpMsg(rt runtime.Runtime, st *SCAState, msg types.Message) {
 	// Store msg in registry, update msgMeta and include in checkpoint
-	//
-	// It is a releaseMsg so the source is the current chain and the
-	// destination is our parent chain.
-	st.storeCheckMsg(rt, msg, st.NetworkName, st.NetworkName.Parent())
+	sto, err := msg.To.Subnet()
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting subnet from address")
+	st.storeCheckMsg(rt, msg, st.NetworkName, sto)
 
 	// Increase nonce.
 	incrementNonce(rt, &st.Nonce)
@@ -522,6 +519,9 @@ func (a SubnetCoordActor) SendCross(rt runtime.Runtime, params *CrossMsgParams) 
 	msg := params.Msg
 	var err error
 
+	if params.Destination == address.UndefSubnetID {
+		rt.Abortf(exitcode.ErrIllegalArgument, "no desination subnet specified in cross-net message")
+	}
 	// Get SECP/BLS publickey to know the specific actor ID in the target subnet to
 	// whom the funds need to be sent.
 	// Funds are sent to the ID that controls the actor account in the destination subnet.
@@ -529,34 +529,45 @@ func (a SubnetCoordActor) SendCross(rt runtime.Runtime, params *CrossMsgParams) 
 	// support cross-messages sent by actors.
 	secp := SecpBLSAddr(rt, rt.Caller())
 
-	var st SCAState
+	var (
+		st SCAState
+		tp hierarchical.MsgType
+	)
+
 	rt.StateTransaction(&st, func() {
+		if params.Destination == address.UndefSubnetID {
+			rt.Abortf(exitcode.ErrIllegalArgument, "destination subnet is current one. You are better of sending a good ol' msg")
+		}
 		// Transform to hierarchical-supported addresses
-		msg.To, err = address.NewHAddress(params.Destination, secp)
+		// NOTE: There is no address translation in msg.To. We could add additional
+		// checks to see the type of address and handle it accordingly.
+		msg.To, err = address.NewHAddress(params.Destination, msg.To)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
 		msg.From, err = address.NewHAddress(st.NetworkName, secp)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
 
+		tp = hierarchical.GetMsgType(&msg)
 		// Check the type of message.
-		switch hierarchical.GetMsgType(&msg) {
+		switch tp {
 		case hierarchical.TopDown:
 			commitTopDownMsg(rt, &st, msg)
 		case hierarchical.BottomUp:
 			// Burn the funds before doing anything else.
-			if msg.Value.GreaterThan(big.Zero()) {
-				code := rt.Send(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, rt.ValueReceived(), &builtin.Discard{})
-				if !code.IsSuccess() {
-					rt.Abortf(exitcode.ErrIllegalState,
-						"failed to send release funds to the burnt funds actor, code: %v", code)
-				}
-			}
 			commitBottomUpMsg(rt, &st, msg)
 		default:
 			rt.Abortf(exitcode.ErrIllegalArgument, "cross-message doesn't have the right type")
 		}
 	})
 
-	panic("not implemented yet")
+	// For bottom-up messages with value, we need to burn the funds before propagating.
+	if tp == hierarchical.BottomUp && msg.Value.GreaterThan(big.Zero()) {
+		code := rt.Send(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, rt.ValueReceived(), &builtin.Discard{})
+		if !code.IsSuccess() {
+			rt.Abortf(exitcode.ErrIllegalState,
+				"failed to send release funds to the burnt funds actor, code: %v", code)
+		}
+	}
+	return nil
 }
 
 // CrossMsgParams determines the cross message to apply.
@@ -577,15 +588,16 @@ func (a SubnetCoordActor) ApplyMessage(rt runtime.Runtime, params *CrossMsgParam
 	// Only system actor can trigger this function.
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
 
-	switch hierarchical.GetMsgType(&params.Msg) {
-	case hierarchical.TopDown:
-		// Fund messages are applied in the SCA of the subnet to which
-		// the TopDown message is directed.
-		applyTopDown(rt, params.Msg)
-	case hierarchical.BottomUp:
+	var st SCAState
+	rt.StateReadonly(&st)
+	buApply, err := hierarchical.ApplyAsBottomUp(st.NetworkName, &params.Msg)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error processing type to apply")
+
+	if buApply {
 		applyBottomUp(rt, params.Msg)
-	default:
-		rt.Abortf(exitcode.ErrIllegalArgument, "Wrong cross-message type")
+		return nil
 	}
+
+	applyTopDown(rt, params.Msg)
 	return nil
 }

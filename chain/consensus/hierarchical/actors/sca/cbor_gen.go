@@ -951,7 +951,7 @@ func (t *MetaTag) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufCrossMsgParams = []byte{129}
+var lengthBufCrossMsgParams = []byte{130}
 
 func (t *CrossMsgParams) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -962,8 +962,22 @@ func (t *CrossMsgParams) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
+	scratch := make([]byte, 9)
+
 	// t.Msg (types.Message) (struct)
 	if err := t.Msg.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.Destination (address.SubnetID) (string)
+	if len(t.Destination) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.Destination was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Destination))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.Destination)); err != nil {
 		return err
 	}
 	return nil
@@ -983,7 +997,7 @@ func (t *CrossMsgParams) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 1 {
+	if extra != 2 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -995,6 +1009,16 @@ func (t *CrossMsgParams) UnmarshalCBOR(r io.Reader) error {
 			return xerrors.Errorf("unmarshaling t.Msg: %w", err)
 		}
 
+	}
+	// t.Destination (address.SubnetID) (string)
+
+	{
+		sval, err := cbg.ReadStringBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+
+		t.Destination = address.SubnetID(sval)
 	}
 	return nil
 }

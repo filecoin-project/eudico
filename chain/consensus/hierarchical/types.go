@@ -6,6 +6,7 @@ import (
 	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/chain/types"
+	"golang.org/x/xerrors"
 )
 
 // ConsensusType for subnet
@@ -72,4 +73,24 @@ func IsBottomUp(from, to address.SubnetID) bool {
 	_, l := from.CommonParent(to)
 	sfrom := strings.Split(from.String(), "/")
 	return len(sfrom)-1 > l
+}
+
+// ApplyAsBottomUp is used to determine if a cross-message in
+// the current subnet needs to be applied as a top-down or
+// bottom-up message according to the path its following.
+func ApplyAsBottomUp(curr address.SubnetID, msg *types.Message) (bool, error) {
+	sto, err := msg.To.Subnet()
+	if err != nil {
+		return false, xerrors.Errorf("error getting subnet from hierarchical address in cross-msg")
+	}
+	sfrom, err := msg.From.Subnet()
+	if err != nil {
+		return false, xerrors.Errorf("error getting subnet from hierarchical address in cross-msg")
+	}
+
+	mt := GetMsgType(msg)
+	cpcurr, _ := curr.CommonParent(sto)
+	cpfrom, _ := sfrom.CommonParent(sto)
+	return mt == BottomUp && cpcurr == cpfrom, nil
+
 }

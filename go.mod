@@ -164,7 +164,7 @@ require (
 )
 
 // Replacing with a fork that includes support to hierarchical consensus addresses.
-replace github.com/filecoin-project/go-address => github.com/adlrocha/go-address v0.0.7-0.20220126120328-811e916eec1b
+replace github.com/filecoin-project/go-address => github.com/adlrocha/go-address v0.0.7-0.20220201161333-9140b209222d
 
 replace github.com/libp2p/go-libp2p-yamux => github.com/libp2p/go-libp2p-yamux v0.5.1
 

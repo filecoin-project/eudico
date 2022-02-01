@@ -7,7 +7,6 @@ import (
 	"github.com/filecoin-project/go-state-types/exitcode"
 	schema "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	ltypes "github.com/filecoin-project/lotus/chain/types"
-	types "github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
@@ -70,7 +69,7 @@ func (sh *Subnet) freezeFunds(rt runtime.Runtime, source address.Address, value 
 	sh.CircSupply = big.Add(sh.CircSupply, value)
 }
 
-func fundMsg(rt runtime.Runtime, id address.SubnetID, secp address.Address, value big.Int) types.Message {
+func fundMsg(rt runtime.Runtime, id address.SubnetID, secp address.Address, value big.Int) ltypes.Message {
 
 	// Transform To and From to HAddresses
 	to, err := address.NewHAddress(id, secp)

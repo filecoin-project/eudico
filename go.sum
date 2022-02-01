@@ -84,8 +84,8 @@ github.com/Stebalien/go-bitfield v0.0.1/go.mod h1:GNjFpasyUVkHMsfEOk8EFLJ9syQ6SI
 github.com/VividCortex/gohistogram v1.0.0/go.mod h1:Pf5mBqqDxYaXu3hDrrU+w6nw50o/4+TcAqDqk/vUH7g=
 github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d h1:licZJFw2RwpHMqeKTCYkitsPqHNxTmd4SNR5r94FGM8=
 github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d/go.mod h1:asat636LX7Bqt5lYEZ27JNDcqxfjdBQuJ/MM4CN/Lzo=
-github.com/adlrocha/go-address v0.0.7-0.20220126120328-811e916eec1b h1:hwUxctiOaEcsEiqiX+ZZaQBkZ5sB8N0c1zL37gFvu3I=
-github.com/adlrocha/go-address v0.0.7-0.20220126120328-811e916eec1b/go.mod h1:7B0/5DA13n6nHkB8bbGx1gWzG/dbTsZ0fgOJVGsM3TE=
+github.com/adlrocha/go-address v0.0.7-0.20220201161333-9140b209222d h1:49cRLnRjRE3YO4NsdFhkVhz2Y/Zv5a/V7a9iFZW76/E=
+github.com/adlrocha/go-address v0.0.7-0.20220201161333-9140b209222d/go.mod h1:7B0/5DA13n6nHkB8bbGx1gWzG/dbTsZ0fgOJVGsM3TE=
 github.com/aead/siphash v1.0.1/go.mod h1:Nywa3cDsYNNK3gaciGTWPwHt0wlpNV15vwmswBAUSII=
 github.com/afex/hystrix-go v0.0.0-20180502004556-fa1af6a1f4f5/go.mod h1:SkGFH1ia65gfNATL8TAiHDNxPzPdmEL5uirI2Uyuz6c=
 github.com/ajstarks/svgo v0.0.0-20180226025133-644b8db467af/go.mod h1:K08gAheRH3/J6wwsYMMT4xOr94bZjxIelGM0+d/wbFw=
