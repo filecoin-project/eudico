@@ -72,9 +72,9 @@ type CheckpointingSub struct {
 	// Participants list identified with their libp2p cid
 	participants []string
 	// taproot config
-	config *keygen.TaprootConfig
+	taprootConfig *keygen.TaprootConfig
 	// new config generated
-	newconfig *keygen.TaprootConfig
+	newTaprootConfig *keygen.TaprootConfig
 	// Previous tx
 	ptxid string
 	// Tweaked value
@@ -131,7 +131,7 @@ func NewCheckpointSub(
 	synced := false
 
 	// Load taproot verification shares from EUDICO_PATH environnement if file exist
-	var config *keygen.TaprootConfig
+	var taprootConfig *keygen.TaprootConfig
 	_, err = os.Stat(os.Getenv("EUDICO_PATH") + "/share.toml")
 	if err == nil {
 		// If we have a share.toml containing the distributed key we load them
@@ -183,7 +183,7 @@ func NewCheckpointSub(
 			verificationShares[party.ID(key)] = &p
 		}
 
-		config = &keygen.TaprootConfig{
+		taprootConfig = &keygen.TaprootConfig{
 			ID:                 party.ID(host.ID().String()),
 			Threshold:          configTOML.Threshold,
 			PrivateShare:       &privateShare,
@@ -193,7 +193,7 @@ func NewCheckpointSub(
 
 		// this is where we append the original list of signers
 		// note: they are not added in the mocked power actor (they probably should? TODO)
-		for id := range config.VerificationShares {
+		for id := range taprootConfig.VerificationShares {
 			minerSigners = append(minerSigners, string(id))
 		}
 	}
@@ -215,9 +215,9 @@ func NewCheckpointSub(
 		api:          &api,
 		events:       e,
 		ptxid:        "",
-		config:       config,
+		taprootConfig:       taprootConfig,
 		participants: minerSigners,
-		newconfig:    nil,
+		newTaprootConfig:    nil,
 		cpconfig:     &cpconfig,
 		minioClient:  minioClient,
 		synced:       synced,
@@ -305,40 +305,42 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 			return false, nil, err
 		}
 
-		// Activate checkpointing every 25 blocks
+		// Activate checkpointing every 15 blocks
 		log.Infow("Height:", "height", newTs.Height().String())
 		fmt.Println("Height:", newTs.Height())
 		// NOTES: this will only work in delegated consensus
 		// Wait for more tipset to valid the height and be sure it is valid
-		// NOTES: should retrieve list of signing miners using Power actor state (see Miners) and not through config instanciation
-		if newTs.Height()%25 == 0 && (c.config != nil || c.newconfig != nil) {
+		// NOTE (lola): should retrieve list of signing miners using Power actor state (see Miners) and not through config instanciation
+		if newTs.Height()%15 == 0 && (c.taprootConfig != nil || c.newTaprootConfig != nil) {
 			log.Infow("Checkpointing time")
 
 			// Initiation and config should be happening at start
 			cp := oldTs.Key().Bytes()
 
-			// If we don't have a config we don't sign but update our config with key
-			// NOTE: `config` refers to config taproot as mentioned in the multi-party-sig lib
-			if c.config == nil {
+			// If we don't have a taprootconfig we don't sign but update our config with key
+			// NOTE: `taprootconfig` refers to the config as mentioned in the multi-party-sig lib
+			if c.taprootConfig == nil {
 				log.Infow("We don't have any config")
-				pubkey := c.newconfig.PublicKey
+				pubkey := c.newTaprootConfig.PublicKey
 
 				pubkeyShort := genCheckpointPublicKeyTaproot(pubkey, cp)
 
-				c.config = c.newconfig
+				c.taprootConfig = c.newTaprootConfig
 				merkleRoot := hashMerkleRoot(pubkey, cp)
 				c.tweakedValue = hashTweakedValue(pubkey, merkleRoot)
 				c.pubkey = pubkeyShort
-				c.newconfig = nil
+				c.newTaprootConfig = nil
 
 			} else {
 				// Change name to MinerConfig (checkpoint in hex and miners list)?
 				var minersConfig string = hex.EncodeToString(cp) + "\n"
-				for _, partyId := range c.orderParticipantsList() {
+				// c.orderParticipantsList() orders the miners from the taproot config --> to change
+				//for _, partyId := range c.orderParticipantsList() {
+				for _, partyId := range newSt.Miners{
 					minersConfig += partyId + "\n"
 				}
 
-				// This create the file that will be stored in minio (or any storage)
+				// This creates the file that will be stored in minio (or any storage)
 				hash, err := CreateMinersConfig([]byte(minersConfig))
 				if err != nil {
 					log.Errorf("could not create miners config: %v", err)
@@ -352,7 +354,9 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 					return false, nil, err
 				}
 
-				err = c.CreateCheckpoint(ctx, cp, hash)
+				// the checkpoint is created by the "previous" set of miners
+				// so that the new key is updated
+				err = c.CreateCheckpoint(ctx, cp, hash, oldSt.Miners)
 				if err != nil {
 					log.Errorf("could not create checkpoint: %v", err)
 					return false, nil, err
@@ -366,6 +370,8 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 		if !reflect.DeepEqual(oldSt.Miners, newSt.Miners) {
 			log.Infow("Generate new aggregated key")
 			err := c.GenerateNewKeys(ctx, newSt.Miners)
+			// need to update participants list here as well otherwise checkpointing does
+			// not work after removing a participants --> this is done in the function
 			if err != nil {
 				log.Errorf("error while generating new key: %v", err)
 				// If generating new key failed, checkpointing should not be possible
@@ -380,7 +386,8 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 	// Listen to changes in Eudico
 	// `76587687658765876` <- This is the confidence threshold used to determine if the StateChangeHandler should be triggered.
 	// It is an absurdly high number so the metric used to determine if to trigger it or not is the number of tipsets that have passed in the heaviest chain (the 5 you see there)
-	err := c.events.StateChanged(checkFunc, changeHandler, revertHandler, 5, 76587687658765876, match)
+	// put 1 here for testing purpose (i,e, there are no forks)
+	err := c.events.StateChanged(checkFunc, changeHandler, revertHandler, 1, 76587687658765876, match)
 	if err != nil {
 		return
 	}
@@ -458,7 +465,7 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	log.Infow("result :", "result", r)
 
 	var ok bool
-	c.newconfig, ok = r.(*keygen.TaprootConfig)
+	c.newTaprootConfig, ok = r.(*keygen.TaprootConfig)
 	if !ok {
 		return xerrors.Errorf("state change propagated is the wrong type")
 	}
@@ -468,15 +475,16 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	return nil
 }
 
-func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte) error {
+func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte, participants []string) error {
+
 	taprootAddress, err := pubkeyToTapprootAddress(c.pubkey)
 	if err != nil {
 		return err
 	}
 
-	pubkey := c.config.PublicKey
-	if c.newconfig != nil {
-		pubkey = c.newconfig.PublicKey
+	pubkey := c.taprootConfig.PublicKey
+	if c.newTaprootConfig != nil {
+		pubkey = c.newTaprootConfig.PublicKey
 	}
 
 	pubkeyShort := genCheckpointPublicKeyTaproot(pubkey, cp)
@@ -489,7 +497,13 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 	// we will chose the "first" half of participants
 	// in order to sign the transaction in the threshold signing.
 	// In later improvement we will choose them randomly.
-	idsStrings := c.orderParticipantsList()
+	//idsStrings := c.orderParticipantsList() // this needs to be changed
+	// the ordered list should not be taken from the mocked actor, not the taproot config
+
+	// list from mocked power actor:
+	sort.Strings(participants)
+	idsStrings := participants
+	
 	log.Infow("participants list :", "participants", idsStrings)
 	log.Infow("precedent tx", "txid", c.ptxid)
 	ids := c.formIDSlice(idsStrings)
@@ -551,7 +565,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 	 */
 
 	log.Infow("starting signing")
-	f := frost.SignTaprootWithTweak(c.config, ids, hashedTx[:], c.tweakedValue[:])
+	f := frost.SignTaprootWithTweak(c.taprootConfig, ids, hashedTx[:], c.tweakedValue[:])
 	n := NewNetwork(c.sub, c.topic)
 	// hashedTx[:] is the session id
 	// ensure everyone is on the same session id
@@ -570,10 +584,11 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 	merkleRoot := hashMerkleRoot(pubkey, cp)
 	c.tweakedValue = hashTweakedValue(pubkey, merkleRoot)
 	c.pubkey = pubkeyShort
+
 	// If new config used
-	if c.newconfig != nil {
-		c.config = c.newconfig
-		c.newconfig = nil
+	if c.newTaprootConfig != nil {
+		c.taprootConfig = c.newTaprootConfig
+		c.newTaprootConfig = nil
 	}
 
 	c.ptxid = ""
@@ -596,16 +611,16 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 	return nil
 }
 
-func (c *CheckpointingSub) orderParticipantsList() []string {
-	var ids []string
-	for id := range c.config.VerificationShares {
-		ids = append(ids, string(id))
-	}
+// func (c *CheckpointingSub) orderParticipantsList() []string {
+// 	var ids []string
+// 	for id := range c.taprootConfig.VerificationShares { // change for mocked actor
+// 		ids = append(ids, string(id))
+// 	}
 
-	sort.Strings(ids)
+// 	sort.Strings(ids)
 
-	return ids
-}
+// 	return ids
+// }
 
 func (c *CheckpointingSub) formIDSlice(ids []string) party.IDSlice {
 	var _ids []party.ID
@@ -678,19 +693,19 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 	}
 
 	// Pre-compute values from participants in the signing process
-	if c.config != nil {
+	if c.taprootConfig != nil {
 		// save public key taproot
 		// NOTE: cidBytes is the tipset key value (aka checkpoint) from the genesis block. When Eudico is stopped it should remember what was the last tipset key value
 		// it signed and replace it with it. Config is not saved, neither when new DKG is done.
-		c.pubkey = genCheckpointPublicKeyTaproot(c.config.PublicKey, cidBytes)
+		c.pubkey = genCheckpointPublicKeyTaproot(c.taprootConfig.PublicKey, cidBytes)
 
 		// Get the taproot address used in taproot.sh
 		address, _ := pubkeyToTapprootAddress(c.pubkey)
 		fmt.Println(address)
 
 		// Save tweaked value
-		merkleRoot := hashMerkleRoot(c.config.PublicKey, cidBytes)
-		c.tweakedValue = hashTweakedValue(c.config.PublicKey, merkleRoot)
+		merkleRoot := hashMerkleRoot(c.taprootConfig.PublicKey, cidBytes)
+		c.tweakedValue = hashTweakedValue(c.taprootConfig.PublicKey, merkleRoot)
 	}
 
 	// Start the checkpoint module
