@@ -258,7 +258,7 @@ var importBenchCmd = &cli.Command{
 		defer cs.Close() //nolint:errcheck
 
 		// TODO: We need to supply the actual beacon after v14
-		stm, err := stmgr.NewStateManager(cs, filcns.NewTipSetExecutor(), vm.Syscalls(verifier), filcns.DefaultUpgradeSchedule(), nil)
+		stm, err := stmgr.NewStateManager(cs, filcns.NewTipSetExecutor(), nil, vm.Syscalls(verifier), filcns.DefaultUpgradeSchedule(), nil)
 		if err != nil {
 			return err
 		}
