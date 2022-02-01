@@ -71,8 +71,10 @@ type CheckpointingSub struct {
 	pubkey []byte
 	// Participants list identified with their libp2p cid
 	participants []string
-	// boolean to help us keep track of when the DKG has finished
+	// boolean to keep track of when the new config has finished the DKG 
 	newDKGComplete bool
+	// boolean to keep
+	keysUpdated bool
 	// taproot config
 	taprootConfig *keygen.TaprootConfig
 	// new config generated
@@ -228,6 +230,7 @@ func NewCheckpointSub(
 		taprootConfig:       taprootConfig,
 		participants: minerSigners,
 		newDKGComplete: false,
+		keysUpdated: true,
 		newTaprootConfig:    nil,
 		cpconfig:     &cpconfig,
 		minioClient:  minioClient,
@@ -375,11 +378,12 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 				}
 				// if there was a new configuration,
 				// replace the set of participants with new state of participant
-				if c.newDKGComplete {
+				if c.keysUpdated {
 					c.participants = newSt.Miners
 					fmt.Println("participants list updated")
 					fmt.Println(c.participants)
 					c.newDKGComplete = false
+					c.keysUpdated = false
 				}
 			}
 		}
@@ -642,6 +646,9 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		}
 	}
 
+	if c.newDKGComplete {
+		c.keysUpdated = true
+	}
 
 	return nil
 }
