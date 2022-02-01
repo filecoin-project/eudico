@@ -89,6 +89,8 @@ type CheckpointingSub struct {
 	synced bool
 	// height verified! (the height of the latest checkpoint)
 	height abi.ChainEpoch
+	// mocked actor includes all the 
+	mockedState mpower.State
 
 
 	// add intitial taproot address here
@@ -97,7 +99,7 @@ type CheckpointingSub struct {
 /*
 	Initiate checkpoint module.
 	It will load config and initiate CheckpointingSub struct
-	using some pre-generated data. (TO: change this and re-generate
+	using some pre-generated data. (TODO: change this and re-generate
 		the data locally each time)
 */
 func NewCheckpointSub(
@@ -191,12 +193,28 @@ func NewCheckpointSub(
 			VerificationShares: verificationShares,
 		}
 
+
+
+		
+
 		// this is where we append the original list of signers
 		// note: they are not added in the mocked power actor (they probably should? TODO)
 		for id := range taprootConfig.VerificationShares {
 			minerSigners = append(minerSigners, string(id))
+			//todo: append to mocked actor here
 		}
+
+
 	}
+
+	// get the mocked power actor variable
+	//actor, err := api.StateGetActor(ctx, mpower.PowerActorAddr, oldTs.Key())
+	// if err != nil {
+	// 	return false, nil, err
+	// }
+	var mockedState mpower.State
+	mockedState.Miners = minerSigners
+	mockedState.MinerCount = int64(len(minerSigners))
 
 	// Initialize minio client object
 	minioClient, err := minio.New(cpconfig.MinioHost, &minio.Options{
@@ -221,6 +239,7 @@ func NewCheckpointSub(
 		cpconfig:     &cpconfig,
 		minioClient:  minioClient,
 		synced:       synced,
+		mockedState: mockedState,
 	}, nil
 }
 
@@ -376,6 +395,8 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 				log.Errorf("error while generating new key: %v", err)
 				// If generating new key failed, checkpointing should not be possible
 			}
+
+			c.mockedState = newSt
 
 			return true, nil, nil // true mean generate keys
 		}
