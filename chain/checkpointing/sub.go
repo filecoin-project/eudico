@@ -378,7 +378,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 				}
 				// if there was a new configuration,
 				// replace the set of participants with new state of participant
-				if c.keysUpdated {
+				if c.newDKGComplete {
 					c.participants = newSt.Miners
 					fmt.Println("participants list updated")
 					fmt.Println(c.participants)
