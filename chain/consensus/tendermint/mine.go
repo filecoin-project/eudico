@@ -1,7 +1,6 @@
 package tendermint
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"time"
@@ -194,9 +193,8 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 					log.Infof("Got block %d from Tendermint", resp.Block.Height)
 					info := tendermintBlockInfo{
 						timestamp: uint64(resp.Block.Time.Unix()),
-						minerAddr: resp.Block.ProposerAddress.Bytes(),
 						hash:      resp.Block.Hash().Bytes(),
-						proposer: resp.Block.ProposerAddress.Bytes(),
+						proposerAddr: resp.Block.ProposerAddress.Bytes(),
 					}
 					parseTendermintBlock(resp.Block, &info, tendermint.tag)
 
@@ -205,25 +203,33 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 			}
 		}
 	}()
+
 	tb := <-tendermintBlockInfoChan
 
-	addr, err := address.NewSecp256k1Address(tb.minerAddr)
+	resp, err := tendermint.client.Validators(ctx, &height, nil, nil)
+	if err != nil {
+		log.Infof("unable to get Tendermint validators: %s", err)
+		return nil, err
+	}
+
+	targetPubKey := findValidatorPubKeyByAddr(resp.Validators, tb.proposerAddr)
+	if targetPubKey == nil {
+		return nil, xerrors.New("unable to find target public key")
+	}
+
+
+	addr, err := address.NewSecp256k1Address(targetPubKey)
 	if err != nil {
 		log.Info("unable to decode miner addr:", err)
+		return nil, err
 	}
-	log.Info(addr)
+	if bt.Miner != addr {
+		bt.Miner = addr
+	}
 
 	bt.Messages = tb.messages
 	bt.CrossMessages = tb.crossMsgs
 	bt.Timestamp = tb.timestamp
-	//TODO: what is the miner addr?
-
-	if !bytes.Equal(bt.Miner.Bytes(), tb.proposer) {
-		log.Info("not equal:", bt.Miner.Bytes(), tb.proposer)
-	}
-	//bt.Miner = addr
-
-
 
 	b, err := sanitizeMessagesAndPrepareBlockForSignature(ctx, tendermint.sm, bt)
 	if err != nil {

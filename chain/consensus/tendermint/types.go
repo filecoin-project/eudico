@@ -54,7 +54,6 @@ type tendermintBlockInfo struct {
 	timestamp uint64
 	messages  []*types.SignedMessage
 	crossMsgs []*types.Message
-	minerAddr []byte
 	hash      []byte
-	proposer []byte
+	proposerAddr []byte
 }

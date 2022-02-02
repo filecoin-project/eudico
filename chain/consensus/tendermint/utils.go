@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"golang.org/x/crypto/ripemd160"
 	"os"
 
 	"github.com/filecoin-project/go-address"
@@ -125,5 +126,27 @@ func GetTendermintID(ctx context.Context) (address.Address, error) {
 		panic(err)
 	}
 	return addr, nil
+}
+
+func findValidatorPubKeyByAddr(validators []*tenderminttypes.Validator, addr []byte) []byte {
+	for _, v := range validators {
+		if bytes.Equal(v.Address.Bytes(), addr) {
+			return v.PubKey.Bytes()
+		}
+	}
+	return nil
+}
+
+func getTendermintAddr(pubKey []byte) []byte {
+	if len(pubKey) != 33 {
+		panic("length of pubkey is incorrect")
+	}
+	hasherSHA256 := sha256.New()
+	_, _ = hasherSHA256.Write(pubKey) // does not error
+	sha := hasherSHA256.Sum(nil)
+
+	hasherRIPEMD160 := ripemd160.New()
+	_, _ = hasherRIPEMD160.Write(sha) // does not error
+	return hasherRIPEMD160.Sum(nil)
 }
 
