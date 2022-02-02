@@ -56,4 +56,5 @@ type tendermintBlockInfo struct {
 	crossMsgs []*types.Message
 	minerAddr []byte
 	hash      []byte
+	proposer []byte
 }

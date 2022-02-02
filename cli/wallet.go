@@ -14,6 +14,10 @@ import (
 
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
+	tmcrypto "github.com/tendermint/tendermint/crypto"
+	tmsecp "github.com/tendermint/tendermint/crypto/secp256k1"
+	tmtypes "github.com/tendermint/tendermint/types"
+	tmjson "github.com/tendermint/tendermint/libs/json"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -39,6 +43,7 @@ var walletCmd = &cli.Command{
 		walletVerify,
 		walletDelete,
 		walletMarket,
+		walletImportTendermintKey,
 	},
 }
 
@@ -385,6 +390,71 @@ var walletImport = &cli.Command{
 		}
 
 		fmt.Printf("imported key %s successfully!\n", addr)
+		return nil
+	},
+}
+
+var walletImportTendermintKey = &cli.Command{
+	Name:      "import-tendermint-key",
+	Usage:     "import Tendermint secp256k1 private key",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "path",
+			Usage: "Path to Tendermint secp256k1 private key file",
+		},
+		&cli.BoolFlag{
+			Name:  "as-default",
+			Usage: "import the given key as your new default key",
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+		api, closer, err := GetFullNodeAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+
+		ctx := ReqContext(cctx)
+		keyFilePath := cctx.String("path")
+
+		// Adopted from https://github.com/tendermint/tendermint/blob/5eae2e62c0bcf359c2c54a345513cb56aedab070/privval/file.go#L213
+		var pvKey  struct {
+			Address tmtypes.Address  `json:"address"`
+			PubKey  tmcrypto.PubKey  `json:"pub_key"`
+			PrivKey tmcrypto.PrivKey `json:"priv_key"`
+		}
+
+		keyJSONBytes, err := ioutil.ReadFile(keyFilePath)
+		if err != nil {
+			return err
+		}
+
+		err = tmjson.Unmarshal(keyJSONBytes, &pvKey)
+		if err != nil {
+			return fmt.Errorf("error reading Tendermint private key from %v: %w", keyFilePath, err)
+		}
+
+		if pvKey.PrivKey.Type() != tmsecp.KeyType {
+			return fmt.Errorf("unsupported private key type %v", pvKey.PrivKey.Type())
+		}
+
+		ki := types.KeyInfo {
+			Type: types.KTSecp256k1,
+			PrivateKey: pvKey.PrivKey.Bytes(),
+		}
+
+		addr, err := api.WalletImport(ctx, &ki)
+		if err != nil {
+			return fmt.Errorf("unable to import key: %w", err)
+		}
+
+		if cctx.Bool("as-default") {
+			if err := api.WalletSetDefault(ctx, addr); err != nil {
+				return fmt.Errorf("failed to set default key: %w", err)
+			}
+		}
+
+		fmt.Printf("imported key %s successfully!\n", pvKey.Address)
 		return nil
 	},
 }

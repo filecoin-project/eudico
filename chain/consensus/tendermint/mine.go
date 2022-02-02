@@ -1,6 +1,7 @@
 package tendermint
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"time"
@@ -195,6 +196,7 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 						timestamp: uint64(resp.Block.Time.Unix()),
 						minerAddr: resp.Block.ProposerAddress.Bytes(),
 						hash:      resp.Block.Hash().Bytes(),
+						proposer: resp.Block.ProposerAddress.Bytes(),
 					}
 					parseTendermintBlock(resp.Block, &info, tendermint.tag)
 
@@ -215,7 +217,13 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 	bt.CrossMessages = tb.crossMsgs
 	bt.Timestamp = tb.timestamp
 	//TODO: what is the miner addr?
+
+	if !bytes.Equal(bt.Miner.Bytes(), tb.proposer) {
+		log.Info("not equal:", bt.Miner.Bytes(), tb.proposer)
+	}
 	//bt.Miner = addr
+
+
 
 	b, err := sanitizeMessagesAndPrepareBlockForSignature(ctx, tendermint.sm, bt)
 	if err != nil {

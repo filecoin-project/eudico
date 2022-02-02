@@ -136,7 +136,6 @@ var tendermintApplicationCmd = &cli.Command{
 		&cli.StringFlag{
 			Name:  "addr",
 			Value: "tcp://127.0.0.1:26658",
-			//Value: "tcp://0.0.0.0:26650",
 			Usage: "socket address",
 		},
 	},
