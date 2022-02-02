@@ -35,6 +35,9 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
+	address "github.com/filecoin-project/go-address"
+	// "github.com/filecoin-project/lotus/build"
+	// "github.com/filecoin-project/lotus/api"
 )
 
 var log = logging.Logger("checkpointing")
@@ -499,6 +502,36 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	}
 
 	c.newDKGComplete = true
+
+	//we need to update the taproot public key in the mocked actor
+	// this is done by sending a transaction with method 4 (which
+	// corresponds to the "add new public key method")
+	a, err := address.NewIDAddress(65)
+	if err != nil{
+		return xerrors.Errorf("mocked actor address not working")
+	}
+	aliceaddr, err := address. NewFromString("t1d2xrzcslx7xlbbylc5c3d5lvandqw4iwl6epxba")
+	if err != nil{
+		return xerrors.Errorf("alice address not working")
+	}
+	_, aerr := c.api.MpoolPushMessage(ctx, &types.Message{
+		To:     a, //this is the mocked actor address
+		From:   aliceaddr, // this is alice address, will need to be changed at some point
+		Value:  abi.NewTokenAmount(0),
+		Method: 4,
+		Params: c.newTaprootConfig.PublicKey,
+	}, nil)
+
+	if aerr != nil {
+		return  aerr
+	}
+
+	// msg := smsg.Cid()
+	// mw, aerr := c.api.StateWaitMsg(ctx, msg, build.MessageConfidence, api.LookbackNoLimit, true)
+	// if aerr != nil {
+	// 	return  aerr
+	// }
+
 
 	return nil
 }
