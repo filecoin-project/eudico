@@ -227,7 +227,7 @@ func NewCheckpointSub(
 		api:          &api,
 		events:       e,
 		ptxid:        "",
-		taprootConfig:       taprootConfig,
+		taprootConfig:       taprootConfig, //either nil (if no shares) or the configuration pre-generated for Alice, Bob and Charlie
 		participants: minerSigners,
 		newDKGComplete: false,
 		keysUpdated: true,
@@ -279,7 +279,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 
 				log.Infow("we are synced")
 				// Yes then verify our checkpoint from Bitcoin and verify if we find in it in our Eudico chain
-				ts, err := c.api.ChainGetTipSet(ctx, c.latestConfigCheckpoint)
+				ts, err := c.api.ChainGetTipSet(ctx, c.latestConfigCheckpoint) 
 				if err != nil {
 					log.Errorf("couldnt get tipset: %v", err)
 					return false, nil, err
@@ -322,10 +322,10 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 		// Activate checkpointing every 15 blocks
 		log.Infow("Height:", "height", newTs.Height().String())
 		fmt.Println("Height:", newTs.Height())
-		// NOTES: this will only work in delegated consensus
+		// NOTE: this will only work in delegated consensus
 		// Wait for more tipset to valid the height and be sure it is valid
-		// NOTE (lola): should retrieve list of signing miners using Power actor state (see Miners) and not through config instanciation
-		// we are checking that the list of mocked actor is not empty
+
+		// we are checking that the list of mocked actor is not empty before starting the checkpoint
 		if newTs.Height()%15 == 0 && len(oldSt.Miners) > 0 && (c.taprootConfig != nil || c.newTaprootConfig != nil) {
 			log.Infow("Checkpointing time")
 
@@ -333,10 +333,11 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 			cp := oldTs.Key().Bytes() // this is the checkpoint 
 
 			// If we don't have a taprootconfig we don't sign but update our config with key
-			// NOTE: `taprootconfig` refers to the config as mentioned in the multi-party-sig lib
+			// This is the case for any "new" miner (i.e., not Alice, Bob and Charlie)
 			if c.taprootConfig == nil {
 				log.Infow("We don't have any config")
-				pubkey := c.newTaprootConfig.PublicKey
+				pubkey := c.newTaprootConfig.PublicKey // the new taproot config has been initialized
+				//during the DKG (in which the new node took part when they joined)
 
 				pubkeyShort := genCheckpointPublicKeyTaproot(pubkey, cp)
 
@@ -345,7 +346,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 				c.tweakedValue = hashTweakedValue(pubkey, merkleRoot)
 				c.pubkey = pubkeyShort
 				c.newTaprootConfig = nil
-				c.participants = newSt.Miners
+				c.participants = newSt.Miners // we had ourselves to the list of participants
 
 			} else {
 				// Miners config is the data that will be stored for now in Minio, later on a eudico-KVS
@@ -504,8 +505,8 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 
 func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte, participants []string) error {
 
-	// check if self is included in the set of participants (e.g, if I'm a new miner that
-	// wasn't part of the last DKG, I don't sign because I don't have a share of the private key)
+	// check if self is included in the set of participants (e.g., a new miner that
+	// wasn't part of the last DKG, does not sign because they don't have a share of the private key)
 
 	for _, participant := range(participants){
 		if participant == c.host.ID().String(){
@@ -518,6 +519,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 			pubkey := c.taprootConfig.PublicKey
 
 			// if a new public key was generated (i.e. new miners), we use this key in the checkpoint
+			// Problem: when a participant leave, no access to this key
 			if c.newTaprootConfig != nil {
 				pubkey = c.newTaprootConfig.PublicKey
 			}
@@ -537,7 +539,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 
 			// list from mocked power actor:
 			sort.Strings(participants)
-			idsStrings := participants
+			idsStrings := participants[:c.taprootConfig.Threshold]
 			
 			log.Infow("participants list :", "participants", idsStrings)
 			log.Infow("precedent tx", "txid", c.ptxid)
@@ -575,7 +577,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 			payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.2f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
 			result := jsonRPC(c.cpconfig.BitcoinHost, payload)
 			if result == nil {
-				return xerrors.Errorf("cant create new transaction")
+				return xerrors.Errorf("can not create new transaction")
 			}
 
 			rawTransaction := result["result"].(string)
@@ -600,6 +602,8 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 			 */
 			fmt.Println("I'm starting the checkpointing")
 			log.Infow("starting signing")
+			// Here all the participants sign the transaction
+			// in practice we only need "threshold" of them to sign
 			f := frost.SignTaprootWithTweak(c.taprootConfig, ids, hashedTx[:], c.tweakedValue[:])
 			n := NewNetwork(c.sub, c.topic)
 			// hashedTx[:] is the session id
