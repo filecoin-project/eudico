@@ -539,8 +539,8 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 
 			// list from mocked power actor:
 			sort.Strings(participants)
-			idsStrings := participants[:c.taprootConfig.Threshold]
-			fmt.Println(idsStrings,c.taprootConfig.Threshold)
+			idsStrings := participants
+			
 			log.Infow("participants list :", "participants", idsStrings)
 			log.Infow("precedent tx", "txid", c.ptxid)
 			ids := c.formIDSlice(idsStrings)

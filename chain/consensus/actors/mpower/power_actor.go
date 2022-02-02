@@ -13,6 +13,8 @@ import (
 	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
 
+	"github.com/Zondax/multi-party-sig/pkg/taproot"
+
 )
 
 type Runtime = runtime.Runtime
@@ -33,6 +35,7 @@ func (a Actor) Exports() []interface{} {
 		builtin.MethodConstructor: a.Constructor, // Initialiazed the actor; always required
 		2:                         a.AddMiners,    // Add a miner to the list (specificaly crafted for checkpointing)
 		3:						   a.RemoveMiners, // Remove miners from the list
+		4: 						   a.UpdateTaprootAddress, // Update the taproot address
 	}
 }
 
@@ -105,6 +108,21 @@ func (a Actor) RemoveMiners(rt Runtime, params *AddMinerParams) *abi.EmptyValue 
 	return nil
 }
 
+
+type NewTaprootAddress struct {
+	PublicKey taproot.PublicKey
+}
+
+func (a Actor) UpdateTaprootAddress(rt Runtime, addr *NewTaprootAddress) *abi.EmptyValue {
+	rt.ValidateImmediateCallerAcceptAny()
+	var st State
+	rt.StateTransaction(&st, func() {
+		// Miners list is replaced with the one passed as parameters
+		st.PublicKey = addr.PublicKey
+	})
+	return nil
+}
+
 func unique(strSlice []string) []string {
     keys := make(map[string]bool)
     list := []string{}	
@@ -116,4 +134,3 @@ func unique(strSlice []string) []string {
     }    
     return list
 }
- 
