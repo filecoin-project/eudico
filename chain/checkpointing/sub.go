@@ -583,7 +583,7 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 
 				seraddp, err1 := actors.SerializeParams(addp)
 				if err1 != nil {
-					return  err
+					return  err1
 				}
 
 				a, err2 := address.NewIDAddress(65)
@@ -826,7 +826,7 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 		return
 	}
 	cidBytes := ts.Key().Bytes()// this is the checkpoint (i.e. hash of block)
-	publickey, err := hex.DecodeString(c.cpconfig.PublicKey)
+	publickey, err := hex.DecodeString(c.cpconfig.PublicKey) //publickey pre-generated
 	if err != nil {
 		log.Errorf("could not decode public key: %v", err)
 		return
@@ -869,6 +869,12 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 		address, _ := pubkeyToTapprootAddress(c.pubkey)
 		fmt.Println(address)
 
+		//why not send the transaction from here?
+		payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendtoaddress\", \"params\": [\""+address+"\", 50]}"
+		result := jsonRPC(c.cpconfig.BitcoinHost, payload)
+		if result == nil {
+			log.Errorf("could not send initial Bitcoin transaction to: %v", address)
+		}
 		// Save tweaked value
 		merkleRoot := hashMerkleRoot(c.taprootConfig.PublicKey, cidBytes)
 		c.tweakedValue = hashTweakedValue(c.taprootConfig.PublicKey, merkleRoot)
