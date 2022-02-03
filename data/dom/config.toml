@@ -187,9 +187,9 @@
 
 [Checkpoint]
   Fee = 0.01
-  BitcoinHost="http://btc-rpc:8332"
+  BitcoinHost="http://127.0.0.1:18443"
   PublicKey="66a554b8af6719851a936b0afc29dc59c3678f0e3f0b7bb081c57c5b77ad48ff"
-  MinioHost = "minio:9000"
+  MinioHost = "127.0.0.1:9000"
   MinioAccessKeyID = "lola"
   MinioSecretAccessKey = "123secure"
   MinioBucketName = "eudico"

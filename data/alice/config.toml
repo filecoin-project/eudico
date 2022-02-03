@@ -185,10 +185,15 @@
     #HotStoreFullGCFrequency = 20
 
 [Checkpoint]
+  # Bitcoin fees are fixed and they should be calculated
   Fee = 0.01
-  BitcoinHost="http://btc-rpc:8332"
+  # Bitcoin node url
+  BitcoinHost="http://127.0.0.1:18443"
+  # The first public key for the first checkpoint
   PublicKey="66a554b8af6719851a936b0afc29dc59c3678f0e3f0b7bb081c57c5b77ad48ff"
-  MinioHost = "minio:9000"
+  #StorageMode="minio" or "IPFS" or "KVS" <- filecoin storage; idea
+  MinioHost = "127.0.0.1:9000"
   MinioAccessKeyID = "lola"
   MinioSecretAccessKey = "123secure"
   MinioBucketName = "eudico"
+  # e.g to start minio in docker -> docker run --net=host -e "MINIO_ROOT_USER=lola" -e "MINIO_ROOT_PASSWORD=123secure" quay.io/minio/minio server /data --console-address ":9001"
