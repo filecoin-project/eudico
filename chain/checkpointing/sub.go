@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
-	"reflect"
+	//"reflect"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -401,7 +401,8 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 		// If Power Actors list has changed start DKG
 		// Changes detected so generate new key
 		// will change this to be triggered only if the difference is greater than some param
-		if !reflect.DeepEqual(oldSt.Miners, newSt.Miners) {
+		//if !reflect.DeepEqual(oldSt.Miners, newSt.Miners) {
+		if !sameStringSlice(oldSt.Miners, newSt.Miners) {
 			log.Infow("Generate new aggregated key")
 			err := c.GenerateNewKeys(ctx, newSt.Miners)
 			// need to update participants list here as well otherwise checkpointing does
