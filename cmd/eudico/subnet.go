@@ -52,14 +52,9 @@ var listSubnetsCmd = &cli.Command{
 
 		ctx := lcli.ReqContext(cctx)
 
-		ts, err := lcli.LoadTipSet(ctx, cctx, api)
-		if err != nil {
-			return err
-		}
-
 		var st sca.SCAState
 
-		act, err := api.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, ts.Key())
+		act, err := api.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, types.EmptyTSK)
 		if err != nil {
 			return xerrors.Errorf("error getting actor state: %w", err)
 		}

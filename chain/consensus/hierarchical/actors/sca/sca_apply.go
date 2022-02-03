@@ -106,13 +106,26 @@ func applyBottomUp(rt runtime.Runtime, msg types.Message) {
 	}
 }
 
-func (st *SCAState) releaseCircSupply(rt runtime.Runtime, id address.SubnetID, value abi.TokenAmount) {
+func (st *SCAState) releaseCircSupply(rt runtime.Runtime, curr *Subnet, id address.SubnetID, value abi.TokenAmount) {
+	// For the current subnet, we don't need to get the subnet object again,
+	// we can modify it directly.
+	if curr.ID == id {
+		curr.releaseSupply(rt, value)
+		return
+		// It is flushed somwhere else.
+	}
+
 	// Update circulating supply reducing release value.
 	sh, has, err := st.GetSubnet(adt.AsStore(rt), id)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching subnet state")
 	if !has {
 		rt.Abortf(exitcode.ErrIllegalState, "subnet for actor hasn't been registered yet")
 	}
+	sh.releaseSupply(rt, value)
+	st.flushSubnet(rt, sh)
+}
+
+func (sh *Subnet) releaseSupply(rt runtime.Runtime, value abi.TokenAmount) {
 	// Even if the actor has balance, we shouldn't allow releasing more than
 	// the current circulating supply, as it would mean that we are
 	// releasing funds from the collateral.
@@ -120,7 +133,6 @@ func (st *SCAState) releaseCircSupply(rt runtime.Runtime, id address.SubnetID, v
 		rt.Abortf(exitcode.ErrIllegalState, "wtf! we can't release funds below the circulating supply. Something went wrong!")
 	}
 	sh.CircSupply = big.Sub(sh.CircSupply, value)
-	st.flushSubnet(rt, sh)
 }
 
 func bottomUpStateTransition(rt runtime.Runtime, st *SCAState, msg types.Message) {

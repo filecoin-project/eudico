@@ -250,7 +250,7 @@ func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *Chec
 		// and we can add it without additional verifications.
 		if empty, _ := prevCom.IsEmpty(); empty {
 			// Apply cross messages from child checkpoint
-			burnValue = st.applyCheckMsgs(rt, ch, commit)
+			burnValue = st.applyCheckMsgs(rt, sh, ch, commit)
 			// Append the new checkpoint to the list of childs.
 			err := ch.AddChild(commit)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error committing checkpoint to this epoch")
@@ -274,7 +274,7 @@ func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *Chec
 		}
 
 		// Apply cross messages from child checkpoint
-		burnValue = st.applyCheckMsgs(rt, ch, commit)
+		burnValue = st.applyCheckMsgs(rt, sh, ch, commit)
 		// Checks passed, we can append the child.
 		err = ch.AddChild(commit)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error committing checkpoint to this epoch")
@@ -297,7 +297,7 @@ func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *Chec
 
 // applyCheckMsgs prepares messages to trigger their execution or propagate cross-messages
 // coming from a checkpoint of a child subnet.
-func (st *SCAState) applyCheckMsgs(rt runtime.Runtime, windowCh *schema.Checkpoint, childCh *schema.Checkpoint) abi.TokenAmount {
+func (st *SCAState) applyCheckMsgs(rt runtime.Runtime, sh *Subnet, windowCh *schema.Checkpoint, childCh *schema.Checkpoint) abi.TokenAmount {
 
 	burnValue := abi.NewTokenAmount(0)
 	// aux map[to]CrossMsg
@@ -331,7 +331,7 @@ func (st *SCAState) applyCheckMsgs(rt runtime.Runtime, windowCh *schema.Checkpoi
 		v, err := mm.GetValue()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting value from meta")
 		burnValue = big.Add(burnValue, v)
-		st.releaseCircSupply(rt, address.SubnetID(mm.From), v)
+		st.releaseCircSupply(rt, sh, address.SubnetID(mm.From), v)
 	}
 
 	// Aggregate all the msgsMeta directed to other subnets in the hierarchy

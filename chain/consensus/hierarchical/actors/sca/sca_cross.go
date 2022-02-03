@@ -2,7 +2,6 @@ package sca
 
 import (
 	"context"
-	"fmt"
 
 	address "github.com/filecoin-project/go-address"
 	abi "github.com/filecoin-project/go-state-types/abi"
@@ -154,7 +153,6 @@ func (st *SCAState) storeBottomUpMsgMeta(rt runtime.Runtime, meta schema.CrossMs
 	st.BottomUpMsgsMeta, err = crossMsgs.Root()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush cross-messages")
 
-	fmt.Println(">>> Storing bottom up message for application in subnet/nonce", st.NetworkName, meta.Nonce)
 	// Increase nonce.
 	incrementNonce(rt, &st.BottomUpNonce)
 }
