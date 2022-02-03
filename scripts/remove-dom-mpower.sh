@@ -1,0 +1,1 @@
+EUDICO_PATH=$PWD/data/alice ./eudico send --from t1d2xrzcslx7xlbbylc5c3d5lvandqw4iwl6epxba --method 3 --params-json "{\"Miners\":[\"12D3KooWSpyoi7KghH98SWDfDFMyAwuvtP8MWWGDcC1e1uHWzjSm\"]}" t065 0
