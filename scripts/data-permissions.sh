@@ -5,3 +5,6 @@ chmod 600 data/dom/keystore/*
 chmod +x ./scripts/restart_bitcoin.sh
 chmod +x ./scripts/delete_eudico_data.sh
 chmod +x ./scripts/restart-demo.sh
+chmod +x ./scripts/add-initial-mpower.sh
+chmod +x ./scripts/add-dom-mpower.sh
+chmod +x ./scripts/remove-dom-mpower.sh
