@@ -454,7 +454,13 @@ var walletImportTendermintKey = &cli.Command{
 			}
 		}
 
-		fmt.Printf("imported key %s successfully!\n", pvKey.Address)
+		fmt.Printf(
+			"imported key successfully:\n\tFilecoin address: %s\n\tTendermint address: %s",
+			addr.String(),
+			pvKey.Address,
+		)
+
+		fmt.Printf("imported key %s successfully!\n", addr.String())
 		return nil
 	},
 }
