@@ -559,6 +559,7 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 				return  aerr
 			}
 
+			fmt.Println("message sent")
 			// msg := smsg.Cid()
 			// mw, aerr := c.api.StateWaitMsg(ctx, msg, build.MessageConfidence, api.LookbackNoLimit, true)
 			// if aerr != nil {
@@ -575,6 +576,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 	// wasn't part of the last DKG, does not sign because they don't have a share of the private key)
 
 	fmt.Println("Checkpoint participants: ",participants)
+	fmt.Println("Myself: ",c.host.ID().String())
 	for _, participant := range(participants){
 		if participant == c.host.ID().String(){
 			fmt.Println("I'm a checkpointer")
