@@ -456,7 +456,8 @@ func (c *CheckpointingSub) Start(ctx context.Context) error {
 }
 
 func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []string) error {
-	
+	fmt.Println("DKG participants: ",participants)
+	fmt.Println("Myself (DKG): ",c.host.ID().String())
 //only the set of new miners take part in the DKG (e.g., a leaving miner does not)
 	for _, participant := range(participants){
 		if participant == c.host.ID().String(){
@@ -490,6 +491,7 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 			// for signing this is already updated
 			// for testing hardcoded is ok to ensure everyone is on the same session
 			// but for production this needs to be updated.
+			//handler, err := protocol.NewMultiHandler(f, []byte{1, 2, 3})
 			handler, err := protocol.NewMultiHandler(f, []byte{1, 2, 3})
 			if err != nil {
 				return err
