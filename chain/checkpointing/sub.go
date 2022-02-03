@@ -459,116 +459,113 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	fmt.Println("DKG participants: ",participants)
 	fmt.Println("Myself (DKG): ",c.host.ID().String())
 //only the set of new miners take part in the DKG (e.g., a leaving miner does not)
-	for _, participant := range(participants){
-		if participant == c.host.ID().String(){
-			idsStrings := participants
-			sort.Strings(idsStrings)
+	idsStrings := participants
+	sort.Strings(idsStrings)
 
-			log.Infow("participants list :", "participants", idsStrings)
+	log.Infow("participants list :", "participants", idsStrings)
 
-			ids := c.formIDSlice(idsStrings)
+	ids := c.formIDSlice(idsStrings)
 
-			id := party.ID(c.host.ID().String())
+	id := party.ID(c.host.ID().String())
 
-			threshold := (len(idsStrings) / 2) + 1
-			//starting a new ceremony with the subscription and topic that were
-			// already defined 
-			//why not call the checkpointing sub directly?
-			n := NewNetwork(c.sub, c.topic)
+	threshold := (len(idsStrings) / 2) + 1
+	//starting a new ceremony with the subscription and topic that were
+	// already defined 
+	//why not call the checkpointing sub directly?
+	n := NewNetwork(c.sub, c.topic)
 
-			// Keygen with Gennaro protocol if failing
-			//f := frost.KeygenTaprootGennaro(id, ids, threshold)
-			f := frost.KeygenTaproot(id, ids, threshold)
+	// Keygen with Gennaro protocol if failing
+	//f := frost.KeygenTaprootGennaro(id, ids, threshold)
+	f := frost.KeygenTaproot(id, ids, threshold)
 
-			//{1,2,3} is session ID, it is hardcoded
-			// change it for a unique identifier
-			// we only need this identifier to be the same for every participants
-			// it could be for example the hash of the checkpointed block
-			// or hash of participants list
-			// problem with 1,2,3: people on different sessions could be on the same execution
-			// try nil --> it probably uses the hash of the participants list
-			// look at the library for DKG (taurus fork)
-			// for signing this is already updated
-			// for testing hardcoded is ok to ensure everyone is on the same session
-			// but for production this needs to be updated.
-			//handler, err := protocol.NewMultiHandler(f, []byte{1, 2, 3})
-			handler, err := protocol.NewMultiHandler(f, []byte{1, 2, 3})
-			if err != nil {
-				return err
-			}
-			LoopHandler(ctx, handler, n)//use the new network, could be re-written
-			r, err := handler.Result()
-			if err != nil {
-				// if a participant is mibehaving the DKG entirely fail (no fallback)
-				return err
-			}
-			log.Infow("result :", "result", r)
-
-			var ok bool
-			c.newTaprootConfig, ok = r.(*keygen.TaprootConfig)
-			if !ok {
-				return xerrors.Errorf("state change propagated is the wrong type")
-			}
-
-			c.newDKGComplete = true
-
-			//we need to update the taproot public key in the mocked actor
-			// this is done by sending a transaction with method 4 (which
-			// corresponds to the "add new public key method")
-
-			// Populate new public key parameter for mocked power actor
-			addp := &mpower.NewTaprootAddressParam{
-					PublicKey: []byte(c.newTaprootConfig.PublicKey),
-			}
-
-			seraddp, err := actors.SerializeParams(addp)
-			if err != nil {
-				return  err
-			}
-
-			// params := &init_.ExecParams{
-			// 	CodeCID:           act.MpowerActorCodeID,
-			// 	ConstructorParams: seraddp,
-			// }
-			// serparams, err := actors.SerializeParams(params)
-			// if err != nil {
-			// 	return  xerrors.Errorf("failed serializing init actor params: %s", err)
-			// }
-
-
-			a, err := address.NewIDAddress(65)
-			if err != nil{
-				return xerrors.Errorf("mocked actor address not working")
-			}
-
-			//TODO: change this, import the wallet automatically
-			// right now we are just copying Alice's address manually (short-term solution)
-			aliceaddr, err := address. NewFromString("t1d2xrzcslx7xlbbylc5c3d5lvandqw4iwl6epxba")
-			if err != nil{
-				return xerrors.Errorf("alice address not working")
-			}
-
-			_, aerr := c.api.MpoolPushMessage(ctx, &types.Message{
-				To:     a, //this is the mocked actor address
-				From:   aliceaddr, // this is alice address, will need to be changed at some point
-				Value:  abi.NewTokenAmount(0),
-				Method: 4,
-				//Params: []byte(c.newTaprootConfig.PublicKey),
-				Params: seraddp,
-			}, nil)
-
-			if aerr != nil {
-				return  aerr
-			}
-
-			fmt.Println("message sent")
-			// msg := smsg.Cid()
-			// mw, aerr := c.api.StateWaitMsg(ctx, msg, build.MessageConfidence, api.LookbackNoLimit, true)
-			// if aerr != nil {
-			// 	return  aerr
-			// }
-		}
+	//{1,2,3} is session ID, it is hardcoded
+	// change it for a unique identifier
+	// we only need this identifier to be the same for every participants
+	// it could be for example the hash of the checkpointed block
+	// or hash of participants list
+	// problem with 1,2,3: people on different sessions could be on the same execution
+	// try nil --> it probably uses the hash of the participants list
+	// look at the library for DKG (taurus fork)
+	// for signing this is already updated
+	// for testing hardcoded is ok to ensure everyone is on the same session
+	// but for production this needs to be updated.
+	//handler, err := protocol.NewMultiHandler(f, []byte{1, 2, 3})
+	handler, err := protocol.NewMultiHandler(f, []byte{1, 2, 3})
+	if err != nil {
+		return err
 	}
+	LoopHandler(ctx, handler, n)//use the new network, could be re-written
+	r, err := handler.Result()
+	if err != nil {
+		// if a participant is mibehaving the DKG entirely fail (no fallback)
+		return err
+	}
+	log.Infow("result :", "result", r)
+
+	var ok bool
+	c.newTaprootConfig, ok = r.(*keygen.TaprootConfig)
+	if !ok {
+		return xerrors.Errorf("state change propagated is the wrong type")
+	}
+
+	c.newDKGComplete = true
+
+	//we need to update the taproot public key in the mocked actor
+	// this is done by sending a transaction with method 4 (which
+	// corresponds to the "add new public key method")
+
+	// Populate new public key parameter for mocked power actor
+	addp := &mpower.NewTaprootAddressParam{
+			PublicKey: []byte(c.newTaprootConfig.PublicKey),
+	}
+
+	seraddp, err := actors.SerializeParams(addp)
+	if err != nil {
+		return  err
+	}
+
+	// params := &init_.ExecParams{
+	// 	CodeCID:           act.MpowerActorCodeID,
+	// 	ConstructorParams: seraddp,
+	// }
+	// serparams, err := actors.SerializeParams(params)
+	// if err != nil {
+	// 	return  xerrors.Errorf("failed serializing init actor params: %s", err)
+	// }
+
+
+	a, err := address.NewIDAddress(65)
+	if err != nil{
+		return xerrors.Errorf("mocked actor address not working")
+	}
+
+	//TODO: change this, import the wallet automatically
+	// right now we are just copying Alice's address manually (short-term solution)
+	aliceaddr, err := address. NewFromString("t1d2xrzcslx7xlbbylc5c3d5lvandqw4iwl6epxba")
+	if err != nil{
+		return xerrors.Errorf("alice address not working")
+	}
+
+	_, aerr := c.api.MpoolPushMessage(ctx, &types.Message{
+		To:     a, //this is the mocked actor address
+		From:   aliceaddr, // this is alice address, will need to be changed at some point
+		Value:  abi.NewTokenAmount(0),
+		Method: 4,
+		//Params: []byte(c.newTaprootConfig.PublicKey),
+		Params: seraddp,
+	}, nil)
+
+	if aerr != nil {
+		return  aerr
+	}
+
+	fmt.Println("message sent")
+	// msg := smsg.Cid()
+	// mw, aerr := c.api.StateWaitMsg(ctx, msg, build.MessageConfidence, api.LookbackNoLimit, true)
+	// if aerr != nil {
+	// 	return  aerr
+	// }
+
 	return nil
 }
 
