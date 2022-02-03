@@ -514,57 +514,100 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	// this is done by sending a transaction with method 4 (which
 	// corresponds to the "add new public key method")
 
-	// Populate new public key parameter for mocked power actor
-	addp := &mpower.NewTaprootAddressParam{
+	// for now only alice sends the transaction (will need to be changed TODO)
+	//
+
+		// Populate new public key parameter for mocked power actor
+		// addp := &mpower.NewTaprootAddressParam{
+		// 		PublicKey: []byte(c.newTaprootConfig.PublicKey),
+		// }
+
+		// seraddp, err := actors.SerializeParams(addp)
+		// if err != nil {
+		// 	return  err
+		// }
+
+		// // params := &init_.ExecParams{
+		// // 	CodeCID:           act.MpowerActorCodeID,
+		// // 	ConstructorParams: seraddp,
+		// // }
+		// // serparams, err := actors.SerializeParams(params)
+		// // if err != nil {
+		// // 	return  xerrors.Errorf("failed serializing init actor params: %s", err)
+		// // }
+
+
+		// a, err := address.NewIDAddress(65)
+		// if err != nil{
+		// 	return xerrors.Errorf("mocked actor address not working")
+		// }
+
+		// //TODO: change this, import the wallet automatically
+		// // right now we are just copying Alice's address manually (short-term solution)
+		// aliceaddr, err := address. NewFromString("t1d2xrzcslx7xlbbylc5c3d5lvandqw4iwl6epxba")
+		// if err != nil{
+		// 	return xerrors.Errorf("alice address not working")
+		// }
+
+		// _, aerr := c.api.MpoolPushMessage(ctx, &types.Message{
+		// 	To:     a, //this is the mocked actor address
+		// 	From:   aliceaddr, // this is alice address, will need to be changed at some point
+		// 	Value:  abi.NewTokenAmount(0),
+		// 	Method: 4,
+		// 	//Params: []byte(c.newTaprootConfig.PublicKey),
+		// 	Params: seraddp,
+		// }, nil)
+
+		// if aerr != nil {
+		// 	return  aerr
+		// }
+
+		// fmt.Println("message sent")
+		
+		// msg := smsg.Cid()
+		// mw, aerr := c.api.StateWaitMsg(ctx, msg, build.MessageConfidence, api.LookbackNoLimit, true)
+		// if aerr != nil {
+		// 	return  aerr
+		// }
+	//}
+
+		if c.host.ID().String()== "12D3KooWMBbLLKTM9Voo89TXLd98w4MjkJUych6QvECptousGtR4"{
+		addp := &mpower.NewTaprootAddressParam{
 			PublicKey: []byte(c.newTaprootConfig.PublicKey),
+		}
+
+		seraddp, err1 := actors.SerializeParams(addp)
+		if err1 != nil {
+			return  err
+		}
+
+		a, err2 := address.NewIDAddress(65)
+		if err2 != nil{
+			return xerrors.Errorf("mocked actor address not working")
+		}
+
+		//TODO: change this, import the wallet automatically
+		// right now we are just copying Alice's address manually (short-term solution)
+		aliceaddr, err3 := address. NewFromString("t1d2xrzcslx7xlbbylc5c3d5lvandqw4iwl6epxba")
+		if err3 != nil{
+			return xerrors.Errorf("alice address not working")
+		}
+
+		_, aerr := c.api.MpoolPushMessage(ctx, &types.Message{
+			To:     a, //this is the mocked actor address
+			From:   aliceaddr, // this is alice address, will need to be changed at some point
+			Value:  abi.NewTokenAmount(0),
+			Method: 4,
+			//Params: []byte(c.newTaprootConfig.PublicKey),
+			Params: seraddp,
+		}, nil)
+
+		if aerr != nil {
+			return  aerr
+		}
+
+		fmt.Println("message sent")
 	}
-
-	seraddp, err := actors.SerializeParams(addp)
-	if err != nil {
-		return  err
-	}
-
-	// params := &init_.ExecParams{
-	// 	CodeCID:           act.MpowerActorCodeID,
-	// 	ConstructorParams: seraddp,
-	// }
-	// serparams, err := actors.SerializeParams(params)
-	// if err != nil {
-	// 	return  xerrors.Errorf("failed serializing init actor params: %s", err)
-	// }
-
-
-	a, err := address.NewIDAddress(65)
-	if err != nil{
-		return xerrors.Errorf("mocked actor address not working")
-	}
-
-	//TODO: change this, import the wallet automatically
-	// right now we are just copying Alice's address manually (short-term solution)
-	aliceaddr, err := address. NewFromString("t1d2xrzcslx7xlbbylc5c3d5lvandqw4iwl6epxba")
-	if err != nil{
-		return xerrors.Errorf("alice address not working")
-	}
-
-	_, aerr := c.api.MpoolPushMessage(ctx, &types.Message{
-		To:     a, //this is the mocked actor address
-		From:   aliceaddr, // this is alice address, will need to be changed at some point
-		Value:  abi.NewTokenAmount(0),
-		Method: 4,
-		//Params: []byte(c.newTaprootConfig.PublicKey),
-		Params: seraddp,
-	}, nil)
-
-	if aerr != nil {
-		return  aerr
-	}
-
-	fmt.Println("message sent")
-	// msg := smsg.Cid()
-	// mw, aerr := c.api.StateWaitMsg(ctx, msg, build.MessageConfidence, api.LookbackNoLimit, true)
-	// if aerr != nil {
-	// 	return  aerr
-	// }
 
 	return nil
 }
@@ -584,13 +627,15 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 				return err
 			}
 
-			pubkey := c.taprootConfig.PublicKey
+			pubkey := c.taprootConfig.PublicKey // change this to use the new actor
 
 			// if a new public key was generated (i.e. new miners), we use this key in the checkpoint
 			// Problem: when a participant leave, no access to this key
 			if c.newTaprootConfig != nil {
 				pubkey = c.newTaprootConfig.PublicKey
-			}
+			}// change this to use the new actor
+
+			// if
 
 			pubkeyShort := genCheckpointPublicKeyTaproot(pubkey, cp)
 			newTaprootAddress, err := pubkeyToTapprootAddress(pubkeyShort)
