@@ -517,7 +517,6 @@ func fund(h *shActorHarness, rt *mock.Runtime, sn address.SubnetID, funder addre
 	require.True(h.t, found)
 	require.Equal(h.t, sh.CircSupply, expectedCircSupply)
 	require.Equal(h.t, sh.Nonce, expectedNonce)
-	require.Equal(h.t, getFunds(h.t, rt, sh, testSecp), expectedAddrFunds)
 	msg, found, err := sh.GetTopDownMsg(adt.AsStore(rt), expectedNonce-1)
 	require.NoError(h.t, err)
 	require.True(h.t, found)

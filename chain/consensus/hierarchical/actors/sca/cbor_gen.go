@@ -452,7 +452,7 @@ func (t *SCAState) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufSubnet = []byte{137}
+var lengthBufSubnet = []byte{136}
 
 func (t *Subnet) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -492,12 +492,6 @@ func (t *Subnet) MarshalCBOR(w io.Writer) error {
 	// t.Stake (big.Int) (struct)
 	if err := t.Stake.MarshalCBOR(w); err != nil {
 		return err
-	}
-
-	// t.Funds (cid.Cid) (struct)
-
-	if err := cbg.WriteCidBuf(scratch, w, t.Funds); err != nil {
-		return xerrors.Errorf("failed to write cid field t.Funds: %w", err)
 	}
 
 	// t.TopDownMsgs (cid.Cid) (struct)
@@ -544,7 +538,7 @@ func (t *Subnet) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 9 {
+	if extra != 8 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -575,18 +569,6 @@ func (t *Subnet) UnmarshalCBOR(r io.Reader) error {
 		if err := t.Stake.UnmarshalCBOR(br); err != nil {
 			return xerrors.Errorf("unmarshaling t.Stake: %w", err)
 		}
-
-	}
-	// t.Funds (cid.Cid) (struct)
-
-	{
-
-		c, err := cbg.ReadCid(br)
-		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.Funds: %w", err)
-		}
-
-		t.Funds = c
 
 	}
 	// t.TopDownMsgs (cid.Cid) (struct)

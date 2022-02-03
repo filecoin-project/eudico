@@ -241,8 +241,6 @@ func (st *SCAState) getSubnetFromActorAddr(s adt.Store, addr address.Address) (*
 }
 
 func (st *SCAState) registerSubnet(rt runtime.Runtime, shid address.SubnetID, stake big.Int) {
-	emptyFundBalances, err := adt.StoreEmptyMap(adt.AsStore(rt), adt.BalanceTableBitwidth)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create empty funds balance table")
 	emptyTopDownMsgsAMT, err := adt.StoreEmptyArray(adt.AsStore(rt), CrossMsgsAMTBitwidth)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create empty top-down msgs array")
 
@@ -253,7 +251,6 @@ func (st *SCAState) registerSubnet(rt runtime.Runtime, shid address.SubnetID, st
 		ID:             shid,
 		ParentID:       st.NetworkName,
 		Stake:          stake,
-		Funds:          emptyFundBalances,
 		TopDownMsgs:    emptyTopDownMsgsAMT,
 		CircSupply:     big.Zero(),
 		Status:         status,

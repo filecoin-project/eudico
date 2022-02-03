@@ -304,7 +304,7 @@ func (st *SCAState) applyCheckMsgs(rt runtime.Runtime, sh *Subnet, windowCh *sch
 	aux := make(map[string][]schema.CrossMsgMeta)
 	for _, mm := range childCh.CrossMsgs() {
 		// if it is directed to this subnet, or another child of the subnet,
-		// add it to top-down messages
+		// add it to bottom-up messages
 		// for the consensus algorithm in the subnet to pick it up.
 		if mm.To == st.NetworkName.String() ||
 			!hierarchical.IsBottomUp(st.NetworkName, address.SubnetID(mm.To)) {
@@ -437,16 +437,14 @@ func commitTopDownMsg(rt runtime.Runtime, st *SCAState, msg types.Message) {
 	// Set nonce for message
 	msg.Nonce = sh.Nonce
 
-	// Freeze funds
-	rfrom, err := msg.From.RawAddr()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting raw address")
-	sh.freezeFunds(rt, rfrom, msg.Value)
-
 	// Store in the list of cross messages.
 	sh.storeTopDownMsg(rt, &msg)
 
 	// Increase nonce.
 	incrementNonce(rt, &sh.Nonce)
+
+	// Increase circulating supply in subnet.
+	sh.CircSupply = big.Add(sh.CircSupply, msg.Value)
 
 	// Flush subnet.
 	st.flushSubnet(rt, sh)

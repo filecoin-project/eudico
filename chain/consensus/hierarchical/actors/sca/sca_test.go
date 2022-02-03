@@ -429,13 +429,6 @@ func addMsgMeta(ch *schema.Checkpoint, from, to address.SubnetID, rand string, v
 	return m
 
 }
-func getFunds(t *testing.T, rt *mock.Runtime, sh *actor.Subnet, addr address.Address) abi.TokenAmount {
-	funds, err := adt.AsBalanceTable(adt.AsStore(rt), sh.Funds)
-	require.NoError(t, err)
-	out, err := funds.Get(addr)
-	require.NoError(t, err)
-	return out
-}
 
 func (h *shActorHarness) getMsgMeta(rt *mock.Runtime, c cid.Cid) (*actor.CrossMsgs, bool) {
 	var st actor.SCAState
