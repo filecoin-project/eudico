@@ -16,11 +16,11 @@ import (
 
 	"golang.org/x/xerrors"
 
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	bstore "github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
-	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/beacon"
 	"github.com/filecoin-project/lotus/chain/consensus"
@@ -236,12 +236,30 @@ func (tm *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBlock) (er
 	// Tendermint specific checks.
 	height := int64(h.Height) + tm.offset
 	log.Infof("Try to access Tendermint RPC from ValidateBlock")
-	tendermintBlock, err := tm.client.Block(ctx, &height)
+	resp, err := tm.client.Block(ctx, &height)
 	if err != nil {
 		return xerrors.Errorf("unable to get the Tendermint block at height %d", height)
 	}
+	val, err := tm.client.Validators(ctx, &height, nil, nil)
+	if err != nil {
+		return xerrors.Errorf("unable to get the Tendermint block validators at height %d", height)
+	}
 
-	sealed, err := isBlockSealed(b, tendermintBlock.Block)
+	proposerPubKey := findValidatorPubKeyByAddress(val.Validators, resp.Block.ProposerAddress.Bytes())
+	if proposerPubKey == nil {
+		return xerrors.Errorf("unable to find pubKey for proposer %w", resp.Block.ProposerAddress)
+	}
+
+	addr, err := address.NewSecp256k1Address(proposerPubKey)
+	if err != nil {
+		return xerrors.Errorf("unable to get proposer addr %w", err)
+	}
+
+	if b.Header.Miner != addr {
+		return xerrors.Errorf("invalid miner address %w in the block header", b.Header.Miner)
+	}
+
+	sealed, err := isBlockSealed(b, resp.Block)
 	if err != nil {
 		log.Infof("block sealed err: %s", err.Error())
 		return err
