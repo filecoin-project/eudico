@@ -460,9 +460,9 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	fmt.Println("DKG participants: ",participants)
 	fmt.Println("Myself (DKG): ",c.host.ID().String())
 //only the set of new miners take part in the DKG (e.g., a leaving miner does not)
-
-	for _, participant := range(participants){
-		if participant == c.host.ID().String(){
+// not working for some reason
+	// for _, participant := range(participants){
+	// 	if participant == c.host.ID().String(){
 			idsStrings := participants
 			sort.Strings(idsStrings)
 
@@ -613,8 +613,8 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 
 				fmt.Println("message sent")
 			}
-		}
-	}
+	// 	}
+	// }
 	return nil
 }
 
