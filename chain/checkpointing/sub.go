@@ -514,12 +514,14 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	if err != nil{
 		return xerrors.Errorf("alice address not working")
 	}
+
 	_, aerr := c.api.MpoolPushMessage(ctx, &types.Message{
 		To:     a, //this is the mocked actor address
 		From:   aliceaddr, // this is alice address, will need to be changed at some point
 		Value:  abi.NewTokenAmount(0),
-		Method: 4,
-		Params: []byte(c.newTaprootConfig.PublicKey),
+		Method: 2,
+		//Params: []byte(c.newTaprootConfig.PublicKey),
+		Params: []string{"12D3KooWSpyoi7KghH98SWDfDFMyAwuvtP8MWWGDcC1e1uHWzjSm"}
 	}, nil)
 
 	if aerr != nil {
