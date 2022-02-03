@@ -462,8 +462,8 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	fmt.Println("Myself (DKG): ",c.host.ID().String())
 //only the set of new miners take part in the DKG (e.g., a leaving miner does not)
 // not working for some reason
-	// for _, participant := range(participants){
-	// 	if participant == c.host.ID().String(){
+	for _, participant := range(participants){
+		if participant == c.host.ID().String(){
 			idsStrings := participants
 			sort.Strings(idsStrings)
 
@@ -578,44 +578,44 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 			//}
 
 				if c.host.ID().String()== "12D3KooWMBbLLKTM9Voo89TXLd98w4MjkJUych6QvECptousGtR4"{
-				addp := &mpower.NewTaprootAddressParam{
-					PublicKey: []byte(c.newTaprootConfig.PublicKey),
-				}
+					addp := &mpower.NewTaprootAddressParam{
+						PublicKey: []byte(c.newTaprootConfig.PublicKey),
+					}
 
-				seraddp, err1 := actors.SerializeParams(addp)
-				if err1 != nil {
-					return  err1
-				}
+					seraddp, err1 := actors.SerializeParams(addp)
+					if err1 != nil {
+						return  err1
+					}
 
-				a, err2 := address.NewIDAddress(65)
-				if err2 != nil{
-					return xerrors.Errorf("mocked actor address not working")
-				}
+					a, err2 := address.NewIDAddress(65)
+					if err2 != nil{
+						return xerrors.Errorf("mocked actor address not working")
+					}
 
-				//TODO: change this, import the wallet automatically
-				// right now we are just copying Alice's address manually (short-term solution)
-				aliceaddr, err3 := address. NewFromString("t1d2xrzcslx7xlbbylc5c3d5lvandqw4iwl6epxba")
-				if err3 != nil{
-					return xerrors.Errorf("alice address not working")
-				}
+					//TODO: change this, import the wallet automatically
+					// right now we are just copying Alice's address manually (short-term solution)
+					aliceaddr, err3 := address. NewFromString("t1d2xrzcslx7xlbbylc5c3d5lvandqw4iwl6epxba")
+					if err3 != nil{
+						return xerrors.Errorf("alice address not working")
+					}
 
-				_, aerr := c.api.MpoolPushMessage(ctx, &types.Message{
-					To:     a, //this is the mocked actor address
-					From:   aliceaddr, // this is alice address, will need to be changed at some point
-					Value:  abi.NewTokenAmount(0),
-					Method: 4,
-					//Params: []byte(c.newTaprootConfig.PublicKey),
-					Params: seraddp,
-				}, nil)
+					_, aerr := c.api.MpoolPushMessage(ctx, &types.Message{
+						To:     a, //this is the mocked actor address
+						From:   aliceaddr, // this is alice address, will need to be changed at some point
+						Value:  abi.NewTokenAmount(0),
+						Method: 4,
+						//Params: []byte(c.newTaprootConfig.PublicKey),
+						Params: seraddp,
+					}, nil)
 
-				if aerr != nil {
-					return  aerr
-				}
+					if aerr != nil {
+						return  aerr
+					}
 
-				fmt.Println("message sent")
+					fmt.Println("message sent")
 			}
-	// 	}
-	// }
+		}
+	}
 	return nil
 }
 
