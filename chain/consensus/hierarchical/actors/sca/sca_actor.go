@@ -512,7 +512,7 @@ func SecpBLSAddr(rt runtime.Runtime, raw address.Address) address.Address {
 // before being propagated to the corresponding subnet.
 // The circulating supply in each subnet needs to be updated as the message passes through them.
 func (a SubnetCoordActor) SendCross(rt runtime.Runtime, params *CrossMsgParams) *abi.EmptyValue {
-	// Only support account addresses to send cross-messages for now.
+	// FIXME: Only support account addresses to send cross-messages for now.
 	rt.ValidateImmediateCallerType(builtin.AccountActorCodeID)
 	msg := params.Msg
 	var err error
