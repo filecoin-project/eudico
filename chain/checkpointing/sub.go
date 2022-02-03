@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
+	//"encoding/json"
 	"fmt"
 	"os"
 	"sort"
@@ -24,6 +25,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/actors/mpower"
 	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/types"
+	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/node/config"
 	"github.com/filecoin-project/lotus/node/impl"
 	"github.com/filecoin-project/lotus/node/modules/helpers"
@@ -36,6 +38,8 @@ import (
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
 	address "github.com/filecoin-project/go-address"
+	act "github.com/filecoin-project/lotus/chain/consensus/actors"
+	init_ "github.com/filecoin-project/specs-actors/actors/builtin/init"
 	// "github.com/filecoin-project/lotus/build"
 	// "github.com/filecoin-project/lotus/api"
 )
@@ -506,6 +510,27 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	//we need to update the taproot public key in the mocked actor
 	// this is done by sending a transaction with method 4 (which
 	// corresponds to the "add new public key method")
+
+	// Populate new public key parameter for mocked power actor
+	addp := &mpower.NewTaprootAddressParam{
+			PublicKey: []byte(c.newTaprootConfig.PublicKey),
+	}
+
+	seraddp, err := actors.SerializeParams(addp)
+	if err != nil {
+		return  err
+	}
+
+	params := &init_.ExecParams{
+		CodeCID:           act.MpowerActorCodeID,
+		ConstructorParams: seraddp,
+	}
+	serparams, err := actors.SerializeParams(params)
+	if err != nil {
+		return  xerrors.Errorf("failed serializing init actor params: %s", err)
+	}
+
+
 	a, err := address.NewIDAddress(65)
 	if err != nil{
 		return xerrors.Errorf("mocked actor address not working")
@@ -519,9 +544,9 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 		To:     a, //this is the mocked actor address
 		From:   aliceaddr, // this is alice address, will need to be changed at some point
 		Value:  abi.NewTokenAmount(0),
-		Method: 2,
+		Method: 4,
 		//Params: []byte(c.newTaprootConfig.PublicKey),
-		Params: []string{"12D3KooWSpyoi7KghH98SWDfDFMyAwuvtP8MWWGDcC1e1uHWzjSm"}
+		Params: serparams,
 	}, nil)
 
 	if aerr != nil {
