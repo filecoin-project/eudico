@@ -7,4 +7,4 @@ chmod +x ./scripts/delete_eudico_data.sh
 chmod +x ./scripts/restart-demo.sh
 chmod +x ./scripts/add-initial-mpower.sh
 chmod +x ./scripts/add-dom-mpower.sh
-chmod +x ./scripts/remove-dom-mpower.sh
+chmod +x ./scripts/remove-dom-power.sh

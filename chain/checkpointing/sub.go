@@ -574,6 +574,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 	// check if self is included in the set of participants (e.g., a new miner that
 	// wasn't part of the last DKG, does not sign because they don't have a share of the private key)
 
+	fmt.Println("Checkpoint participants: ",participants)
 	for _, participant := range(participants){
 		if participant == c.host.ID().String(){
 			fmt.Println("I'm a checkpointer")
