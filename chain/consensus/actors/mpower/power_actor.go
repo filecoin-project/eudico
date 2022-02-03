@@ -13,7 +13,7 @@ import (
 	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
 
-	"github.com/Zondax/multi-party-sig/pkg/taproot"
+	//"github.com/Zondax/multi-party-sig/pkg/taproot"
 
 )
 
@@ -109,11 +109,11 @@ func (a Actor) RemoveMiners(rt Runtime, params *AddMinerParams) *abi.EmptyValue 
 }
 
 
-type NewTaprootAddress struct {
-	PublicKey taproot.PublicKey
+type NewTaprootAddressParam struct {
+	PublicKey []byte
 }
 
-func (a Actor) UpdateTaprootAddress(rt Runtime, addr *NewTaprootAddress) *abi.EmptyValue {
+func (a Actor) UpdateTaprootAddress(rt Runtime, addr *NewTaprootAddressParam) *abi.EmptyValue {
 	rt.ValidateImmediateCallerAcceptAny()
 	var st State
 	rt.StateTransaction(&st, func() {
