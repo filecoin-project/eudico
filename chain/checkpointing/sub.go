@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 	"reflect"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/Zondax/multi-party-sig/pkg/math/curve"
@@ -493,7 +494,8 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 			// for testing hardcoded is ok to ensure everyone is on the same session
 			// but for production this needs to be updated.
 			//handler, err := protocol.NewMultiHandler(f, []byte{1, 2, 3})
-			handler, err := protocol.NewMultiHandler(f, []byte{1, 2, 3})
+			sessionID := strings.Join(idsStrings, "")
+			handler, err := protocol.NewMultiHandler(f, []byte(sessionID))
 			if err != nil {
 				return err
 			}
