@@ -38,8 +38,8 @@ import (
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
 	address "github.com/filecoin-project/go-address"
-	act "github.com/filecoin-project/lotus/chain/consensus/actors"
-	init_ "github.com/filecoin-project/specs-actors/actors/builtin/init"
+	// act "github.com/filecoin-project/lotus/chain/consensus/actors"
+	// init_ "github.com/filecoin-project/specs-actors/actors/builtin/init"
 	// "github.com/filecoin-project/lotus/build"
 	// "github.com/filecoin-project/lotus/api"
 )
@@ -521,14 +521,14 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 		return  err
 	}
 
-	params := &init_.ExecParams{
-		CodeCID:           act.MpowerActorCodeID,
-		ConstructorParams: seraddp,
-	}
-	serparams, err := actors.SerializeParams(params)
-	if err != nil {
-		return  xerrors.Errorf("failed serializing init actor params: %s", err)
-	}
+	// params := &init_.ExecParams{
+	// 	CodeCID:           act.MpowerActorCodeID,
+	// 	ConstructorParams: seraddp,
+	// }
+	// serparams, err := actors.SerializeParams(params)
+	// if err != nil {
+	// 	return  xerrors.Errorf("failed serializing init actor params: %s", err)
+	// }
 
 
 	a, err := address.NewIDAddress(65)
@@ -546,7 +546,7 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 		Value:  abi.NewTokenAmount(0),
 		Method: 4,
 		//Params: []byte(c.newTaprootConfig.PublicKey),
-		Params: serparams,
+		Params: seraddp,
 	}, nil)
 
 	if aerr != nil {
