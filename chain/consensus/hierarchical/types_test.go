@@ -5,21 +5,34 @@ import (
 
 	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/types"
+	tutil "github.com/filecoin-project/specs-actors/v6/support/testing"
 	"github.com/stretchr/testify/require"
 )
 
-func TestSubnetOps(t *testing.T) {
-	testParentAndBottomUp(t, "/root/a", "/root/a/b", "/root/a", 2, false)
-	testParentAndBottomUp(t, "/root/c/a", "/root/a/b", "/root", 1, true)
-	testParentAndBottomUp(t, "/root/c/a/d", "/root/c/a/e", "/root/c/a", 3, true)
-	testParentAndBottomUp(t, "/root/c/a", "/root/c/b", "/root/c", 2, true)
+func TestBottomUp(t *testing.T) {
+	testBottomUp(t, "/root/a", "/root/a/b", false)
+	testBottomUp(t, "/root/c/a", "/root/a/b", true)
+	testBottomUp(t, "/root/c/a/d", "/root/c/a/e", true)
+	testBottomUp(t, "/root/c/a", "/root/c/b", true)
 }
 
-func testParentAndBottomUp(t *testing.T, from, to, parent string, exl int, bottomup bool) {
-	p, l := hierarchical.CommonParent(
-		address.SubnetID(from), address.SubnetID(to))
-	require.Equal(t, p, address.SubnetID(parent))
-	require.Equal(t, exl, l)
+func testBottomUp(t *testing.T, from, to string, bottomup bool) {
 	require.Equal(t, hierarchical.IsBottomUp(
 		address.SubnetID(from), address.SubnetID(to)), bottomup)
+}
+
+func TestApplyAsBottomUp(t *testing.T) {
+	testApplyAsBottomUp(t, "/root/a", "/root", "/root/a/b", false)
+	testApplyAsBottomUp(t, "/root/a", "/root/a/b/c", "/root/a", true)
+	testApplyAsBottomUp(t, "/root/a", "/root/a/b/c", "/root/b/a", true)
+	testApplyAsBottomUp(t, "/root/a", "/root/b/a/c", "/root/a/b", false)
+}
+
+func testApplyAsBottomUp(t *testing.T, curr, from, to string, bottomup bool) {
+	ff, _ := address.NewHAddress(address.SubnetID(from), tutil.NewIDAddr(t, 101))
+	tt, _ := address.NewHAddress(address.SubnetID(to), tutil.NewIDAddr(t, 101))
+	bu, err := hierarchical.ApplyAsBottomUp(address.SubnetID(curr), &types.Message{From: ff, To: tt})
+	require.NoError(t, err)
+	require.Equal(t, bu, bottomup)
 }

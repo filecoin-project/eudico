@@ -67,6 +67,7 @@ func TestMarshalMsgMeta(t *testing.T) {
 		From:    "asedf",
 		To:      "sfg",
 		MsgsCid: []byte("asdg"),
+		Value:   "10",
 	}
 	// Marshal
 	var buf bytes.Buffer
@@ -178,4 +179,18 @@ func TestEncodeDecodeSignature(t *testing.T) {
 	if sig.Equal(origsig) {
 		t.Fatal("sig should not be equal")
 	}
+}
+
+func TestCrossMsgMetaValue(t *testing.T) {
+	mt := schema.NewCrossMsgMeta(address.SubnetID("from"), address.SubnetID("to"))
+	err := mt.AddValue(abi.NewTokenAmount(30))
+	require.NoError(t, err)
+	v, err := mt.GetValue()
+	require.NoError(t, err)
+	require.Equal(t, v, abi.NewTokenAmount(30))
+	err = mt.SubValue(abi.NewTokenAmount(20))
+	require.NoError(t, err)
+	v, err = mt.GetValue()
+	require.NoError(t, err)
+	require.Equal(t, v, abi.NewTokenAmount(10))
 }

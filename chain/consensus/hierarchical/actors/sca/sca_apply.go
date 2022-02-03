@@ -2,6 +2,7 @@ package sca
 
 import (
 	address "github.com/filecoin-project/go-address"
+	abi "github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	rtt "github.com/filecoin-project/go-state-types/rt"
@@ -25,12 +26,14 @@ func fromToRawAddr(rt runtime.Runtime, from, to address.Address) (address.Addres
 func applyTopDown(rt runtime.Runtime, msg types.Message) {
 	var st SCAState
 	_, rto := fromToRawAddr(rt, msg.From, msg.To)
-
-	if hierarchical.GetMsgType(&msg) != hierarchical.TopDown {
-		rt.Abortf(exitcode.ErrIllegalArgument, "msg passed as argument not topDown")
-	}
+	sto, err := msg.To.Subnet()
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get subnet from HAddress")
 
 	rt.StateTransaction(&st, func() {
+		if bu, err := hierarchical.ApplyAsBottomUp(st.NetworkName, &msg); bu {
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error checking type of message to be applied")
+			rt.Abortf(exitcode.ErrIllegalArgument, "msg passed as argument not topDown")
+		}
 		// NOTE: Check if the nonce of the message being applied is the subsequent one (we could relax a bit this
 		// requirement, but it would mean that we need to determine how we want to handle gaps, and messages
 		// being validated out-of-order).
@@ -54,13 +57,20 @@ func applyTopDown(rt runtime.Runtime, msg types.Message) {
 		return
 	}
 
-	// Send the cross-message
-	// FIXME: We are currently discarding the output, this will change once we
-	// support calling arbitrary actors. And we don't support params. We'll need a way
-	// to support arbitrary calls.
-	code = rt.Send(rto, msg.Method, nil, msg.Value, &builtin.Discard{})
-	if !code.IsSuccess() {
-		noop(rt, code)
+	// If not directed to this subnet we need to go down.
+	if sto != st.NetworkName {
+		rt.StateTransaction(&st, func() {
+			commitTopDownMsg(rt, &st, msg)
+		})
+	} else {
+		// Send the cross-message
+		// FIXME: We are currently discarding the output, this will change once we
+		// support calling arbitrary actors. And we don't support params. We'll need a way
+		// to support arbitrary calls.
+		code = rt.Send(rto, msg.Method, nil, msg.Value, &builtin.Discard{})
+		if !code.IsSuccess() {
+			noop(rt, code)
+		}
 	}
 }
 
@@ -68,39 +78,61 @@ func applyBottomUp(rt runtime.Runtime, msg types.Message) {
 	var st SCAState
 
 	_, rto := fromToRawAddr(rt, msg.From, msg.To)
-	snFrom, err := msg.From.Subnet()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting subnet from HAddress")
-
-	if hierarchical.GetMsgType(&msg) != hierarchical.BottomUp {
-		rt.Abortf(exitcode.ErrIllegalArgument, "msg passed as argument not bottomUp")
-	}
+	sto, err := msg.To.Subnet()
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get subnet from HAddress")
 
 	rt.StateTransaction(&st, func() {
+		if bu, err := hierarchical.ApplyAsBottomUp(st.NetworkName, &msg); !bu {
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error checking type of message to be applied")
+			rt.Abortf(exitcode.ErrIllegalArgument, "msg passed as argument not bottomup")
+		}
 		bottomUpStateTransition(rt, &st, msg)
 
-		// Update circulating supply reducing release value.
-		sh, has, err := st.GetSubnet(adt.AsStore(rt), snFrom)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching subnet state")
-		if !has {
-			rt.Abortf(exitcode.ErrIllegalState, "subnet for actor hasn't been registered yet")
+		if sto != st.NetworkName {
+			// If directed to a child we need to commit message as a
+			// top-down transaction to propagate it down.
+			commitTopDownMsg(rt, &st, msg)
 		}
-		// Even if the actor has balance, we shouldn't allow releasing more than
-		// the current circulating supply, as it would mean that we are
-		// releasing funds from the collateral.
-		if sh.CircSupply.LessThan(msg.Value) {
-			rt.Abortf(exitcode.ErrIllegalState, "wtf! we can't release funds below the circulating supply. Something went wrong!")
-		}
-		sh.CircSupply = big.Sub(sh.CircSupply, msg.Value)
-		st.flushSubnet(rt, sh)
 	})
 
-	// Release funds to the destination address.
-	// FIXME: We currently don't support sending messages with arbitrary params. We should
-	// support this.
-	code := rt.Send(rto, msg.Method, nil, msg.Value, &builtin.Discard{})
-	if !code.IsSuccess() {
-		noop(rt, code)
+	if sto == st.NetworkName {
+		// Release funds to the destination address if it is directed to the current network.
+		// FIXME: We currently don't support sending messages with arbitrary params. We should
+		// support this.
+		code := rt.Send(rto, msg.Method, nil, msg.Value, &builtin.Discard{})
+		if !code.IsSuccess() {
+			noop(rt, code)
+		}
 	}
+}
+
+func (st *SCAState) releaseCircSupply(rt runtime.Runtime, curr *Subnet, id address.SubnetID, value abi.TokenAmount) {
+	// For the current subnet, we don't need to get the subnet object again,
+	// we can modify it directly.
+	if curr.ID == id {
+		curr.releaseSupply(rt, value)
+		return
+		// It is flushed somwhere else.
+	}
+
+	// Update circulating supply reducing release value.
+	sh, has, err := st.GetSubnet(adt.AsStore(rt), id)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching subnet state")
+	if !has {
+		rt.Abortf(exitcode.ErrIllegalState, "subnet for actor hasn't been registered yet")
+	}
+	sh.releaseSupply(rt, value)
+	st.flushSubnet(rt, sh)
+}
+
+func (sh *Subnet) releaseSupply(rt runtime.Runtime, value abi.TokenAmount) {
+	// Even if the actor has balance, we shouldn't allow releasing more than
+	// the current circulating supply, as it would mean that we are
+	// releasing funds from the collateral.
+	if sh.CircSupply.LessThan(value) {
+		rt.Abortf(exitcode.ErrIllegalState, "wtf! we can't release funds below the circulating supply. Something went wrong!")
+	}
+	sh.CircSupply = big.Sub(sh.CircSupply, value)
 }
 
 func bottomUpStateTransition(rt runtime.Runtime, st *SCAState, msg types.Message) {

@@ -115,7 +115,7 @@ func (cm *CrossMsgs) AddMsgMeta(from, to address.SubnetID, meta schema.CrossMsgM
 	cm.Metas = append(cm.Metas, meta)
 }
 
-func (st *SCAState) releaseMsg(rt runtime.Runtime, value big.Int, to address.Address) {
+func (st *SCAState) releaseMsg(rt runtime.Runtime, value big.Int, to address.Address, nonce uint64) ltypes.Message {
 	// The way we identify it is a release message from the subnet is by
 	// setting the burntFundsActor as the from of the message
 	// See hierarchical/types.go
@@ -128,7 +128,7 @@ func (st *SCAState) releaseMsg(rt runtime.Runtime, value big.Int, to address.Add
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
 
 	// Build message.
-	msg := ltypes.Message{
+	return ltypes.Message{
 		To:         to,
 		From:       from,
 		Value:      value,
@@ -140,14 +140,6 @@ func (st *SCAState) releaseMsg(rt runtime.Runtime, value big.Int, to address.Add
 		Params:     nil,
 	}
 
-	// Store msg in registry, update msgMeta and include in checkpoint
-	//
-	// It is a releaseMsg so the source is the current chain and the
-	// destination is our parent chain.
-	st.storeCheckMsg(rt, msg, st.NetworkName, st.NetworkName.Parent())
-
-	// Increase nonce.
-	incrementNonce(rt, &st.Nonce)
 }
 
 func (st *SCAState) storeBottomUpMsgMeta(rt runtime.Runtime, meta schema.CrossMsgMeta) {
@@ -246,6 +238,14 @@ func (st *SCAState) aggChildMsgMeta(rt runtime.Runtime, ch *schema.Checkpoint, a
 			msgMeta = schema.NewCrossMsgMeta(st.NetworkName, address.SubnetID(to))
 		}
 
+		value := abi.NewTokenAmount(0)
+		// All value inside msgMetas
+		for _, mt := range mm {
+			v, err := mt.GetValue()
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting value from meta")
+			value = big.Add(value, v)
+		}
+
 		// If there is already a msgMeta for that to/from update with new message
 		if len(msgMeta.MsgsCid) != 0 {
 			_, prevMetaCid, err := cid.CidFromBytes(msgMeta.MsgsCid)
@@ -253,6 +253,7 @@ func (st *SCAState) aggChildMsgMeta(rt runtime.Runtime, ch *schema.Checkpoint, a
 			metaCid := st.appendMetasToMeta(rt, prevMetaCid, mm)
 			// Update msgMeta in checkpoint
 			ch.SetMsgMetaCid(metaIndex, metaCid)
+			ch.AddValueMetaCid(metaIndex, value)
 		} else {
 			// if not populate a new one
 			meta := &CrossMsgs{Metas: mm}
@@ -265,6 +266,7 @@ func (st *SCAState) aggChildMsgMeta(rt runtime.Runtime, ch *schema.Checkpoint, a
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush msgMeta registry")
 			// Append msgMeta to registry
 			msgMeta.MsgsCid = metaCid.Bytes()
+			msgMeta.AddValue(value)
 			ch.AppendMsgMeta(msgMeta)
 		}
 	}
@@ -286,6 +288,7 @@ func (st *SCAState) storeCheckMsg(rt runtime.Runtime, msg ltypes.Message, from, 
 		metaCid := st.appendMsgToMeta(rt, prevMetaCid, msg)
 		// Update msgMeta in checkpoint
 		ch.SetMsgMetaCid(metaIndex, metaCid)
+		ch.AddValueMetaCid(metaIndex, msg.Value)
 	} else {
 		// if not populate a new one
 		meta := &CrossMsgs{Msgs: []ltypes.Message{msg}}
@@ -298,6 +301,7 @@ func (st *SCAState) storeCheckMsg(rt runtime.Runtime, msg ltypes.Message, from, 
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush msgMeta registry")
 		// Append msgMeta to registry
 		msgMeta.MsgsCid = metaCid.Bytes()
+		msgMeta.AddValue(msg.Value)
 		ch.AppendMsgMeta(msgMeta)
 	}
 

@@ -2,13 +2,16 @@ package main
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	big "github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/lotus/blockstore"
+	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
+	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -33,6 +36,7 @@ var subnetCmds = &cli.Command{
 		checkpointCmds,
 		fundCmd,
 		releaseCmd,
+		sendCmd,
 	},
 }
 
@@ -48,14 +52,9 @@ var listSubnetsCmd = &cli.Command{
 
 		ctx := lcli.ReqContext(cctx)
 
-		ts, err := lcli.LoadTipSet(ctx, cctx, api)
-		if err != nil {
-			return err
-		}
-
 		var st sca.SCAState
 
-		act, err := api.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, ts.Key())
+		act, err := api.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, types.EmptyTSK)
 		if err != nil {
 			return xerrors.Errorf("error getting actor state: %w", err)
 		}
@@ -558,6 +557,177 @@ var fundCmd = &cli.Command{
 		}
 		fmt.Fprintf(cctx.App.Writer, "Successfully funded subnet in message: %s\n", c)
 		fmt.Fprintf(cctx.App.Writer, "Cross-message should be validated shortly in subnet: %s\n", subnet)
+		return nil
+	},
+}
+
+var sendCmd = &cli.Command{
+	Name:      "send",
+	Usage:     "Send a cross-net message to a subnet",
+	ArgsUsage: "[targetAddress] [amount]",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "subnet",
+			Usage: "specify the id of the destination subnet",
+		},
+		&cli.StringFlag{
+			Name:  "from",
+			Usage: "optionally specify the account to send funds from",
+		},
+		&cli.StringFlag{
+			Name:  "gas-premium",
+			Usage: "specify gas price to use in AttoFIL",
+			Value: "0",
+		},
+		&cli.StringFlag{
+			Name:  "gas-feecap",
+			Usage: "specify gas fee cap to use in AttoFIL",
+			Value: "0",
+		},
+		&cli.Int64Flag{
+			Name:  "gas-limit",
+			Usage: "specify gas limit",
+			Value: 0,
+		},
+		&cli.Uint64Flag{
+			Name:  "nonce",
+			Usage: "specify the nonce to use",
+			Value: 0,
+		},
+		&cli.Uint64Flag{
+			Name:  "method",
+			Usage: "specify method to invoke",
+			Value: uint64(builtin.MethodSend),
+		},
+		&cli.StringFlag{
+			Name:  "params-json",
+			Usage: "specify invocation parameters in json",
+		},
+		&cli.StringFlag{
+			Name:  "params-hex",
+			Usage: "specify invocation parameters in hex",
+		},
+		&cli.BoolFlag{
+			Name:  "force",
+			Usage: "Deprecated: use global 'force-send'",
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+
+		if cctx.Args().Len() != 2 {
+			return lcli.ShowHelp(cctx, fmt.Errorf("'send' expects the destination address and an amount of FILs to send to subnet, along with a set of mandatory flags"))
+		}
+		api, closer, err := lcli.GetFullNodeAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+
+		srv, err := lcli.GetFullNodeServices(cctx)
+		if err != nil {
+			return err
+		}
+		defer srv.Close() //nolint:errcheck
+
+		ctx := lcli.ReqContext(cctx)
+		var params lcli.SendParams
+		params.To, err = address.NewFromString(cctx.Args().Get(0))
+		if err != nil {
+			return lcli.ShowHelp(cctx, fmt.Errorf("failed to parse target address: %w", err))
+		}
+
+		val, err := types.ParseFIL(cctx.Args().Get(1))
+		if err != nil {
+			return lcli.ShowHelp(cctx, fmt.Errorf("failed to parse amount: %w", err))
+		}
+		params.Val = abi.TokenAmount(val)
+
+		if from := cctx.String("from"); from != "" {
+			addr, err := address.NewFromString(from)
+			if err != nil {
+				return err
+			}
+
+			params.From = addr
+		}
+
+		if cctx.IsSet("gas-premium") {
+			gp, err := types.BigFromString(cctx.String("gas-premium"))
+			if err != nil {
+				return err
+			}
+			params.GasPremium = &gp
+		}
+
+		if cctx.IsSet("gas-feecap") {
+			gfc, err := types.BigFromString(cctx.String("gas-feecap"))
+			if err != nil {
+				return err
+			}
+			params.GasFeeCap = &gfc
+		}
+
+		if cctx.IsSet("gas-limit") {
+			limit := cctx.Int64("gas-limit")
+			params.GasLimit = &limit
+		}
+
+		params.Method = abi.MethodNum(cctx.Uint64("method"))
+
+		if cctx.IsSet("params-json") {
+			decparams, err := srv.DecodeTypedParamsFromJSON(ctx, params.To, params.Method, cctx.String("params-json"))
+			if err != nil {
+				return fmt.Errorf("failed to decode json params: %w", err)
+			}
+			params.Params = decparams
+		}
+		if cctx.IsSet("params-hex") {
+			if params.Params != nil {
+				return fmt.Errorf("can only specify one of 'params-json' and 'params-hex'")
+			}
+			decparams, err := hex.DecodeString(cctx.String("params-hex"))
+			if err != nil {
+				return fmt.Errorf("failed to decode hex params: %w", err)
+			}
+			params.Params = decparams
+		}
+
+		if cctx.IsSet("nonce") {
+			n := cctx.Uint64("nonce")
+			params.Nonce = &n
+		}
+
+		proto, err := srv.MessageForSend(ctx, params)
+		if err != nil {
+			return xerrors.Errorf("creating message prototype: %w", err)
+		}
+
+		if cctx.String("subnet") == "" {
+			return xerrors.Errorf("no destination subnet specified")
+		}
+
+		subnet := address.SubnetID(cctx.String("subnet"))
+		crossParams := &sca.CrossMsgParams{
+			Destination: subnet,
+			Msg:         proto.Message,
+		}
+		serparams, err := actors.SerializeParams(crossParams)
+		if err != nil {
+			return xerrors.Errorf("failed serializing init actor params: %s", err)
+		}
+		smsg, aerr := api.MpoolPushMessage(ctx, &types.Message{
+			To:     hierarchical.SubnetCoordActorAddr,
+			From:   params.From,
+			Value:  params.Val,
+			Method: sca.Methods.SendCross,
+			Params: serparams,
+		}, nil)
+		if aerr != nil {
+			return xerrors.Errorf("Error sending message: %s", aerr)
+		}
+
+		fmt.Fprintf(cctx.App.Writer, "Successfully send cross-message with cid: %s\n", smsg.Cid())
+		fmt.Fprintf(cctx.App.Writer, "Cross-message should be propagated shortly to the right subnet: %s\n", subnet)
 		return nil
 	},
 }

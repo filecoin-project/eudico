@@ -24,19 +24,22 @@ import (
 const crossMsgResolutionTimeout = 30 * time.Second
 
 func checkCrossMsg(ctx context.Context, r *resolver.Resolver, pstore, snstore blockadt.Store, parentSCA, snSCA *sca.SCAState, msg *types.Message) error {
-	switch hierarchical.GetMsgType(msg) {
-	case hierarchical.TopDown:
-		// sanity-check: the root chain doesn't support topDown messages,
-		// so return an error if parentSCA is nil and we are here.
-		if parentSCA == nil {
-			return xerrors.Errorf("root chains (id=%v) does not support topDown cross msgs", snSCA.NetworkName)
-		}
-		return checkTopDownMsg(pstore, parentSCA, snSCA, msg)
-	case hierarchical.BottomUp:
+
+	buApply, err := hierarchical.ApplyAsBottomUp(snSCA.NetworkName, msg)
+	if err != nil {
+		return xerrors.Errorf("error processing type to apply: %w", err)
+	}
+	if buApply {
 		return checkBottomUpMsg(ctx, r, snstore, snSCA, msg)
 	}
 
-	return xerrors.Errorf("Unknown cross-msg type")
+	// If the message needs to be applied top-down.
+	// sanity-check: the root chain doesn't support topDown messages,
+	// so return an error if parentSCA is nil and we are here.
+	if parentSCA == nil {
+		return xerrors.Errorf("root chains (id=%v) does not support topDown cross msgs", snSCA.NetworkName)
+	}
+	return checkTopDownMsg(pstore, parentSCA, snSCA, msg)
 }
 
 // checkTopDownMsg validates the topdown message.
@@ -237,17 +240,26 @@ func sortCrossMsgs(ctx context.Context, sm *stmgr.StateManager, r *resolver.Reso
 	i := 0
 	for _, cm := range msgs {
 		m := cm.VMMessage()
-		switch hierarchical.GetMsgType(m) {
+
+		netName, err := stmgr.GetNetworkName(ctx, sm, ts.ParentState())
+		if err != nil {
+			return []*types.Message{}, xerrors.Errorf("error getting network name: %w", err)
+		}
+		isBu, err := hierarchical.ApplyAsBottomUp(address.SubnetID(netName), m)
+		if err != nil {
+			return []*types.Message{}, xerrors.Errorf("error processing type to apply: %w", err)
+		}
+
 		// Bottom-up messages are the ones that require exhaustive ordering
 		// top-down already come in order of nonce.
-		case hierarchical.BottomUp:
+		if isBu {
 			_, ok := buApply[m.Nonce]
 			if !ok {
 				buApply[m.Nonce] = make([]*types.Message, 0)
 			}
 			buApply[m.Nonce] = append(buApply[m.Nonce], m)
+		} else {
 			// Append top-down messages as they can be ordered directly.
-		case hierarchical.TopDown:
 			out[i] = m
 			i++
 		}

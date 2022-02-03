@@ -15,15 +15,9 @@ import (
 )
 
 type Subnet struct {
-	ID       address.SubnetID // human-readable name of the subnet ID (path in the hierarchy)
-	ParentID address.SubnetID
-	Stake    abi.TokenAmount
-	// The SCA doesn't keep track of the stake from miners, just locks the funds.
-	// Is up to the subnet actor to handle this and distribute the stake
-	// when the subnet is killed.
-	// NOTE: We may want to keep track of this in the future.
-	// Stake      cid.Cid // BalanceTable with locked stake.
-	Funds       cid.Cid // BalanceTable with funds from addresses that entered the subnet.
+	ID          address.SubnetID // human-readable name of the subnet ID (path in the hierarchy)
+	ParentID    address.SubnetID
+	Stake       abi.TokenAmount
 	TopDownMsgs cid.Cid // AMT[ltypes.Messages] of cross top-down messages to subnet.
 	// NOTE: We can avoid explitly storing the Nonce here and use CrossMsgs length
 	// to determine the nonce. Deferring that for future iterations.
@@ -54,49 +48,27 @@ func (sh *Subnet) addStake(rt runtime.Runtime, st *SCAState, value abi.TokenAmou
 
 }
 
-// freezeFunds freezes some funds from an address to inject them into a subnet.
-func (sh *Subnet) freezeFunds(rt runtime.Runtime, source address.Address, value abi.TokenAmount) {
-	funds, err := adt.AsBalanceTable(adt.AsStore(rt), sh.Funds)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state balance map for frozen funds")
-	// Add the amount being frozen to address.
-	err = funds.Add(source, value)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error adding frozen funds to user balance table")
-	// Flush funds adding miner stake.
-	sh.Funds, err = funds.Root()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush funds")
-
-	// Increase circulating supply in subnet.
-	sh.CircSupply = big.Add(sh.CircSupply, value)
-}
-
-func (sh *Subnet) addFundMsg(rt runtime.Runtime, secp address.Address, value big.Int) {
+func fundMsg(rt runtime.Runtime, id address.SubnetID, secp address.Address, value big.Int) ltypes.Message {
 
 	// Transform To and From to HAddresses
-	to, err := address.NewHAddress(sh.ID, secp)
+	to, err := address.NewHAddress(id, secp)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
-	from, err := address.NewHAddress(sh.ID.Parent(), secp)
+	from, err := address.NewHAddress(id.Parent(), secp)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
 
 	// Build message.
 	//
 	// Fund messages include the same to and from.
-	msg := &ltypes.Message{
+	return ltypes.Message{
 		To:         to,
 		From:       from,
 		Value:      value,
 		Method:     builtin.MethodSend,
-		Nonce:      sh.Nonce,
 		GasLimit:   1 << 30, // This is will be applied as an implicit msg, add enough gas
 		GasFeeCap:  ltypes.NewInt(0),
 		GasPremium: ltypes.NewInt(0),
 		Params:     nil,
 	}
-
-	// Store in the list of cross messages.
-	sh.storeTopDownMsg(rt, msg)
-
-	// Increase nonce.
-	incrementNonce(rt, &sh.Nonce)
 }
 
 func (sh *Subnet) storeTopDownMsg(rt runtime.Runtime, msg *ltypes.Message) {
