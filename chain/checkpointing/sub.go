@@ -519,7 +519,7 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 		From:   aliceaddr, // this is alice address, will need to be changed at some point
 		Value:  abi.NewTokenAmount(0),
 		Method: 4,
-		Params: c.newTaprootConfig.PublicKey,
+		Params: []byte(c.newTaprootConfig.PublicKey),
 	}, nil)
 
 	if aerr != nil {
