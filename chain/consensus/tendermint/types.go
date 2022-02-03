@@ -16,7 +16,7 @@ const (
 
 type RegistrationMessage struct {
 	Name   []byte
-	Tag []byte
+	Tag    []byte
 	Offset int64
 }
 
@@ -40,7 +40,7 @@ func (msg *RegistrationMessage) Serialize() ([]byte, error) {
 func NewRegistrationMessageBytes(name address.SubnetID, tag []byte) ([]byte, error) {
 	msg := RegistrationMessage{
 		Name: []byte(name.String()),
-		Tag: tag,
+		Tag:  tag,
 	}
 	b, err := msg.Serialize()
 	if err != nil {
@@ -51,9 +51,9 @@ func NewRegistrationMessageBytes(name address.SubnetID, tag []byte) ([]byte, err
 }
 
 type tendermintBlockInfo struct {
-	timestamp uint64
-	messages  []*types.SignedMessage
-	crossMsgs []*types.Message
-	hash      []byte
-	proposerAddr []byte
+	timestamp       uint64
+	messages        []*types.SignedMessage
+	crossMsgs       []*types.Message
+	hash            []byte
+	proposerAddress []byte
 }

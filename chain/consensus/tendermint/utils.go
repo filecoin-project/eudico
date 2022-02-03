@@ -128,7 +128,7 @@ func GetTendermintID(ctx context.Context) (address.Address, error) {
 	return addr, nil
 }
 
-func findValidatorPubKeyByAddr(validators []*tenderminttypes.Validator, addr []byte) []byte {
+func findValidatorPubKeyByAddress(validators []*tenderminttypes.Validator, addr []byte) []byte {
 	for _, v := range validators {
 		if bytes.Equal(v.Address.Bytes(), addr) {
 			return v.PubKey.Bytes()
@@ -137,7 +137,7 @@ func findValidatorPubKeyByAddr(validators []*tenderminttypes.Validator, addr []b
 	return nil
 }
 
-func getTendermintAddr(pubKey []byte) []byte {
+func getTendermintAddress(pubKey []byte) []byte {
 	if len(pubKey) != 33 {
 		panic("length of pubkey is incorrect")
 	}

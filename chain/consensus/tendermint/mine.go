@@ -1,11 +1,12 @@
 package tendermint
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"time"
 
-	httptendermintrpcclient "github.com/tendermint/tendermint/rpc/client/http"
+	tmclient "github.com/tendermint/tendermint/rpc/client/http"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
@@ -18,7 +19,7 @@ import (
 var pool = newMessagePool()
 
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {
-	tendermintClient, err := httptendermintrpcclient.New(NodeAddr())
+	tendermintClient, err := tmclient.New(NodeAddr())
 	if err != nil {
 		log.Fatalf("unable to create a Tendermint client: %s", err)
 	}
@@ -167,7 +168,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	}
 }
 
-func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.BlockTemplate) (*types.FullBlock, error) {
+func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.BlockTemplate) (*types.FullBlock, error) {
 	log.Infof("starting creating block for epoch %d", bt.Epoch)
 	defer log.Infof("stopping creating block for epoch %d", bt.Epoch)
 
@@ -175,7 +176,7 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 	defer ticker.Stop()
 
 	tendermintBlockInfoChan := make(chan *tendermintBlockInfo)
-	height := int64(bt.Epoch) + tendermint.offset
+	height := int64(bt.Epoch) + tm.offset
 
 	go func() {
 		for {
@@ -185,7 +186,7 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 				tendermintBlockInfoChan <- nil
 				return
 			case <-ticker.C:
-				resp, err := tendermint.client.Block(ctx, &height)
+				resp, err := tm.client.Block(ctx, &height)
 				if err != nil {
 					log.Infof("unable to get the last Tendermint block @%d: %s", height, err)
 					continue
@@ -194,9 +195,9 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 					info := tendermintBlockInfo{
 						timestamp: uint64(resp.Block.Time.Unix()),
 						hash:      resp.Block.Hash().Bytes(),
-						proposerAddr: resp.Block.ProposerAddress.Bytes(),
+						proposerAddress: resp.Block.ProposerAddress.Bytes(),
 					}
-					parseTendermintBlock(resp.Block, &info, tendermint.tag)
+					parseTendermintBlock(resp.Block, &info, tm.tag)
 
 					tendermintBlockInfoChan <- &info
 				}
@@ -206,44 +207,47 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 
 	tb := <-tendermintBlockInfoChan
 
-	resp, err := tendermint.client.Validators(ctx, &height, nil, nil)
-	if err != nil {
-		log.Infof("unable to get Tendermint validators: %s", err)
-		return nil, err
-	}
+	// Our Tendermint node proposed this block.
+	if bytes.Equal(tb.proposerAddress, tm.validatorAddress) {
+		bt.Miner = tm.clientAddress
+	} else {
+	// Another Tendermint node proposed the block.
+		resp, err := tm.client.Validators(ctx, &height, nil, nil)
+		if err != nil {
+			log.Infof("unable to get Tendermint validators for %d height: %s", height, err)
+			return nil, err
+		}
 
-	targetPubKey := findValidatorPubKeyByAddr(resp.Validators, tb.proposerAddr)
-	if targetPubKey == nil {
-		return nil, xerrors.New("unable to find target public key")
-	}
+		proposerPubKey := findValidatorPubKeyByAddress(resp.Validators, tb.proposerAddress)
+		if proposerPubKey == nil {
+			return nil, xerrors.New("unable to find target public key")
+		}
 
-
-	addr, err := address.NewSecp256k1Address(targetPubKey)
-	if err != nil {
-		log.Info("unable to decode miner addr:", err)
-		return nil, err
-	}
-	if bt.Miner != addr {
-		bt.Miner = addr
+		eudicoAddress, err := address.NewSecp256k1Address(proposerPubKey)
+		if err != nil {
+			log.Info("unable to create address in Eudico format:", err)
+			return nil, err
+		}
+		bt.Miner = eudicoAddress
 	}
 
 	bt.Messages = tb.messages
 	bt.CrossMessages = tb.crossMsgs
 	bt.Timestamp = tb.timestamp
 
-	b, err := sanitizeMessagesAndPrepareBlockForSignature(ctx, tendermint.sm, bt)
+	b, err := sanitizeMessagesAndPrepareBlockForSignature(ctx, tm.sm, bt)
 	if err != nil {
 		log.Info(err)
 		return nil, err
 	}
 
 	h := b.Header
-	baseTs, err := tendermint.store.LoadTipSet(types.NewTipSetKey(h.Parents...))
+	baseTs, err := tm.store.LoadTipSet(types.NewTipSetKey(h.Parents...))
 	if err != nil {
 		return nil, xerrors.Errorf("load parent tipset failed (%s): %w", h.Parents, err)
 	}
 
-	validMsgs, err := common.FilterBlockMessages(ctx, tendermint.store, tendermint.sm, tendermint.subMgr, tendermint.r, tendermint.netName, b, baseTs)
+	validMsgs, err := common.FilterBlockMessages(ctx, tm.store, tm.sm, tm.subMgr, tm.r, tm.netName, b, baseTs)
 	if validMsgs.BLSMessages != nil {
 		b.BlsMessages = validMsgs.BLSMessages
 	}
@@ -257,7 +261,7 @@ func (tendermint *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt
 	b.Header.Ticket = &types.Ticket{VRFProof: tb.hash}
 
 	/*
-		err = tendermint.validateBlock(ctx, b)
+		err = tm.validateBlock(ctx, b)
 		if err != nil {
 			log.Info(err)
 			return nil, err

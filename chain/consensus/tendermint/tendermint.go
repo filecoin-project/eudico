@@ -10,16 +10,17 @@ import (
 	"github.com/hashicorp/go-multierror"
 	logging "github.com/ipfs/go-log/v2"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	httptendermintrpcclient "github.com/tendermint/tendermint/rpc/client/http"
-	"github.com/tendermint/tendermint/rpc/coretypes"
+	tmsecp "github.com/tendermint/tendermint/crypto/secp256k1"
+	tmclient "github.com/tendermint/tendermint/rpc/client/http"
 	"go.opencensus.io/stats"
+
 	"golang.org/x/xerrors"
 
-	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	bstore "github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/beacon"
 	"github.com/filecoin-project/lotus/chain/consensus"
@@ -70,13 +71,20 @@ type Tendermint struct {
 
 	r *resolver.Resolver
 
-	client *httptendermintrpcclient.HTTP
+	client *tmclient.HTTP
 
 	offset int64
 
 	tag []byte
 
-	events <-chan coretypes.ResultEvent
+	// Tendermint validator secp256k1 address
+	validatorAddress []byte
+
+	// Eudico client secp256k1 address
+	clientAddress address.Address
+
+	// Secp256k1 public key
+	clientPubKey []byte
 }
 
 func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon.Schedule, r *resolver.Resolver,
@@ -87,21 +95,34 @@ func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon
 
 	tag := sha256.Sum256([]byte(subnetID))
 
-	tendermintClient, err := httptendermintrpcclient.New(NodeAddr())
+	tmClient, err := tmclient.New(NodeAddr())
 	if err != nil {
 		log.Fatalf("unable to create a Tendermint client: %s", err)
 	}
-	info, err := tendermintClient.Status(context.TODO())
+	resp, err := tmClient.Status(context.TODO())
 	if err != nil {
 		log.Fatalf("unable to connect to the Tendermint node: %s", err)
 	}
-	log.Info("Tendermint validator:", info.ValidatorInfo.Address)
+	log.Info("Tendermint validator:", resp.ValidatorInfo.Address)
+
+	validatorAddress := resp.ValidatorInfo.Address.Bytes()
+
+	keyType := resp.ValidatorInfo.PubKey.Type()
+	if keyType != tmsecp.KeyType {
+		log.Fatalf("Tendermint validator uses unsupported key type: %s", keyType)
+	}
+	validatorPubKey := resp.ValidatorInfo.PubKey.Bytes()
+
+	clientAddress, err := address.NewSecp256k1Address(validatorPubKey)
+	if err != nil {
+		log.Fatalf("unable to calculate client address: %s", err.Error())
+	}
 
 	regMsg, err := NewRegistrationMessageBytes(subnetID, tag[:4])
 	if err != nil {
 		log.Fatalf("unable to create a registration message: %s", err)
 	}
-	regResp, err := tendermintClient.BroadcastTxCommit(context.TODO(), regMsg)
+	regResp, err := tmClient.BroadcastTxCommit(context.TODO(), regMsg)
 	if err != nil {
 		log.Fatalf("unable to register network: %s", err)
 	}
@@ -114,19 +135,6 @@ func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon
 
 	log.Warnf("!!!!! Tendermint offset for %s is %d", regSubnet.Name, regSubnet.Offset)
 
-	err = tendermintClient.Start()
-	if err != nil {
-		log.Fatal(err)
-	}
-	//TODO: stop client on exit
-
-	//TODO: do we need this? Now all requests to Tendermint are made using plain HTTP
-	query := "tm.event = 'NewBlock'"
-	events, err := tendermintClient.Subscribe(context.TODO(), "test-client", query)
-	if err != nil {
-		log.Fatalf("unable to subscribe to the Tendermint events: %s", err)
-	}
-
 	return &Tendermint{
 		store:    sm.ChainStore(),
 		beacon:   beacon,
@@ -135,14 +143,16 @@ func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon
 		genesis:  genesis,
 		subMgr:   submgr,
 		netName:  subnetID,
-		client:   tendermintClient,
-		events:   events,
+		client:   tmClient,
 		offset:   regSubnet.Offset,
 		tag: tag[:4],
+		validatorAddress: validatorAddress,
+		clientAddress: clientAddress,
+		clientPubKey: validatorPubKey,
 	}
 }
 
-func (tendermint *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBlock) (err error) {
+func (tm *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBlock) (err error) {
 	log.Infof("STARTED VALIDATE BLOCK %d", b.Header.Height)
 	defer log.Infof("FINISHED VALIDATE BLOCK %d", b.Header.Height)
 
@@ -152,7 +162,7 @@ func (tendermint *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBl
 
 	h := b.Header
 
-	baseTs, err := tendermint.store.LoadTipSet(types.NewTipSetKey(h.Parents...))
+	baseTs, err := tm.store.LoadTipSet(types.NewTipSetKey(h.Parents...))
 	if err != nil {
 		return xerrors.Errorf("load parent tipset failed (%s): %w", h.Parents, err)
 	}
@@ -170,10 +180,10 @@ func (tendermint *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBl
 		log.Warn("Got block from the future, but within threshold", h.Timestamp, build.Clock.Now().Unix())
 	}
 
-	msgsChecks := common.CheckMsgsWithoutBlockSig(ctx, tendermint.store, tendermint.sm, tendermint.subMgr, tendermint.r, tendermint.netName, b, baseTs)
+	msgsChecks := common.CheckMsgsWithoutBlockSig(ctx, tm.store, tm.sm, tm.subMgr, tm.r, tm.netName, b, baseTs)
 
 	minerCheck := async.Err(func() error {
-		if err := tendermint.minerIsValid(b.Header.Miner); err != nil {
+		if err := tm.minerIsValid(b.Header.Miner); err != nil {
 			return xerrors.Errorf("minerIsValid failed: %w", err)
 		}
 		return nil
@@ -189,7 +199,7 @@ func (tendermint *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBl
 			b.Header.ParentWeight, pweight)
 	}
 
-	stateRootCheck := common.CheckStateRoot(ctx, tendermint.store, tendermint.sm, b, baseTs)
+	stateRootCheck := common.CheckStateRoot(ctx, tm.store, tm.sm, b, baseTs)
 
 	await := []async.ErrorFuture{
 		minerCheck,
@@ -224,9 +234,9 @@ func (tendermint *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBl
 	}
 
 	// Tendermint specific checks.
-	height := int64(h.Height) + tendermint.offset
+	height := int64(h.Height) + tm.offset
 	log.Infof("Try to access Tendermint RPC from ValidateBlock")
-	tendermintBlock, err := tendermint.client.Block(ctx, &height)
+	tendermintBlock, err := tm.client.Block(ctx, &height)
 	if err != nil {
 		return xerrors.Errorf("unable to get the Tendermint block at height %d", height)
 	}
@@ -244,7 +254,7 @@ func (tendermint *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBl
 	return nil
 }
 
-func (tendermint *Tendermint) validateBlock(ctx context.Context, b *types.FullBlock) (err error) {
+func (tm *Tendermint) validateBlock(ctx context.Context, b *types.FullBlock) (err error) {
 	log.Infof("STARTED ADDITIONAL VALIDATION FOR BLOCK %d", b.Header.Height)
 	defer log.Infof("FINISHED ADDITIONAL VALIDATION FOR  %d", b.Header.Height)
 
@@ -254,7 +264,7 @@ func (tendermint *Tendermint) validateBlock(ctx context.Context, b *types.FullBl
 
 	h := b.Header
 
-	baseTs, err := tendermint.store.LoadTipSet(types.NewTipSetKey(h.Parents...))
+	baseTs, err := tm.store.LoadTipSet(types.NewTipSetKey(h.Parents...))
 	if err != nil {
 		return xerrors.Errorf("load parent tipset failed (%s): %w", h.Parents, err)
 	}
@@ -272,10 +282,10 @@ func (tendermint *Tendermint) validateBlock(ctx context.Context, b *types.FullBl
 		log.Warn("Got block from the future, but within threshold", h.Timestamp, build.Clock.Now().Unix())
 	}
 
-	msgsChecks := common.CheckMsgsWithoutBlockSig(ctx, tendermint.store, tendermint.sm, tendermint.subMgr, tendermint.r, tendermint.netName, b, baseTs)
+	msgsChecks := common.CheckMsgsWithoutBlockSig(ctx, tm.store, tm.sm, tm.subMgr, tm.r, tm.netName, b, baseTs)
 
 	minerCheck := async.Err(func() error {
-		if err := tendermint.minerIsValid(b.Header.Miner); err != nil {
+		if err := tm.minerIsValid(b.Header.Miner); err != nil {
 			return xerrors.Errorf("minerIsValid failed: %w", err)
 		}
 		return nil
@@ -291,7 +301,7 @@ func (tendermint *Tendermint) validateBlock(ctx context.Context, b *types.FullBl
 			b.Header.ParentWeight, pweight)
 	}
 
-	stateRootCheck := common.CheckStateRoot(ctx, tendermint.store, tendermint.sm, b, baseTs)
+	stateRootCheck := common.CheckStateRoot(ctx, tm.store, tm.sm, b, baseTs)
 
 	await := []async.ErrorFuture{
 		minerCheck,
@@ -325,8 +335,8 @@ func (tendermint *Tendermint) validateBlock(ctx context.Context, b *types.FullBl
 		return mulErr
 	}
 
-	height := int64(h.Height) + tendermint.offset
-	tendermintBlock, err := tendermint.client.Block(ctx, &height)
+	height := int64(h.Height) + tm.offset
+	tendermintBlock, err := tm.client.Block(ctx, &height)
 	if err != nil {
 		return xerrors.Errorf("unable to get the Tendermint block by height %d", height)
 	}
@@ -343,12 +353,12 @@ func (tendermint *Tendermint) validateBlock(ctx context.Context, b *types.FullBl
 	return nil
 }
 
-func (tendermint *Tendermint) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
-	if tendermint.genesis == nil {
+func (tm *Tendermint) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
+	if tm.genesis == nil {
 		return false
 	}
 
-	tendermintLastBlock, err := tendermint.client.Block(context.TODO(), nil)
+	tendermintLastBlock, err := tm.client.Block(context.TODO(), nil)
 	if err != nil {
 		//TODO: Tendermint: Discuss what we should return here.
 		return false
@@ -357,7 +367,7 @@ func (tendermint *Tendermint) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
 	return tendermintLastBlock.Block.Height+MaxHeightDrift < int64(epoch)
 }
 
-func (tendermint *Tendermint) ValidateBlockPubsub(ctx context.Context, self bool, msg *pubsub.Message) (pubsub.ValidationResult, string) {
+func (tm *Tendermint) ValidateBlockPubsub(ctx context.Context, self bool, msg *pubsub.Message) (pubsub.ValidationResult, string) {
 	if self {
 		return validateLocalBlock(ctx, msg)
 	}
@@ -396,7 +406,7 @@ func (tendermint *Tendermint) ValidateBlockPubsub(ctx context.Context, self bool
 	return pubsub.ValidationAccept, ""
 }
 
-func (tendermint *Tendermint) minerIsValid(maddr address.Address) error {
+func (tm *Tendermint) minerIsValid(maddr address.Address) error {
 	switch maddr.Protocol() {
 	case address.BLS:
 		fallthrough
