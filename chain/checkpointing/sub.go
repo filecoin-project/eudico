@@ -522,6 +522,7 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 			if !ok {
 				return xerrors.Errorf("state change propagated is the wrong type")
 			}
+			c.newDKGComplete = true
 
 			//we need to update the taproot public key in the mocked actor
 			// this is done by sending a transaction with method 4 (which
