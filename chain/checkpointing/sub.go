@@ -838,8 +838,7 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 		result := jsonRPC(c.cpconfig.BitcoinHost, payload)
 		if result == nil {
 			log.Errorf("could not send initial Bitcoin transaction to: %v", address)
-		}
-		else{
+		} else {
 			log.Infow("successfully sent first bitcoin tx")
 		}
 		// Save tweaked value
