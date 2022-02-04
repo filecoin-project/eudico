@@ -8,3 +8,4 @@ chmod +x ./scripts/restart-demo.sh
 chmod +x ./scripts/add-initial-mpower.sh
 chmod +x ./scripts/add-dom-power.sh
 chmod +x ./scripts/remove-dom-mpower.sh
+chmod +x ./scripts/remove-charlie.sh
