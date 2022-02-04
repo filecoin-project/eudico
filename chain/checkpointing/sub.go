@@ -731,12 +731,12 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 
 	// even miners who left the protocol will do this as their newDKGComplete
 	// return true for everyone after a DKG has completed (whether they took part or no)
-	if c.newDKGComplete {
-		c.keysUpdated = true
-		c.participants = c.newParticipants
-		c.newParticipants = []string{}
+	// if c.newDKGComplete {
+	// 	c.keysUpdated = true
+	// 	c.participants = c.newParticipants
+	// 	c.newParticipants = []string{}
 
-	}
+	// }
 
 	return nil
 }
