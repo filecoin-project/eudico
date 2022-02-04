@@ -4,6 +4,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"github.com/tendermint/tendermint/rpc/coretypes"
+	"strings"
+	"time"
+
 	"github.com/Gurpartap/async"
 	secp "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/hashicorp/go-multierror"
@@ -13,7 +17,6 @@ import (
 	"github.com/tendermint/tendermint/libs/rand"
 	tmclient "github.com/tendermint/tendermint/rpc/client/http"
 	"go.opencensus.io/stats"
-	"strings"
 
 	"golang.org/x/xerrors"
 
@@ -39,7 +42,8 @@ import (
 
 
 const (
-	Sidecar = "http://127.0.0.1:26657"
+	defaultTendermintRPCAddress = "http://127.0.0.1:26657"
+	tendermintRPCAddressEnv = "EUDICO_TENDERMINT_RPC"
 
 	// TODO: is that correct or should be adapted?
 	// Blocks that are more than MaxHeightDrift epochs above
@@ -100,10 +104,31 @@ func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon
 	if err != nil {
 		log.Fatalf("unable to create a Tendermint client: %s", err)
 	}
-	resp, err := tmClient.Status(context.TODO())
-	if err != nil {
-		log.Fatalf("unable to connect to the Tendermint node: %s", err)
+
+	var resp *coretypes.ResultStatus
+	var statusErr error
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	loop := true
+	for loop {
+		select {
+		case <-ticker.C:
+			resp, statusErr = tmClient.Status(context.TODO())
+			if statusErr != nil {
+				continue
+			} else {
+				loop = false
+			}
+
+		case <-time.After(20 * time.Second):
+			if statusErr != nil {
+				log.Fatalf("unable to get Tendermint status: %s", statusErr)
+			}
+		}
 	}
+
 	log.Info("Tendermint validator:", resp.ValidatorInfo.Address)
 
 	validatorAddress := resp.ValidatorInfo.Address.Bytes()

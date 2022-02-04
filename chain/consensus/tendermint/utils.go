@@ -18,9 +18,9 @@ import (
 )
 
 func NodeAddr() string {
-	addr := os.Getenv("TENDERMINT_NODE_ADDR")
+	addr := os.Getenv(tendermintRPCAddressEnv)
 	if addr == "" {
-		return Sidecar
+		return defaultTendermintRPCAddress
 	}
 	return addr
 }
@@ -112,7 +112,7 @@ func parseTx(tx []byte) (interface{}, uint32, error) {
 }
 
 func GetTendermintID(ctx context.Context) (address.Address, error) {
-	client, err := httptendermintrpcclient.New(Sidecar)
+	client, err := httptendermintrpcclient.New(NodeAddr())
 	if err != nil {
 		panic("unable to access a tendermint client")
 	}

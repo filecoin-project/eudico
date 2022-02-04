@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	secp "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"time"
 
+	secp "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	tmclient "github.com/tendermint/tendermint/rpc/client/http"
 	"golang.org/x/xerrors"
 
