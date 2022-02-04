@@ -594,6 +594,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 			if c.newDKGComplete {
 				//pubkey = c.newTaprootConfig.PublicKey // change this to update from the actor
 				pubkey = taproot.PublicKey(c.newKey)
+				fmt.Println("Keys from DKG: ", c.newTaprootConfig.PublicKey, pubkey)
 			}
 			// change this to use the new actor
 
