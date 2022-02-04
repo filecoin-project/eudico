@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	secp "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"strings"
 
 	"github.com/Gurpartap/async"
@@ -112,11 +113,14 @@ func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon
 		log.Fatalf("Tendermint validator uses unsupported key type: %s", keyType)
 	}
 	validatorPubKey := resp.ValidatorInfo.PubKey.Bytes()
+	uncompressedValidatorPubKey, err := secp.ParsePubKey(validatorPubKey)
 
-	clientAddress, err := address.NewSecp256k1Address(validatorPubKey)
+	clientAddress, err := address.NewSecp256k1Address(uncompressedValidatorPubKey.SerializeUncompressed())
 	if err != nil {
 		log.Fatalf("unable to calculate client address: %s", err.Error())
 	}
+
+	log.Info("Eudico client addr:", clientAddress)
 
 	regMsg, err := NewRegistrationMessageBytes(subnetID, tag[:4])
 	if err != nil {
@@ -133,7 +137,7 @@ func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon
 		log.Fatalf("unable to decode registration response: %s", err.Error())
 	}
 
-	log.Warnf("!!!!! Tendermint offset for %s is %d", regSubnet.Name, regSubnet.Offset)
+	log.Warnf("Tendermint offset for %s is %d", regSubnet.Name, regSubnet.Offset)
 
 	return &Tendermint{
 		store:    sm.ChainStore(),
@@ -250,7 +254,9 @@ func (tm *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBlock) (er
 		return xerrors.Errorf("unable to find pubKey for proposer %w", resp.Block.ProposerAddress)
 	}
 
-	addr, err := address.NewSecp256k1Address(proposerPubKey)
+	uncompressedProposerPubKey, err := secp.ParsePubKey(proposerPubKey)
+
+	addr, err := address.NewSecp256k1Address(uncompressedProposerPubKey.SerializeUncompressed())
 	if err != nil {
 		return xerrors.Errorf("unable to get proposer addr %w", err)
 	}

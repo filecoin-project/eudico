@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	secp "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"time"
 
 	tmclient "github.com/tendermint/tendermint/rpc/client/http"
@@ -19,6 +20,7 @@ import (
 var pool = newMessagePool()
 
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {
+	log.Info("Miner addr:", miner.String())
 	tendermintClient, err := tmclient.New(NodeAddr())
 	if err != nil {
 		log.Fatalf("unable to create a Tendermint client: %s", err)
@@ -134,7 +136,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		}
 
 		bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
-			Miner:            miner,
+			Miner:            address.Undef,
 			Parents:          base.Key(),
 			BeaconValues:     nil,
 			Ticket:           nil,
@@ -207,11 +209,9 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 
 	tb := <-tendermintBlockInfoChan
 
-	// Our Tendermint node proposed this block.
-	if bytes.Equal(tb.proposerAddress, tm.validatorAddress) {
-		bt.Miner = tm.clientAddress
-	} else {
-	// Another Tendermint node proposed the block.
+	bt.Miner = tm.clientAddress
+	// if another Tendermint node proposed the block.
+	if !bytes.Equal(tb.proposerAddress, tm.validatorAddress) {
 		resp, err := tm.client.Validators(ctx, &height, nil, nil)
 		if err != nil {
 			log.Infof("unable to get Tendermint validators for %d height: %s", height, err)
@@ -223,7 +223,9 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 			return nil, xerrors.New("unable to find target public key")
 		}
 
-		eudicoAddress, err := address.NewSecp256k1Address(proposerPubKey)
+		uncompressedProposerPubKey, err := secp.ParsePubKey(proposerPubKey)
+
+		eudicoAddress, err := address.NewSecp256k1Address(uncompressedProposerPubKey.SerializeUncompressed())
 		if err != nil {
 			log.Info("unable to create address in Eudico format:", err)
 			return nil, err
@@ -268,6 +270,8 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 		}
 
 	*/
+
+	log.Infof("!!!!%s mined a block", b.Header.Miner)
 
 	return b, nil
 }

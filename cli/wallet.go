@@ -434,6 +434,8 @@ var walletImportTendermintKey = &cli.Command{
 			return fmt.Errorf("error reading Tendermint private key from %v: %w", keyFilePath, err)
 		}
 
+		log.Info("read public key from file:", pvKey.PubKey.Bytes())
+
 		if pvKey.PrivKey.Type() != tmsecp.KeyType {
 			return fmt.Errorf("unsupported private key type %v", pvKey.PrivKey.Type())
 		}
@@ -455,12 +457,11 @@ var walletImportTendermintKey = &cli.Command{
 		}
 
 		fmt.Printf(
-			"imported key successfully:\n\tFilecoin address: %s\n\tTendermint address: %s",
+			"imported key successfully:\n\tFilecoin address: %s\n\tTendermint address: %s\n",
 			addr.String(),
 			pvKey.Address,
 		)
 
-		fmt.Printf("imported key %s successfully!\n", addr.String())
 		return nil
 	},
 }

@@ -108,6 +108,13 @@ var tendermintGenesisCmd = &cli.Command{
 var tendermintMinerCmd = &cli.Command{
 	Name:  "miner",
 	Usage: "run tendermint consensus miner",
+	Flags: []cli.Flag{
+		&cli.BoolFlag{
+			Name:  "default-key",
+			Value: true,
+			Usage: "use default wallet's key",
+		},
+	},
 	Action: func(cctx *cli.Context) error {
 		api, closer, err := lcli.GetFullNodeAPIV1(cctx)
 		if err != nil {
@@ -116,9 +123,18 @@ var tendermintMinerCmd = &cli.Command{
 		defer closer()
 		ctx := cliutil.ReqContext(cctx)
 
-		miner, err := address.NewFromString(cctx.Args().First())
-		if err != nil {
-			return err
+		var miner address.Address
+
+		if cctx.Bool("default-key") {
+			miner, err = api.WalletDefaultAddress(ctx)
+			if err != nil {
+				return err
+			}
+		} else {
+			miner, err = address.NewFromString(cctx.Args().First())
+			if err != nil {
+				return err
+			}
 		}
 		if miner == address.Undef {
 			return xerrors.Errorf("no miner address specified to start mining")

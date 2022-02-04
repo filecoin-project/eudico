@@ -25,5 +25,5 @@ tmux new-session -d -s "tendermint" \; \
       ./eudico tendermint daemon --genesis=./testdata/gen.gen" Enter \; \
   send-keys -t "tendermint:0.3" "./eudico wait-api;
       ./eudico wallet import-tendermint-key --as-default -path=/Users/alpha/.tendermint/config/priv_validator_key.json; sleep 2;
-      ./eudico tendermint miner f1ozbo7zqwfx6d4tqb353qoq7sfp4qhycefx6ftgy" Enter \; \
+      ./eudico tendermint miner --default-key" Enter \; \
   attach-session -t "tendermint:0.1"
