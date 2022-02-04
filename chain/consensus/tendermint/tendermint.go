@@ -4,16 +4,16 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
-	secp "github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"strings"
-
 	"github.com/Gurpartap/async"
+	secp "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/hashicorp/go-multierror"
 	logging "github.com/ipfs/go-log/v2"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	tmsecp "github.com/tendermint/tendermint/crypto/secp256k1"
+	"github.com/tendermint/tendermint/libs/rand"
 	tmclient "github.com/tendermint/tendermint/rpc/client/http"
 	"go.opencensus.io/stats"
+	"strings"
 
 	"golang.org/x/xerrors"
 
@@ -122,10 +122,15 @@ func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon
 
 	log.Info("Eudico client addr:", clientAddress)
 
-	regMsg, err := NewRegistrationMessageBytes(subnetID, tag[:4])
+	regMsg, err := NewRegistrationMessageBytes(subnetID, tag[:4], rand.Bytes(10) )
+	fmt.Println(regMsg)
 	if err != nil {
 		log.Fatalf("unable to create a registration message: %s", err)
 	}
+
+	// TODO: remove registration functionality or improve it
+	// https://github.com/tendermint/tendermint/issues/7678
+	// https://github.com/tendermint/tendermint/issues/3414
 	regResp, err := tmClient.BroadcastTxCommit(context.TODO(), regMsg)
 	if err != nil {
 		log.Fatalf("unable to register network: %s", err)

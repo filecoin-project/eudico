@@ -18,7 +18,7 @@ var _ = cid.Undef
 var _ = math.E
 var _ = sort.Sort
 
-var lengthBufRegistrationMessage = []byte{131}
+var lengthBufRegistrationMessage = []byte{132}
 
 func (t *RegistrationMessage) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -67,6 +67,19 @@ func (t *RegistrationMessage) MarshalCBOR(w io.Writer) error {
 			return err
 		}
 	}
+
+	// t.Nonce ([]uint8) (slice)
+	if len(t.Nonce) > cbg.ByteArrayMaxLen {
+		return xerrors.Errorf("Byte array in field t.Nonce was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajByteString, uint64(len(t.Nonce))); err != nil {
+		return err
+	}
+
+	if _, err := w.Write(t.Nonce[:]); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -84,7 +97,7 @@ func (t *RegistrationMessage) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 3 {
+	if extra != 4 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -154,6 +167,27 @@ func (t *RegistrationMessage) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		t.Offset = int64(extraI)
+	}
+	// t.Nonce ([]uint8) (slice)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+
+	if extra > cbg.ByteArrayMaxLen {
+		return fmt.Errorf("t.Nonce: byte array too large (%d)", extra)
+	}
+	if maj != cbg.MajByteString {
+		return fmt.Errorf("expected byte array")
+	}
+
+	if extra > 0 {
+		t.Nonce = make([]uint8, extra)
+	}
+
+	if _, err := io.ReadFull(br, t.Nonce[:]); err != nil {
+		return err
 	}
 	return nil
 }

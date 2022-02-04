@@ -18,6 +18,7 @@ type RegistrationMessage struct {
 	Name   []byte
 	Tag    []byte
 	Offset int64
+	Nonce []byte
 }
 
 func DecodeRegistrationMessage(b []byte) (*RegistrationMessage, error) {
@@ -37,10 +38,11 @@ func (msg *RegistrationMessage) Serialize() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func NewRegistrationMessageBytes(name address.SubnetID, tag []byte) ([]byte, error) {
+func NewRegistrationMessageBytes(name address.SubnetID, tag, nonce []byte) ([]byte, error) {
 	msg := RegistrationMessage{
 		Name: []byte(name.String()),
 		Tag:  tag,
+		Nonce: nonce,
 	}
 	b, err := msg.Serialize()
 	if err != nil {
