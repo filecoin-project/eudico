@@ -242,7 +242,7 @@ func (v *Validator) Validate(ctx context.Context, pid peer.ID, msg *pubsub.Messa
 	}
 
 	// Process the resolveMsg, record error, and return gossipsub validation status.
-	sub, err := v.r.processResolveMsg(v.submgr, rmsg)
+	sub, err := v.r.processResolveMsg(ctx, v.submgr, rmsg)
 	if err != nil {
 		log.Errorf("error processing resolve message: %s", err)
 		return sub
@@ -274,22 +274,22 @@ func (r *Resolver) HandleIncomingResolveMsg(ctx context.Context, sub *pubsub.Sub
 	}
 }
 
-func (r *Resolver) processResolveMsg(submgr subnet.SubnetMgr, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
+func (r *Resolver) processResolveMsg(ctx context.Context, submgr subnet.SubnetMgr, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
 	switch rmsg.Type {
 	case Push:
-		return r.processPush(rmsg)
+		return r.processPush(ctx, rmsg)
 	case PullMeta:
 		return r.processPull(submgr, rmsg)
 	case Response:
-		return r.processResponse(rmsg)
+		return r.processResponse(ctx, rmsg)
 	}
 	return pubsub.ValidationReject, xerrors.Errorf("Resolve message type is not valid")
 
 }
 
-func (r *Resolver) processPush(rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
+func (r *Resolver) processPush(ctx context.Context, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
 	// Check if we are already storing the CrossMsgs CID locally.
-	_, found, err := r.getLocal(rmsg.Cid)
+	_, found, err := r.getLocal(ctx, rmsg.Cid)
 	if err != nil {
 		return pubsub.ValidationIgnore, xerrors.Errorf("Error getting cross-msg locally: %w", err)
 	}
@@ -298,7 +298,7 @@ func (r *Resolver) processPush(rmsg *ResolveMsg) (pubsub.ValidationResult, error
 		return pubsub.ValidationIgnore, nil
 	}
 	// If not stored locally, store it in the datastore for future access.
-	if err := r.setLocal(rmsg.Cid, &rmsg.CrossMsgs); err != nil {
+	if err := r.setLocal(ctx, rmsg.Cid, &rmsg.CrossMsgs); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
 
@@ -330,10 +330,10 @@ func (r *Resolver) processPull(submgr subnet.SubnetMgr, rmsg *ResolveMsg) (pubsu
 	return pubsub.ValidationAccept, nil
 }
 
-func (r *Resolver) processResponse(rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
+func (r *Resolver) processResponse(ctx context.Context, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
 	// Response messages are processed in the same way as push messages
 	// (at least for now). Is the validation what differs between them.
-	if sub, err := r.processPush(rmsg); err != nil {
+	if sub, err := r.processPush(ctx, rmsg); err != nil {
 		return sub, err
 	}
 	// If received successfully we can delete ongoingPull
@@ -341,8 +341,8 @@ func (r *Resolver) processResponse(rmsg *ResolveMsg) (pubsub.ValidationResult, e
 	return pubsub.ValidationAccept, nil
 }
 
-func (r *Resolver) getLocal(c cid.Cid) (*sca.CrossMsgs, bool, error) {
-	b, err := r.ds.Get(datastore.NewKey(c.String()))
+func (r *Resolver) getLocal(ctx context.Context, c cid.Cid) (*sca.CrossMsgs, bool, error) {
+	b, err := r.ds.Get(ctx, datastore.NewKey(c.String()))
 	if err != nil {
 		if err == datastore.ErrNotFound {
 			return nil, false, nil
@@ -356,12 +356,12 @@ func (r *Resolver) getLocal(c cid.Cid) (*sca.CrossMsgs, bool, error) {
 	return out, true, nil
 }
 
-func (r *Resolver) setLocal(c cid.Cid, msgs *sca.CrossMsgs) error {
+func (r *Resolver) setLocal(ctx context.Context, c cid.Cid, msgs *sca.CrossMsgs) error {
 	w := new(bytes.Buffer)
 	if err := msgs.MarshalCBOR(w); err != nil {
 		return err
 	}
-	return r.ds.Put(datastore.NewKey(c.String()), w.Bytes())
+	return r.ds.Put(ctx, datastore.NewKey(c.String()), w.Bytes())
 }
 
 func (r *Resolver) publishMsg(m *ResolveMsg, id address.SubnetID) error {
@@ -385,7 +385,7 @@ func (r *Resolver) WaitCrossMsgsResolved(ctx context.Context, c cid.Cid, from ad
 				return
 			default:
 				// Check if crossMsg fully resolved.
-				_, resolved, err = r.ResolveCrossMsgs(c, address.SubnetID(from))
+				_, resolved, err = r.ResolveCrossMsgs(ctx, c, address.SubnetID(from))
 				if err != nil {
 					out <- err
 				}
@@ -401,10 +401,10 @@ func (r *Resolver) WaitCrossMsgsResolved(ctx context.Context, c cid.Cid, from ad
 	return out
 }
 
-func (r *Resolver) ResolveCrossMsgs(c cid.Cid, from address.SubnetID) ([]types.Message, bool, error) {
+func (r *Resolver) ResolveCrossMsgs(ctx context.Context, c cid.Cid, from address.SubnetID) ([]types.Message, bool, error) {
 	// FIXME: This function should keep track of the retries that have been done,
 	// and fallback to a 1:1 exchange if this fails.
-	cross, found, err := r.getLocal(c)
+	cross, found, err := r.getLocal(ctx, c)
 	if err != nil {
 		return []types.Message{}, false, err
 	}
@@ -419,7 +419,7 @@ func (r *Resolver) ResolveCrossMsgs(c cid.Cid, from address.SubnetID) ([]types.M
 				return []types.Message{}, false, nil
 			}
 			// Recursively resolve crossMsg for meta
-			cross, found, err := r.ResolveCrossMsgs(c, address.SubnetID(mt.From))
+			cross, found, err := r.ResolveCrossMsgs(ctx, c, address.SubnetID(mt.From))
 			if err != nil {
 				return []types.Message{}, false, nil
 			}

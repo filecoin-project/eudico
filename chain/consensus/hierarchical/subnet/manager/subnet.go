@@ -87,15 +87,15 @@ type Subnet struct {
 }
 
 // LoadGenesis from serialized genesis bootstrap
-func (sh *Subnet) LoadGenesis(genBytes []byte) (chain.Genesis, error) {
-	c, err := car.LoadCar(sh.bs, bytes.NewReader(genBytes))
+func (sh *Subnet) LoadGenesis(ctx context.Context, genBytes []byte) (chain.Genesis, error) {
+	c, err := car.LoadCar(ctx, sh.bs, bytes.NewReader(genBytes))
 	if err != nil {
 		return nil, xerrors.Errorf("loading genesis car file failed: %w", err)
 	}
 	if len(c.Roots) != 1 {
 		return nil, xerrors.New("expected genesis file to have one root")
 	}
-	root, err := sh.bs.Get(c.Roots[0])
+	root, err := sh.bs.Get(ctx, c.Roots[0])
 	if err != nil {
 		return nil, err
 	}
@@ -105,13 +105,13 @@ func (sh *Subnet) LoadGenesis(genBytes []byte) (chain.Genesis, error) {
 		return nil, xerrors.Errorf("decoding block failed: %w", err)
 	}
 
-	err = sh.ch.SetGenesis(h)
+	err = sh.ch.SetGenesis(ctx, h)
 	if err != nil {
 		log.Errorw("Error setting genesis for subnet", "err", err)
 		return nil, err
 	}
 	//LoadGenesis to pass it
-	return chain.LoadGenesis(sh.sm)
+	return chain.LoadGenesis(ctx, sh.sm)
 }
 
 func (sh *Subnet) HandleIncomingMessages(ctx context.Context, bootstrapper dtypes.Bootstrapper) error {

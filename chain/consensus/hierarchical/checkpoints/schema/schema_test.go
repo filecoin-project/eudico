@@ -12,7 +12,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/utils"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/wallet"
-	tutil "github.com/filecoin-project/specs-actors/v6/support/testing"
+	tutil "github.com/filecoin-project/specs-actors/v7/support/testing"
 	"github.com/stretchr/testify/require"
 )
 

@@ -11,10 +11,10 @@ import (
 	actor "github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	schema "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/types"
-	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
-	"github.com/filecoin-project/specs-actors/v6/support/mock"
-	tutil "github.com/filecoin-project/specs-actors/v6/support/testing"
+	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
+	"github.com/filecoin-project/specs-actors/v7/support/mock"
+	tutil "github.com/filecoin-project/specs-actors/v7/support/testing"
 	"github.com/stretchr/testify/require"
 )
 

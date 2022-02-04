@@ -43,7 +43,7 @@ func CheckStateRoot(ctx context.Context, store *store.ChainStore, sm *stmgr.Stat
 		}
 
 		if stateroot != h.ParentStateRoot {
-			msgs, err := store.MessagesForTipset(baseTs)
+			msgs, err := store.MessagesForTipset(ctx, baseTs)
 			if err != nil {
 				log.Error("failed to load messages for tipset during tipset state mismatch error: ", err)
 			} else {
@@ -171,7 +171,7 @@ func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.St
 		return xerrors.Errorf("failed to load base state tree: %w", err)
 	}
 
-	nv := sm.GetNtwkVersion(ctx, b.Header.Height)
+	nv := sm.GetNetworkVersion(ctx, b.Header.Height)
 	pl := vm.PricelistByEpoch(baseTs.Height())
 	var sumGasLimit int64
 	checkMsg := func(msg types.ChainMsg) error {
@@ -193,7 +193,7 @@ func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.St
 		// Phase 2: (Partial) semantic validation:
 		// the sender exists and is an account actor, and the nonces make sense
 		var sender address.Address
-		if sm.GetNtwkVersion(ctx, b.Header.Height) >= network.Version13 {
+		if sm.GetNetworkVersion(ctx, b.Header.Height) >= network.Version13 {
 			sender, err = st.LookupID(m.From)
 			if err != nil {
 				return err
@@ -233,7 +233,7 @@ func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.St
 			return xerrors.Errorf("block had invalid bls message at index %d: %w", i, err)
 		}
 
-		c, err := store.PutMessage(tmpbs, m)
+		c, err := store.PutMessage(ctx, tmpbs, m)
 		if err != nil {
 			return xerrors.Errorf("failed to store message %s: %w", m.Cid(), err)
 		}
@@ -261,7 +261,7 @@ func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.St
 			return xerrors.Errorf("secpk message %s has invalid signature: %w", m.Cid(), err)
 		}
 
-		c, err := store.PutMessage(tmpbs, m)
+		c, err := store.PutMessage(ctx, tmpbs, m)
 		if err != nil {
 			return xerrors.Errorf("failed to store message %s: %w", m.Cid(), err)
 		}
@@ -309,7 +309,7 @@ func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.St
 		//         return xerrors.Errorf("block had invalid bls message at index %d: %w", i, err)
 		// }
 
-		c, err := store.PutMessage(tmpbs, m)
+		c, err := store.PutMessage(ctx, tmpbs, m)
 		if err != nil {
 			return xerrors.Errorf("failed to store message %s: %w", m.Cid(), err)
 		}

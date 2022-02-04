@@ -9,7 +9,7 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	ltypes "github.com/filecoin-project/lotus/chain/types"
-	tutil "github.com/filecoin-project/specs-actors/v6/support/testing"
+	tutil "github.com/filecoin-project/specs-actors/v7/support/testing"
 	"github.com/ipfs/go-datastore"
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -17,8 +17,9 @@ import (
 )
 
 func TestGetSet(t *testing.T) {
+	ctx := context.Background()
 	ds := datastore.NewMapDatastore()
-	h, err := libp2p.New(context.TODO())
+	h, err := libp2p.New()
 	require.NoError(t, err)
 	ps, err := pubsub.NewGossipSub(context.TODO(), h)
 	require.NoError(t, err)
@@ -35,22 +36,23 @@ func TestGetSet(t *testing.T) {
 	}
 	out := &sca.CrossMsgs{Msgs: []ltypes.Message{msg}}
 	r := NewResolver(h.ID(), ds, ps, address.RootSubnet)
-	out1, found, err := r.getLocal(msg.Cid())
+	out1, found, err := r.getLocal(ctx, msg.Cid())
 	require.NoError(t, err)
 	require.False(t, found)
 	require.Nil(t, out1)
 	require.NoError(t, err)
-	err = r.setLocal(msg.Cid(), out)
+	err = r.setLocal(ctx, msg.Cid(), out)
 	require.NoError(t, err)
-	out2, found, err := r.getLocal(msg.Cid())
+	out2, found, err := r.getLocal(ctx, msg.Cid())
 	require.NoError(t, err)
 	require.True(t, found)
 	require.Equal(t, out, out2)
 }
 
 func TestResolve(t *testing.T) {
+	ctx := context.Background()
 	ds := datastore.NewMapDatastore()
-	h, err := libp2p.New(context.TODO())
+	h, err := libp2p.New()
 	require.NoError(t, err)
 	ps, err := pubsub.NewGossipSub(context.TODO(), h)
 	require.NoError(t, err)
@@ -68,12 +70,12 @@ func TestResolve(t *testing.T) {
 	out := &sca.CrossMsgs{Msgs: []ltypes.Message{msg}}
 	r := NewResolver(h.ID(), ds, ps, address.RootSubnet)
 	c, _ := out.Cid()
-	_, found, err := r.ResolveCrossMsgs(c, address.RootSubnet)
+	_, found, err := r.ResolveCrossMsgs(ctx, c, address.RootSubnet)
 	require.NoError(t, err)
 	require.False(t, found)
-	err = r.setLocal(c, out)
+	err = r.setLocal(ctx, c, out)
 	require.NoError(t, err)
-	pulled, found, err := r.ResolveCrossMsgs(c, address.RootSubnet)
+	pulled, found, err := r.ResolveCrossMsgs(ctx, c, address.RootSubnet)
 	require.NoError(t, err)
 	require.True(t, found)
 	require.Equal(t, len(pulled), 1)
@@ -82,8 +84,9 @@ func TestResolve(t *testing.T) {
 }
 
 func TestWaitResolve(t *testing.T) {
+	ctx := context.Background()
 	ds := datastore.NewMapDatastore()
-	h, err := libp2p.New(context.TODO())
+	h, err := libp2p.New()
 	require.NoError(t, err)
 	ps, err := pubsub.NewGossipSub(context.TODO(), h)
 	require.NoError(t, err)
@@ -107,7 +110,7 @@ func TestWaitResolve(t *testing.T) {
 	go func() {
 		// Wait one second, and store cross-msgs locally
 		time.Sleep(1 * time.Second)
-		err = r.setLocal(c, out)
+		err = r.setLocal(ctx, c, out)
 		require.NoError(t, err)
 	}()
 
