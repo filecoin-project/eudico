@@ -363,6 +363,8 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 				c.pubkey = pubkeyShort
 				c.newTaprootConfig = nil
 				c.participants = newSt.Miners // we add ourselves to the list of participants
+				c.newDKGComplete = false
+				//c.newKey = 
 
 
 			} else {
