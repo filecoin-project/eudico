@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
-	//"reflect"
+	"reflect"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -77,8 +77,12 @@ type CheckpointingSub struct {
 	*/
 	// Generated public key
 	pubkey []byte
+	//Keys of the new set of participants
+	newKey []byte
 	// Participants list identified with their libp2p cid
 	participants []string
+	// Participants list identified with their libp2p cid
+	newParticipants []string	
 	// boolean to keep track of when the new config has finished the DKG 
 	newDKGComplete bool
 	// boolean to keep
@@ -354,7 +358,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 				c.tweakedValue = hashTweakedValue(pubkey, merkleRoot)
 				c.pubkey = pubkeyShort
 				c.newTaprootConfig = nil
-				c.participants = newSt.Miners // we had ourselves to the list of participants
+				//c.participants = newSt.Miners // we add ourselves to the list of participants
 
 			} else {
 				// Miners config is the data that will be stored for now in Minio, later on a eudico-KVS
@@ -386,16 +390,21 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 					log.Errorf("could not create checkpoint: %v", err)
 					return false, nil, err
 				}
-				// if there was a new configuration,
-				// replace the set of participants with new state of participant
-				if c.newDKGComplete {
-					c.participants = newSt.Miners
-					fmt.Println("participants list updated")
-					fmt.Println(c.participants)
-					c.newDKGComplete = false
-					c.keysUpdated = false
-				}
+
+	
 			}
+		}
+
+		// we check if a new key was computed as part of a DKG and update
+		// our key locally if this is the case
+		if !reflect.DeepEqual(oldSt.PublicKey,newSt.PublicKey) {
+			//c.participants = newSt.Miners
+			//fmt.Println("participants list updated")
+			//fmt.Println(c.participants)
+			c.newDKGComplete = true
+			c.newKey = newSt.PublicKey
+			c.keysUpdated = false
+			
 		}
 
 		// If Power Actors list has changed start DKG
@@ -413,10 +422,10 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 				log.Errorf("error while generating new key: %v", err)
 				// If generating new key failed, checkpointing should not be possible
 			}
+			c.newParticipants = newSt.Miners
 
 			return true, nil, nil // true mean generate keys
 		}
-
 		return false, nil, nil
 	}
 
@@ -462,8 +471,8 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	fmt.Println("Myself (DKG): ",c.host.ID().String())
 //only the set of new miners take part in the DKG (e.g., a leaving miner does not)
 // not working for some reason
-	for _, participant := range(participants){
-		if participant == c.host.ID().String(){
+	// for _, participant := range(participants){
+	// 	if participant == c.host.ID().String(){
 			idsStrings := participants
 			sort.Strings(idsStrings)
 
@@ -514,8 +523,6 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 				return xerrors.Errorf("state change propagated is the wrong type")
 			}
 
-			c.newDKGComplete = true
-
 			//we need to update the taproot public key in the mocked actor
 			// this is done by sending a transaction with method 4 (which
 			// corresponds to the "add new public key method")
@@ -523,99 +530,45 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 			// for now only alice sends the transaction (will need to be changed TODO)
 			//
 
-				// Populate new public key parameter for mocked power actor
-				// addp := &mpower.NewTaprootAddressParam{
-				// 		PublicKey: []byte(c.newTaprootConfig.PublicKey),
-				// }
+			if c.host.ID().String()== "12D3KooWMBbLLKTM9Voo89TXLd98w4MjkJUych6QvECptousGtR4"{
+				addp := &mpower.NewTaprootAddressParam{
+					PublicKey: []byte(c.newTaprootConfig.PublicKey), // new public key that was just generated
+				}
 
-				// seraddp, err := actors.SerializeParams(addp)
-				// if err != nil {
-				// 	return  err
-				// }
+				seraddp, err1 := actors.SerializeParams(addp)
+				if err1 != nil {
+					return  err1
+				}
 
-				// // params := &init_.ExecParams{
-				// // 	CodeCID:           act.MpowerActorCodeID,
-				// // 	ConstructorParams: seraddp,
-				// // }
-				// // serparams, err := actors.SerializeParams(params)
-				// // if err != nil {
-				// // 	return  xerrors.Errorf("failed serializing init actor params: %s", err)
-				// // }
+				a, err2 := address.NewIDAddress(65)
+				if err2 != nil{
+					return xerrors.Errorf("mocked actor address not working")
+				}
 
+				//TODO: change this, import the wallet automatically
+				// right now we are just copying Alice's address manually (short-term solution)
+				aliceaddr, err3 := address. NewFromString("t1d2xrzcslx7xlbbylc5c3d5lvandqw4iwl6epxba")
+				if err3 != nil{
+					return xerrors.Errorf("alice address not working")
+				}
 
-				// a, err := address.NewIDAddress(65)
-				// if err != nil{
-				// 	return xerrors.Errorf("mocked actor address not working")
-				// }
+				_, aerr := c.api.MpoolPushMessage(ctx, &types.Message{
+					To:     a, //this is the mocked actor address
+					From:   aliceaddr, // this is alice address, will need to be changed at some point
+					Value:  abi.NewTokenAmount(0),
+					Method: 4,
+					//Params: []byte(c.newTaprootConfig.PublicKey),
+					Params: seraddp,
+				}, nil)
 
-				// //TODO: change this, import the wallet automatically
-				// // right now we are just copying Alice's address manually (short-term solution)
-				// aliceaddr, err := address. NewFromString("t1d2xrzcslx7xlbbylc5c3d5lvandqw4iwl6epxba")
-				// if err != nil{
-				// 	return xerrors.Errorf("alice address not working")
-				// }
+				if aerr != nil {
+					return  aerr
+				}
 
-				// _, aerr := c.api.MpoolPushMessage(ctx, &types.Message{
-				// 	To:     a, //this is the mocked actor address
-				// 	From:   aliceaddr, // this is alice address, will need to be changed at some point
-				// 	Value:  abi.NewTokenAmount(0),
-				// 	Method: 4,
-				// 	//Params: []byte(c.newTaprootConfig.PublicKey),
-				// 	Params: seraddp,
-				// }, nil)
-
-				// if aerr != nil {
-				// 	return  aerr
-				// }
-
-				// fmt.Println("message sent")
-				
-				// msg := smsg.Cid()
-				// mw, aerr := c.api.StateWaitMsg(ctx, msg, build.MessageConfidence, api.LookbackNoLimit, true)
-				// if aerr != nil {
-				// 	return  aerr
-				// }
-			//}
-
-				if c.host.ID().String()== "12D3KooWMBbLLKTM9Voo89TXLd98w4MjkJUych6QvECptousGtR4"{
-					addp := &mpower.NewTaprootAddressParam{
-						PublicKey: []byte(c.newTaprootConfig.PublicKey),
-					}
-
-					seraddp, err1 := actors.SerializeParams(addp)
-					if err1 != nil {
-						return  err1
-					}
-
-					a, err2 := address.NewIDAddress(65)
-					if err2 != nil{
-						return xerrors.Errorf("mocked actor address not working")
-					}
-
-					//TODO: change this, import the wallet automatically
-					// right now we are just copying Alice's address manually (short-term solution)
-					aliceaddr, err3 := address. NewFromString("t1d2xrzcslx7xlbbylc5c3d5lvandqw4iwl6epxba")
-					if err3 != nil{
-						return xerrors.Errorf("alice address not working")
-					}
-
-					_, aerr := c.api.MpoolPushMessage(ctx, &types.Message{
-						To:     a, //this is the mocked actor address
-						From:   aliceaddr, // this is alice address, will need to be changed at some point
-						Value:  abi.NewTokenAmount(0),
-						Method: 4,
-						//Params: []byte(c.newTaprootConfig.PublicKey),
-						Params: seraddp,
-					}, nil)
-
-					if aerr != nil {
-						return  aerr
-					}
-
-					fmt.Println("message sent")
-			}
+				fmt.Println("message sent")
 		}
-	}
+	// 	}
+	// }
 	return nil
 }
 
@@ -634,15 +587,17 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 				return err
 			}
 
-			pubkey := c.taprootConfig.PublicKey // change this to use the new actor
-
+			pubkey := c.taprootConfig.PublicKey 
 			// if a new public key was generated (i.e. new miners), we use this key in the checkpoint
 			// Problem: when a participant leave, no access to this key
-			if c.newTaprootConfig != nil {
-				pubkey = c.newTaprootConfig.PublicKey
-			}// change this to use the new actor
+			//if c.newTaprootConfig != nil {
+			if c.newDKGComplete {
+				//pubkey = c.newTaprootConfig.PublicKey // change this to update from the actor
+				pubkey = taproot.PublicKey(c.newKey)
+			}
+			// change this to use the new actor
 
-			// if
+			// ifnew
 
 			pubkeyShort := genCheckpointPublicKeyTaproot(pubkey, cp)
 			newTaprootAddress, err := pubkeyToTapprootAddress(pubkeyShort)
@@ -668,6 +623,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 			if c.ptxid == "" {
 				log.Infow("missing precedent txid")
 				taprootScript := getTaprootScript(c.pubkey)
+				//we add our public key to our bitcoin wallet
 				success := addTaprootToWallet(c.cpconfig.BitcoinHost, taprootScript)
 				if !success {
 					return xerrors.Errorf("failed to add taproot address to wallet")
@@ -676,6 +632,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 				// sleep an arbitrary long time to be sure it has been scanned
 				time.Sleep(6 * time.Second)
 
+				//we get the transaction id using our bitcoin client
 				ptxid, err := walletGetTxidFromAddress(c.cpconfig.BitcoinHost, taprootAddress)
 				if err != nil {
 					return err
@@ -742,13 +699,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 			// if signing is a success we register the new value
 			merkleRoot := hashMerkleRoot(pubkey, cp)
 			c.tweakedValue = hashTweakedValue(pubkey, merkleRoot)
-			c.pubkey = pubkeyShort
-
-			// If we have new config, we replace the previous config with this config
-			if c.newTaprootConfig != nil {
-				c.taprootConfig = c.newTaprootConfig
-				c.newTaprootConfig = nil
-			}
+			c.pubkey = pubkeyShort //updates the public key to the new key
 
 			c.ptxid = ""
 
@@ -770,9 +721,21 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 			break
 		}
 	}
+	// If we have new config (i.e. a DKG has completed and we participated in it)
+	// we replace the previous config with this config
+	// Note: if someone left the protocol, they will not do this so this is not great
+	if c.newTaprootConfig != nil {
+		c.taprootConfig = c.newTaprootConfig
+		c.newTaprootConfig = nil
+	}
 
+	// even miners who left the protocol will do this as their newDKGComplete
+	// return true for everyone after a DKG has completed (whether they took part or no)
 	if c.newDKGComplete {
 		c.keysUpdated = true
+		c.participants = c.newParticipants
+		c.newParticipants = []string{}
+
 	}
 
 	return nil
