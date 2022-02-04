@@ -579,8 +579,8 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 
 	fmt.Println("Checkpoint participants: ",participants)
 	fmt.Println("Myself: ",c.host.ID().String())
-	for _, participant := range(participants){
-		if participant == c.host.ID().String(){
+	// for _, participant := range(participants){
+	// 	if participant == c.host.ID().String(){
 			fmt.Println("I'm a checkpointer")
 			taprootAddress, err := pubkeyToTapprootAddress(c.pubkey)
 			if err != nil {
@@ -718,9 +718,9 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 			log.Infow("new Txid:", "newtxid", newtxid)
 			c.ptxid = newtxid
 
-			break
-		}
-	}
+	// 		break
+	// 	}
+	// }
 	// If we have new config (i.e. a DKG has completed and we participated in it)
 	// we replace the previous config with this config
 	// Note: if someone left the protocol, they will not do this so this is not great
@@ -731,12 +731,12 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 
 	// even miners who left the protocol will do this as their newDKGComplete
 	// return true for everyone after a DKG has completed (whether they took part or no)
-	// if c.newDKGComplete {
-	// 	c.keysUpdated = true
-	// 	c.participants = c.newParticipants
-	// 	c.newParticipants = []string{}
+	if c.newDKGComplete {
+		c.keysUpdated = true
+		c.participants = c.newParticipants
+		c.newParticipants = []string{}
 
-	// }
+	}
 
 	return nil
 }
