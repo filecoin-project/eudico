@@ -738,6 +738,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		c.keysUpdated = true
 		c.participants = c.newParticipants
 		c.newParticipants = []string{}
+		c.newDKGComplete = false
 
 	}
 
