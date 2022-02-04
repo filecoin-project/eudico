@@ -1,7 +1,6 @@
 package tendermint
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"time"
@@ -197,7 +196,7 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 					info := tendermintBlockInfo{
 						timestamp: uint64(resp.Block.Time.Unix()),
 						hash:      resp.Block.Hash().Bytes(),
-						proposerAddress: resp.Block.ProposerAddress.Bytes(),
+						proposerAddress: resp.Block.ProposerAddress.String(),
 					}
 					parseTendermintBlock(resp.Block, &info, tm.tag)
 
@@ -211,26 +210,34 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 
 	bt.Miner = tm.clientAddress
 	// if another Tendermint node proposed the block.
-	if !bytes.Equal(tb.proposerAddress, tm.validatorAddress) {
-		resp, err := tm.client.Validators(ctx, &height, nil, nil)
-		if err != nil {
-			log.Infof("unable to get Tendermint validators for %d height: %s", height, err)
-			return nil, err
-		}
+	if tb.proposerAddress != tm.validatorAddress {
+		eudicoAddress, ok := tm.tendermintEudicoAddresses[tb.proposerAddress]
+		// known address
+		if ok {
+			bt.Miner = eudicoAddress
+		// unknown address
+		} else {
+			resp, err := tm.client.Validators(ctx, &height, nil, nil)
+			if err != nil {
+				log.Infof("unable to get Tendermint validators for %d height: %s", height, err)
+				return nil, err
+			}
 
-		proposerPubKey := findValidatorPubKeyByAddress(resp.Validators, tb.proposerAddress)
-		if proposerPubKey == nil {
-			return nil, xerrors.New("unable to find target public key")
-		}
+			proposerPubKey := findValidatorPubKeyByAddress(resp.Validators, []byte(tb.proposerAddress))
+			if proposerPubKey == nil {
+				return nil, xerrors.New("unable to find target public key")
+			}
 
-		uncompressedProposerPubKey, err := secp.ParsePubKey(proposerPubKey)
+			uncompressedProposerPubKey, err := secp.ParsePubKey(proposerPubKey)
 
-		eudicoAddress, err := address.NewSecp256k1Address(uncompressedProposerPubKey.SerializeUncompressed())
-		if err != nil {
-			log.Info("unable to create address in Eudico format:", err)
-			return nil, err
+			eudicoAddress, err := address.NewSecp256k1Address(uncompressedProposerPubKey.SerializeUncompressed())
+			if err != nil {
+				log.Info("unable to create address in Eudico format:", err)
+				return nil, err
+			}
+			tm.tendermintEudicoAddresses[tb.proposerAddress] = eudicoAddress
+			bt.Miner = eudicoAddress
 		}
-		bt.Miner = eudicoAddress
 	}
 
 	bt.Messages = tb.messages

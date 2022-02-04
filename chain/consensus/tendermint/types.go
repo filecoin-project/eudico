@@ -57,5 +57,5 @@ type tendermintBlockInfo struct {
 	messages        []*types.SignedMessage
 	crossMsgs       []*types.Message
 	hash            []byte
-	proposerAddress []byte
+	proposerAddress string
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
-	"github.com/tendermint/tendermint/rpc/coretypes"
 	"strings"
 	"time"
 
@@ -16,6 +15,7 @@ import (
 	tmsecp "github.com/tendermint/tendermint/crypto/secp256k1"
 	"github.com/tendermint/tendermint/libs/rand"
 	tmclient "github.com/tendermint/tendermint/rpc/client/http"
+	"github.com/tendermint/tendermint/rpc/coretypes"
 	"go.opencensus.io/stats"
 
 	"golang.org/x/xerrors"
@@ -42,8 +42,8 @@ import (
 
 
 const (
-	defaultTendermintRPCAddress = "http://127.0.0.1:26657"
 	tendermintRPCAddressEnv = "EUDICO_TENDERMINT_RPC"
+	defaultTendermintRPCAddress = "http://127.0.0.1:26657"
 
 	// TODO: is that correct or should be adapted?
 	// Blocks that are more than MaxHeightDrift epochs above
@@ -83,13 +83,17 @@ type Tendermint struct {
 	tag []byte
 
 	// Tendermint validator secp256k1 address
-	validatorAddress []byte
+	validatorAddress string
 
 	// Eudico client secp256k1 address
 	clientAddress address.Address
 
 	// Secp256k1 public key
 	clientPubKey []byte
+
+	// Mapping between Tendermint validator addresses and Eudico miner addresses
+	tendermintEudicoAddresses map[string] address.Address
+
 }
 
 func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon.Schedule, r *resolver.Resolver,
@@ -104,6 +108,7 @@ func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon
 	if err != nil {
 		log.Fatalf("unable to create a Tendermint client: %s", err)
 	}
+
 
 	var resp *coretypes.ResultStatus
 	var statusErr error
@@ -131,7 +136,7 @@ func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon
 
 	log.Info("Tendermint validator:", resp.ValidatorInfo.Address)
 
-	validatorAddress := resp.ValidatorInfo.Address.Bytes()
+	validatorAddress := resp.ValidatorInfo.Address.String()
 
 	keyType := resp.ValidatorInfo.PubKey.Type()
 	if keyType != tmsecp.KeyType {
@@ -183,6 +188,7 @@ func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon
 		validatorAddress: validatorAddress,
 		clientAddress: clientAddress,
 		clientPubKey: validatorPubKey,
+		tendermintEudicoAddresses: make(map[string] address.Address),
 	}
 }
 
@@ -274,26 +280,34 @@ func (tm *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBlock) (er
 	if err != nil {
 		return xerrors.Errorf("unable to get the Tendermint block at height %d", height)
 	}
+
 	val, err := tm.client.Validators(ctx, &height, nil, nil)
 	if err != nil {
 		return xerrors.Errorf("unable to get the Tendermint block validators at height %d", height)
 	}
 
-	proposerPubKey := findValidatorPubKeyByAddress(val.Validators, resp.Block.ProposerAddress.Bytes())
-	if proposerPubKey == nil {
-		return xerrors.Errorf("unable to find pubKey for proposer %w", resp.Block.ProposerAddress)
+	eudicoAddress, ok := tm.tendermintEudicoAddresses[resp.Block.ProposerAddress.String()]
+	if !ok {
+		proposerPubKey := findValidatorPubKeyByAddress(val.Validators, resp.Block.ProposerAddress.Bytes())
+		if proposerPubKey == nil {
+			return xerrors.Errorf("unable to find pubKey for proposer %w", resp.Block.ProposerAddress)
+		}
+		uncompressedProposerPubKey, err := secp.ParsePubKey(proposerPubKey)
+		if err != nil {
+			return xerrors.Errorf("unable to parse pubKey %w", err)
+		}
+		addr, err := address.NewSecp256k1Address(uncompressedProposerPubKey.SerializeUncompressed())
+		if err != nil {
+			return xerrors.Errorf("unable to get proposer addr %w", err)
+		}
+		tm.tendermintEudicoAddresses[resp.Block.ProposerAddress.String()] = addr
 	}
 
-	uncompressedProposerPubKey, err := secp.ParsePubKey(proposerPubKey)
-
-	addr, err := address.NewSecp256k1Address(uncompressedProposerPubKey.SerializeUncompressed())
-	if err != nil {
-		return xerrors.Errorf("unable to get proposer addr %w", err)
-	}
-
-	if b.Header.Miner != addr {
+	eudicoAddress = tm.tendermintEudicoAddresses[resp.Block.ProposerAddress.String()]
+	if b.Header.Miner != eudicoAddress {
 		return xerrors.Errorf("invalid miner address %w in the block header", b.Header.Miner)
 	}
+
 
 	sealed, err := isBlockSealed(b, resp.Block)
 	if err != nil {
