@@ -344,8 +344,12 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 			// Initiation and config should be happening at start
 			cp := oldTs.Key().Bytes() // this is the checkpoint 
 
-			// If we don't have a taprootconfig we don't sign but update our config with key
+			// If we don't have a taprootconfig we don't sign because it means we were not part
+			// of the previous DKG and hence we need to let the "previous" miners update the aggregated
+			// key on bitcoin before starting signing.
+			// We update our config to be ready for next checkpointing 
 			// This is the case for any "new" miner (i.e., not Alice, Bob and Charlie)
+			// Basically we skip the next
 			if c.taprootConfig == nil {
 				log.Infow("We don't have any config")
 				pubkey := c.newTaprootConfig.PublicKey // the new taproot config has been initialized
@@ -358,7 +362,8 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 				c.tweakedValue = hashTweakedValue(pubkey, merkleRoot)
 				c.pubkey = pubkeyShort
 				c.newTaprootConfig = nil
-				//c.participants = newSt.Miners // we add ourselves to the list of participants
+				c.participants = newSt.Miners // we add ourselves to the list of participants
+
 
 			} else {
 				// Miners config is the data that will be stored for now in Minio, later on a eudico-KVS
