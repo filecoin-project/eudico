@@ -104,6 +104,7 @@ func (a Actor) RemoveMiners(rt Runtime, params *AddMinerParams) *abi.EmptyValue 
 			}
 
 		} 
+		fmt.Println("New list of miners after removal: ",st.Miners)
 		st.MinerCount = int64(len(st.Miners))
 	})
 	return nil
