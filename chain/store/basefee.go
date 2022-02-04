@@ -59,7 +59,7 @@ func (cs *ChainStore) ComputeBaseFee(ctx context.Context, ts *types.TipSet) (abi
 
 	for _, b := range ts.Blocks() {
 		// NOTE XXX: Cross-messages doesn't account for basefee?
-		msg1, msg2, _, err := cs.MessagesForBlock(b)
+		msg1, msg2, _, err := cs.MessagesForBlock(ctx, b)
 		if err != nil {
 			return zero, xerrors.Errorf("error getting messages for: %s: %w", b.Cid(), err)
 		}

@@ -122,7 +122,7 @@ func (tsp *TSPoW) ValidateBlock(ctx context.Context, b *types.FullBlock) (err er
 
 	h := b.Header
 
-	baseTs, err := tsp.store.LoadTipSet(types.NewTipSetKey(h.Parents...))
+	baseTs, err := tsp.store.LoadTipSet(ctx, types.NewTipSetKey(h.Parents...))
 	if err != nil {
 		return xerrors.Errorf("load parent tipset failed (%s): %w", h.Parents, err)
 	}

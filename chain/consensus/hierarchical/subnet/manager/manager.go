@@ -221,7 +221,7 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 	// Start state manager.
 	sh.sm.Start(ctx)
 
-	gen, err := sh.LoadGenesis(genesis)
+	gen, err := sh.LoadGenesis(ctx, genesis)
 	if err != nil {
 		log.Errorw("Error loading genesis bootstrap for subnet", "subnetID", id, "err", err)
 		return err
@@ -256,7 +256,7 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 	bserv := blockservice.New(sh.bs, offline.Exchange(sh.bs))
 	prov := messagepool.NewProvider(sh.sm, s.pubsub)
 
-	sh.mpool, err = messagepool.New(prov, sh.ds, s.us, dtypes.NetworkName(sh.ID.String()), s.j)
+	sh.mpool, err = messagepool.New(ctx, prov, sh.ds, s.us, dtypes.NetworkName(sh.ID.String()), s.j)
 	if err != nil {
 		log.Errorw("Error creating message pool for subnet", "subnetID", id, "err", err)
 		return err

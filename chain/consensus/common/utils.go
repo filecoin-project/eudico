@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	"sort"
 
 	"github.com/filecoin-project/go-address"
@@ -41,7 +42,7 @@ func (ma NonceArray) Swap(i, j int) {
 
 // Take messages from meta before the transformation
 // to the meta nonce, and recover original nonce
-func recoverOriginalNonce(r *resolver.Resolver, n uint64, sca *sca.SCAState,
+func recoverOriginalNonce(ctx context.Context, r *resolver.Resolver, n uint64, sca *sca.SCAState,
 	store adt.Store, msg []*types.Message) ([]*types.Message, error) {
 	meta, found, err := sca.GetBottomUpMsgMeta(store, n)
 	if err != nil {
@@ -51,7 +52,7 @@ func recoverOriginalNonce(r *resolver.Resolver, n uint64, sca *sca.SCAState,
 		return []*types.Message{}, xerrors.Errorf("No BottomUp meta found for nonce in SCA: %d", n)
 	}
 	c, _ := meta.Cid()
-	orig, _, err := r.ResolveCrossMsgs(c, address.SubnetID(meta.From))
+	orig, _, err := r.ResolveCrossMsgs(ctx, c, address.SubnetID(meta.From))
 	if err != nil {
 		return []*types.Message{}, xerrors.Errorf("error resolving cross-msgs: %w", err)
 	}
@@ -71,9 +72,9 @@ func recoverOriginalNonce(r *resolver.Resolver, n uint64, sca *sca.SCAState,
 
 }
 
-func sortByOriginalNonce(r *resolver.Resolver, n uint64, sca *sca.SCAState,
+func sortByOriginalNonce(ctx context.Context, r *resolver.Resolver, n uint64, sca *sca.SCAState,
 	store adt.Store, msg []*types.Message) ([]*types.Message, error) {
-	bu, err := recoverOriginalNonce(r, n, sca, store, msg)
+	bu, err := recoverOriginalNonce(ctx, r, n, sca, store, msg)
 	if err != nil {
 		return []*types.Message{}, err
 	}

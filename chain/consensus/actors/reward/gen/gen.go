@@ -8,7 +8,7 @@ import (
 
 func main() {
 	if err := gen.WriteTupleEncodersToFile("./cbor_gen.go", "reward",
-		actor.ThisEpochRewardReturn{},
+		// actor.ThisEpochRewardReturn{},
 		actor.FundingParams{},
 		actor.State{},
 	); err != nil {

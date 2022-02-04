@@ -13,7 +13,7 @@ import (
 )
 
 func PrepareBlockForSignature(ctx context.Context, sm *stmgr.StateManager, bt *lapi.BlockTemplate) (*types.FullBlock, error) {
-	pts, err := sm.ChainStore().LoadTipSet(bt.Parents)
+	pts, err := sm.ChainStore().LoadTipSet(ctx, bt.Parents)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to load parent tipset: %w", err)
 	}
@@ -47,14 +47,14 @@ func PrepareBlockForSignature(ctx context.Context, sm *stmgr.StateManager, bt *l
 			blsSigs = append(blsSigs, msg.Signature)
 			blsMessages = append(blsMessages, &msg.Message)
 
-			c, err := sm.ChainStore().PutMessage(&msg.Message)
+			c, err := sm.ChainStore().PutMessage(ctx, &msg.Message)
 			if err != nil {
 				return nil, err
 			}
 
 			blsMsgCids = append(blsMsgCids, c)
 		} else {
-			c, err := sm.ChainStore().PutMessage(msg)
+			c, err := sm.ChainStore().PutMessage(ctx, msg)
 			if err != nil {
 				return nil, err
 			}
@@ -65,7 +65,7 @@ func PrepareBlockForSignature(ctx context.Context, sm *stmgr.StateManager, bt *l
 	}
 
 	for _, msg := range bt.CrossMessages {
-		c, err := sm.ChainStore().PutMessage(msg)
+		c, err := sm.ChainStore().PutMessage(ctx, msg)
 		if err != nil {
 			return nil, err
 		}

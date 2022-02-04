@@ -60,7 +60,7 @@ func makePoWGenesisBlock(ctx context.Context, bs bstore.Blockstore, template gen
 	if err != nil {
 		return nil, xerrors.Errorf("serializing msgmeta failed: %w", err)
 	}
-	if err := bs.Put(mmb); err != nil {
+	if err := bs.Put(ctx, mmb); err != nil {
 		return nil, xerrors.Errorf("putting msgmeta block to blockstore: %w", err)
 	}
 
@@ -102,7 +102,7 @@ func makePoWGenesisBlock(ctx context.Context, bs bstore.Blockstore, template gen
 		return nil, xerrors.Errorf("serializing block header failed: %w", err)
 	}
 
-	if err := bs.Put(sb); err != nil {
+	if err := bs.Put(ctx, sb); err != nil {
 		return nil, xerrors.Errorf("putting header to blockstore: %w", err)
 	}
 

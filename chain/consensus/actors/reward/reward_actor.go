@@ -13,11 +13,11 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
 	reward0 "github.com/filecoin-project/specs-actors/actors/builtin/reward"
+	reward6 "github.com/filecoin-project/specs-actors/v6/actors/builtin/reward"
 	"github.com/ipfs/go-cid"
 
-	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
-	"github.com/filecoin-project/specs-actors/v6/actors/util/smoothing"
+	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
 )
 
 var RewardActorAddr = func() address.Address {
@@ -189,10 +189,11 @@ func (a Actor) AwardBlockReward(rt runtime.Runtime, params *AwardBlockRewardPara
 
 // Changed since v0:
 // - removed ThisEpochReward (unsmoothed)
-type ThisEpochRewardReturn struct {
-	ThisEpochRewardSmoothed smoothing.FilterEstimate
-	ThisEpochBaselinePower  abi.StoragePower
-}
+//type ThisEpochRewardReturn struct {
+//	ThisEpochRewardSmoothed smoothing.FilterEstimate
+//	ThisEpochBaselinePower  abi.StoragePower
+//}
+type ThisEpochRewardReturn = reward6.ThisEpochRewardReturn
 
 // The award value used for the current epoch, updated at the end of an epoch
 // through cron tick.  In the case previous epochs were null blocks this

@@ -16,6 +16,8 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	init_ "github.com/filecoin-project/lotus/chain/actors/builtin/init"
+	"github.com/filecoin-project/lotus/chain/actors/builtin/market"
+	"github.com/filecoin-project/lotus/chain/actors/builtin/power"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/system"
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/filecoin-project/lotus/chain/consensus/actors/reward"
@@ -36,7 +38,7 @@ import (
 )
 
 const (
-	networkVersion = network.Version14
+	networkVersion = network.Version15
 )
 
 func WriteGenesis(netName address.SubnetID, consensus hierarchical.ConsensusType, miner, vreg, rem address.Address, checkPeriod abi.ChainEpoch, seq uint64, w io.Writer) error {
@@ -113,6 +115,15 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 		return nil, nil, xerrors.Errorf("set system actor: %w", err)
 	}
 
+	// Create empty power actor
+	spact, err := SetupStoragePowerActor(ctx, bs, av)
+	if err != nil {
+		return nil, nil, xerrors.Errorf("setup storage power actor: %w", err)
+	}
+	if err := state.SetActor(power.Address, spact); err != nil {
+		return nil, nil, xerrors.Errorf("set storage power actor: %w", err)
+	}
+
 	// Create init actor
 
 	idStart, initact, keyIDs, err := genesis2.SetupInitActor(ctx, bs, template.NetworkName, template.Accounts, template.VerifregRootKey, template.RemainderAccount, av)
@@ -137,6 +148,14 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 		return nil, nil, xerrors.Errorf("set SCA actor: %w", err)
 	}
 
+	// Create empty market actor
+	marketact, err := SetupStorageMarketActor(ctx, bs, av)
+	if err != nil {
+		return nil, nil, xerrors.Errorf("setup storage market actor: %w", err)
+	}
+	if err := state.SetActor(market.Address, marketact); err != nil {
+		return nil, nil, xerrors.Errorf("set storage market actor: %w", err)
+	}
 	// Setup reward actor
 	// This is a modified reward actor to support the needs of hierarchical consensus
 	// protocol.
@@ -272,6 +291,59 @@ func SetupRewardActor(ctx context.Context, bs bstore.Blockstore, qaPower big.Int
 		// NOTE: This sets up the initial balance of the reward actor.
 		Balance: types.BigInt{Int: build.InitialRewardBalance},
 		Head:    statecid,
+	}
+
+	return act, nil
+}
+
+func SetupStorageMarketActor(ctx context.Context, bs bstore.Blockstore, av actors.Version) (*types.Actor, error) {
+	cst := cbor.NewCborStore(bs)
+	mst, err := market.MakeState(adt.WrapStore(ctx, cbor.NewCborStore(bs)), av)
+	if err != nil {
+		return nil, err
+	}
+
+	statecid, err := cst.Put(ctx, mst.GetState())
+	if err != nil {
+		return nil, err
+	}
+
+	actcid, err := market.GetActorCodeID(av)
+	if err != nil {
+		return nil, err
+	}
+
+	act := &types.Actor{
+		Code:    actcid,
+		Head:    statecid,
+		Balance: big.Zero(),
+	}
+
+	return act, nil
+}
+
+func SetupStoragePowerActor(ctx context.Context, bs bstore.Blockstore, av actors.Version) (*types.Actor, error) {
+
+	cst := cbor.NewCborStore(bs)
+	pst, err := power.MakeState(adt.WrapStore(ctx, cbor.NewCborStore(bs)), av)
+	if err != nil {
+		return nil, err
+	}
+
+	statecid, err := cst.Put(ctx, pst.GetState())
+	if err != nil {
+		return nil, err
+	}
+
+	actcid, err := power.GetActorCodeID(av)
+	if err != nil {
+		return nil, err
+	}
+
+	act := &types.Actor{
+		Code:    actcid,
+		Head:    statecid,
+		Balance: big.Zero(),
 	}
 
 	return act, nil

@@ -24,6 +24,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin/power"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/reward"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/verifreg"
+	rewact "github.com/filecoin-project/lotus/chain/consensus/actors/reward"
 	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/types"
 )
@@ -31,7 +32,7 @@ import (
 // sets up information about the vesting schedule
 func (sm *StateManager) setupGenesisVestingSchedule(ctx context.Context) error {
 
-	gb, err := sm.cs.GetGenesis()
+	gb, err := sm.cs.GetGenesis(ctx)
 	if err != nil {
 		return xerrors.Errorf("getting genesis block: %w", err)
 	}
@@ -246,12 +247,13 @@ func GetFilMined(ctx context.Context, st *state.StateTree) (abi.TokenAmount, err
 		return big.Zero(), xerrors.Errorf("failed to load reward actor state: %w", err)
 	}
 
-	rst, err := reward.Load(adt.WrapStore(ctx, st.Store), ractor)
+	var rst rewact.State
+	store := adt.WrapStore(ctx, st.Store)
+	err = store.Get(store.Context(), ractor.Head, &rst)
 	if err != nil {
 		return big.Zero(), err
 	}
-
-	return rst.TotalStoragePowerReward()
+	return rst.TotalStoragePowerReward, nil
 }
 
 func getFilMarketLocked(ctx context.Context, st *state.StateTree) (abi.TokenAmount, error) {

@@ -83,7 +83,7 @@ func checkBottomUpMsg(ctx context.Context, r *resolver.Resolver, snstore blockad
 	}
 
 	// Get cross-messages
-	cross, found, err := r.ResolveCrossMsgs(c, address.SubnetID(comMeta.From))
+	cross, found, err := r.ResolveCrossMsgs(ctx, c, address.SubnetID(comMeta.From))
 	if err != nil {
 		return xerrors.Errorf("Error resolving messages: %v", err)
 	}
@@ -283,7 +283,7 @@ func sortCrossMsgs(ctx context.Context, sm *stmgr.StateManager, r *resolver.Reso
 	// For each meta nonce, get all messages and sort them
 	// by nonce.
 	for _, n := range metaNonces {
-		mabu, err := sortByOriginalNonce(r, n, sca, store, buApply[n])
+		mabu, err := sortByOriginalNonce(ctx, r, n, sca, store, buApply[n])
 		if err != nil {
 			return []*types.Message{}, err
 		}

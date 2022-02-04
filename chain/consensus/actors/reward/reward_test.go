@@ -13,9 +13,9 @@ import (
 
 	"github.com/filecoin-project/lotus/chain/consensus/actors/reward"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
-	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v6/support/mock"
-	tutil "github.com/filecoin-project/specs-actors/v6/support/testing"
+	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v7/support/mock"
+	tutil "github.com/filecoin-project/specs-actors/v7/support/testing"
 )
 
 func TestExports(t *testing.T) {

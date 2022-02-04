@@ -32,7 +32,7 @@ func DefaultUpgradeSchedule() stmgr.UpgradeSchedule {
 
 	updates := []stmgr.Upgrade{{
 		Height:    -1,
-		Network:   network.Version14,
+		Network:   network.Version15,
 		Migration: nil,
 		Expensive: true,
 	},
@@ -74,16 +74,16 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 		partDone()
 	}()
 
-	makeVmWithBaseState := func(base cid.Cid) (*vm.VM, error) {
+	makeVmWithBaseStateAndEpoch := func(base cid.Cid, e abi.ChainEpoch) (*vm.VM, error) {
 		vmopt := &vm.VMOpts{
 			StateBase:      base,
-			Epoch:          epoch,
+			Epoch:          e,
 			Rand:           r,
 			Bstore:         sm.ChainStore().StateBlockstore(),
 			Actors:         registry.NewActorRegistry(),
 			Syscalls:       sm.Syscalls,
 			CircSupplyCalc: sm.GetVMCirculatingSupply,
-			NtwkVersion:    sm.GetNtwkVersion,
+			NetworkVersion: sm.GetNetworkVersion(ctx, e),
 			BaseFee:        baseFee,
 			LookbackState:  stmgr.LookbackStateGetterForTipset(sm, ts),
 		}
@@ -91,7 +91,7 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 		return sm.VMConstructor()(ctx, vmopt)
 	}
 
-	vmi, err := makeVmWithBaseState(pstate)
+	vmi, err := makeVmWithBaseStateAndEpoch(pstate, epoch)
 	if err != nil {
 		return cid.Undef, cid.Undef, xerrors.Errorf("making vm: %w", err)
 	}
@@ -105,13 +105,12 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 		}
 
 		if pstate != newState {
-			vmi, err = makeVmWithBaseState(newState)
+			vmi, err = makeVmWithBaseStateAndEpoch(newState, i)
 			if err != nil {
 				return cid.Undef, cid.Undef, xerrors.Errorf("making vm: %w", err)
 			}
 		}
 
-		vmi.SetBlockHeight(i + 1)
 		pstate = newState
 	}
 
@@ -261,7 +260,7 @@ func (t *tipSetExecutor) ExecuteTipSet(ctx context.Context, sm *stmgr.StateManag
 	var parentEpoch abi.ChainEpoch
 	pstate := blks[0].ParentStateRoot
 	if blks[0].Height > 0 {
-		parent, err := sm.ChainStore().GetBlock(blks[0].Parents[0])
+		parent, err := sm.ChainStore().GetBlock(ctx, blks[0].Parents[0])
 		if err != nil {
 			return cid.Undef, cid.Undef, xerrors.Errorf("getting parent block: %w", err)
 		}
@@ -269,9 +268,9 @@ func (t *tipSetExecutor) ExecuteTipSet(ctx context.Context, sm *stmgr.StateManag
 		parentEpoch = parent.Height
 	}
 
-	r := rand.NewStateRand(sm.ChainStore(), ts.Cids(), nil)
+	r := rand.NewStateRand(sm.ChainStore(), ts.Cids(), sm.Beacon(), sm.GetNetworkVersion)
 
-	blkmsgs, err := sm.ChainStore().BlockMsgsForTipset(ts)
+	blkmsgs, err := sm.ChainStore().BlockMsgsForTipset(ctx, ts)
 	if err != nil {
 		return cid.Undef, cid.Undef, xerrors.Errorf("getting block messages for tipset: %w", err)
 	}

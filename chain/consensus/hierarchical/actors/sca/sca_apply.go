@@ -9,9 +9,9 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/actors/reward"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	types "github.com/filecoin-project/lotus/chain/types"
-	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
-	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
+	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
+	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
 )
 
 func fromToRawAddr(rt runtime.Runtime, from, to address.Address) (address.Address, address.Address) {
