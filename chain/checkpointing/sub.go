@@ -400,7 +400,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 		if !reflect.DeepEqual(oldSt.PublicKey,newSt.PublicKey) {
 			//c.participants = newSt.Miners
 			//fmt.Println("participants list updated")
-			//fmt.Println(c.participants)
+			fmt.Println("DKG successfully completed")
 			c.newDKGComplete = true
 			c.newKey = newSt.PublicKey
 			c.keysUpdated = false
