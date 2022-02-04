@@ -404,7 +404,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 			c.newDKGComplete = true
 			c.newKey = newSt.PublicKey
 			c.keysUpdated = false
-			
+
 		}
 
 		// If Power Actors list has changed start DKG
@@ -839,6 +839,9 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 		if result == nil {
 			log.Errorf("could not send initial Bitcoin transaction to: %v", address)
 		}
+		else{
+			log.Infow("successfully sent first bitcoin tx")
+		}
 		// Save tweaked value
 		merkleRoot := hashMerkleRoot(c.taprootConfig.PublicKey, cidBytes)
 		c.tweakedValue = hashTweakedValue(c.taprootConfig.PublicKey, merkleRoot)
@@ -849,6 +852,7 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 	if err != nil {
 		log.Errorf("could not start checkpointing module: %v", err)
 	}
+
 
 	lc.Append(fx.Hook{
 		OnStop: func(ctx context.Context) error {
