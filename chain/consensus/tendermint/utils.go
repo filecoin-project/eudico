@@ -6,13 +6,19 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"golang.org/x/crypto/ripemd160"
+	secp "github.com/decred/dcrd/dcrec/secp256k1/v4"
+	tmsecp "github.com/tendermint/tendermint/crypto/secp256k1"
+	"golang.org/x/xerrors"
 	"os"
+	"time"
+
+	"github.com/tendermint/tendermint/rpc/coretypes"
+	"golang.org/x/crypto/ripemd160"
 
 	"github.com/filecoin-project/go-address"
 	abci "github.com/tendermint/tendermint/abci/types"
-	httptendermintrpcclient "github.com/tendermint/tendermint/rpc/client/http"
-	tenderminttypes "github.com/tendermint/tendermint/types"
+	tmclient "github.com/tendermint/tendermint/rpc/client/http"
+	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/filecoin-project/lotus/chain/types"
 )
@@ -25,7 +31,7 @@ func NodeAddr() string {
 	return addr
 }
 
-func parseTendermintBlock(b *tenderminttypes.Block, dst *tendermintBlockInfo, tag []byte) {
+func parseTendermintBlock(b *tmtypes.Block, dst *tendermintBlockInfo, tag []byte) {
 	var msgs []*types.SignedMessage
 	var crossMsgs []*types.Message
 
@@ -65,7 +71,7 @@ func parseTendermintBlock(b *tenderminttypes.Block, dst *tendermintBlockInfo, ta
 	dst.crossMsgs = crossMsgs
 }
 
-func getMessageMapFromTendermintBlock(tb *tenderminttypes.Block) (map[[32]byte]bool, error) {
+func getMessageMapFromTendermintBlock(tb *tmtypes.Block) (map[[32]byte]bool, error) {
 	msgs := make(map[[32]byte]bool)
 	for _, msg := range tb.Txs {
 		tx := msg.String()
@@ -112,7 +118,7 @@ func parseTx(tx []byte) (interface{}, uint32, error) {
 }
 
 func GetTendermintID(ctx context.Context) (address.Address, error) {
-	client, err := httptendermintrpcclient.New(NodeAddr())
+	client, err := tmclient.New(NodeAddr())
 	if err != nil {
 		panic("unable to access a tendermint client")
 	}
@@ -128,7 +134,7 @@ func GetTendermintID(ctx context.Context) (address.Address, error) {
 	return addr, nil
 }
 
-func findValidatorPubKeyByAddress(validators []*tenderminttypes.Validator, addr []byte) []byte {
+func findValidatorPubKeyByAddress(validators []*tmtypes.Validator, addr []byte) []byte {
 	for _, v := range validators {
 		if bytes.Equal(v.Address.Bytes(), addr) {
 			return v.PubKey.Bytes()
@@ -148,5 +154,66 @@ func getTendermintAddress(pubKey []byte) []byte {
 	hasherRIPEMD160 := ripemd160.New()
 	_, _ = hasherRIPEMD160.Write(sha) // does not error
 	return hasherRIPEMD160.Sum(nil)
+}
+
+func getValidatorsInfo(ctx context.Context, client *tmclient.HTTP) (string, []byte, address.Address, error) {
+	var resp *coretypes.ResultStatus
+	var err error
+
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	loop := true
+	for loop {
+		select {
+		case <-ticker.C:
+			resp, err = client.Status(ctx)
+			if err != nil {
+				continue
+			} else {
+				loop = false
+			}
+
+		case <-time.After(10 * time.Second):
+			return  "", nil, address.Address{}, xerrors.Errorf("unable to get response")
+		}
+	}
+
+	validatorAddress := resp.ValidatorInfo.Address.String()
+
+	keyType := resp.ValidatorInfo.PubKey.Type()
+	if keyType != tmsecp.KeyType {
+		return "", nil, address.Address{}, xerrors.Errorf("Tendermint validator uses unsupported key type: %s", keyType)
+	}
+
+	validatorPubKey := resp.ValidatorInfo.PubKey.Bytes()
+
+	uncompressedValidatorPubKey, err := secp.ParsePubKey(validatorPubKey)
+	if err != nil {
+		return "", nil, address.Address{}, xerrors.Errorf("unable to parse pub key %w", err)
+	}
+
+	clientAddress, err := address.NewSecp256k1Address(uncompressedValidatorPubKey.SerializeUncompressed())
+	if err != nil {
+		return "", nil, address.Address{}, xerrors.Errorf("unable to calculate client address: %w", err)
+	}
+
+	return validatorAddress, validatorPubKey, clientAddress, nil
+}
+
+func registerNetwork(ctx context.Context, client *tmclient.HTTP, regMsg []byte) (*RegistrationMessage, error) {
+	// TODO: remove registration functionality or improve it
+	// https://github.com/tendermint/tendermint/issues/7678
+	// https://github.com/tendermint/tendermint/issues/3414
+	regResp, err := client.BroadcastTxCommit(ctx, regMsg)
+	if err != nil {
+		return nil, xerrors.Errorf("unable to register network: %w", err)
+	}
+
+	regSubnetMsg, err := DecodeRegistrationMessage(regResp.DeliverTx.Data)
+	if err != nil {
+		return nil, xerrors.Errorf("unable to decode registration response: %w", err)
+	}
+	return regSubnetMsg, nil
 }
 

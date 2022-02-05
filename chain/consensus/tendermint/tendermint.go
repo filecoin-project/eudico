@@ -5,19 +5,15 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/Gurpartap/async"
 	secp "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/hashicorp/go-multierror"
 	logging "github.com/ipfs/go-log/v2"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	tmsecp "github.com/tendermint/tendermint/crypto/secp256k1"
 	"github.com/tendermint/tendermint/libs/rand"
 	tmclient "github.com/tendermint/tendermint/rpc/client/http"
-	"github.com/tendermint/tendermint/rpc/coretypes"
 	"go.opencensus.io/stats"
-
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
@@ -93,14 +89,15 @@ type Tendermint struct {
 
 	// Mapping between Tendermint validator addresses and Eudico miner addresses
 	tendermintEudicoAddresses map[string] address.Address
-
 }
 
 func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon.Schedule, r *resolver.Resolver,
 	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
 
+	ctx := context.TODO()
+
 	subnetID := address.SubnetID(netName)
-	log.Infof("New Tendermint consensus for %s subnet", subnetID )
+	log.Infof("New Tendermint consensus for %s subnet", subnetID)
 
 	tag := sha256.Sum256([]byte(subnetID))
 
@@ -109,69 +106,26 @@ func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon
 		log.Fatalf("unable to create a Tendermint client: %s", err)
 	}
 
-
-	var resp *coretypes.ResultStatus
-	var statusErr error
-
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-
-	loop := true
-	for loop {
-		select {
-		case <-ticker.C:
-			resp, statusErr = tmClient.Status(context.TODO())
-			if statusErr != nil {
-				continue
-			} else {
-				loop = false
-			}
-
-		case <-time.After(20 * time.Second):
-			if statusErr != nil {
-				log.Fatalf("unable to get Tendermint status: %s", statusErr)
-			}
-		}
-	}
-
-	log.Info("Tendermint validator:", resp.ValidatorInfo.Address)
-
-	validatorAddress := resp.ValidatorInfo.Address.String()
-
-	keyType := resp.ValidatorInfo.PubKey.Type()
-	if keyType != tmsecp.KeyType {
-		log.Fatalf("Tendermint validator uses unsupported key type: %s", keyType)
-	}
-	validatorPubKey := resp.ValidatorInfo.PubKey.Bytes()
-	uncompressedValidatorPubKey, err := secp.ParsePubKey(validatorPubKey)
-
-	clientAddress, err := address.NewSecp256k1Address(uncompressedValidatorPubKey.SerializeUncompressed())
+	valAddr, valPubKey, clientAddr, err := getValidatorsInfo(ctx, tmClient)
 	if err != nil {
-		log.Fatalf("unable to calculate client address: %s", err.Error())
+		log.Fatalf("unable to get Tendermint validators info: %s", err)
 	}
 
-	log.Info("Eudico client addr:", clientAddress)
+	log.Info( "Tendermint validator addr:", valAddr)
+	log.Info("Tendermint validator pub key", valPubKey)
+	log.Info("Eudico client addr", clientAddr)
 
 	regMsg, err := NewRegistrationMessageBytes(subnetID, tag[:4], rand.Bytes(10) )
-	fmt.Println(regMsg)
 	if err != nil {
 		log.Fatalf("unable to create a registration message: %s", err)
 	}
 
-	// TODO: remove registration functionality or improve it
-	// https://github.com/tendermint/tendermint/issues/7678
-	// https://github.com/tendermint/tendermint/issues/3414
-	regResp, err := tmClient.BroadcastTxCommit(context.TODO(), regMsg)
+	regSubnet, err := registerNetwork(ctx, tmClient, regMsg)
 	if err != nil {
-		log.Fatalf("unable to register network: %s", err)
+		log.Fatalf("unable to registrate network: %s", err)
 	}
+
 	log.Info("subnet registered")
-
-	regSubnet, err := DecodeRegistrationMessage(regResp.DeliverTx.Data)
-	if err != nil {
-		log.Fatalf("unable to decode registration response: %s", err.Error())
-	}
-
 	log.Warnf("Tendermint offset for %s is %d", regSubnet.Name, regSubnet.Offset)
 
 	return &Tendermint{
@@ -185,9 +139,9 @@ func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon
 		client:   tmClient,
 		offset:   regSubnet.Offset,
 		tag: tag[:4],
-		validatorAddress: validatorAddress,
-		clientAddress: clientAddress,
-		clientPubKey: validatorPubKey,
+		validatorAddress: valAddr,
+		clientAddress: clientAddr,
+		clientPubKey: valPubKey,
 		tendermintEudicoAddresses: make(map[string] address.Address),
 	}
 }
