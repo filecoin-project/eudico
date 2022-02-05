@@ -6,20 +6,19 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	secp "github.com/decred/dcrd/dcrec/secp256k1/v4"
-	tmsecp "github.com/tendermint/tendermint/crypto/secp256k1"
-	"golang.org/x/xerrors"
 	"os"
 	"time"
 
+	secp "github.com/decred/dcrd/dcrec/secp256k1/v4"
+	abci "github.com/tendermint/tendermint/abci/types"
+	tmsecp "github.com/tendermint/tendermint/crypto/secp256k1"
+	tmclient "github.com/tendermint/tendermint/rpc/client/http"
 	"github.com/tendermint/tendermint/rpc/coretypes"
+	tmtypes "github.com/tendermint/tendermint/types"
 	"golang.org/x/crypto/ripemd160"
+	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
-	abci "github.com/tendermint/tendermint/abci/types"
-	tmclient "github.com/tendermint/tendermint/rpc/client/http"
-	tmtypes "github.com/tendermint/tendermint/types"
-
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
@@ -44,8 +43,8 @@ func parseTendermintBlock(b *tmtypes.Block, dst *tendermintBlockInfo, tag []byte
 			log.Error("unable to decode Tendermint messages:", err)
 			continue
 		}
-		//data = {msg...|tag1-tag2-tag3-tag4|type}
-		inputTag := txoData[len(txoData)-5:len(txoData)-1]
+		//data = {msg...|8 byte tag| type}
+		inputTag := txoData[len(txoData)-(tagLength+1):len(txoData)-1]
 		if !bytes.Equal(inputTag, tag) {
 			continue
 		}
@@ -76,8 +75,8 @@ func getMessageMapFromTendermintBlock(tb *tmtypes.Block) (map[[32]byte]bool, err
 	for _, msg := range tb.Txs {
 		tx := msg.String()
 		// Transactions from Tendermint are in the Tx{} format. So we have to remove T,x, { and } characters.
-		// Then we have to remove last two characters that are message type.
-		txo := tx[3 : len(tx)-3-8]
+		// Then we have to remove last two characters that are message type and tag.
+		txo := tx[3 : len(tx)-1-2-2*tagLength]
 		txoData, err := hex.DecodeString(txo)
 		if err != nil {
 			return nil, err
@@ -101,11 +100,11 @@ func parseTx(tx []byte) (interface{}, uint32, error) {
 	lastByte := tx[ln-1]
 	switch lastByte {
 	case SignedMessageType:
-		msg, err = types.DecodeSignedMessage(tx[:ln-5])
+		msg, err = types.DecodeSignedMessage(tx[:ln-tagLength-1])
 	case CrossMessageType:
-		msg, err = types.DecodeMessage(tx[:ln-5])
+		msg, err = types.DecodeMessage(tx[:ln-tagLength-5])
 	case RegistrationMessageType:
-		msg, err = DecodeRegistrationMessage(tx[:ln-1])
+		msg, err = DecodeRegistrationMessageRequest(tx[:ln-1])
 	default:
 		err = fmt.Errorf("unknown message type %d", lastByte)
 	}
@@ -156,26 +155,25 @@ func getTendermintAddress(pubKey []byte) []byte {
 	return hasherRIPEMD160.Sum(nil)
 }
 
-func getValidatorsInfo(ctx context.Context, client *tmclient.HTTP) (string, []byte, address.Address, error) {
+func getValidatorsInfo(ctx context.Context, c *tmclient.HTTP) (string, []byte, address.Address, error) {
 	var resp *coretypes.ResultStatus
 	var err error
+
 
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
-	loop := true
-	for loop {
+	shouldRetry := true
+	for shouldRetry {
 		select {
 		case <-ticker.C:
-			resp, err = client.Status(ctx)
-			if err != nil {
-				continue
-			} else {
-				loop = false
+			resp, err = c.Status(ctx)
+			if err == nil {
+				shouldRetry = false
 			}
-
 		case <-time.After(10 * time.Second):
-			return  "", nil, address.Address{}, xerrors.Errorf("unable to get response")
+			shouldRetry = false
+			return  "", nil, address.Address{}, xerrors.Errorf("unable to access Status method")
 		}
 	}
 
@@ -201,19 +199,31 @@ func getValidatorsInfo(ctx context.Context, client *tmclient.HTTP) (string, []by
 	return validatorAddress, validatorPubKey, clientAddress, nil
 }
 
-func registerNetwork(ctx context.Context, client *tmclient.HTTP, regMsg []byte) (*RegistrationMessage, error) {
-	// TODO: remove registration functionality or improve it
+func registerNetwork(ctx context.Context, c *tmclient.HTTP, regReq []byte) (*RegistrationMessageResponse, error) {
+	// TODO: explore whether we need to remove registration functionality or improve it
 	// https://github.com/tendermint/tendermint/issues/7678
 	// https://github.com/tendermint/tendermint/issues/3414
-	regResp, err := client.BroadcastTxCommit(ctx, regMsg)
+
+	regResp, err := c.BroadcastTxCommit(ctx, regReq)
 	if err != nil {
-		return nil, xerrors.Errorf("unable to register network: %w", err)
+		return nil, xerrors.Errorf("unable to broadcast registration request: %s", err)
 	}
 
-	regSubnetMsg, err := DecodeRegistrationMessage(regResp.DeliverTx.Data)
+	regSubnetMsg, err := DecodeRegistrationMessageResponse(regResp.DeliverTx.Data)
 	if err != nil {
 		return nil, xerrors.Errorf("unable to decode registration response: %w", err)
 	}
 	return regSubnetMsg, nil
 }
 
+func getFilecoinAddrByTendermintPubKey(pubKey []byte) (address.Address, error) {
+	uncompressedProposerPubKey, err := secp.ParsePubKey(pubKey)
+
+	eudicoAddress, err := address.NewSecp256k1Address(uncompressedProposerPubKey.SerializeUncompressed())
+	if err != nil {
+		log.Info("unable to create address in Filecoin format:", err)
+		return address.Address{}, err
+	}
+
+	return eudicoAddress, nil
+}

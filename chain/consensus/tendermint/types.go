@@ -14,15 +14,21 @@ const (
 	RegistrationMessageType = 3
 )
 
-type RegistrationMessage struct {
+type RegistrationMessageRequest struct {
+	Name   []byte
+	Tag    []byte
+	Nonce []byte
+}
+
+type RegistrationMessageResponse struct {
 	Name   []byte
 	Tag    []byte
 	Offset int64
 	Nonce []byte
 }
 
-func DecodeRegistrationMessage(b []byte) (*RegistrationMessage, error) {
-	var msg RegistrationMessage
+func DecodeRegistrationMessageRequest(b []byte) (*RegistrationMessageRequest, error) {
+	var msg RegistrationMessageRequest
 	if err := msg.UnmarshalCBOR(bytes.NewReader(b)); err != nil {
 		return nil, err
 	}
@@ -30,7 +36,17 @@ func DecodeRegistrationMessage(b []byte) (*RegistrationMessage, error) {
 	return &msg, nil
 }
 
-func (msg *RegistrationMessage) Serialize() ([]byte, error) {
+func DecodeRegistrationMessageResponse(b []byte) (*RegistrationMessageResponse, error) {
+	var msg RegistrationMessageResponse
+
+	if err := msg.UnmarshalCBOR(bytes.NewReader(b)); err != nil {
+		return nil, err
+	}
+
+	return &msg, nil
+}
+
+func (msg *RegistrationMessageRequest) Serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
 	if err := msg.MarshalCBOR(buf); err != nil {
 		return nil, err
@@ -38,8 +54,18 @@ func (msg *RegistrationMessage) Serialize() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+
+func (msg *RegistrationMessageResponse) Serialize() ([]byte, error) {
+	buf := new(bytes.Buffer)
+	if err := msg.MarshalCBOR(buf); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
 func NewRegistrationMessageBytes(name address.SubnetID, tag, nonce []byte) ([]byte, error) {
-	msg := RegistrationMessage{
+	msg := RegistrationMessageRequest{
 		Name: []byte(name.String()),
 		Tag:  tag,
 		Nonce: nonce,

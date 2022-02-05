@@ -1,11 +1,9 @@
 rm -rf ./eudico
 make eudico
 rm -rvf ~/.eudico
-#rm -rvf ~/.tendermint/config
-#rm -rvf ~/.tendermint/data
+rm -rvf ~/.tendermint/config
+rm -rvf ~/.tendermint/data
 
-rm -rf ./tendermint
-#make tendermint
 tendermint init validator --key=secp256k1
 #mkdir ~/.tendermint/data
 #cp ~/.tendermint/priv_validator_state.json ~/.tendermint/data

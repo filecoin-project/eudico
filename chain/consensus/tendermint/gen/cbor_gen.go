@@ -8,7 +8,8 @@ import (
 
 func main() {
 	if err := gen.WriteTupleEncodersToFile("./cbor_gen.go", "tendermint",
-		tendermint.RegistrationMessage{},
+		tendermint.RegistrationMessageRequest{},
+		tendermint.RegistrationMessageResponse{},
 	); err != nil {
 		panic(err)
 	}

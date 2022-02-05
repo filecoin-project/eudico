@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"time"
 
-	secp "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	tmclient "github.com/tendermint/tendermint/rpc/client/http"
 	"golang.org/x/xerrors"
 
@@ -35,7 +34,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	log.Info("Subnet ID name:", subnetID)
 
 	tag := sha256.Sum256([]byte(subnetID))
-	log.Info("tag:", tag[:4])
+	log.Info("tag:", tag[:tagLength])
 
 	head, err := api.ChainHead(ctx)
 	if err != nil {
@@ -92,7 +91,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			log.Debug("message hash:", id)
 
 			if pool.shouldSubmitMessage(tx, base.Height()) {
-				payload := append(tx, tag[:4]...)
+				payload := append(tx, tag[:tagLength]...)
 				payload = append(payload, SignedMessageType)
 				res, err := tendermintClient.BroadcastTxSync(ctx, payload)
 				if err != nil {
@@ -120,7 +119,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			log.Info("!!!!! cross message hash:", id)
 
 			if pool.shouldSubmitMessage(tx, base.Height()) {
-				payload := append(tx, tag[:4]...)
+				payload := append(tx, tag[:tagLength]...)
 				payload = append(payload, CrossMessageType)
 				res, err := tendermintClient.BroadcastTxSync(ctx, payload)
 				if err != nil {
@@ -208,11 +207,10 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 
 	tb := <-tendermintBlockInfoChan
 
-	bt.Miner = tm.clientAddress
 	// if another Tendermint node proposed the block.
-	if tb.proposerAddress != tm.validatorAddress {
+	if tb.proposerAddress != tm.tendermintValidatorAddress {
 		eudicoAddress, ok := tm.tendermintEudicoAddresses[tb.proposerAddress]
-		// known address
+		// We have already known the eudico address of the proposer
 		if ok {
 			bt.Miner = eudicoAddress
 		// unknown address
@@ -225,19 +223,19 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 
 			proposerPubKey := findValidatorPubKeyByAddress(resp.Validators, []byte(tb.proposerAddress))
 			if proposerPubKey == nil {
-				return nil, xerrors.New("unable to find target public key")
+				return nil, xerrors.New("unable to find the proposer's public key")
 			}
 
-			uncompressedProposerPubKey, err := secp.ParsePubKey(proposerPubKey)
-
-			eudicoAddress, err := address.NewSecp256k1Address(uncompressedProposerPubKey.SerializeUncompressed())
+			newEudicoAddress, err := getFilecoinAddrByTendermintPubKey(proposerPubKey)
 			if err != nil {
-				log.Info("unable to create address in Eudico format:", err)
 				return nil, err
 			}
-			tm.tendermintEudicoAddresses[tb.proposerAddress] = eudicoAddress
-			bt.Miner = eudicoAddress
+			tm.tendermintEudicoAddresses[tb.proposerAddress] = newEudicoAddress
+			bt.Miner = newEudicoAddress
 		}
+	// Our Tendermint node proposed the block
+	} else {
+		bt.Miner = tm.eudicoClientAddress
 	}
 
 	bt.Messages = tb.messages

@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/Gurpartap/async"
-	secp "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/hashicorp/go-multierror"
 	logging "github.com/ipfs/go-log/v2"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -36,14 +35,12 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
-
 const (
-	tendermintRPCAddressEnv = "EUDICO_TENDERMINT_RPC"
+	tendermintRPCAddressEnv     = "EUDICO_TENDERMINT_RPC"
 	defaultTendermintRPCAddress = "http://127.0.0.1:26657"
+	tagLength                   = 8
 
-	// TODO: is that correct or should be adapted?
-	// Blocks that are more than MaxHeightDrift epochs above
-	// the theoretical max height based on systime are quickly rejected
+	// MaxHeightDrift TODO: is that correct or should be adapted?
 	MaxHeightDrift = 5
 )
 
@@ -53,96 +50,77 @@ var (
 )
 
 type Tendermint struct {
-	// The interface for accessing and putting tipsets into local storage
-	store *store.ChainStore
-
-	// handle to the random beacon for verification
-	beacon beacon.Schedule
-
-	// the state manager handles making state queries
-	sm *stmgr.StateManager
-
+	store    *store.ChainStore
+	beacon   beacon.Schedule
+	sm       *stmgr.StateManager
 	verifier ffiwrapper.Verifier
+	genesis  *types.TipSet
+	subMgr   subnet.SubnetMgr
+	netName  address.SubnetID
+	r        *resolver.Resolver
 
-	genesis *types.TipSet
-
-	subMgr subnet.SubnetMgr
-
-	netName address.SubnetID
-
-	r *resolver.Resolver
-
+	// Used to access Tendermint RPC
 	client *tmclient.HTTP
-
+	// Offset in Tendermint blockchain
 	offset int64
-
+	// Subnet tag
 	tag []byte
-
 	// Tendermint validator secp256k1 address
-	validatorAddress string
-
+	tendermintValidatorAddress string
 	// Eudico client secp256k1 address
-	clientAddress address.Address
-
+	eudicoClientAddress address.Address
 	// Secp256k1 public key
-	clientPubKey []byte
-
+	eudicoClientPubKey []byte
 	// Mapping between Tendermint validator addresses and Eudico miner addresses
-	tendermintEudicoAddresses map[string] address.Address
+	tendermintEudicoAddresses map[string]address.Address
 }
 
-func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon.Schedule, r *resolver.Resolver,
-	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
-
+func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, b beacon.Schedule, r *resolver.Resolver, v ffiwrapper.Verifier, g chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
 	ctx := context.TODO()
 
 	subnetID := address.SubnetID(netName)
 	log.Infof("New Tendermint consensus for %s subnet", subnetID)
-
 	tag := sha256.Sum256([]byte(subnetID))
 
-	tmClient, err := tmclient.New(NodeAddr())
+	c, err := tmclient.New(NodeAddr())
 	if err != nil {
-		log.Fatalf("unable to create a Tendermint client: %s", err)
+		log.Fatalf("unable to create a Tendermint RPC client: %s", err)
 	}
 
-	valAddr, valPubKey, clientAddr, err := getValidatorsInfo(ctx, tmClient)
+	valAddr, valPubKey, clientAddr, err := getValidatorsInfo(ctx, c)
 	if err != nil {
-		log.Fatalf("unable to get Tendermint validators info: %s", err)
+		log.Fatalf("unable to get or handle Tendermint validators info: %s", err)
 	}
-
-	log.Info( "Tendermint validator addr:", valAddr)
+	log.Info("Tendermint validator addr:", valAddr)
 	log.Info("Tendermint validator pub key", valPubKey)
 	log.Info("Eudico client addr", clientAddr)
 
-	regMsg, err := NewRegistrationMessageBytes(subnetID, tag[:4], rand.Bytes(10) )
+	regMsg, err := NewRegistrationMessageBytes(subnetID, tag[:tagLength], rand.Bytes(16))
 	if err != nil {
 		log.Fatalf("unable to create a registration message: %s", err)
 	}
-
-	regSubnet, err := registerNetwork(ctx, tmClient, regMsg)
+	regSubnet, err := registerNetwork(ctx, c, regMsg)
 	if err != nil {
 		log.Fatalf("unable to registrate network: %s", err)
 	}
-
 	log.Info("subnet registered")
 	log.Warnf("Tendermint offset for %s is %d", regSubnet.Name, regSubnet.Offset)
 
 	return &Tendermint{
-		store:    sm.ChainStore(),
-		beacon:   beacon,
-		sm:       sm,
-		verifier: verifier,
-		genesis:  genesis,
-		subMgr:   submgr,
-		netName:  subnetID,
-		client:   tmClient,
-		offset:   regSubnet.Offset,
-		tag: tag[:4],
-		validatorAddress: valAddr,
-		clientAddress: clientAddr,
-		clientPubKey: valPubKey,
-		tendermintEudicoAddresses: make(map[string] address.Address),
+		store:                      sm.ChainStore(),
+		beacon:                     b,
+		sm:                         sm,
+		verifier:                   v,
+		genesis:                    g,
+		subMgr:                     submgr,
+		netName:                    subnetID,
+		client:                     c,
+		offset:                     regSubnet.Offset,
+		tag:                        tag[:tagLength],
+		tendermintValidatorAddress: valAddr,
+		eudicoClientAddress:        clientAddr,
+		eudicoClientPubKey:         valPubKey,
+		tendermintEudicoAddresses:  make(map[string]address.Address),
 	}
 }
 
@@ -189,7 +167,7 @@ func (tm *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBlock) (er
 	}
 
 	if types.BigCmp(pweight, b.Header.ParentWeight) != 0 {
-		return xerrors.Errorf("parrent weight different: %s (header) != %s (computed)",
+		return xerrors.Errorf("parent weight different: %s (header) != %s (computed)",
 			b.Header.ParentWeight, pweight)
 	}
 
@@ -240,28 +218,24 @@ func (tm *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBlock) (er
 		return xerrors.Errorf("unable to get the Tendermint block validators at height %d", height)
 	}
 
-	eudicoAddress, ok := tm.tendermintEudicoAddresses[resp.Block.ProposerAddress.String()]
+	var validMinerEudicoAddress address.Address
+	var convErr error
+	validMinerEudicoAddress, ok := tm.tendermintEudicoAddresses[resp.Block.ProposerAddress.String()]
 	if !ok {
 		proposerPubKey := findValidatorPubKeyByAddress(val.Validators, resp.Block.ProposerAddress.Bytes())
 		if proposerPubKey == nil {
 			return xerrors.Errorf("unable to find pubKey for proposer %w", resp.Block.ProposerAddress)
 		}
-		uncompressedProposerPubKey, err := secp.ParsePubKey(proposerPubKey)
-		if err != nil {
-			return xerrors.Errorf("unable to parse pubKey %w", err)
-		}
-		addr, err := address.NewSecp256k1Address(uncompressedProposerPubKey.SerializeUncompressed())
-		if err != nil {
+
+		validMinerEudicoAddress, convErr = getFilecoinAddrByTendermintPubKey(proposerPubKey)
+		if convErr != nil {
 			return xerrors.Errorf("unable to get proposer addr %w", err)
 		}
-		tm.tendermintEudicoAddresses[resp.Block.ProposerAddress.String()] = addr
+		tm.tendermintEudicoAddresses[resp.Block.ProposerAddress.String()] = validMinerEudicoAddress
 	}
-
-	eudicoAddress = tm.tendermintEudicoAddresses[resp.Block.ProposerAddress.String()]
-	if b.Header.Miner != eudicoAddress {
+	if b.Header.Miner != validMinerEudicoAddress {
 		return xerrors.Errorf("invalid miner address %w in the block header", b.Header.Miner)
 	}
-
 
 	sealed, err := isBlockSealed(b, resp.Block)
 	if err != nil {

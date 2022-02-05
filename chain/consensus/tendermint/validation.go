@@ -161,8 +161,7 @@ func isBlockSealed(fb *types.FullBlock, tb *tenderminttypes.Block) (bool, error)
 		id := sha256.Sum256(bs)
 		_, found := tendermintMessagesHashes[id]
 		if !found {
-			log.Info("bls messages are not sealed")
-			return false, nil
+			return false, xerrors.New("bls messages are not sealed")
 		}
 	}
 
@@ -174,8 +173,7 @@ func isBlockSealed(fb *types.FullBlock, tb *tenderminttypes.Block) (bool, error)
 		id := sha256.Sum256(bs)
 		_, found := tendermintMessagesHashes[id]
 		if !found {
-			log.Info("secpk messages are not sealed")
-			return false, nil
+			return false, xerrors.New("secpk messages are not sealed")
 		}
 	}
 
@@ -187,8 +185,7 @@ func isBlockSealed(fb *types.FullBlock, tb *tenderminttypes.Block) (bool, error)
 		id := sha256.Sum256(bs)
 		_, found := tendermintMessagesHashes[id]
 		if !found {
-			log.Info("cross messages are not sealed")
-			return false, nil
+			return false, xerrors.New("cross msgs messages are not sealed")
 		}
 	}
 

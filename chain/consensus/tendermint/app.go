@@ -143,10 +143,10 @@ func (a *Application) DeliverTx(req abci.RequestDeliverTx) (resp abci.ResponseDe
 	}
 
 	switch subnet := msg.(type) {
-	case *RegistrationMessage:
+	case *RegistrationMessageRequest:
 		height := a.consensus.GetSubnetOffset(subnet.Name)
 		log.Info("Height:", height)
-		regResp := RegistrationMessage {
+		regResp := RegistrationMessageResponse{
 			Name: subnet.Name,
 			Tag: subnet.Tag,
 			Offset: height,
@@ -197,7 +197,7 @@ func (a *Application) EndBlock(req abci.RequestEndBlock) (resp abci.ResponseEndB
 }
 
 func (a *Application) Commit() (resp abci.ResponseCommit) {
-	a.consensus.Commit()
+	_ = a.consensus.Commit()
 	return abci.ResponseCommit{}
 }
 
