@@ -32,7 +32,7 @@ curl -s 'http://localhost:26657/broadcast_tx_sync?tx=0x828a0055017642efe6162dfc3
 ```
 
 ### Subnet
-```azure
+```
  ./eudico subnet add --consensus 2 --name tndr
  ./eudico subnet join --subnet=/root/t01001 10
  ./eudico subnet mine  --subnet=/root/t01001

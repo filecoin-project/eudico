@@ -58,10 +58,10 @@ func parseTendermintBlock(b *tmtypes.Block, dst *tendermintBlockInfo, tag []byte
 
 		switch m := msg.(type) {
 		case *types.SignedMessage:
-			log.Info("received Tx is signed messages from %s to %s", m.Message.From.String(), m.Message.To.String())
+			log.Infof("received Tx - signed message from %s to %s with %s tokens", m.Message.From.String(), m.Message.To.String(), m.Message.Value)
 			msgs = append(msgs, m)
 		case *types.Message:
-			log.Info("received Tx is cross messages from %s to %s in %s", m.From.String(), m.To.String())
+			log.Infof("received Tx - cross message from %s to %s with %s tokens", m.From.String(), m.To.String(), m.Value)
 			crossMsgs = append(crossMsgs, m)
 		default:
 			log.Info("unknown message type")
@@ -103,7 +103,7 @@ func parseTx(tx []byte) (interface{}, uint32, error) {
 	case SignedMessageType:
 		msg, err = types.DecodeSignedMessage(tx[:ln-tagLength-1])
 	case CrossMessageType:
-		msg, err = types.DecodeMessage(tx[:ln-tagLength-5])
+		msg, err = types.DecodeMessage(tx[:ln-tagLength-1])
 	case RegistrationMessageType:
 		msg, err = DecodeRegistrationMessageRequest(tx[:ln-1])
 	default:

@@ -103,6 +103,13 @@ var tpowGenesisCmd = &cli.Command{
 var tpowMinerCmd = &cli.Command{
 	Name:  "miner",
 	Usage: "run tspow conesensus miner",
+	Flags: []cli.Flag{
+		&cli.BoolFlag{
+			Name:  "default-key",
+			Value: true,
+			Usage: "use default wallet's key",
+		},
+	},
 	Action: func(cctx *cli.Context) error {
 		api, closer, err := lcli.GetFullNodeAPIV1(cctx)
 		if err != nil {
@@ -111,12 +118,21 @@ var tpowMinerCmd = &cli.Command{
 		defer closer()
 		ctx := cliutil.ReqContext(cctx)
 
-		miner, err := address.NewFromString(cctx.Args().First())
-		if err != nil {
-			return err
-		}
-		if miner == address.Undef {
-			return xerrors.Errorf("no miner address specified to start mining")
+		var miner address.Address
+
+		if cctx.Bool("default-key") {
+			miner, err = api.WalletDefaultAddress(ctx)
+			if err != nil {
+				return err
+			}
+		} else {
+			miner, err := address.NewFromString(cctx.Args().First())
+			if err != nil {
+				return err
+			}
+			if miner == address.Undef {
+				return xerrors.Errorf("no miner address specified to start mining")
+			}
 		}
 
 		log.Infow("Starting mining with miner", "miner", miner)

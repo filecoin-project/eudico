@@ -95,7 +95,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 				payload = append(payload, SignedMessageType)
 				res, err := tendermintClient.BroadcastTxSync(ctx, payload)
 				if err != nil {
-					log.Error("unable to send message to Tendermint error:", err)
+					log.Error("unable to send msg to Tendermint error:", err)
 					continue
 				} else {
 					pool.addMessage(tx, base.Height())
@@ -123,7 +123,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 				payload = append(payload, CrossMessageType)
 				res, err := tendermintClient.BroadcastTxSync(ctx, payload)
 				if err != nil {
-					log.Error("unable to send cross message to Tendermint error:", err)
+					log.Error("unable to send cross msg to Tendermint error:", err)
 					continue
 				} else {
 					pool.addMessage(tx, base.Height())
