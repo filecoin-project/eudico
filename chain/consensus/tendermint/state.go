@@ -50,12 +50,12 @@ func (s *State) GetSubnetOffset(subnetName []byte) int64 {
 
 	id := sha256.Sum256(subnetName)
 
-	_, ok := s.subnets[id]
+	h, ok := s.subnets[id]
 	if !ok {
 		s.subnets[id] = s.height
 		return s.height
 	}
-	return s.subnets[id]
+	return h
 }
 
 func (s *State) AddBlock(block []byte) error {

@@ -92,8 +92,8 @@ func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, b beacon.Sche
 		log.Fatalf("unable to get or handle Tendermint validators info: %s", err)
 	}
 	log.Info("Tendermint validator addr:", valAddr)
-	log.Info("Tendermint validator pub key", valPubKey)
-	log.Info("Eudico client addr", clientAddr)
+	log.Info("Tendermint validator pub key:", valPubKey)
+	log.Info("Eudico client addr: ", clientAddr)
 
 	regMsg, err := NewRegistrationMessageBytes(subnetID, tag[:tagLength], rand.Bytes(16))
 	if err != nil {

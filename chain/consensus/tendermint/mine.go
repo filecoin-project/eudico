@@ -41,7 +41,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		return xerrors.Errorf("getting head: %w", err)
 	}
 
-	log.Infof("%s starting tendermint mining on @%d",subnetID, head.Height())
+	log.Infof("%s starting tendermint mining on @%d", subnetID, head.Height())
 	defer log.Info("%s stopping tendermint mining on @%d", subnetID, head.Height())
 
 	for {
@@ -193,9 +193,9 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 				} else {
 					log.Infof("Got block %d from Tendermint", resp.Block.Height)
 					info := tendermintBlockInfo{
-						timestamp: uint64(resp.Block.Time.Unix()),
-						hash:      resp.Block.Hash().Bytes(),
-						proposerAddress: resp.Block.ProposerAddress.String(),
+						timestamp:       uint64(resp.Block.Time.Unix()),
+						hash:            resp.Block.Hash().Bytes(),
+						proposerAddress: resp.Block.ProposerAddress,
 					}
 					parseTendermintBlock(resp.Block, &info, tm.tag)
 
@@ -206,14 +206,15 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 	}()
 
 	tb := <-tendermintBlockInfoChan
+	proposerAddrStr := tb.proposerAddress.String()
 
 	// if another Tendermint node proposed the block.
-	if tb.proposerAddress != tm.tendermintValidatorAddress {
-		eudicoAddress, ok := tm.tendermintEudicoAddresses[tb.proposerAddress]
+	if proposerAddrStr != tm.tendermintValidatorAddress {
+		eudicoAddress, ok := tm.tendermintEudicoAddresses[proposerAddrStr]
 		// We have already known the eudico address of the proposer
 		if ok {
 			bt.Miner = eudicoAddress
-		// unknown address
+			// unknown address
 		} else {
 			resp, err := tm.client.Validators(ctx, &height, nil, nil)
 			if err != nil {
@@ -221,7 +222,7 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 				return nil, err
 			}
 
-			proposerPubKey := findValidatorPubKeyByAddress(resp.Validators, []byte(tb.proposerAddress))
+			proposerPubKey := findValidatorPubKeyByAddress(resp.Validators, tb.proposerAddress)
 			if proposerPubKey == nil {
 				return nil, xerrors.New("unable to find the proposer's public key")
 			}
@@ -230,10 +231,10 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 			if err != nil {
 				return nil, err
 			}
-			tm.tendermintEudicoAddresses[tb.proposerAddress] = newEudicoAddress
+			tm.tendermintEudicoAddresses[proposerAddrStr] = newEudicoAddress
 			bt.Miner = newEudicoAddress
 		}
-	// Our Tendermint node proposed the block
+		// Our Tendermint node proposed the block
 	} else {
 		bt.Miner = tm.eudicoClientAddress
 	}

@@ -2,6 +2,7 @@ package tendermint
 
 import (
 	"bytes"
+	"github.com/tendermint/tendermint/crypto"
 
 	"github.com/filecoin-project/go-address"
 
@@ -15,8 +16,8 @@ const (
 )
 
 type RegistrationMessageRequest struct {
-	Name   []byte
-	Tag    []byte
+	Name  []byte
+	Tag   []byte
 	Nonce []byte
 }
 
@@ -24,7 +25,7 @@ type RegistrationMessageResponse struct {
 	Name   []byte
 	Tag    []byte
 	Offset int64
-	Nonce []byte
+	Nonce  []byte
 }
 
 func DecodeRegistrationMessageRequest(b []byte) (*RegistrationMessageRequest, error) {
@@ -54,7 +55,6 @@ func (msg *RegistrationMessageRequest) Serialize() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-
 func (msg *RegistrationMessageResponse) Serialize() ([]byte, error) {
 	buf := new(bytes.Buffer)
 	if err := msg.MarshalCBOR(buf); err != nil {
@@ -66,8 +66,8 @@ func (msg *RegistrationMessageResponse) Serialize() ([]byte, error) {
 
 func NewRegistrationMessageBytes(name address.SubnetID, tag, nonce []byte) ([]byte, error) {
 	msg := RegistrationMessageRequest{
-		Name: []byte(name.String()),
-		Tag:  tag,
+		Name:  []byte(name.String()),
+		Tag:   tag,
 		Nonce: nonce,
 	}
 	b, err := msg.Serialize()
@@ -83,5 +83,5 @@ type tendermintBlockInfo struct {
 	messages        []*types.SignedMessage
 	crossMsgs       []*types.Message
 	hash            []byte
-	proposerAddress string
+	proposerAddress crypto.Address
 }

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/tendermint/tendermint/crypto"
 	"os"
 	"time"
 
@@ -44,7 +45,7 @@ func parseTendermintBlock(b *tmtypes.Block, dst *tendermintBlockInfo, tag []byte
 			continue
 		}
 		//data = {msg...|8 byte tag| type}
-		inputTag := txoData[len(txoData)-(tagLength+1):len(txoData)-1]
+		inputTag := txoData[len(txoData)-(tagLength+1) : len(txoData)-1]
 		if !bytes.Equal(inputTag, tag) {
 			continue
 		}
@@ -133,9 +134,9 @@ func GetTendermintID(ctx context.Context) (address.Address, error) {
 	return addr, nil
 }
 
-func findValidatorPubKeyByAddress(validators []*tmtypes.Validator, addr []byte) []byte {
+func findValidatorPubKeyByAddress(validators []*tmtypes.Validator, addr crypto.Address) []byte {
 	for _, v := range validators {
-		if bytes.Equal(v.Address.Bytes(), addr) {
+		if bytes.Equal(v.Address.Bytes(), addr.Bytes()) {
 			return v.PubKey.Bytes()
 		}
 	}
@@ -159,7 +160,6 @@ func getValidatorsInfo(ctx context.Context, c *tmclient.HTTP) (string, []byte, a
 	var resp *coretypes.ResultStatus
 	var err error
 
-
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -173,7 +173,7 @@ func getValidatorsInfo(ctx context.Context, c *tmclient.HTTP) (string, []byte, a
 			}
 		case <-time.After(10 * time.Second):
 			shouldRetry = false
-			return  "", nil, address.Address{}, xerrors.Errorf("unable to access Status method")
+			return "", nil, address.Address{}, xerrors.Errorf("unable to access Status method")
 		}
 	}
 
