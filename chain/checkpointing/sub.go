@@ -256,6 +256,36 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 
 		// Verify if we are sync here (maybe ?)
 		// if not sync return done = true and more = false
+				// verify we are synced
+		// Maybe move it to checkFunc
+		st, err := c.api.SyncState(ctx)
+		if err != nil {
+			log.Errorf("unable to sync: %v", err)
+			return false, false, err
+		}
+
+		if !c.synced {
+			// Are we synced ?
+			// Replace this WaitForSync logic with this function
+			// https://github.com/Zondax/eudico/blob/1de9d0f773e49b61cd405add93c3c28c9f74cb38/node/modules/services.go#L104
+			if len(st.ActiveSyncs) > 0 &&
+				st.ActiveSyncs[len(st.ActiveSyncs)-1].Height == ts.Height() {
+
+				log.Infow("we are synced")
+				// Yes then verify our checkpoint from Bitcoin and verify if we find in it in our Eudico chain
+				ts, err := c.api.ChainGetTipSet(ctx, c.latestConfigCheckpoint) 
+				if err != nil {
+					log.Errorf("couldnt get tipset: %v", err)
+					return false, false, err
+
+				}
+				log.Infow("We have a checkpoint up to height : ", "height", ts.Height())
+				c.synced = true
+				c.height = ts.Height()
+			} else {
+				return false, false, nil
+			}
+		}
 
 		return false, true, nil
 	}
@@ -273,37 +303,6 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 	match := func(oldTs, newTs *types.TipSet) (bool, events.StateChange, error) {
 		c.lk.Lock()
 		defer c.lk.Unlock()
-
-		// verify we are synced
-		// Maybe move it to checkFunc
-		st, err := c.api.SyncState(ctx)
-		if err != nil {
-			log.Errorf("unable to sync: %v", err)
-			return false, nil, err
-		}
-
-		if !c.synced {
-			// Are we synced ?
-			// Replace this WaitForSync logic with this function
-			// https://github.com/Zondax/eudico/blob/1de9d0f773e49b61cd405add93c3c28c9f74cb38/node/modules/services.go#L104
-			if len(st.ActiveSyncs) > 0 &&
-				st.ActiveSyncs[len(st.ActiveSyncs)-1].Height == newTs.Height() {
-
-				log.Infow("we are synced")
-				// Yes then verify our checkpoint from Bitcoin and verify if we find in it in our Eudico chain
-				ts, err := c.api.ChainGetTipSet(ctx, c.latestConfigCheckpoint) 
-				if err != nil {
-					log.Errorf("couldnt get tipset: %v", err)
-					return false, nil, err
-
-				}
-				log.Infow("We have a checkpoint up to height : ", "height", ts.Height())
-				c.synced = true
-				c.height = ts.Height()
-			} else {
-				return false, nil, nil
-			}
-		}
 
 		/*
 			Now we compared old Power Actor State and new Power Actor State
