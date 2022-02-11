@@ -318,7 +318,8 @@ func (s *SubnetMgr) Close(ctx context.Context) error {
 			return err
 		}
 	}
-	return nil
+	// Close resolver
+	return s.r.Close()
 }
 
 func BuildSubnetMgr(mctx helpers.MetricsCtx, lc fx.Lifecycle, s *SubnetMgr) {

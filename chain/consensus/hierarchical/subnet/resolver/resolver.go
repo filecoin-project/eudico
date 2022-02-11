@@ -167,6 +167,11 @@ func (r *Resolver) HandleMsgs(ctx context.Context, submgr subnet.SubnetMgr) erro
 	return nil
 }
 
+func (r *Resolver) Close() error {
+	// Unregister topic validator when resolver is closed. If not, when
+	// initializing it again registering the validator will fail.
+	return r.pubsub.UnregisterTopicValidator(SubnetResolverTopic(r.netName))
+}
 func (r *Resolver) shouldPull(c cid.Cid) bool {
 	r.lk.Lock()
 	defer r.lk.Unlock()

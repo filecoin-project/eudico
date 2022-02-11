@@ -167,6 +167,8 @@ func (sh *Subnet) Close(ctx context.Context) error {
 	sh.syncer.Stop()
 	// Close message pool
 	err5 := sh.mpool.Close()
+	// Close resolver.
+	err6 := sh.r.Close()
 
 	// TODO: Do we need to do something else to fully close the
 	// subnet. We'll need to revisit this.
@@ -182,6 +184,7 @@ func (sh *Subnet) Close(ctx context.Context) error {
 		err3,
 		err4,
 		err5,
+		err6,
 	)
 }
 
