@@ -544,17 +544,8 @@ func (a SubnetCoordActor) SendCross(rt runtime.Runtime, params *CrossMsgParams) 
 		msg.From, err = address.NewHAddress(st.NetworkName, secp)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
 
-		tp = hierarchical.GetMsgType(&msg)
-		// Check the type of message.
-		switch tp {
-		case hierarchical.TopDown:
-			commitTopDownMsg(rt, &st, msg)
-		case hierarchical.BottomUp:
-			// Burn the funds before doing anything else.
-			commitBottomUpMsg(rt, &st, msg)
-		default:
-			rt.Abortf(exitcode.ErrIllegalArgument, "cross-message doesn't have the right type")
-		}
+		tp = st.sendCrossMsg(rt, msg)
+
 	})
 
 	// For bottom-up messages with value, we need to burn the funds before propagating.
@@ -566,6 +557,21 @@ func (a SubnetCoordActor) SendCross(rt runtime.Runtime, params *CrossMsgParams) 
 		}
 	}
 	return nil
+}
+
+func (st *SCAState) sendCrossMsg(rt runtime.Runtime, msg types.Message) hierarchical.MsgType {
+	tp := hierarchical.GetMsgType(&msg)
+	// Check the type of message.
+	switch tp {
+	case hierarchical.TopDown:
+		commitTopDownMsg(rt, st, msg)
+	case hierarchical.BottomUp:
+		// Burn the funds before doing anything else.
+		commitBottomUpMsg(rt, st, msg)
+	default:
+		rt.Abortf(exitcode.ErrIllegalArgument, "cross-message doesn't have the right type")
+	}
+	return tp
 }
 
 // CrossMsgParams determines the cross message to apply.

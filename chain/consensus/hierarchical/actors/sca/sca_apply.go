@@ -12,6 +12,7 @@ import (
 	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
+	"github.com/polydawn/refmt/cbor"
 )
 
 func fromToRawAddr(rt runtime.Runtime, from, to address.Address) (address.Address, address.Address) {
@@ -53,7 +54,7 @@ func applyTopDown(rt runtime.Runtime, msg types.Message) {
 	}
 	code := rt.Send(reward.RewardActorAddr, reward.Methods.ExternalFunding, params, big.Zero(), &builtin.Discard{})
 	if !code.IsSuccess() {
-		noop(rt, code)
+		noop(rt, msg, code)
 		return
 	}
 
@@ -69,7 +70,7 @@ func applyTopDown(rt runtime.Runtime, msg types.Message) {
 		// to support arbitrary calls.
 		code = rt.Send(rto, msg.Method, nil, msg.Value, &builtin.Discard{})
 		if !code.IsSuccess() {
-			noop(rt, code)
+			noop(rt, msg, code)
 		}
 	}
 }
@@ -101,7 +102,7 @@ func applyBottomUp(rt runtime.Runtime, msg types.Message) {
 		// support this.
 		code := rt.Send(rto, msg.Method, nil, msg.Value, &builtin.Discard{})
 		if !code.IsSuccess() {
-			noop(rt, code)
+			noop(rt, msg, code)
 		}
 	}
 }
@@ -158,8 +159,20 @@ func bottomUpStateTransition(rt runtime.Runtime, st *SCAState, msg types.Message
 
 }
 
+// ErrorParam wraps an error code to notify that the
+// cross-messaged failed (at this point is not processed anywhere)
+type ErrorParam struct {
+	Code int64
+}
+
+func errorParam(rt runtime.Runtime, code exitcode.ExitCode) []byte {
+	p, err := cbor.Marshal(&ErrorParam{Code: int64(code)})
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error marshalling error params")
+	return p
+}
+
 // noop is triggered to notify when a crossMsg fails to be applied.
-func noop(rt runtime.Runtime, code exitcode.ExitCode) {
+func noop(rt runtime.Runtime, msg types.Message, code exitcode.ExitCode) {
 	// rt.Abortf(exitcode.ErrIllegalState, "failed to apply crossMsg, code: %v", code)
 	// NOTE: If the message is not well-formed and something fails when applying the mesasge,
 	// instead of aborting (which could be harming the liveliness of the subnet consensus protocol, as there wouldn't
@@ -168,4 +181,12 @@ func noop(rt runtime.Runtime, code exitcode.ExitCode) {
 	// notifying the source subnet in some way so it may revert potential state changes in the cross-msg path.
 	rt.Log(rtt.WARN, `cross-msg couldn't be applied. Failed with code: %v. 
 	Some state changes in other subnet may need to be reverted`, code)
+	var st SCAState
+	rt.StateTransaction(&st, func() {
+		// FIXME: We may need to send a special method or params to
+		// notify the other side of an failed message.
+		msg.From, msg.To = msg.To, msg.From
+		msg.Params = errorParam(rt, code)
+		st.sendCrossMsg(rt, msg)
+	})
 }
