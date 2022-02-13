@@ -17,6 +17,7 @@ func main() {
 		actor.CrossMsgs{},
 		actor.MetaTag{},
 		actor.CrossMsgParams{},
+		actor.ErrorParam{},
 	); err != nil {
 		panic(err)
 	}
