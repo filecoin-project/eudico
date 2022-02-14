@@ -30,7 +30,7 @@ Run  `go run gen.go`.
 **A:** By using the `api-MpoolPushMessage.` See how to use it [here](https://github.com/filecoin-project/eudico/blob/113829e7fc115daac08ea0217170baddcb7788ba/chain/consensus/hierarchical/subnet/manager/manager.go#L375-L391).
 
 **Q: How can a built-in actor be initialize?
-A:** This is tricky and can be done by doing something similar to [this code](https://github.com/filecoin-project/eudico/blob/113829e7fc115daac08ea0217170baddcb7788ba/chain/consensus/hierarchical/actors/subnet/genesis.go#L131).
+A:** You can see an example of how is done for the SCA in [this piece of code](https://github.com/filecoin-project/eudico/blob/113829e7fc115daac08ea0217170baddcb7788ba/chain/consensus/hierarchical/actors/subnet/genesis.go#L131).
 
 **Q: How can I run an eudico network with a specific consensus protocol?
 A:** Use the following commands:
