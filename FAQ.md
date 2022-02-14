@@ -30,3 +30,46 @@ Run  `go run gen.go`.
 
 **Q: How to initialize an actor?
 A:** This is tricky and can be done by imitating [this code](https://github.com/filecoin-project/eudico/blob/113829e7fc115daac08ea0217170baddcb7788ba/chain/consensus/hierarchical/actors/subnet/genesis.go#L131).
+
+**Q: How to run a consensus protocol?
+A:** Use the following commands:
+
+Run a network:
+ ```
+ ./eudico tspow genesis $ADDR gen.gen
+ ./eudico tspow daemon --genesis=gen.gen
+ ```
+ Run a miner:
+ ```
+ ./eudico wallet import --format=json-lotus $ADDR
+ ./eudico tspow miner
+ ```
+ 
+**Q: How to run two eudico clients on the same host?
+A:** Use `EUDICO_PATH` variable and `api` argument.
+
+Terminal 1:
+```
+export EUDICO_PATH="~/.eudico1/"
+./eudico tspow daemon --genesis=gen.gen --api=1234
+```
+
+Terminal 2:
+```
+export EUDICO_PATH="~/.eudico2/"
+./eudico tspow daemon --genesis=gen.gen --api=1235
+```
+
+**Q: How to connect two eudico clients with each other?
+A:** Suppose you have two eudico clients A and B. Run the following commands:
+
+On the client A:
+The command below outputs the target libp2p address `ADDR_A` 
+```
+./eudico net listen
+```
+
+On the client B:
+```
+./eudico net connect ADDR_A
+```
