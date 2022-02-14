@@ -1,4 +1,5 @@
 # Eudico FAQ
+_Note: The aim of these FAQs is to get you started fast with Eudico so you can spawn a test netork and start contributing to the code in no time. For more in depth documentation or further information about how to perform other actions go to the [Lotus documentation](https://lotus.filecoin.io/docs/set-up/about/), or refer to the base code. Eudico is a fork of Lotus, which means that "almost" everything that works in Lotus should work in Eudico out-of-the-box._
 
 **Q: How to import a wallet?**
 
@@ -28,10 +29,10 @@ Run  `go run gen.go`.
 **Q: How do you send a transaction directly from the code?**
 **A:** By using the `api-MpoolPushMessage.` See it use [here](https://github.com/filecoin-project/eudico/blob/113829e7fc115daac08ea0217170baddcb7788ba/chain/consensus/hierarchical/subnet/manager/manager.go#L375-L391).
 
-**Q: How to initialize an actor?
-A:** This is tricky and can be done by imitating [this code](https://github.com/filecoin-project/eudico/blob/113829e7fc115daac08ea0217170baddcb7788ba/chain/consensus/hierarchical/actors/subnet/genesis.go#L131).
+**Q: How can a built-in actor be initialize?
+A:** This is tricky and can be done by doing something similar to [this code](https://github.com/filecoin-project/eudico/blob/113829e7fc115daac08ea0217170baddcb7788ba/chain/consensus/hierarchical/actors/subnet/genesis.go#L131).
 
-**Q: How to run a consensus protocol?
+**Q: How can I run an eudico network with a specific consensus protocol?
 A:** Use the following commands:
 
 Run a network:
@@ -45,8 +46,8 @@ Run a network:
  ./eudico tspow miner
  ```
  
-**Q: How to run two eudico clients on the same host?
-A:** Use `EUDICO_PATH` variable and `api` argument.
+**Q: How can I run two eudico peers on the same host?
+A:** Use a different `EUDICO_PATH` variable and `api` argument for each path.
 
 Terminal 1:
 ```
@@ -60,16 +61,15 @@ export EUDICO_PATH="~/.eudico2/"
 ./eudico tspow daemon --genesis=gen.gen --api=1235
 ```
 
-**Q: How to connect two eudico clients with each other?
+**Q: How can two two eudico clients be connected with each other?
 A:** Suppose you have two eudico clients A and B. Run the following commands:
 
-On the client A:
-The command below outputs the target libp2p address `ADDR_A` 
+On client A run the command below to output the target's libp2p address, `ADDR_A` 
 ```
 ./eudico net listen
 ```
 
-On the client B:
+Run on client B:
 ```
 ./eudico net connect ADDR_A
 ```
