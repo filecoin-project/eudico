@@ -27,7 +27,7 @@ Run  `go run gen.go`.
 
 
 **Q: How do you send a transaction directly from the code?**
-**A:** By using the `api-MpoolPushMessage.` See it use [here](https://github.com/filecoin-project/eudico/blob/113829e7fc115daac08ea0217170baddcb7788ba/chain/consensus/hierarchical/subnet/manager/manager.go#L375-L391).
+**A:** By using the `api-MpoolPushMessage.` See how to use it [here](https://github.com/filecoin-project/eudico/blob/113829e7fc115daac08ea0217170baddcb7788ba/chain/consensus/hierarchical/subnet/manager/manager.go#L375-L391).
 
 **Q: How can a built-in actor be initialize?
 A:** This is tricky and can be done by doing something similar to [this code](https://github.com/filecoin-project/eudico/blob/113829e7fc115daac08ea0217170baddcb7788ba/chain/consensus/hierarchical/actors/subnet/genesis.go#L131).
