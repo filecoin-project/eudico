@@ -64,10 +64,8 @@ func applyTopDown(rt runtime.Runtime, msg types.Message) {
 		})
 	} else {
 		// Send the cross-message
-		// FIXME: We are currently discarding the output, this will change once we
-		// support calling arbitrary actors. And we don't support params. We'll need a way
-		// to support arbitrary calls.
-		code = rt.Send(rto, msg.Method, nil, msg.Value, &builtin.Discard{})
+		// FIXME: Should we not discard the output for any reason?
+		code = rt.SendWithSerializedParams(rto, msg.Method, msg.Params, msg.Value, &builtin.Discard{})
 		if !code.IsSuccess() {
 			noop(rt, code)
 		}
@@ -97,9 +95,8 @@ func applyBottomUp(rt runtime.Runtime, msg types.Message) {
 
 	if sto == st.NetworkName {
 		// Release funds to the destination address if it is directed to the current network.
-		// FIXME: We currently don't support sending messages with arbitrary params. We should
-		// support this.
-		code := rt.Send(rto, msg.Method, nil, msg.Value, &builtin.Discard{})
+		// FIXME: Should we not discard the output for any reason?
+		code := rt.SendWithSerializedParams(rto, msg.Method, msg.Params, msg.Value, &builtin.Discard{})
 		if !code.IsSuccess() {
 			noop(rt, code)
 		}
