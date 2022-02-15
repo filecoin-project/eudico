@@ -174,7 +174,9 @@ require (
 
 // FIXME: Replacing with a fork to upgrade go-ipld-cbor and support to network v15 and v7 while keeping new actors
 // in the eudico repo.
-replace github.com/filecoin-project/specs-actors/v7 => github.com/adlrocha/specs-actors/v7 v7.0.0-rc1.0.20220204105221-abb2f8c8a27a
+// In this fork we also include a SendWithSerializedParams required to forward messages with already serialized
+// params from an actor.
+replace github.com/filecoin-project/specs-actors/v7 => github.com/adlrocha/specs-actors/v7 v7.0.0-rc1.0.20220215102846-08bb2fde502a
 
 // FIXME: Replacing with a fork that includes support to hierarchical consensus addresses.
 replace github.com/filecoin-project/go-address => github.com/adlrocha/go-address v0.0.7-0.20220201161333-9140b209222d
