@@ -315,7 +315,10 @@ func (s *SubnetMgr) Close(ctx context.Context) error {
 	for _, sh := range s.subnets {
 		err := sh.Close(ctx)
 		if err != nil {
-			return err
+			log.Errorf("error closing subnet %s: %w", sh.ID, err)
+			// NOTE: Even if we fail to close a subnet we should continue
+			// and not return. We shouldn't stop half-way.
+			// return err
 		}
 	}
 	// Close resolver
