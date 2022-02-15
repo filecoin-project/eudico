@@ -17,6 +17,7 @@ import (
 	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
 	cid "github.com/ipfs/go-cid"
+	xerrors "golang.org/x/xerrors"
 )
 
 var _ runtime.VMActor = SubnetCoordActor{}
@@ -426,12 +427,22 @@ func (a SubnetCoordActor) Fund(rt runtime.Runtime, params *SubnetIDParam) *abi.E
 func commitTopDownMsg(rt runtime.Runtime, st *SCAState, msg types.Message) {
 	sto, err := msg.To.Subnet()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "error getting subnet from address")
+	sfrom, err := msg.From.Subnet()
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "error getting subnet from address")
 
 	// Get the next subnet to which the message needs to be sent.
 	sh, has, err := st.GetSubnet(adt.AsStore(rt), sto.Down(st.NetworkName))
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching subnet state")
 	if !has {
-		rt.Abortf(exitcode.ErrIllegalArgument, "subnet for actor hasn't been registered yet")
+		// If the source is this subnet abort, if not send noop.
+		if sfrom == st.NetworkName {
+			rt.Abortf(exitcode.ErrIllegalArgument, "subnet for actor hasn't been registered yet")
+		} else {
+			ret := st.requireNoErrorWithNoop(rt, msg, exitcode.ErrIllegalArgument, xerrors.Errorf("subnet for actor hasn't been registered yet"), "error committing top-down message")
+			if ret {
+				return
+			}
+		}
 	}
 
 	// Set nonce for message
@@ -595,7 +606,7 @@ func (a SubnetCoordActor) ApplyMessage(rt runtime.Runtime, params *CrossMsgParam
 	var st SCAState
 	rt.StateReadonly(&st)
 	buApply, err := hierarchical.ApplyAsBottomUp(st.NetworkName, &params.Msg)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error processing type to apply")
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error computing type of message to apply")
 
 	if buApply {
 		applyBottomUp(rt, params.Msg)
@@ -604,4 +615,22 @@ func (a SubnetCoordActor) ApplyMessage(rt runtime.Runtime, params *CrossMsgParam
 
 	applyTopDown(rt, params.Msg)
 	return nil
+}
+
+// RequireNoErrorWithNoop sends a opposite cross-net mesasge to revert state changes if error
+func (st *SCAState) requireNoErrorWithNoop(rt runtime.Runtime, msg types.Message, code exitcode.ExitCode, err error, errmsg string) bool {
+	if err != nil {
+		noop(rt, st, msg, code, xerrors.Errorf("%s: %s", errmsg, err))
+		return true
+	}
+	return false
+}
+
+// RequireNoErrorWithNoop sends a opposite cross-net mesasge to revert state changes if message code is not successful.
+func requireSuccessWithNoop(rt runtime.Runtime, msg types.Message, code exitcode.ExitCode, errmsg string) bool {
+	if !code.IsSuccess() {
+		noopWithStateTransaction(rt, msg, code, xerrors.Errorf("%s", errmsg))
+		return true
+	}
+	return false
 }
