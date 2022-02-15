@@ -374,9 +374,6 @@ func (rt *Runtime) CurrEpoch() abi.ChainEpoch {
 }
 
 func (rt *Runtime) Send(to address.Address, method abi.MethodNum, m cbor.Marshaler, value abi.TokenAmount, out cbor.Er) exitcode.ExitCode {
-	if !rt.allowInternal {
-		rt.Abortf(exitcode.SysErrorIllegalActor, "runtime.Send() is currently disallowed")
-	}
 	var params []byte
 	if m != nil {
 		buf := new(bytes.Buffer)
@@ -384,6 +381,13 @@ func (rt *Runtime) Send(to address.Address, method abi.MethodNum, m cbor.Marshal
 			rt.Abortf(exitcode.ErrSerialization, "failed to marshal input parameters: %s", err)
 		}
 		params = buf.Bytes()
+	}
+	return rt.SendWithSerializedParams(to, method, params, value, out)
+}
+
+func (rt *Runtime) SendWithSerializedParams(to address.Address, method abi.MethodNum, params []byte, value abi.TokenAmount, out cbor.Er) exitcode.ExitCode {
+	if !rt.allowInternal {
+		rt.Abortf(exitcode.SysErrorIllegalActor, "runtime.Send() is currently disallowed")
 	}
 
 	ret, err := rt.internalSend(rt.Receiver(), to, method, value, params)
