@@ -77,7 +77,8 @@ func IsBottomUp(from, to address.SubnetID) bool {
 
 // ApplyAsBottomUp is used to determine if a cross-message in
 // the current subnet needs to be applied as a top-down or
-// bottom-up message according to the path its following.
+// bottom-up message according to the path its following (i.e.
+// we process a message or a msgMeta).
 func ApplyAsBottomUp(curr address.SubnetID, msg *types.Message) (bool, error) {
 	sto, err := msg.To.Subnet()
 	if err != nil {

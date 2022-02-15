@@ -1,5 +1,5 @@
 # Eudico FAQ
-_Note: The aim of these FAQs is to get you started fast with Eudico so you can spawn a test netork and start contributing to the code in no time. For more in depth documentation or further information about how to perform other actions go to the [Lotus documentation](https://lotus.filecoin.io/docs/set-up/about/), or refer to the base code. Eudico is a fork of Lotus, which means that "almost" everything that works in Lotus should work in Eudico out-of-the-box._
+_Note: The aim of these FAQs is to get you started fast with Eudico so you can spawn a test network and start contributing to the code in no time. For more in depth documentation or further information about how to perform other actions go to the [Lotus documentation](https://lotus.filecoin.io/docs/set-up/about/), or refer to the base code. Eudico is a fork of Lotus, which means that "almost" everything that works in Lotus should work in Eudico out-of-the-box._
 
 **Q: How to import a wallet?**
 

@@ -1,6 +1,8 @@
 package sca
 
 import (
+	"bytes"
+
 	address "github.com/filecoin-project/go-address"
 	abi "github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
@@ -32,7 +34,6 @@ func applyTopDown(rt runtime.Runtime, msg types.Message) {
 	rt.StateTransaction(&st, func() {
 		if bu, err := hierarchical.ApplyAsBottomUp(st.NetworkName, &msg); bu {
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error checking type of message to be applied")
-			rt.Abortf(exitcode.ErrIllegalArgument, "msg passed as argument not topDown")
 		}
 		// NOTE: Check if the nonce of the message being applied is the subsequent one (we could relax a bit this
 		// requirement, but it would mean that we need to determine how we want to handle gaps, and messages
@@ -52,8 +53,8 @@ func applyTopDown(rt runtime.Runtime, msg types.Message) {
 		Value: msg.Value,
 	}
 	code := rt.Send(reward.RewardActorAddr, reward.Methods.ExternalFunding, params, big.Zero(), &builtin.Discard{})
-	if !code.IsSuccess() {
-		noop(rt, code)
+	ret := requireSuccessWithNoop(rt, msg, code, "error applying bottomUp message")
+	if ret {
 		return
 	}
 
@@ -68,9 +69,7 @@ func applyTopDown(rt runtime.Runtime, msg types.Message) {
 		// support calling arbitrary actors. And we don't support params. We'll need a way
 		// to support arbitrary calls.
 		code = rt.Send(rto, msg.Method, nil, msg.Value, &builtin.Discard{})
-		if !code.IsSuccess() {
-			noop(rt, code)
-		}
+		requireSuccessWithNoop(rt, msg, code, "error applying bottomUp message")
 	}
 }
 
@@ -84,7 +83,6 @@ func applyBottomUp(rt runtime.Runtime, msg types.Message) {
 	rt.StateTransaction(&st, func() {
 		if bu, err := hierarchical.ApplyAsBottomUp(st.NetworkName, &msg); !bu {
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error checking type of message to be applied")
-			rt.Abortf(exitcode.ErrIllegalArgument, "msg passed as argument not bottomup")
 		}
 		bottomUpStateTransition(rt, &st, msg)
 
@@ -100,9 +98,7 @@ func applyBottomUp(rt runtime.Runtime, msg types.Message) {
 		// FIXME: We currently don't support sending messages with arbitrary params. We should
 		// support this.
 		code := rt.Send(rto, msg.Method, nil, msg.Value, &builtin.Discard{})
-		if !code.IsSuccess() {
-			noop(rt, code)
-		}
+		requireSuccessWithNoop(rt, msg, code, "error applying bottomUp message")
 	}
 }
 
@@ -158,14 +154,43 @@ func bottomUpStateTransition(rt runtime.Runtime, st *SCAState, msg types.Message
 
 }
 
-// noop is triggered to notify when a crossMsg fails to be applied.
-func noop(rt runtime.Runtime, code exitcode.ExitCode) {
-	// rt.Abortf(exitcode.ErrIllegalState, "failed to apply crossMsg, code: %v", code)
-	// NOTE: If the message is not well-formed and something fails when applying the mesasge,
-	// instead of aborting (which could be harming the liveliness of the subnet consensus protocol, as there wouldn't
-	// be a way of applying the top-down message and allowing the nonce sequence continue), we log the error
-	// and seamlessly increment the nonce without triggering the state changes for the cross-msg. This may require
-	// notifying the source subnet in some way so it may revert potential state changes in the cross-msg path.
-	rt.Log(rtt.WARN, `cross-msg couldn't be applied. Failed with code: %v. 
-	Some state changes in other subnet may need to be reverted`, code)
+// ErrorParam wraps an error code to notify that the
+// cross-messaged failed (at this point is not processed anywhere)
+type ErrorParam struct {
+	Code int64
+}
+
+func errorParam(rt runtime.Runtime, code exitcode.ExitCode) []byte {
+	var buf bytes.Buffer
+	p := &ErrorParam{Code: int64(code)}
+	err := p.MarshalCBOR(&buf)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error marshalling error params")
+	return buf.Bytes()
+}
+
+// noop is triggered to notify when a crossMsg fails to be applied successfully.
+func noop(rt runtime.Runtime, st *SCAState, msg types.Message, code exitcode.ExitCode, err error) {
+	rt.Log(rtt.WARN, `cross-msg couldn't be applied. Failed with code: %v, error: %s. 
+	A message will be sent to revert any state change performed by the cross-net message in its way here.`, code, err)
+	msg.From, msg.To = msg.To, msg.From
+	// Sending an errorParam that to give feedback to the source subnet about the error.
+	msg.Params = errorParam(rt, code)
+
+	sto, err := msg.To.Subnet()
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting subnet from HAddress")
+	if hierarchical.IsBottomUp(st.NetworkName, sto) {
+		commitBottomUpMsg(rt, st, msg)
+		return
+	}
+	commitTopDownMsg(rt, st, msg)
+}
+
+func noopWithStateTransaction(rt runtime.Runtime, msg types.Message, code exitcode.ExitCode, err error) {
+	var st SCAState
+	// If the message is not well-formed and something fails when applying the mesasge,
+	// we increase the nonce and send a cross-message back to the source to notify about
+	// the error applying the message (and to revert all the state changes in the route traversed).
+	rt.StateTransaction(&st, func() {
+		noop(rt, &st, msg, code, err)
+	})
 }

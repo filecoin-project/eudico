@@ -141,38 +141,77 @@ func TestApplyRouting(t *testing.T) {
 	require.NoError(t, err)
 	tt, err := address.NewHAddress(sn1, to)
 	require.NoError(t, err)
-	h.applyCrossMsg(rt, ff, tt, abi.NewTokenAmount(1e17), 0, 1)
+	h.applyCrossMsg(rt, ff, tt, abi.NewTokenAmount(1e17), 0, 1, false)
 	tt, err = address.NewHAddress(sn2, to)
 	require.NoError(t, err)
-	h.applyCrossMsg(rt, ff, tt, abi.NewTokenAmount(1e17), 1, 1)
+	h.applyCrossMsg(rt, ff, tt, abi.NewTokenAmount(1e17), 1, 1, false)
 	ff, err = address.NewHAddress(address.SubnetID("/root/f01/f012"), from)
 	require.NoError(t, err)
 	tt, err = address.NewHAddress(sn1, to)
 	require.NoError(t, err)
-	h.applyCrossMsg(rt, ff, tt, abi.NewTokenAmount(1e17), 2, 2)
+	h.applyCrossMsg(rt, ff, tt, abi.NewTokenAmount(1e17), 2, 2, false)
 	// Directed to current subnet
 	tt, err = address.NewHAddress(shid, to)
 	require.NoError(t, err)
-	h.applyCrossMsg(rt, ff, tt, abi.NewTokenAmount(1e17), 3, 0)
+	h.applyCrossMsg(rt, ff, tt, abi.NewTokenAmount(1e17), 3, 0, false)
 
 	// BottomUp
 	ff, err = address.NewHAddress(sn1, to)
 	require.NoError(t, err)
 	tt, err = address.NewHAddress(address.SubnetID("/root/f0101/f0102/f011"), from)
 	require.NoError(t, err)
-	h.applyCrossMsg(rt, ff, tt, abi.NewTokenAmount(1e17), 0, 2)
+	h.applyCrossMsg(rt, ff, tt, abi.NewTokenAmount(1e17), 0, 2, false)
 	ff, err = address.NewHAddress(sn2, to)
 	require.NoError(t, err)
 	tt, err = address.NewHAddress(address.SubnetID("/root/f0101/f0101/f011"), from)
 	require.NoError(t, err)
-	h.applyCrossMsg(rt, ff, tt, abi.NewTokenAmount(1e17), 1, 3)
+	h.applyCrossMsg(rt, ff, tt, abi.NewTokenAmount(1e17), 1, 3, false)
 	// Directed to current subnet
 	ff, err = address.NewHAddress(address.SubnetID("/root/f0101/f0102/f011"), from)
 	require.NoError(t, err)
 	tt, err = address.NewHAddress(shid, to)
 	require.NoError(t, err)
-	h.applyCrossMsg(rt, ff, tt, abi.NewTokenAmount(1e17), 1, 0)
+	h.applyCrossMsg(rt, ff, tt, abi.NewTokenAmount(1e17), 1, 0, false)
 
+}
+
+func TestNoopMessageWhenError(t *testing.T) {
+	h := newHarness(t)
+	builder := mock.NewBuilder(builtin.StoragePowerActorAddr).WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
+	rt := builder.Build(t)
+	shid := address.SubnetID("/root/f0101")
+	h.constructAndVerifyWithNetworkName(rt, shid)
+	snAddr1 := tutil.NewIDAddr(t, 101)
+	h.registerSubnet(rt, shid, snAddr1)
+	snAddr2 := tutil.NewIDAddr(t, 102)
+	// h.registerSubnet(rt, shid, snAddr2)
+	sn1 := address.NewSubnetID(shid, snAddr1)
+	sn2 := address.NewSubnetID(shid, snAddr2)
+
+	// Inject some funds
+	funderID := tutil.NewIDAddr(h.t, 1000)
+	t.Log("inject some funds in subnets")
+	init := abi.NewTokenAmount(1e18)
+	fund(h, rt, sn1, funderID, init, 1, init, init)
+
+	from := tutil.NewSECP256K1Addr(h.t, "from")
+	to := tutil.NewSECP256K1Addr(h.t, "to")
+
+	// TopDown
+	ff, err := address.NewHAddress(address.SubnetID("/root"), from)
+	require.NoError(t, err)
+	tt, err := address.NewHAddress(sn2, to)
+	require.NoError(t, err)
+	h.applyCrossMsg(rt, ff, tt, abi.NewTokenAmount(1e17), 0, 1, true)
+
+	// BottomUp
+	ff, err = address.NewHAddress(sn1, to)
+	require.NoError(t, err)
+	tt, err = address.NewHAddress(address.SubnetID("/root/f0101/f0102/f011"), from)
+	require.NoError(t, err)
+	h.applyCrossMsg(rt, ff, tt, abi.NewTokenAmount(1e17), 0, 1, true)
+
+	// TODO: Maybe include more extensive tests?
 }
 
 func TestApplyMsg(t *testing.T) {
@@ -309,7 +348,7 @@ func (h *shActorHarness) applyReleaseMsg(rt *mock.Runtime, addr address.Address,
 	require.Equal(h.t, st.AppliedBottomUpNonce, nonce)
 }
 
-func (h *shActorHarness) applyCrossMsg(rt *mock.Runtime, from, to address.Address, value big.Int, msgNonce, tdNonce uint64) {
+func (h *shActorHarness) applyCrossMsg(rt *mock.Runtime, from, to address.Address, value big.Int, msgNonce, tdNonce uint64, noop bool) {
 	rt.SetCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
 	rt.SetBalance(value)
 	params := &actor.CrossMsgParams{
@@ -341,19 +380,7 @@ func (h *shActorHarness) applyCrossMsg(rt *mock.Runtime, from, to address.Addres
 		rt.Verify()
 		st := getState(rt)
 		require.Equal(h.t, st.AppliedBottomUpNonce, msgNonce)
-		if sto != st.NetworkName {
-			sh, found := h.getSubnet(rt, sto.Down(st.NetworkName))
-			require.True(h.t, found)
-			msg, found, err := sh.GetTopDownMsg(adt.AsStore(rt), tdNonce)
-			require.NoError(h.t, err)
-			require.True(h.t, found)
-			require.Equal(h.t, msg.From, from)
-			require.Equal(h.t, msg.To, to)
-			require.Equal(h.t, msg.Value, value)
-		}
 	} else {
-		// case hierarchical.TopDown:
-		// TopDown
 		rewParams := &reward.FundingParams{
 			Addr:  hierarchical.SubnetCoordActorAddr,
 			Value: value,
@@ -369,16 +396,48 @@ func (h *shActorHarness) applyCrossMsg(rt *mock.Runtime, from, to address.Addres
 		rt.Verify()
 		st := getState(rt)
 		require.Equal(h.t, st.AppliedTopDownNonce, msgNonce+1)
-		if sto != st.NetworkName {
-			sh, found := h.getSubnet(rt, sto.Down(st.NetworkName))
+	}
+
+	// If this is noop
+	if noop {
+		msg := params.Msg
+		msg.From, msg.To = msg.To, msg.From
+		// sfrom, err := msg.From.Subnet()
+		// require.NoError(h.t, err)
+		sto, err := msg.To.Subnet()
+		require.NoError(h.t, err)
+		if hierarchical.IsBottomUp(h.sn.Parent(), sto) {
+			// Check that msgMeta included in checkpoint
+			windowCh := currWindowCheckpoint(rt, 0)
+			_, chmeta := windowCh.CrossMsgMeta(h.sn.Parent(), sto)
+			require.NotNil(h.t, chmeta)
+			cidmeta, err := chmeta.Cid()
+			require.NoError(h.t, err)
+			meta, found := h.getMsgMeta(rt, cidmeta)
+			require.True(h.t, found)
+			require.Equal(h.t, len(meta.Msgs), 1)
+			msg := meta.Msgs[0]
+			require.Equal(h.t, msg.From, to)
+			require.Equal(h.t, msg.To, from)
+		} else {
+			// TopDown
+			sh, found := h.getSubnet(rt, sto.Down(h.sn.Parent()))
 			require.True(h.t, found)
 			msg, found, err := sh.GetTopDownMsg(adt.AsStore(rt), tdNonce)
 			require.NoError(h.t, err)
 			require.True(h.t, found)
-			require.Equal(h.t, msg.From, from)
-			require.Equal(h.t, msg.To, to)
-			require.Equal(h.t, msg.Value, value)
+			require.Equal(h.t, msg.From, to)
+			require.Equal(h.t, msg.To, from)
 		}
+	} else if sto != st.NetworkName {
+		sh, found := h.getSubnet(rt, sto.Down(st.NetworkName))
+		require.True(h.t, found)
+		msg, found, err := sh.GetTopDownMsg(adt.AsStore(rt), tdNonce)
+		require.NoError(h.t, err)
+		require.True(h.t, found)
+		require.Equal(h.t, msg.From, from)
+		require.Equal(h.t, msg.To, to)
+		require.Equal(h.t, msg.Value, value)
 	}
 }
 
