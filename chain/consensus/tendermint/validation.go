@@ -3,23 +3,23 @@ package tendermint
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"fmt"
-	"github.com/filecoin-project/lotus/build"
-	"github.com/filecoin-project/lotus/metrics"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"go.opencensus.io/stats"
 
 	"github.com/ipfs/go-cid"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/minio/blake2b-simd"
 	tenderminttypes "github.com/tendermint/tendermint/types"
+	"go.opencensus.io/stats"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-state-types/crypto"
 	lapi "github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/lib/sigs"
+	"github.com/filecoin-project/lotus/metrics"
 )
 
 // sanitizeMessagesAndPrepareBlockForSignature checks and removes invalid messages from the block fixture
@@ -158,7 +158,7 @@ func isBlockSealed(fb *types.FullBlock, tb *tenderminttypes.Block) (bool, error)
 		if err != nil {
 			return false, err
 		}
-		id := sha256.Sum256(bs)
+		id := blake2b.Sum256(bs)
 		_, found := tendermintMessagesHashes[id]
 		if !found {
 			return false, xerrors.New("bls messages are not sealed")
@@ -170,7 +170,7 @@ func isBlockSealed(fb *types.FullBlock, tb *tenderminttypes.Block) (bool, error)
 		if err != nil {
 			return false, err
 		}
-		id := sha256.Sum256(bs)
+		id := blake2b.Sum256(bs)
 		_, found := tendermintMessagesHashes[id]
 		if !found {
 			return false, xerrors.New("secpk messages are not sealed")
@@ -182,7 +182,7 @@ func isBlockSealed(fb *types.FullBlock, tb *tenderminttypes.Block) (bool, error)
 		if err != nil {
 			return false, err
 		}
-		id := sha256.Sum256(bs)
+		id := blake2b.Sum256(bs)
 		_, found := tendermintMessagesHashes[id]
 		if !found {
 			return false, xerrors.New("cross msgs messages are not sealed")

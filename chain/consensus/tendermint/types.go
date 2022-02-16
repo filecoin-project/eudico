@@ -2,10 +2,10 @@ package tendermint
 
 import (
 	"bytes"
+
 	"github.com/tendermint/tendermint/crypto"
 
 	"github.com/filecoin-project/go-address"
-
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
@@ -76,6 +76,20 @@ func NewRegistrationMessageBytes(name address.SubnetID, tag, nonce []byte) ([]by
 	}
 	b = append(b, RegistrationMessageType)
 	return b, nil
+}
+
+func NewSignedMessageBytes(msg, tag []byte) []byte {
+	var payload []byte
+	payload = append(msg, tag[:tagLength]...)
+	payload = append(payload, SignedMessageType)
+	return payload
+}
+
+func NewCrossMessageBytes(msg, tag []byte) []byte {
+	var payload []byte
+	payload = append(msg, tag[:tagLength]...)
+	payload = append(payload, CrossMessageType)
+	return payload
 }
 
 type tendermintBlockInfo struct {

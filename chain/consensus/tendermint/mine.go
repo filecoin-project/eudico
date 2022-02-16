@@ -2,9 +2,10 @@ package tendermint
 
 import (
 	"context"
-	"crypto/sha256"
+	"github.com/tendermint/tendermint/rpc/coretypes"
 	"time"
 
+	"github.com/minio/blake2b-simd"
 	tmclient "github.com/tendermint/tendermint/rpc/client/http"
 	"golang.org/x/xerrors"
 
@@ -18,7 +19,9 @@ import (
 var pool = newMessagePool()
 
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {
-	log.Info("Miner addr:", miner.String())
+	log.Info("starting miner:", miner.String())
+	defer log.Info("shutdown miner")
+
 	tendermintClient, err := tmclient.New(NodeAddr())
 	if err != nil {
 		log.Fatalf("unable to create a Tendermint client: %s", err)
@@ -28,22 +31,17 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	if err != nil {
 		return err
 	}
-	log.Info("Network name:", nn)
-
 	subnetID := address.SubnetID(nn)
-	log.Info("Subnet ID name:", subnetID)
-
-	tag := sha256.Sum256([]byte(subnetID))
-	log.Info("tag:", tag[:tagLength])
+	tag := blake2b.Sum256([]byte(subnetID))
+	log.Infof("miner network:%s, subnet ID: %s, subnet tag: %x", nn, subnetID, tag[:tagLength])
 
 	head, err := api.ChainHead(ctx)
 	if err != nil {
-		return xerrors.Errorf("getting head: %w", err)
+		return xerrors.Errorf("unable to get the head: %w", err)
 	}
 
-	log.Infof("%s starting tendermint mining on @%d", subnetID, head.Height())
-	defer log.Info("%s stopping tendermint mining on @%d", subnetID, head.Height())
-
+	log.Infof("[%s] starting tendermint mining loop at %d", subnetID, head.Height())
+	defer log.Infof("[%s] stopping tendermint mining loop at %d", subnetID, head.Height())
 	for {
 		select {
 		case <-ctx.Done():
@@ -53,81 +51,66 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 
 		base, err := api.ChainHead(ctx)
 		if err != nil {
-			log.Errorw("creating block failed", "error", err)
+			log.Errorw("getting block failed", "error", err)
 			continue
 		}
 
-		log.Infof("%s try tendermint mining at @%d", subnetID, base.Height())
+		log.Infof("[%s] try tendermint mining at @%d", subnetID, base.Height())
 
 		msgs, err := api.MpoolSelect(ctx, base.Key(), 1)
 		if err != nil {
 			log.Errorw("unable to select messages from mempool", "error", err)
 		}
 
-		log.Debugf("Msgs being proposed in block @%s: %d", base.Height()+1, len(msgs))
-
-		// Get cross-message pool from subnet.
-		nn, err := api.StateNetworkName(ctx)
-		if err != nil {
-			return err
-		}
-		crossMsgs, err := api.GetCrossMsgsPool(ctx, address.SubnetID(nn), base.Height()+1)
+		crossMsgs, err := api.GetCrossMsgsPool(ctx, subnetID, base.Height()+1)
 		if err != nil {
 			log.Errorw("selecting cross-messages failed", "error", err)
 		}
-		log.Infof("CrossMsgs being proposed in block @%s: %d", base.Height()+1, len(crossMsgs))
+		log.Infof("[%s] %d - msgs, %d - crossmsgs proposed in the block @%s", subnetID, len(msgs), len(crossMsgs), base.Height()+1)
 
 		for _, msg := range msgs {
-			tx, err := msg.Serialize()
+			msgBytes, err := msg.Serialize()
 			if err != nil {
 				log.Error(err)
 				continue
 			}
-			log.Debug("next msg:", tx)
 
-			// LRU cache is used to store the messages that have already been sent.
+			// Message cache is used to store the messages that have already been sent to Tendermint.
 			// It is also a workaround for this bug: https://github.com/tendermint/tendermint/issues/7185.
-			id := sha256.Sum256(tx)
-			log.Debug("message hash:", id)
+			id := blake2b.Sum256(msgBytes)
 
-			if pool.shouldSubmitMessage(tx, base.Height()) {
-				payload := append(tx, tag[:tagLength]...)
-				payload = append(payload, SignedMessageType)
-				res, err := tendermintClient.BroadcastTxSync(ctx, payload)
+			if pool.shouldSubmitMessage(msgBytes, base.Height()) {
+				tx := NewSignedMessageBytes(msgBytes, tag[:])
+				_, err := tendermintClient.BroadcastTxSync(ctx, tx)
 				if err != nil {
-					log.Error("unable to send msg to Tendermint error:", err)
+					log.Error("unable to send msg to Tendermint:", err)
 					continue
 				} else {
-					pool.addMessage(tx, base.Height())
-					log.Info(res)
+					pool.addMessage(msgBytes, base.Height())
 					log.Info("successfully sent msg to Tendermint:", id)
 				}
 			}
 		}
 
 		for _, msg := range crossMsgs {
-			tx, err := msg.Serialize()
+			msgBytes, err := msg.Serialize()
 			if err != nil {
 				log.Error(err)
 				continue
 			}
-			log.Info("!!! next cross msg:", tx)
 
-			// LRU cache is used to store the messages that have already been sent.
+			// Message cache is used to store the messages that have already been sent.
 			// It is also a workaround for this bug: https://github.com/tendermint/tendermint/issues/7185.
-			id := sha256.Sum256(tx)
-			log.Info("!!!!! cross message hash:", id)
+			id := blake2b.Sum256(msgBytes)
 
-			if pool.shouldSubmitMessage(tx, base.Height()) {
-				payload := append(tx, tag[:tagLength]...)
-				payload = append(payload, CrossMessageType)
-				res, err := tendermintClient.BroadcastTxSync(ctx, payload)
+			if pool.shouldSubmitMessage(msgBytes, base.Height()) {
+				tx := NewCrossMessageBytes(msgBytes, tag[:])
+				_, err := tendermintClient.BroadcastTxSync(ctx, tx)
 				if err != nil {
-					log.Error("unable to send cross msg to Tendermint error:", err)
+					log.Error("unable to send cross msg to Tendermint:", err)
 					continue
 				} else {
-					pool.addMessage(tx, base.Height())
-					log.Info(res)
+					pool.addMessage(msgBytes, base.Height())
 					log.Info("successfully sent cross msg to Tendermint:", id)
 				}
 			}
@@ -138,10 +121,10 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			Parents:          base.Key(),
 			BeaconValues:     nil,
 			Ticket:           nil,
-			Messages:         nil,
 			Epoch:            base.Height() + 1,
 			Timestamp:        0,
 			WinningPoStProof: nil,
+			Messages:         nil,
 			CrossMessages:    nil,
 		})
 		if err != nil {
@@ -152,7 +135,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			continue
 		}
 
-		log.Infof("%s try syncing Tendermint block at @%d", subnetID, base.Height())
+		log.Infof("[%s] try syncing Tendermint block at @%d", subnetID, base.Height())
 
 		err = api.SyncSubmitBlock(ctx, &types.BlockMsg{
 			Header:        bh.Header,
@@ -164,7 +147,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			log.Errorw("submitting block failed", "error", err)
 		}
 
-		log.Infof("Tendermint mined a block %v in %s:", bh.Cid(), subnetID)
+		log.Infof("[%s] Tendermint mined a block %v", subnetID, bh.Cid())
 	}
 }
 
@@ -175,37 +158,32 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 	ticker := time.NewTicker(1000 * time.Millisecond)
 	defer ticker.Stop()
 
-	tendermintBlockInfoChan := make(chan *tendermintBlockInfo)
+	// Calculate actual target height of the Tendermint blockchain.
 	height := int64(bt.Epoch) + tm.offset
 
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				// fixme: what should me send here?
-				tendermintBlockInfoChan <- nil
-				return
-			case <-ticker.C:
-				resp, err := tm.client.Block(ctx, &height)
-				if err != nil {
-					log.Infof("unable to get the last Tendermint block @%d: %s", height, err)
-					continue
-				} else {
-					log.Infof("Got block %d from Tendermint", resp.Block.Height)
-					info := tendermintBlockInfo{
-						timestamp:       uint64(resp.Block.Time.Unix()),
-						hash:            resp.Block.Hash().Bytes(),
-						proposerAddress: resp.Block.ProposerAddress,
-					}
-					parseTendermintBlock(resp.Block, &info, tm.tag)
-
-					tendermintBlockInfoChan <- &info
-				}
+	try := true
+	var resp *coretypes.ResultBlock
+	var err error
+	for try {
+		select {
+		case <-ctx.Done():
+			log.Info("create block was stopped")
+			return nil, nil
+		case <-ticker.C:
+			resp, err = tm.client.Block(ctx, &height)
+			if err != nil {
+				log.Infof("unable to get the Tendermint block @%d: %s", height, err)
+				continue
 			}
+			try = false
 		}
-	}()
-
-	tb := <-tendermintBlockInfoChan
+	}
+	tb := &tendermintBlockInfo{
+		timestamp:       uint64(resp.Block.Time.Unix()),
+		hash:            resp.Block.Hash().Bytes(),
+		proposerAddress: resp.Block.ProposerAddress,
+	}
+	tb = parseTendermintBlock(resp.Block, tb, tm.tag)
 	proposerAddrStr := tb.proposerAddress.String()
 
 	// if another Tendermint node proposed the block.
@@ -268,16 +246,7 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 
 	b.Header.Ticket = &types.Ticket{VRFProof: tb.hash}
 
-	/*
-		err = tm.validateBlock(ctx, b)
-		if err != nil {
-			log.Info(err)
-			return nil, err
-		}
-
-	*/
-
-	log.Infof("!!!!%s mined a block", b.Header.Miner)
+	log.Infof("!!! %s mined a block", b.Header.Miner)
 
 	return b, nil
 }

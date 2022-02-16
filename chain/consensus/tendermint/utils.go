@@ -6,12 +6,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/tendermint/tendermint/crypto"
 	"os"
 	"time"
 
 	secp "github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/minio/blake2b-simd"
 	abci "github.com/tendermint/tendermint/abci/types"
+	"github.com/tendermint/tendermint/crypto"
 	tmsecp "github.com/tendermint/tendermint/crypto/secp256k1"
 	tmclient "github.com/tendermint/tendermint/rpc/client/http"
 	"github.com/tendermint/tendermint/rpc/coretypes"
@@ -31,17 +32,18 @@ func NodeAddr() string {
 	return addr
 }
 
-func parseTendermintBlock(b *tmtypes.Block, dst *tendermintBlockInfo, tag []byte) {
+func parseTendermintBlock(b *tmtypes.Block, dst *tendermintBlockInfo, tag []byte) *tendermintBlockInfo {
 	var msgs []*types.SignedMessage
 	var crossMsgs []*types.Message
 
 	for _, tx := range b.Txs {
 		stx := tx.String()
-		// Transactions from Tendermint are in the Tx{} format.
+		// Transactions from Tendermint are in the "Tx{....}" format.
+		// So we have to remove T,x,{,} characters.
 		txo := stx[3 : len(stx)-1]
 		txoData, err := hex.DecodeString(txo)
 		if err != nil {
-			log.Error("unable to decode Tendermint messages:", err)
+			log.Error("unable to decode Tendermint tx:", err)
 			continue
 		}
 		//data = {msg...|8 byte tag| type}
@@ -58,10 +60,10 @@ func parseTendermintBlock(b *tmtypes.Block, dst *tendermintBlockInfo, tag []byte
 
 		switch m := msg.(type) {
 		case *types.SignedMessage:
-			log.Infof("received Tx - signed message from %s to %s with %s tokens", m.Message.From.String(), m.Message.To.String(), m.Message.Value)
+			log.Infof("found signed message from %s to %s with %s tokens", m.Message.From.String(), m.Message.To.String(), m.Message.Value)
 			msgs = append(msgs, m)
 		case *types.Message:
-			log.Infof("received Tx - cross message from %s to %s with %s tokens", m.From.String(), m.To.String(), m.Value)
+			log.Infof("found cross message from %s to %s with %s tokens", m.From.String(), m.To.String(), m.Value)
 			crossMsgs = append(crossMsgs, m)
 		default:
 			log.Info("unknown message type")
@@ -69,6 +71,8 @@ func parseTendermintBlock(b *tmtypes.Block, dst *tendermintBlockInfo, tag []byte
 	}
 	dst.messages = msgs
 	dst.crossMsgs = crossMsgs
+
+	return dst
 }
 
 func getMessageMapFromTendermintBlock(tb *tmtypes.Block) (map[[32]byte]bool, error) {
@@ -82,7 +86,7 @@ func getMessageMapFromTendermintBlock(tb *tmtypes.Block) (map[[32]byte]bool, err
 		if err != nil {
 			return nil, err
 		}
-		id := sha256.Sum256(txoData)
+		id := blake2b.Sum256(txoData)
 		msgs[id] = true
 	}
 	return msgs, nil

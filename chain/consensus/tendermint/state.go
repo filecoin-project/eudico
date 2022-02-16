@@ -1,9 +1,10 @@
 package tendermint
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"sync"
+
+	"github.com/minio/blake2b-simd"
 )
 
 type State struct {
@@ -36,7 +37,7 @@ func (s *State) AddSubnet(subnetName []byte) {
 	s.m.Lock()
 	defer s.m.Unlock()
 
-	id := sha256.Sum256(subnetName)
+	id := blake2b.Sum256(subnetName)
 
 	_, ok := s.subnets[id]
 	if !ok {
@@ -48,7 +49,7 @@ func (s *State) GetSubnetOffset(subnetName []byte) int64 {
 	s.m.Lock()
 	defer s.m.Unlock()
 
-	id := sha256.Sum256(subnetName)
+	id := blake2b.Sum256(subnetName)
 
 	h, ok := s.subnets[id]
 	if !ok {
@@ -62,7 +63,7 @@ func (s *State) AddBlock(block []byte) error {
 	s.m.Lock()
 	defer s.m.Unlock()
 
-	id := sha256.Sum256(block)
+	id := blake2b.Sum256(block)
 
 	_, ok := s.filecoinBlocks[id]
 	if ok {

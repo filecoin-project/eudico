@@ -2,7 +2,6 @@ package tendermint
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"strings"
 
@@ -10,6 +9,7 @@ import (
 	"github.com/hashicorp/go-multierror"
 	logging "github.com/ipfs/go-log/v2"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/minio/blake2b-simd"
 	"github.com/tendermint/tendermint/libs/rand"
 	tmclient "github.com/tendermint/tendermint/rpc/client/http"
 	"go.opencensus.io/stats"
@@ -80,7 +80,7 @@ func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, b beacon.Sche
 
 	subnetID := address.SubnetID(netName)
 	log.Infof("New Tendermint consensus for %s subnet", subnetID)
-	tag := sha256.Sum256([]byte(subnetID))
+	tag := blake2b.Sum256([]byte(subnetID))
 
 	c, err := tmclient.New(NodeAddr())
 	if err != nil {

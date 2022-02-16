@@ -1,8 +1,9 @@
 package tendermint
 
 import (
-	"crypto/sha256"
 	"sync"
+
+	"github.com/minio/blake2b-simd"
 
 	"github.com/filecoin-project/go-state-types/abi"
 )
@@ -19,7 +20,7 @@ func newMessagePool() *msgPool {
 
 //TODO: messages should be removed from the pool after some time
 type msgPool struct {
-	lk   sync.RWMutex
+	lk   sync.Mutex
 	pool map[[32]byte]abi.ChainEpoch
 }
 
@@ -27,15 +28,16 @@ func (p *msgPool) addMessage(tx []byte, epoch abi.ChainEpoch) {
 	p.lk.Lock()
 	defer p.lk.Unlock()
 
-	id := sha256.Sum256(tx)
+	id := blake2b.Sum256(tx)
+
 	p.pool[id] = epoch
 }
 
 func (p *msgPool) shouldSubmitMessage(tx []byte, currentEpoch abi.ChainEpoch) bool {
-	p.lk.RLock()
-	defer p.lk.RUnlock()
+	p.lk.Lock()
+	defer p.lk.Unlock()
 
-	id := sha256.Sum256(tx)
+	id := blake2b.Sum256(tx)
 	proposedAt, proposed := p.pool[id]
 
 	return !proposed || proposedAt+finalityWait < currentEpoch
