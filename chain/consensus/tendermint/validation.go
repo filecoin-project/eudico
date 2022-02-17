@@ -146,7 +146,7 @@ func sanitizeMessagesAndPrepareBlockForSignature(ctx context.Context, sm *stmgr.
 
 // isBlockSealed checks that the following conditions hold:
 //     - all messages from the Filecoin block are contained in the Tendermint block.
-//     - Tendermint block hash is equal to Filecoin BlockSig field.
+//     - Tendermint block hash is equal to Filecoin ticket field.
 func isBlockSealed(fb *types.FullBlock, tb *tenderminttypes.Block) (bool, error) {
 	tendermintMessagesHashes, err := getMessageMapFromTendermintBlock(tb)
 	if err != nil {

@@ -104,12 +104,6 @@ eudico: $(BUILD_DEPS)
 .PHONY: eudico
 BINS+=eudico
 
-tendermint:
-	rm -f ./tendermint
-	$(GOCC) build $(GOFLAGS) -o tendermint ./cmd/tendermint
-
-.PHONY: tendermint
-
 lotus-miner: $(BUILD_DEPS)
 	rm -f lotus-miner
 	$(GOCC) build $(GOFLAGS) -o lotus-miner ./cmd/lotus-miner

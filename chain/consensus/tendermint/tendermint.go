@@ -207,7 +207,17 @@ func (tm *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBlock) (er
 	}
 
 	// Tendermint specific checks.
-	height := int64(h.Height) + tm.offset
+	if err := tm.authTendermintData(ctx, b); err != nil {
+		return err
+	}
+
+	log.Infof("block at @%d is valid", b.Header.Height)
+
+	return nil
+}
+
+func (tm *Tendermint) authTendermintData(ctx context.Context, b *types.FullBlock) error {
+	height := int64(b.Header.Height) + tm.offset
 	log.Infof("Try to access Tendermint RPC from ValidateBlock")
 	resp, err := tm.client.Block(ctx, &height)
 	if err != nil {
@@ -247,123 +257,7 @@ func (tm *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBlock) (er
 		log.Infof("block is not sealed %d", b.Header.Height)
 		return xerrors.New("block is not sealed")
 	}
-
-	log.Infof("block at @%d is valid", b.Header.Height)
-
 	return nil
-}
-
-func (tm *Tendermint) validateBlock(ctx context.Context, b *types.FullBlock) (err error) {
-	log.Infof("STARTED ADDITIONAL VALIDATION FOR BLOCK %d", b.Header.Height)
-	defer log.Infof("FINISHED ADDITIONAL VALIDATION FOR  %d", b.Header.Height)
-
-	if err := common.BlockSanityChecks(hierarchical.Tendermint, b.Header); err != nil {
-		return xerrors.Errorf("incoming header failed basic sanity checks: %w", err)
-	}
-
-	h := b.Header
-
-	baseTs, err := tm.store.LoadTipSet(ctx, types.NewTipSetKey(h.Parents...))
-	if err != nil {
-		return xerrors.Errorf("load parent tipset failed (%s): %w", h.Parents, err)
-	}
-
-	// fast checks first
-	if h.Height != baseTs.Height() {
-		return xerrors.Errorf("block height not parent height+1: %d != %d", h.Height, baseTs.Height()+1)
-	}
-
-	now := uint64(build.Clock.Now().Unix())
-	if h.Timestamp > now+build.AllowableClockDriftSecs {
-		return xerrors.Errorf("block was from the future (now=%d, blk=%d): %w", now, h.Timestamp, consensus.ErrTemporal)
-	}
-	if h.Timestamp > now {
-		log.Warn("Got block from the future, but within threshold", h.Timestamp, build.Clock.Now().Unix())
-	}
-
-	msgsChecks := common.CheckMsgsWithoutBlockSig(ctx, tm.store, tm.sm, tm.subMgr, tm.r, tm.netName, b, baseTs)
-
-	minerCheck := async.Err(func() error {
-		if err := tm.minerIsValid(b.Header.Miner); err != nil {
-			return xerrors.Errorf("minerIsValid failed: %w", err)
-		}
-		return nil
-	})
-
-	pweight, err := Weight(context.TODO(), nil, baseTs)
-	if err != nil {
-		return xerrors.Errorf("getting parent weight: %w", err)
-	}
-
-	if types.BigCmp(pweight, b.Header.ParentWeight) != 0 {
-		return xerrors.Errorf("parrent weight different: %s (header) != %s (computed)",
-			b.Header.ParentWeight, pweight)
-	}
-
-	stateRootCheck := common.CheckStateRoot(ctx, tm.store, tm.sm, b, baseTs)
-
-	await := []async.ErrorFuture{
-		minerCheck,
-		stateRootCheck,
-	}
-
-	await = append(await, msgsChecks...)
-
-	var merr error
-	for _, fut := range await {
-		if err := fut.AwaitContext(ctx); err != nil {
-			merr = multierror.Append(merr, err)
-		}
-	}
-	if merr != nil {
-		mulErr := merr.(*multierror.Error)
-		mulErr.ErrorFormat = func(es []error) string {
-			if len(es) == 1 {
-				return fmt.Sprintf("1 error occurred:\n\t* %+v\n\n", es[0])
-			}
-
-			points := make([]string, len(es))
-			for i, err := range es {
-				points[i] = fmt.Sprintf("* %+v", err)
-			}
-
-			return fmt.Sprintf(
-				"%d errors occurred:\n\t%s\n\n",
-				len(es), strings.Join(points, "\n\t"))
-		}
-		return mulErr
-	}
-
-	height := int64(h.Height) + tm.offset
-	tendermintBlock, err := tm.client.Block(ctx, &height)
-	if err != nil {
-		return xerrors.Errorf("unable to get the Tendermint block by height %d", height)
-	}
-
-	sealed, err := isBlockSealed(b, tendermintBlock.Block)
-	if err != nil {
-		log.Infof("block sealed err: %s", err.Error())
-		return err
-	}
-	if !sealed {
-		log.Infof("block is not sealed %d", b.Header.Height)
-		return xerrors.New("block is not sealed")
-	}
-	return nil
-}
-
-func (tm *Tendermint) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
-	if tm.genesis == nil {
-		return false
-	}
-
-	tendermintLastBlock, err := tm.client.Block(context.TODO(), nil)
-	if err != nil {
-		//TODO: Tendermint: Discuss what we should return here.
-		return false
-	}
-	//TODO: Tendermint: Discuss what we should return here.
-	return tendermintLastBlock.Block.Height+MaxHeightDrift < int64(epoch)
 }
 
 func (tm *Tendermint) ValidateBlockPubsub(ctx context.Context, self bool, msg *pubsub.Message) (pubsub.ValidationResult, string) {
@@ -414,6 +308,20 @@ func (tm *Tendermint) minerIsValid(maddr address.Address) error {
 	}
 
 	return xerrors.Errorf("miner address must be a key")
+}
+
+func (tm *Tendermint) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
+	if tm.genesis == nil {
+		return false
+	}
+
+	tendermintLastBlock, err := tm.client.Block(context.TODO(), nil)
+	if err != nil {
+		//TODO: Tendermint: Discuss what we should return here.
+		return false
+	}
+	//TODO: Tendermint: Discuss what we should return here.
+	return tendermintLastBlock.Block.Height+MaxHeightDrift < int64(epoch)
 }
 
 // Weight defines weight.
