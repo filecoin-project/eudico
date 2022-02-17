@@ -58,7 +58,7 @@ curl -s 'http://localhost:26657/broadcast_tx_sync?tx=0x828a0055017642efe6162dfc3
 
 ```
 
-### Subnet
+### Subnet Demo
 ```
  ./eudico subnet add --consensus 2 --name tendermint
  ./eudico subnet join --subnet=/root/t01001 10
@@ -67,4 +67,21 @@ curl -s 'http://localhost:26657/broadcast_tx_sync?tx=0x828a0055017642efe6162dfc3
  ./eudico --subnet-api=/root/t01001 wallet list
  
  ./eudico subnet list-subnets
+```
+
+### Fault Tolerance Demo
+
+```
+./scriopts/eud-tendermint-testnet.sh
+```
+In terminal 4:
+```
+addr-node0
+
+stop-node1
+stop-app1
+
+start-app1
+start-node1
+connect-node0
 ```
