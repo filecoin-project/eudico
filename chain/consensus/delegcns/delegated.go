@@ -93,7 +93,7 @@ func (deleg *Delegated) ValidateBlock(ctx context.Context, b *types.FullBlock) (
 	}
 
 	h := b.Header
-	baseTs, err := deleg.store.LoadTipSet(types.NewTipSetKey(h.Parents...))
+	baseTs, err := deleg.store.LoadTipSet(ctx, types.NewTipSetKey(h.Parents...))
 	if err != nil {
 		return xerrors.Errorf("load parent tipset failed (%s): %w", h.Parents, err)
 	}

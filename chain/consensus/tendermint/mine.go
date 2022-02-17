@@ -228,7 +228,7 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 	}
 
 	h := b.Header
-	baseTs, err := tm.store.LoadTipSet(types.NewTipSetKey(h.Parents...))
+	baseTs, err := tm.store.LoadTipSet(ctx, types.NewTipSetKey(h.Parents...))
 	if err != nil {
 		return nil, xerrors.Errorf("load parent tipset failed (%s): %w", h.Parents, err)
 	}

@@ -135,7 +135,7 @@ func (tm *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBlock) (er
 
 	h := b.Header
 
-	baseTs, err := tm.store.LoadTipSet(types.NewTipSetKey(h.Parents...))
+	baseTs, err := tm.store.LoadTipSet(ctx, types.NewTipSetKey(h.Parents...))
 	if err != nil {
 		return xerrors.Errorf("load parent tipset failed (%s): %w", h.Parents, err)
 	}
@@ -263,7 +263,7 @@ func (tm *Tendermint) validateBlock(ctx context.Context, b *types.FullBlock) (er
 
 	h := b.Header
 
-	baseTs, err := tm.store.LoadTipSet(types.NewTipSetKey(h.Parents...))
+	baseTs, err := tm.store.LoadTipSet(ctx, types.NewTipSetKey(h.Parents...))
 	if err != nil {
 		return xerrors.Errorf("load parent tipset failed (%s): %w", h.Parents, err)
 	}

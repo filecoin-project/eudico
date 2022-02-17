@@ -92,7 +92,7 @@ func (s *SubnetMgr) ListCheckpoints(
 
 	subAPI := s.getAPI(id)
 	if subAPI == nil {
-		xerrors.Errorf("Not listening to subnet")
+		return nil, xerrors.Errorf("Not listening to subnet")
 	}
 
 	subnetAct, err := parentAPI.StateGetActor(ctx, subnetActAddr, types.EmptyTSK)

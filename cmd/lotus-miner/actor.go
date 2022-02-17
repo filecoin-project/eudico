@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/filecoin-project/go-state-types/network"
+
 	rlepluslazy "github.com/filecoin-project/go-bitfield/rle"
 	cbor "github.com/ipfs/go-ipld-cbor"
 
@@ -255,7 +257,7 @@ var actorWithdrawCmd = &cli.Command{
 			amount = abi.TokenAmount(f)
 
 			if amount.GreaterThan(available) {
-				return xerrors.Errorf("can't withdraw more funds than available; requested: %s; available: %s", amount, available)
+				return xerrors.Errorf("can't withdraw more funds than available; requested: %s; available: %s", types.FIL(amount), types.FIL(available))
 			}
 		}
 
@@ -280,6 +282,8 @@ var actorWithdrawCmd = &cli.Command{
 		fmt.Printf("Requested rewards withdrawal in message %s\n", smsg.Cid())
 
 		// wait for it to get mined into a block
+		fmt.Printf("waiting for %d epochs for confirmation..\n", uint64(cctx.Int("confidence")))
+
 		wait, err := api.StateWaitMsg(ctx, smsg.Cid(), uint64(cctx.Int("confidence")))
 		if err != nil {
 			return err
@@ -291,14 +295,21 @@ var actorWithdrawCmd = &cli.Command{
 			return err
 		}
 
-		var withdrawn abi.TokenAmount
-		if err := withdrawn.UnmarshalCBOR(bytes.NewReader(wait.Receipt.Return)); err != nil {
+		nv, err := api.StateNetworkVersion(ctx, wait.TipSet)
+		if err != nil {
 			return err
 		}
 
-		fmt.Printf("Successfully withdrew %s FIL\n", withdrawn)
-		if withdrawn != amount {
-			fmt.Printf("Note that this is less than the requested amount of %s FIL\n", amount)
+		if nv >= network.Version14 {
+			var withdrawn abi.TokenAmount
+			if err := withdrawn.UnmarshalCBOR(bytes.NewReader(wait.Receipt.Return)); err != nil {
+				return err
+			}
+
+			fmt.Printf("Successfully withdrew %s \n", types.FIL(withdrawn))
+			if withdrawn.LessThan(amount) {
+				fmt.Printf("Note that this is less than the requested amount of %s\n", types.FIL(amount))
+			}
 		}
 
 		return nil

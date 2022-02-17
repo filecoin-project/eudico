@@ -452,7 +452,7 @@ func (t *SCAState) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufSubnet = []byte{137}
+var lengthBufSubnet = []byte{136}
 
 func (t *Subnet) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -492,12 +492,6 @@ func (t *Subnet) MarshalCBOR(w io.Writer) error {
 	// t.Stake (big.Int) (struct)
 	if err := t.Stake.MarshalCBOR(w); err != nil {
 		return err
-	}
-
-	// t.Funds (cid.Cid) (struct)
-
-	if err := cbg.WriteCidBuf(scratch, w, t.Funds); err != nil {
-		return xerrors.Errorf("failed to write cid field t.Funds: %w", err)
 	}
 
 	// t.TopDownMsgs (cid.Cid) (struct)
@@ -544,7 +538,7 @@ func (t *Subnet) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 9 {
+	if extra != 8 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -575,18 +569,6 @@ func (t *Subnet) UnmarshalCBOR(r io.Reader) error {
 		if err := t.Stake.UnmarshalCBOR(br); err != nil {
 			return xerrors.Errorf("unmarshaling t.Stake: %w", err)
 		}
-
-	}
-	// t.Funds (cid.Cid) (struct)
-
-	{
-
-		c, err := cbg.ReadCid(br)
-		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.Funds: %w", err)
-		}
-
-		t.Funds = c
 
 	}
 	// t.TopDownMsgs (cid.Cid) (struct)
@@ -951,7 +933,7 @@ func (t *MetaTag) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufCrossMsgParams = []byte{129}
+var lengthBufCrossMsgParams = []byte{130}
 
 func (t *CrossMsgParams) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -962,8 +944,22 @@ func (t *CrossMsgParams) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
+	scratch := make([]byte, 9)
+
 	// t.Msg (types.Message) (struct)
 	if err := t.Msg.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.Destination (address.SubnetID) (string)
+	if len(t.Destination) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.Destination was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Destination))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.Destination)); err != nil {
 		return err
 	}
 	return nil
@@ -983,7 +979,7 @@ func (t *CrossMsgParams) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 1 {
+	if extra != 2 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -995,6 +991,88 @@ func (t *CrossMsgParams) UnmarshalCBOR(r io.Reader) error {
 			return xerrors.Errorf("unmarshaling t.Msg: %w", err)
 		}
 
+	}
+	// t.Destination (address.SubnetID) (string)
+
+	{
+		sval, err := cbg.ReadStringBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+
+		t.Destination = address.SubnetID(sval)
+	}
+	return nil
+}
+
+var lengthBufErrorParam = []byte{129}
+
+func (t *ErrorParam) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufErrorParam); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.Code (int64) (int64)
+	if t.Code >= 0 {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.Code)); err != nil {
+			return err
+		}
+	} else {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.Code-1)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (t *ErrorParam) UnmarshalCBOR(r io.Reader) error {
+	*t = ErrorParam{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 1 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.Code (int64) (int64)
+	{
+		maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+		var extraI int64
+		if err != nil {
+			return err
+		}
+		switch maj {
+		case cbg.MajUnsignedInt:
+			extraI = int64(extra)
+			if extraI < 0 {
+				return fmt.Errorf("int64 positive overflow")
+			}
+		case cbg.MajNegativeInt:
+			extraI = int64(extra)
+			if extraI < 0 {
+				return fmt.Errorf("int64 negative oveflow")
+			}
+			extraI = -1 - extraI
+		default:
+			return fmt.Errorf("wrong type for int64 field: %d", maj)
+		}
+
+		t.Code = int64(extraI)
 	}
 	return nil
 }

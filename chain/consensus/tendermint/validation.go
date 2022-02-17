@@ -25,7 +25,7 @@ import (
 // sanitizeMessagesAndPrepareBlockForSignature checks and removes invalid messages from the block fixture
 // and return the bock with valid messages.
 func sanitizeMessagesAndPrepareBlockForSignature(ctx context.Context, sm *stmgr.StateManager, bt *lapi.BlockTemplate) (*types.FullBlock, error) {
-	pts, err := sm.ChainStore().LoadTipSet(bt.Parents)
+	pts, err := sm.ChainStore().LoadTipSet(ctx, bt.Parents)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to load parent tipset: %w", err)
 	}
@@ -66,14 +66,14 @@ func sanitizeMessagesAndPrepareBlockForSignature(ctx context.Context, sm *stmgr.
 			blsSigs = append(blsSigs, msg.Signature)
 			blsMessages = append(blsMessages, &msg.Message)
 
-			c, err := sm.ChainStore().PutMessage(&msg.Message)
+			c, err := sm.ChainStore().PutMessage(ctx, &msg.Message)
 			if err != nil {
 				return nil, err
 			}
 
 			blsMsgCids = append(blsMsgCids, c)
 		} else {
-			c, err := sm.ChainStore().PutMessage(msg)
+			c, err := sm.ChainStore().PutMessage(ctx, msg)
 			if err != nil {
 				return nil, err
 			}
@@ -85,7 +85,7 @@ func sanitizeMessagesAndPrepareBlockForSignature(ctx context.Context, sm *stmgr.
 
 	for _, msg := range bt.CrossMessages {
 		//TODO: do we need any additional validation here?
-		c, err := sm.ChainStore().PutMessage(msg)
+		c, err := sm.ChainStore().PutMessage(ctx, msg)
 		if err != nil {
 			return nil, err
 		}

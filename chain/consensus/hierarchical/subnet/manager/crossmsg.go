@@ -330,7 +330,7 @@ func (s *SubnetMgr) getBottomUpPool(ctx context.Context, id address.SubnetID, he
 		if err != nil {
 			return nil, err
 		}
-		cross, found, err := r.ResolveCrossMsgs(c, address.SubnetID(mt.From))
+		cross, found, err := r.ResolveCrossMsgs(ctx, c, address.SubnetID(mt.From))
 		if err != nil {
 			return nil, err
 		}
@@ -380,7 +380,7 @@ func (s *SubnetMgr) getSubnetResolver(id address.SubnetID) *resolver.Resolver {
 
 func (s *SubnetMgr) CrossMsgResolve(ctx context.Context, id address.SubnetID, c cid.Cid, from address.SubnetID) ([]types.Message, error) {
 	r := s.getSubnetResolver(id)
-	msgs, _, err := r.ResolveCrossMsgs(c, address.SubnetID(from))
+	msgs, _, err := r.ResolveCrossMsgs(ctx, c, address.SubnetID(from))
 	return msgs, err
 }
 

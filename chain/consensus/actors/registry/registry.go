@@ -8,14 +8,14 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	"github.com/filecoin-project/lotus/chain/vm"
-	exported6 "github.com/filecoin-project/specs-actors/v6/actors/builtin/exported"
+	exported7 "github.com/filecoin-project/specs-actors/v7/actors/builtin/exported"
 )
 
 func NewActorRegistry() *vm.ActorRegistry {
 	inv := vm.NewActorRegistry()
 
 	// TODO: drop unneeded
-	inv.Register(vm.ActorsVersionPredicate(actors.Version6), exported6.BuiltinActors()...)
+	inv.Register(vm.ActorsVersionPredicate(actors.Version7), exported7.BuiltinActors()...)
 	inv.Register(nil, initactor.InitActor{}) // use our custom init actor
 
 	inv.Register(nil, reward.Actor{})
