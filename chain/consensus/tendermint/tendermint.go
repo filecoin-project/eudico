@@ -221,12 +221,12 @@ func (tm *Tendermint) validateTendermintData(ctx context.Context, b *types.FullB
 
 	blockInfo, err := tm.client.Block(ctx, &height)
 	if err != nil {
-		return xerrors.Errorf("unable to get the Tendermint block info at height %d", height)
+		return xerrors.Errorf("unable to get the Tendermint block info at height %d: %w", height, err)
 	}
 
 	valInfo, err := tm.client.Validators(ctx, &height, nil, nil)
 	if err != nil {
-		return xerrors.Errorf("unable to get the Tendermint validators info at height %d", height)
+		return xerrors.Errorf("unable to get the Tendermint validators info at height %d: %w", height, err)
 	}
 
 	var validMinerEudicoAddress address.Address

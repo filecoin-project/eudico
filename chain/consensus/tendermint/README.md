@@ -16,6 +16,13 @@ go get github.com/tendermint/tendermint
 cd $GOPATH/src/github.com/tendermint/tendermint
 ```
 
+Use this target in Tendermint makefile to use secp256k1 keys:
+```
+localnet-start: localnet-stop build-docker-localnode
+    @if ! [ -f build/node0/config/genesis.json ]; then docker run --rm -v $(CURDIR)/build:/tendermint:Z tendermint/localnode testnet --key secp256k1 --config /etc/tendermint/config-template.toml --o . --starting-ip-address 192.167.10.
+    docker-compose up
+```
+
 ## How to Add a Consensus Protocol to Eudico
  - Register a consensus constant in `chain/consensus/hierarchical/types.go`
  - Instantiate a consensus miner in a subnet in `chain/consensus/hierarchical/subnet/consensus/consensus.go`

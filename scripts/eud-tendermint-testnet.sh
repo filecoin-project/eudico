@@ -10,13 +10,13 @@ NODE_0_NETADDR="$NODE_0_PATH/.netaddr"
 NODE_0_API="1234"
 NODE_1_API="1235"
 
-NODE_0_KEY="/Users/alpha/Projects/tendermint/build/node0/config/priv_validator_key.json"
-NODE_1_KEY="/Users/alpha/Projects/tendermint/build/node1/config/priv_validator_key.json"
+NODE_0_KEY="$TENDERMINT_PATH/build/node0/config/priv_validator_key.json"
+NODE_1_KEY="$TENDERMINT_PATH/build/node1/config/priv_validator_key.json"
 
-NODE_1_APP_DATA="/Users/alpha/Projects/tendermint/build/node1/data/"
+NODE_1_APP_DATA="$TENDERMINT_PATH/build/node1/data/"
 
-#rm -rf ./eudico
-#make eudico
+rm -rf ./eudico
+make eudico
 
 rm -rvf ~/.eudico
 rm -rvf ~/.eudico-node0
@@ -49,7 +49,7 @@ tmux new-session -d -s "tendermint" \; \
         export EUDICO_PATH=$NODE_0_PATH
         sleep 14
         ./eudico wait-api;
-        ./eudico net listen | grep '/ip4/127' > $NODE_0_NETADDR
+        ./eudico net listen | grep '/ip6/::1/' > $NODE_0_NETADDR
         ./eudico wallet import-tendermint-key --as-default -path=$NODE_0_KEY; sleep 2;
         ./eudico tendermint miner --default-key > term2.log 2>&1 &
             tail -f term2.log" Enter \; \

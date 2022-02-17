@@ -66,7 +66,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		if err != nil {
 			log.Errorw("selecting cross-messages failed", "error", err)
 		}
-		log.Infof("[%s] %d - msgs, %d - crossmsgs proposed in the block @%s", subnetID, len(msgs), len(crossMsgs), base.Height()+1)
+		log.Infof("[%s] %d - msgs, %d - crossmsgs proposed in the block @%s", subnetID, len(msgs), len(crossMsgs), base.Height())
 
 		for _, msg := range msgs {
 			msgBytes, err := msg.Serialize()
@@ -147,7 +147,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			log.Errorw("submitting block failed", "error", err)
 		}
 
-		log.Infof("[%s] Tendermint mined a block %v", subnetID, bh.Cid())
+		log.Infof("[%s] Tendermint mined a block %v at %d", subnetID, bh.Cid(), bh.Header.Height)
 	}
 }
 
