@@ -2,11 +2,11 @@ package tendermint
 
 import (
 	"context"
-	"github.com/tendermint/tendermint/rpc/coretypes"
 	"time"
 
 	"github.com/minio/blake2b-simd"
 	tmclient "github.com/tendermint/tendermint/rpc/client/http"
+	"github.com/tendermint/tendermint/rpc/coretypes"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"

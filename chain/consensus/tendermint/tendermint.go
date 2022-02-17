@@ -38,7 +38,9 @@ import (
 const (
 	tendermintRPCAddressEnv     = "EUDICO_TENDERMINT_RPC"
 	defaultTendermintRPCAddress = "http://127.0.0.1:26657"
-	tagLength                   = 8
+
+	// Subnet tag is fixed length subnet ID added to messages sent to Tendermint
+	tagLength = 8
 
 	// MaxHeightDrift TODO: is that correct or should be adapted?
 	MaxHeightDrift = 5
@@ -125,8 +127,7 @@ func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, b beacon.Sche
 }
 
 func (tm *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBlock) (err error) {
-	log.Infof("STARTED VALIDATE BLOCK %d", b.Header.Height)
-	defer log.Infof("FINISHED VALIDATE BLOCK %d", b.Header.Height)
+	log.Infof("starting block validation process at @%d", b.Header.Height)
 
 	if err := common.BlockSanityChecks(hierarchical.Tendermint, b.Header); err != nil {
 		return xerrors.Errorf("incoming header failed basic sanity checks: %w", err)
@@ -246,6 +247,8 @@ func (tm *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBlock) (er
 		log.Infof("block is not sealed %d", b.Header.Height)
 		return xerrors.New("block is not sealed")
 	}
+
+	log.Infof("block at @%d is valid", b.Header.Height)
 
 	return nil
 }
