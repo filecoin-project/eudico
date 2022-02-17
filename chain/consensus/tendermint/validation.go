@@ -147,53 +147,53 @@ func sanitizeMessagesAndPrepareBlockForSignature(ctx context.Context, sm *stmgr.
 // isBlockSealed checks that the following conditions hold:
 //     - all messages from the Filecoin block are contained in the Tendermint block.
 //     - Tendermint block hash is equal to Filecoin ticket field.
-func isBlockSealed(fb *types.FullBlock, tb *tenderminttypes.Block) (bool, error) {
+func isBlockSealed(fb *types.FullBlock, tb *tenderminttypes.Block) error {
 	tendermintMessagesHashes, err := getMessageMapFromTendermintBlock(tb)
 	if err != nil {
-		return false, err
+		return xerrors.Errorf("unable to get Tendermint message map: %w", err)
 	}
 
 	for _, msg := range fb.BlsMessages {
 		bs, err := msg.Serialize()
 		if err != nil {
-			return false, err
+			return err
 		}
 		id := blake2b.Sum256(bs)
 		_, found := tendermintMessagesHashes[id]
 		if !found {
-			return false, xerrors.New("bls messages are not sealed")
+			return xerrors.New("bls messages are not sealed")
 		}
 	}
 
 	for _, msg := range fb.SecpkMessages {
 		bs, err := msg.Serialize()
 		if err != nil {
-			return false, err
+			return err
 		}
 		id := blake2b.Sum256(bs)
 		_, found := tendermintMessagesHashes[id]
 		if !found {
-			return false, xerrors.New("secpk messages are not sealed")
+			return xerrors.New("secpk messages are not sealed")
 		}
 	}
 
 	for _, msg := range fb.CrossMessages {
 		bs, err := msg.Serialize()
 		if err != nil {
-			return false, err
+			return err
 		}
 		id := blake2b.Sum256(bs)
 		_, found := tendermintMessagesHashes[id]
 		if !found {
-			return false, xerrors.New("cross msgs messages are not sealed")
+			return xerrors.New("cross msgs messages are not sealed")
 		}
 	}
 
 	if !bytes.Equal(fb.Header.Ticket.VRFProof, tb.Hash().Bytes()) {
 		log.Infof("block tendermint hash is invalid %x", fb.Header.Ticket.VRFProof)
-		return false, xerrors.New("block tendermint hash is invalid")
+		return xerrors.New("block ticket and hash are different")
 	}
-	return true, nil
+	return nil
 }
 
 func validateLocalBlock(ctx context.Context, msg *pubsub.Message) (pubsub.ValidationResult, string) {

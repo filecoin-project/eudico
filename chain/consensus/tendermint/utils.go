@@ -80,7 +80,7 @@ func getMessageMapFromTendermintBlock(tb *tmtypes.Block) (map[[32]byte]bool, err
 	for _, msg := range tb.Txs {
 		tx := msg.String()
 		// Transactions from Tendermint are in the Tx{} format. So we have to remove T,x, { and } characters.
-		// Then we have to remove last two characters that are message type and tag.
+		// Then we have to remove last two fields that are message type and tag.
 		txo := tx[3 : len(tx)-1-2-2*tagLength]
 		txoData, err := hex.DecodeString(txo)
 		if err != nil {

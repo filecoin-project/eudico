@@ -206,8 +206,8 @@ func (tm *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBlock) (er
 		return mulErr
 	}
 
-	// Tendermint specific checks.
-	if err := tm.authTendermintData(ctx, b); err != nil {
+	// Perform Tendermint specific checks.
+	if err := tm.validateTendermintData(ctx, b); err != nil {
 		return err
 	}
 
@@ -216,46 +216,40 @@ func (tm *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBlock) (er
 	return nil
 }
 
-func (tm *Tendermint) authTendermintData(ctx context.Context, b *types.FullBlock) error {
+func (tm *Tendermint) validateTendermintData(ctx context.Context, b *types.FullBlock) error {
 	height := int64(b.Header.Height) + tm.offset
-	log.Infof("Try to access Tendermint RPC from ValidateBlock")
-	resp, err := tm.client.Block(ctx, &height)
+
+	blockInfo, err := tm.client.Block(ctx, &height)
 	if err != nil {
-		return xerrors.Errorf("unable to get the Tendermint block at height %d", height)
+		return xerrors.Errorf("unable to get the Tendermint block info at height %d", height)
 	}
 
-	val, err := tm.client.Validators(ctx, &height, nil, nil)
+	valInfo, err := tm.client.Validators(ctx, &height, nil, nil)
 	if err != nil {
-		return xerrors.Errorf("unable to get the Tendermint block validators at height %d", height)
+		return xerrors.Errorf("unable to get the Tendermint validators info at height %d", height)
 	}
 
 	var validMinerEudicoAddress address.Address
 	var convErr error
-	validMinerEudicoAddress, ok := tm.tendermintEudicoAddresses[resp.Block.ProposerAddress.String()]
+	validMinerEudicoAddress, ok := tm.tendermintEudicoAddresses[blockInfo.Block.ProposerAddress.String()]
 	if !ok {
-		proposerPubKey := findValidatorPubKeyByAddress(val.Validators, resp.Block.ProposerAddress.Bytes())
+		proposerPubKey := findValidatorPubKeyByAddress(valInfo.Validators, blockInfo.Block.ProposerAddress.Bytes())
 		if proposerPubKey == nil {
-			return xerrors.Errorf("unable to find pubKey for proposer %w", resp.Block.ProposerAddress)
+			return xerrors.Errorf("unable to find pubKey for proposer %w", blockInfo.Block.ProposerAddress)
 		}
 
 		validMinerEudicoAddress, convErr = getFilecoinAddrByTendermintPubKey(proposerPubKey)
 		if convErr != nil {
 			return xerrors.Errorf("unable to get proposer addr %w", err)
 		}
-		tm.tendermintEudicoAddresses[resp.Block.ProposerAddress.String()] = validMinerEudicoAddress
+		tm.tendermintEudicoAddresses[blockInfo.Block.ProposerAddress.String()] = validMinerEudicoAddress
 	}
 	if b.Header.Miner != validMinerEudicoAddress {
 		return xerrors.Errorf("invalid miner address %w in the block header", b.Header.Miner)
 	}
 
-	sealed, err := isBlockSealed(b, resp.Block)
-	if err != nil {
-		log.Infof("block sealed err: %s", err.Error())
-		return err
-	}
-	if !sealed {
-		log.Infof("block is not sealed %d", b.Header.Height)
-		return xerrors.New("block is not sealed")
+	if err := isBlockSealed(b, blockInfo.Block); err != nil {
+		return xerrors.Errorf("block is not sealed: %w", err)
 	}
 	return nil
 }
