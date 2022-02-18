@@ -33,7 +33,7 @@ func (s *State) GetBlock(id [32]byte) ([]byte, bool) {
 	return b, ok
 }
 
-func (s *State) GetSubnetOffset(subnetName []byte) int64 {
+func (s *State) SetSubnetOffset(subnetName []byte) int64 {
 	s.m.Lock()
 	defer s.m.Unlock()
 
@@ -49,6 +49,15 @@ func (s *State) GetSubnetOffset(subnetName []byte) int64 {
 		return s.subnets[id]
 	}
 	return h
+}
+
+func (s *State) GetSubnetOffset(subnetName []byte) (int64, bool) {
+	s.m.Lock()
+	defer s.m.Unlock()
+
+	id := string(subnetName)
+	h, ok := s.subnets[id]
+	return h, ok
 }
 
 func (s *State) AddBlock(block []byte) error {

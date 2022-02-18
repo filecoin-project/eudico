@@ -84,7 +84,13 @@ func (a *Application) Query(req abci.RequestQuery) (resp abci.ResponseQuery) {
 	switch req.Path {
 	case "/reg":
 		subnetID := req.Data
-		height := a.consensus.GetSubnetOffset(subnetID)
+		height, ok := a.consensus.GetSubnetOffset(subnetID)
+		if !ok {
+			return abci.ResponseQuery{
+				Code: codeStateFailure,
+				Log:  "subnet offset hasn't been set yet",
+			}
+		}
 
 		regResp := RegistrationMessageResponse{
 			Name:   subnetID,
@@ -169,7 +175,7 @@ func (a *Application) DeliverTx(req abci.RequestDeliverTx) (resp abci.ResponseDe
 	case *RegistrationMessageRequest:
 		log.Info("Common Height:", a.consensus.height)
 		log.Info("subnet name:", subnet.Name)
-		height := a.consensus.GetSubnetOffset(subnet.Name)
+		height := a.consensus.SetSubnetOffset(subnet.Name)
 		log.Info("Height:", height)
 		regResp := RegistrationMessageResponse{
 			Name:   subnet.Name,

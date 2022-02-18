@@ -248,7 +248,7 @@ func registerNetworkNew(ctx context.Context, c *tmclient.HTTP, subnetID address.
 
 			resq, err = c.ABCIQuery(ctx, "/reg", []byte(subnetID))
 			if err != nil {
-				log.Infof("unable to query Tendermint %s", err)
+				log.Infof("unable to get Tendermint height %s", err)
 				continue
 			}
 			try = false
