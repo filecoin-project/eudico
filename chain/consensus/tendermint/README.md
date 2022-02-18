@@ -23,6 +23,11 @@ localnet-start: localnet-stop build-docker-localnode
     docker-compose up
 ```
 
+Add the following command into Tendermint's testnet docker-compose file:
+```
+command: node --proxy-app=tcp://host.docker.internal:$PORT
+```
+
 ## How to Add a Consensus Protocol to Eudico
  - Register a consensus constant in `chain/consensus/hierarchical/types.go`
  - Instantiate a consensus miner in a subnet in `chain/consensus/hierarchical/subnet/consensus/consensus.go`

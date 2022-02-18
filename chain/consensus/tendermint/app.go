@@ -155,7 +155,7 @@ func (a *Application) CheckTx(req abci.RequestCheckTx) (resp abci.ResponseCheckT
 
 func (a *Application) DeliverTx(req abci.RequestDeliverTx) (resp abci.ResponseDeliverTx) {
 	tx := req.GetTx()
-	a.logger.Log(tx)
+	log.Info("Input TX:", tx)
 
 	msg, code, err := parseTx(tx)
 	if err != nil {
@@ -167,6 +167,8 @@ func (a *Application) DeliverTx(req abci.RequestDeliverTx) (resp abci.ResponseDe
 
 	switch subnet := msg.(type) {
 	case *RegistrationMessageRequest:
+		log.Info("Common Height:", a.consensus.height)
+		log.Info("subnet name:", subnet.Name)
 		height := a.consensus.GetSubnetOffset(subnet.Name)
 		log.Info("Height:", height)
 		regResp := RegistrationMessageResponse{
@@ -206,7 +208,10 @@ func (a *Application) DeliverTx(req abci.RequestDeliverTx) (resp abci.ResponseDe
 }
 
 func (a *Application) EndBlock(req abci.RequestEndBlock) (resp abci.ResponseEndBlock) {
+	log.Info("End block height:", req.Height)
+	a.consensus.m.Lock()
 	a.consensus.height = req.Height
+	a.consensus.m.Unlock()
 
 	defer func() {
 		level.Debug(a.logger).Log(

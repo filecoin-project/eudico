@@ -10,7 +10,7 @@ import (
 type State struct {
 	m              sync.Mutex
 	filecoinBlocks map[[32]byte][]byte
-	subnets        map[[32]byte]int64
+	subnets        map[string]int64
 	commitCount    int64
 	height         int64
 }
@@ -20,7 +20,7 @@ func NewState() *State {
 		filecoinBlocks: make(map[[32]byte][]byte),
 		commitCount:    0,
 		height:         0,
-		subnets:        make(map[[32]byte]int64),
+		subnets:        make(map[string]int64),
 	}
 }
 
@@ -33,28 +33,20 @@ func (s *State) GetBlock(id [32]byte) ([]byte, bool) {
 	return b, ok
 }
 
-func (s *State) AddSubnet(subnetName []byte) {
-	s.m.Lock()
-	defer s.m.Unlock()
-
-	id := blake2b.Sum256(subnetName)
-
-	_, ok := s.subnets[id]
-	if !ok {
-		s.subnets[id] = s.height
-	}
-}
-
 func (s *State) GetSubnetOffset(subnetName []byte) int64 {
 	s.m.Lock()
 	defer s.m.Unlock()
 
-	id := blake2b.Sum256(subnetName)
+	log.Info("common state height:", s.height)
+
+	id := string(subnetName)
+
+	log.Info("map height:", s.subnets[id])
 
 	h, ok := s.subnets[id]
 	if !ok {
 		s.subnets[id] = s.height
-		return s.height
+		return s.subnets[id]
 	}
 	return h
 }
