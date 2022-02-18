@@ -251,6 +251,11 @@ func registerNetworkNew(ctx context.Context, c *tmclient.HTTP, subnetID address.
 				log.Infof("unable to get Tendermint height %s", err)
 				continue
 			}
+			if resq.Response.Code != 0 {
+				log.Info(resq.Response.Log)
+				continue
+			}
+
 			try = false
 		case <-time.After(60 * time.Second):
 			return nil, xerrors.New("time exceeded")
