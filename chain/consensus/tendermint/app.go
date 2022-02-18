@@ -81,8 +81,31 @@ func (a *Application) Query(req abci.RequestQuery) (resp abci.ResponseQuery) {
 		)
 	}()
 
-	return abci.ResponseQuery{
-		Code: abci.CodeTypeOK,
+	switch req.Path {
+	case "/reg":
+		subnetID := req.Data
+		height := a.consensus.GetSubnetOffset(subnetID)
+
+		regResp := RegistrationMessageResponse{
+			Name:   subnetID,
+			Offset: height,
+		}
+
+		data, err := regResp.Serialize()
+		if err != nil {
+			return abci.ResponseQuery{
+				Code: codeBadRequest,
+				Log:  err.Error(),
+			}
+		}
+
+		resp.Key = req.Data
+		resp.Value = data
+		return
+	default:
+		return abci.ResponseQuery{
+			Code: abci.CodeTypeOK,
+		}
 	}
 }
 
@@ -147,8 +170,8 @@ func (a *Application) DeliverTx(req abci.RequestDeliverTx) (resp abci.ResponseDe
 		height := a.consensus.GetSubnetOffset(subnet.Name)
 		log.Info("Height:", height)
 		regResp := RegistrationMessageResponse{
-			Name: subnet.Name,
-			Tag: subnet.Tag,
+			Name:   subnet.Name,
+			Tag:    subnet.Tag,
 			Offset: height,
 		}
 

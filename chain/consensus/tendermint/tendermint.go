@@ -10,7 +10,6 @@ import (
 	logging "github.com/ipfs/go-log/v2"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/minio/blake2b-simd"
-	"github.com/tendermint/tendermint/libs/rand"
 	tmclient "github.com/tendermint/tendermint/rpc/client/http"
 	"go.opencensus.io/stats"
 	"golang.org/x/xerrors"
@@ -97,11 +96,7 @@ func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, b beacon.Sche
 	log.Info("Tendermint validator pub key:", valPubKey)
 	log.Info("Eudico client addr: ", clientAddr)
 
-	regMsg, err := NewRegistrationMessageBytes(subnetID, tag[:tagLength], rand.Bytes(16))
-	if err != nil {
-		log.Fatalf("unable to create a registration message: %s", err)
-	}
-	regSubnet, err := registerNetwork(ctx, c, regMsg)
+	regSubnet, err := registerNetworkNew(ctx, c, subnetID, tag[:tagLength])
 	if err != nil {
 		log.Fatalf("unable to registrate network: %s", err)
 	}

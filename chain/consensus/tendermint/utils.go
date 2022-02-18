@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/tendermint/tendermint/libs/rand"
 	"os"
 	"time"
 
@@ -214,6 +215,49 @@ func registerNetwork(ctx context.Context, c *tmclient.HTTP, regReq []byte) (*Reg
 	}
 
 	regSubnetMsg, err := DecodeRegistrationMessageResponse(regResp.DeliverTx.Data)
+	if err != nil {
+		return nil, xerrors.Errorf("unable to decode registration response: %w", err)
+	}
+	return regSubnetMsg, nil
+}
+
+func registerNetworkNew(ctx context.Context, c *tmclient.HTTP, subnetID address.SubnetID, tag []byte) (*RegistrationMessageResponse, error) {
+	var err error
+
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	try := true
+	var resq *coretypes.ResultABCIQuery
+	for try {
+		select {
+		case <-ctx.Done():
+			log.Info("registering network was stopped")
+			return nil, nil
+		case <-ticker.C:
+			regMsg, derr := NewRegistrationMessageBytes(subnetID, tag[:tagLength], rand.Bytes(16))
+			if derr != nil {
+				return nil, xerrors.Errorf("unable to create a registration message: %s", err)
+			}
+
+			_, err = c.BroadcastTxSync(ctx, regMsg)
+			if err != nil {
+				log.Infof("unable to broadcast a registration request: %s", err)
+				continue
+			}
+
+			resq, err = c.ABCIQuery(ctx, "/reg", []byte(subnetID))
+			if err != nil {
+				log.Infof("unable to query Tendermint %s", err)
+				continue
+			}
+			try = false
+		case <-time.After(60 * time.Second):
+			return nil, xerrors.New("time exceeded")
+		}
+	}
+
+	regSubnetMsg, err := DecodeRegistrationMessageResponse(resq.Response.Value)
 	if err != nil {
 		return nil, xerrors.Errorf("unable to decode registration response: %w", err)
 	}
