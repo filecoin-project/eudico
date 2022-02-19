@@ -44,6 +44,10 @@ import (
 	"github.com/filecoin-project/lotus/metrics"
 )
 
+const (
+	tendermintRPCErrorStr = "connect: connection refused"
+)
+
 var (
 	// LocalIncoming is the _local_ pubsub (unrelated to libp2p pubsub) topic
 	// where the Syncer publishes candidate chain heads to be synced.
@@ -723,6 +727,9 @@ func (syncer *Syncer) collectHeaders(ctx context.Context, incoming *types.TipSet
 	// i.e. if a fork of the chain has been requested that we know to be bad.
 	for _, pcid := range incoming.Parents().Cids() {
 		if reason, ok := syncer.bad.Has(pcid); ok {
+			if syncer.consensus.Name() == "Tendermint" {
+				continue
+			}
 			newReason := reason.Linked("linked to %s", pcid)
 			for _, b := range incoming.Cids() {
 				syncer.bad.Add(b, newReason)

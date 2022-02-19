@@ -16,4 +16,5 @@ type Consensus interface {
 	IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool
 
 	CreateBlock(ctx context.Context, w api.Wallet, bt *api.BlockTemplate) (*types.FullBlock, error)
+	Name() string
 }

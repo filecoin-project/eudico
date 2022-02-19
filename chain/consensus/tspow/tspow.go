@@ -340,6 +340,10 @@ func (tsp *TSPoW) validateBlockHeader(ctx context.Context, b *types.BlockHeader)
 	return "", nil
 }
 
+func (tsp *TSPoW) Name() string {
+	return "tspow"
+}
+
 func BestWorkBlock(ts *types.TipSet) *types.BlockHeader {
 	blks := ts.Blocks()
 	sort.Slice(blks, func(i, j int) bool {

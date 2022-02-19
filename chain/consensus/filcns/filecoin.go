@@ -879,4 +879,8 @@ func (filec *FilecoinEC) isChainNearSynced() bool {
 	return build.Clock.Since(timestampTime) < 6*time.Hour
 }
 
+func (filec *FilecoinEC) Name() string {
+	return "filecoin"
+}
+
 var _ consensus.Consensus = &FilecoinEC{}

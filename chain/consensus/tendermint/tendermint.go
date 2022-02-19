@@ -313,6 +313,10 @@ func (tm *Tendermint) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
 	return tendermintLastBlock.Block.Height+MaxHeightDrift < int64(epoch)
 }
 
+func (tm *Tendermint) Name() string {
+	return "Tendermint"
+}
+
 // Weight defines weight.
 // TODO: should we adopt weight for tendermint?
 func Weight(ctx context.Context, stateBs bstore.Blockstore, ts *types.TipSet) (types.BigInt, error) {

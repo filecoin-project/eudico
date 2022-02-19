@@ -36,6 +36,7 @@ command: node --proxy-app=tcp://host.docker.internal:$PORT
  - Decide how to compute a state and implement the corresponding logic in `chain/consensus/$CONSENSUS/compute_state.go`
  - Implement `Consensus interface` defined in `chain/consensus/iface.go` for the consensus algorithm
  - Add the corresponding CLI commands in `cmd/eudico/$CONSENSUS.go`
+ - Adapt [bad blocks cache](https://github.com/filecoin-project/eudico/blob/0306742e553f6bd6260332b501bb65a5bfc16a76/chain/sync.go#L725) for the case when Tendermint nodes were unreachable
 
 ## Commands
 ### Eudico
