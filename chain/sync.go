@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"sort"
 	"sync"
 	"time"
@@ -727,7 +728,7 @@ func (syncer *Syncer) collectHeaders(ctx context.Context, incoming *types.TipSet
 	// i.e. if a fork of the chain has been requested that we know to be bad.
 	for _, pcid := range incoming.Parents().Cids() {
 		if reason, ok := syncer.bad.Has(pcid); ok {
-			if syncer.consensus.Name() == "Tendermint" {
+			if syncer.consensus.Type() == hierarchical.Tendermint {
 				continue
 			}
 			newReason := reason.Linked("linked to %s", pcid)

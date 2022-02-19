@@ -16,6 +16,7 @@ type ConsensusType uint64
 const (
 	Delegated ConsensusType = iota
 	PoW
+	FilecoinEC
 	Tendermint
 )
 

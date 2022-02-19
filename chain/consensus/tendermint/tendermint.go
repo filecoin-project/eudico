@@ -313,8 +313,8 @@ func (tm *Tendermint) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
 	return tendermintLastBlock.Block.Height+MaxHeightDrift < int64(epoch)
 }
 
-func (tm *Tendermint) Name() string {
-	return "Tendermint"
+func (tm *Tendermint) Type() hierarchical.ConsensusType {
+	return hierarchical.Tendermint
 }
 
 // Weight defines weight.

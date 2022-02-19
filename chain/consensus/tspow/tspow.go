@@ -340,8 +340,8 @@ func (tsp *TSPoW) validateBlockHeader(ctx context.Context, b *types.BlockHeader)
 	return "", nil
 }
 
-func (tsp *TSPoW) Name() string {
-	return "tspow"
+func (tsp *TSPoW) Type() hierarchical.ConsensusType {
+	return hierarchical.PoW
 }
 
 func BestWorkBlock(ts *types.TipSet) *types.BlockHeader {
