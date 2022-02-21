@@ -392,62 +392,62 @@ func (c *CheckpointingSub) matchNewConfig(ctx context.Context, oldTs, newTs *typ
 }
 
 func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *types.TipSet, oldSt, newSt mpower.State, diff *diffInfo) (bool, error) {
-	// // we are checking that the list of mocked actor is not empty before starting the checkpoint
-	// if newTs.Height()%15 == 0 && len(oldSt.Miners) > 0 && (c.taprootConfig != nil || c.newTaprootConfig != nil) {
-	// 	cp := oldTs.Key().Bytes() // this is the checkpoint 
-	// 	diff.cp = cp
+	// we are checking that the list of mocked actor is not empty before starting the checkpoint
+	if newTs.Height()%15 == 0 && len(oldSt.Miners) > 0 && (c.taprootConfig != nil || c.newTaprootConfig != nil) {
+		cp := oldTs.Key().Bytes() // this is the checkpoint 
+		diff.cp = cp
 
-	// // If we don't have a taprootconfig we don't sign because it means we were not part
-	// // of the previous DKG and hence we need to let the "previous" miners update the aggregated
-	// // key on bitcoin before starting signing.
-	// // We update our config to be ready for next checkpointing 
-	// // This is the case for any "new" miner (i.e., not Alice, Bob and Charlie)
-	// // Basically we skip the next
-	// if c.taprootConfig == nil {
-	// 	log.Infow("We don't have any config")
-	// 	pubkey := c.newTaprootConfig.PublicKey // the new taproot config has been initialized
-	// 	//during the DKG (in which the new node took part when they joined)
+	// If we don't have a taprootconfig we don't sign because it means we were not part
+	// of the previous DKG and hence we need to let the "previous" miners update the aggregated
+	// key on bitcoin before starting signing.
+	// We update our config to be ready for next checkpointing 
+	// This is the case for any "new" miner (i.e., not Alice, Bob and Charlie)
+	// Basically we skip the next
+		if c.taprootConfig == nil {
+			log.Infow("We don't have any config")
+			pubkey := c.newTaprootConfig.PublicKey // the new taproot config has been initialized
+			//during the DKG (in which the new node took part when they joined)
 
-	// 	pubkeyShort := genCheckpointPublicKeyTaproot(pubkey, cp)
+			pubkeyShort := genCheckpointPublicKeyTaproot(pubkey, cp)
 
-	// 	c.taprootConfig = c.newTaprootConfig
-	// 	merkleRoot := hashMerkleRoot(pubkey, cp)
-	// 	c.tweakedValue = hashTweakedValue(pubkey, merkleRoot)
-	// 	c.pubkey = pubkeyShort
-	// 	c.newTaprootConfig = nil
-	// 	c.participants = newSt.Miners // we add ourselves to the list of participants
-	// 	c.newDKGComplete = false
-	// 	//c.newKey = 
+			c.taprootConfig = c.newTaprootConfig
+			merkleRoot := hashMerkleRoot(pubkey, cp)
+			c.tweakedValue = hashTweakedValue(pubkey, merkleRoot)
+			c.pubkey = pubkeyShort
+			c.newTaprootConfig = nil
+			c.participants = newSt.Miners // we add ourselves to the list of participants
+			c.newDKGComplete = false
+			//c.newKey = 
 
 
-	// } else {
-	// 	// Miners config is the data that will be stored for now in Minio, later on a eudico-KVS
-	// 	var minersConfig string = hex.EncodeToString(cp) + "\n"
-	// 	// c.orderParticipantsList() orders the miners from the taproot config --> to change
-	// 	//for _, partyId := range c.orderParticipantsList() {
-	// 	for _, partyId := range newSt.Miners{ // list of new miners
-	// 		minersConfig += partyId + "\n"
-	// 	}
+		} else {
+			// Miners config is the data that will be stored for now in Minio, later on a eudico-KVS
+			var minersConfig string = hex.EncodeToString(cp) + "\n"
+			// c.orderParticipantsList() orders the miners from the taproot config --> to change
+			//for _, partyId := range c.orderParticipantsList() {
+			for _, partyId := range newSt.Miners{ // list of new miners
+				minersConfig += partyId + "\n"
+			}
 
-	// 	// This creates the file that will be stored in minio (or any storage)
-	// 	hash, err := CreateMinersConfig([]byte(minersConfig))
-	// 	if err != nil {
-	// 		log.Errorf("could not create miners config: %v", err)
-	// 		return false, err
-	// 	}
-	// 	diff.hash = hash
+			// This creates the file that will be stored in minio (or any storage)
+			hash, err := CreateMinersConfig([]byte(minersConfig))
+			if err != nil {
+				log.Errorf("could not create miners config: %v", err)
+				return false, err
+			}
+			diff.hash = hash
 
-	// 	// Push config to minio
-	// 	err = StoreMinersConfig(ctx, c.minioClient, c.cpconfig.MinioBucketName, hex.EncodeToString(hash))
-	// 	if err != nil {
-	// 		log.Errorf("could not push miners config: %v", err)
-	// 		return false, err
-	// 	}
+			// Push config to minio
+			err = StoreMinersConfig(ctx, c.minioClient, c.cpconfig.MinioBucketName, hex.EncodeToString(hash))
+			if err != nil {
+				log.Errorf("could not push miners config: %v", err)
+				return false, err
+			}
+		}
 
-	// 	return true, nil
-	// }
+		return true, nil
+	}
 	return true, nil
-
 }
 
 func (c *CheckpointingSub) triggerChange(ctx context.Context, diff *diffInfo) (more bool, err error) {
