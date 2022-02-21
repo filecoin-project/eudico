@@ -47,6 +47,14 @@ import (
 
 var log = logging.Logger("checkpointing")
 
+// struct used to propagate detected changes.
+type diffInfo struct {
+	newMiners []string
+	newPublicKey []byte
+	hash []byte
+	cp []byte
+}
+
 /*
 	Main file for the checkpointing module. Handle all the core logic.
 */
@@ -261,9 +269,14 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 	}
 
 	changeHandler := func(oldTs, newTs *types.TipSet, states events.StateChange, curH abi.ChainEpoch) (more bool, err error) {
-		log.Infow("State change detected for power actor")
-
-		return true, nil
+		log.Infow("State change detected for mocked power actor")
+		diff, ok := states.(*diffInfo)
+		if !ok {
+			log.Error("Error casting states, not of type *diffInfo")
+			return true, err
+		}
+		//return true, nil
+		return c.triggerChange(ctx, diff)
 	}
 
 	revertHandler := func(ctx context.Context, ts *types.TipSet) error {
@@ -273,6 +286,8 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 	match := func(oldTs, newTs *types.TipSet) (bool, events.StateChange, error) {
 		c.lk.Lock()
 		defer c.lk.Unlock()
+
+		diff := &diffInfo{}
 
 		// verify we are synced
 		// Maybe move it to checkFunc
@@ -304,11 +319,6 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 				return false, nil, nil
 			}
 		}
-
-		/*
-			Now we compared old Power Actor State and new Power Actor State
-		*/
-
 		// Get actors at specified tipset
 		newAct, err := c.api.StateGetActor(ctx, mpower.PowerActorAddr, newTs.Key())
 		if err != nil {
@@ -317,7 +327,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 
 		oldAct, err := c.api.StateGetActor(ctx, mpower.PowerActorAddr, oldTs.Key())
 		if err != nil {
-			return false, nil, err
+			return false,nil, err
 		}
 
 		// Get state from specified actors
@@ -330,110 +340,22 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 		if err := cst.Get(ctx, newAct.Head, &newSt); err != nil {
 			return false, nil, err
 		}
-
-		// Activate checkpointing every 15 blocks
-		log.Infow("Height:", "height", newTs.Height().String())
-		fmt.Println("Height:", newTs.Height())
-		// NOTE: this will only work in delegated consensus
-		// Wait for more tipset to valid the height and be sure it is valid
-
-		// we are checking that the list of mocked actor is not empty before starting the checkpoint
-		if newTs.Height()%15 == 0 && len(oldSt.Miners) > 0 && (c.taprootConfig != nil || c.newTaprootConfig != nil) {
-			log.Infow("Checkpointing time")
-
-			// Initiation and config should be happening at start
-			cp := oldTs.Key().Bytes() // this is the checkpoint 
-
-			// If we don't have a taprootconfig we don't sign because it means we were not part
-			// of the previous DKG and hence we need to let the "previous" miners update the aggregated
-			// key on bitcoin before starting signing.
-			// We update our config to be ready for next checkpointing 
-			// This is the case for any "new" miner (i.e., not Alice, Bob and Charlie)
-			// Basically we skip the next
-			if c.taprootConfig == nil {
-				log.Infow("We don't have any config")
-				pubkey := c.newTaprootConfig.PublicKey // the new taproot config has been initialized
-				//during the DKG (in which the new node took part when they joined)
-
-				pubkeyShort := genCheckpointPublicKeyTaproot(pubkey, cp)
-
-				c.taprootConfig = c.newTaprootConfig
-				merkleRoot := hashMerkleRoot(pubkey, cp)
-				c.tweakedValue = hashTweakedValue(pubkey, merkleRoot)
-				c.pubkey = pubkeyShort
-				c.newTaprootConfig = nil
-				c.participants = newSt.Miners // we add ourselves to the list of participants
-				c.newDKGComplete = false
-				//c.newKey = 
-
-
-			} else {
-				// Miners config is the data that will be stored for now in Minio, later on a eudico-KVS
-				var minersConfig string = hex.EncodeToString(cp) + "\n"
-				// c.orderParticipantsList() orders the miners from the taproot config --> to change
-				//for _, partyId := range c.orderParticipantsList() {
-				for _, partyId := range newSt.Miners{ // list of new miners
-					minersConfig += partyId + "\n"
-				}
-
-				// This creates the file that will be stored in minio (or any storage)
-				hash, err := CreateMinersConfig([]byte(minersConfig))
-				if err != nil {
-					log.Errorf("could not create miners config: %v", err)
-					return false, nil, err
-				}
-
-				// Push config to minio
-				err = StoreMinersConfig(ctx, c.minioClient, c.cpconfig.MinioBucketName, hex.EncodeToString(hash))
-				if err != nil {
-					log.Errorf("could not push miners config: %v", err)
-					return false, nil, err
-				}
-
-				// the checkpoint is created by the "previous" set of miners
-				// so that the new key is updated
-				err = c.CreateCheckpoint(ctx, cp, hash, c.participants)
-				if err != nil {
-					log.Errorf("could not create checkpoint: %v", err)
-					return false, nil, err
-				}
-
-	
-			}
+		change, err := c.matchNewConfig(ctx , oldTs, newTs, oldSt, newSt, diff) 
+		if err != nil {
+			log.Errorw("Error checking for new configuration", "err", err)
+			return false, nil, err
 		}
 
-		// we check if a new key was computed as part of a DKG and update
-		// our key locally if this is the case
 		if !reflect.DeepEqual(oldSt.PublicKey,newSt.PublicKey) {
-			//c.participants = newSt.Miners
-			//fmt.Println("participants list updated")
-			fmt.Println("DKG successfully completed")
 			c.newDKGComplete = true
 			c.newKey = newSt.PublicKey
 			c.keysUpdated = false
 
-		}
+		}		
 
-		// If Power Actors list has changed start DKG
-		// Changes detected so generate new key
-		// will change this to be triggered only if the difference is greater than some param
-		//if !reflect.DeepEqual(oldSt.Miners, newSt.Miners) {
-		if !sameStringSlice(oldSt.Miners, newSt.Miners) {
-			log.Infow("Generate new aggregated key")
-			err := c.GenerateNewKeys(ctx, newSt.Miners)
-			// need to update participants list here as well otherwise checkpointing does
-			// not work after removing a participants --> this is done in the function
-			// c.newParticipants = newSt.Miners
-			//c.participants = oldSt.Miners
-			if err != nil {
-				log.Errorf("error while generating new key: %v", err)
-				// If generating new key failed, checkpointing should not be possible
-			}
-			c.newParticipants = newSt.Miners
+		change2, err := c.matchCheckpoint(ctx, oldTs, newTs,oldSt, newSt, diff)
 
-			return true, nil, nil // true mean generate keys
-		}
-		return false, nil, nil
+		return change || change2 , nil, nil
 	}
 
 	// Listen to changes in Eudico
@@ -444,6 +366,114 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 	if err != nil {
 		return
 	}
+}
+
+
+func (c *CheckpointingSub) matchNewConfig(ctx context.Context, oldTs, newTs *types.TipSet, oldSt, newSt mpower.State, diff *diffInfo) (bool, error) {
+	/*
+		Now we compared old Power Actor State and new Power Actor State
+	*/
+
+	// If no changes in configuration
+	if sameStringSlice(oldSt.Miners, newSt.Miners) {
+		return false, nil
+	}
+	// only the participants in the new config need to trigger the DKG
+	for _, participant := range(newSt.Miners){
+		if participant == c.host.ID().String(){
+			diff.newMiners = newSt.Miners
+			c.newParticipants = newSt.Miners
+			return true , nil
+		}
+	}
+	return false, nil
+
+	
+}
+
+func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *types.TipSet, oldSt, newSt mpower.State, diff *diffInfo) (bool, error) {
+	// // we are checking that the list of mocked actor is not empty before starting the checkpoint
+	// if newTs.Height()%15 == 0 && len(oldSt.Miners) > 0 && (c.taprootConfig != nil || c.newTaprootConfig != nil) {
+	// 	cp := oldTs.Key().Bytes() // this is the checkpoint 
+	// 	diff.cp = cp
+
+	// // If we don't have a taprootconfig we don't sign because it means we were not part
+	// // of the previous DKG and hence we need to let the "previous" miners update the aggregated
+	// // key on bitcoin before starting signing.
+	// // We update our config to be ready for next checkpointing 
+	// // This is the case for any "new" miner (i.e., not Alice, Bob and Charlie)
+	// // Basically we skip the next
+	// if c.taprootConfig == nil {
+	// 	log.Infow("We don't have any config")
+	// 	pubkey := c.newTaprootConfig.PublicKey // the new taproot config has been initialized
+	// 	//during the DKG (in which the new node took part when they joined)
+
+	// 	pubkeyShort := genCheckpointPublicKeyTaproot(pubkey, cp)
+
+	// 	c.taprootConfig = c.newTaprootConfig
+	// 	merkleRoot := hashMerkleRoot(pubkey, cp)
+	// 	c.tweakedValue = hashTweakedValue(pubkey, merkleRoot)
+	// 	c.pubkey = pubkeyShort
+	// 	c.newTaprootConfig = nil
+	// 	c.participants = newSt.Miners // we add ourselves to the list of participants
+	// 	c.newDKGComplete = false
+	// 	//c.newKey = 
+
+
+	// } else {
+	// 	// Miners config is the data that will be stored for now in Minio, later on a eudico-KVS
+	// 	var minersConfig string = hex.EncodeToString(cp) + "\n"
+	// 	// c.orderParticipantsList() orders the miners from the taproot config --> to change
+	// 	//for _, partyId := range c.orderParticipantsList() {
+	// 	for _, partyId := range newSt.Miners{ // list of new miners
+	// 		minersConfig += partyId + "\n"
+	// 	}
+
+	// 	// This creates the file that will be stored in minio (or any storage)
+	// 	hash, err := CreateMinersConfig([]byte(minersConfig))
+	// 	if err != nil {
+	// 		log.Errorf("could not create miners config: %v", err)
+	// 		return false, err
+	// 	}
+	// 	diff.hash = hash
+
+	// 	// Push config to minio
+	// 	err = StoreMinersConfig(ctx, c.minioClient, c.cpconfig.MinioBucketName, hex.EncodeToString(hash))
+	// 	if err != nil {
+	// 		log.Errorf("could not push miners config: %v", err)
+	// 		return false, err
+	// 	}
+
+	// 	return true, nil
+	// }
+	return true, nil
+
+}
+
+func (c *CheckpointingSub) triggerChange(ctx context.Context, diff *diffInfo) (more bool, err error) {
+	//If there is a new configuration, trigger the checkpoint
+	if len(diff.newMiners) >0 {
+		log.Infow("Generate new aggregated key")
+		err := c.GenerateNewKeys(ctx, diff.newMiners)
+		if err != nil {
+			log.Errorw("error while generating new key: %v", err)
+			// If generating new key failed, checkpointing should not be possible
+			return true, err
+		}
+
+		log.Infow("Successful DKG")
+	}
+
+	if diff.cp!=nil && diff.hash !=nil {
+		// the checkpoint is created by the "previous" set of miners
+		// so that the new key is updated
+		err = c.CreateCheckpoint(ctx, diff.cp, diff.hash, c.participants)
+		if err != nil {
+			log.Errorw("could not create checkpoint: %v", err)
+			return true, err
+			}
+		}
+	return true, nil
 }
 
 func (c *CheckpointingSub) Start(ctx context.Context) error {
