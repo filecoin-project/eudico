@@ -10,9 +10,17 @@ import (
 type State struct {
 	MinerCount int64
 	Miners     []string
-	PublicKey []string //taproot address
+	PublicKey []byte //taproot address
 }
 
+// func ConstructState(store adt.Store) (*State, error) {
+// 	return &State{
+// 		MinerCount: 0,
+// 		// should have participants with pre generated key
+// 		Miners: make([]string, 0),
+// 		PublicKey: make([]byte, 0),
+// 	}, nil
+// }
 func ConstructState(store adt.Store) (*State, error) {
 	return &State{
 		MinerCount: 0,

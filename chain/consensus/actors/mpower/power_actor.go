@@ -115,29 +115,29 @@ type NewTaprootAddressParam struct {
 	PublicKey []byte
 }
 
-// func (a Actor) UpdateTaprootAddress(rt Runtime, addr *NewTaprootAddressParam) *abi.EmptyValue {
-// 	rt.ValidateImmediateCallerAcceptAny()
-// 	var st State
-// 	rt.StateTransaction(&st, func() {
-// 		// Miners list is replaced with the one passed as parameters
-// 		fmt.Println("actor address before",st.PublicKey)
-// 		st.PublicKey = addr.PublicKey
-// 		fmt.Println("address updated",st.PublicKey)
-// 	})
-// 	return nil
-// }
-
-func (a Actor) UpdateTaprootAddress(rt Runtime, addr *AddMinerParams) *abi.EmptyValue {
+func (a Actor) UpdateTaprootAddress(rt Runtime, addr *NewTaprootAddressParam) *abi.EmptyValue {
 	rt.ValidateImmediateCallerAcceptAny()
 	var st State
 	rt.StateTransaction(&st, func() {
 		// Miners list is replaced with the one passed as parameters
 		fmt.Println("actor address before",st.PublicKey)
-		st.PublicKey = addr.Miners[0]
+		st.PublicKey = addr.PublicKey
 		fmt.Println("address updated",st.PublicKey)
 	})
 	return nil
 }
+
+// func (a Actor) UpdateTaprootAddress(rt Runtime, addr *AddMinerParams) *abi.EmptyValue {
+// 	rt.ValidateImmediateCallerAcceptAny()
+// 	var st State
+// 	rt.StateTransaction(&st, func() {
+// 		// Miners list is replaced with the one passed as parameters
+// 		fmt.Println("actor address before",st.PublicKey)
+// 		st.PublicKey = addr.Miners
+// 		fmt.Println("address updated",st.PublicKey)
+// 	})
+// 	return nil
+// }
 
 func unique(strSlice []string) []string {
     keys := make(map[string]bool)
