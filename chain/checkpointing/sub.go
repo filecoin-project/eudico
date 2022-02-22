@@ -355,7 +355,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 
 		change2, err := c.matchCheckpoint(ctx, oldTs, newTs,oldSt, newSt, diff)
 
-		return change || change2 , nil, nil
+		return change || change2 , diff, nil
 	}
 
 	// Listen to changes in Eudico
