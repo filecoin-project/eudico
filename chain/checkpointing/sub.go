@@ -372,6 +372,7 @@ func (c *CheckpointingSub) matchNewPublicKey(ctx context.Context, oldTs, newTs *
 			c.newKey = newSt.PublicKey
 			c.keysUpdated = false
 			diff.newPublicKey = newSt.PublicKey
+			fmt.Println("The new public key has correctly been updated")
 			return true, nil
 		}	
 		return false, nil
@@ -646,11 +647,11 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 			// }
 			// change this to use the new actor
 			//pubkey := taproot.PublicKey(pk)
-			if len(pk)>0 {
-				//pubkey = c.newTaprootConfig.PublicKey // change this to update from the actor
-				pubkey = taproot.PublicKey(pk)
-				fmt.Println("Keys from DKG: ", c.newTaprootConfig.PublicKey, pubkey)
-			}
+			// if len(pk)>0 {
+			// 	//pubkey = c.newTaprootConfig.PublicKey // change this to update from the actor
+			// 	pubkey = taproot.PublicKey(pk)
+			// 	fmt.Println("Keys from DKG: ", c.newTaprootConfig.PublicKey, pubkey)
+			// }
 
 			pubkeyShort := genCheckpointPublicKeyTaproot(pubkey, cp)
 			newTaprootAddress, err := pubkeyToTapprootAddress(pubkeyShort)
