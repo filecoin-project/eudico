@@ -632,17 +632,17 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 				return err
 			}
 
-			// pubkey := c.taprootConfig.PublicKey 
-			// // if a new public key was generated (i.e. new miners), we use this key in the checkpoint
-			// // Problem: when a participant leave, no access to this key
-			// //if c.newTaprootConfig != nil {
-			// if c.newDKGComplete {
-			// 	//pubkey = c.newTaprootConfig.PublicKey // change this to update from the actor
-			// 	pubkey = taproot.PublicKey(c.newKey)
-			// 	fmt.Println("Keys from DKG: ", c.newTaprootConfig.PublicKey, pubkey)
-			// }
+			pubkey := c.taprootConfig.PublicKey 
+			// if a new public key was generated (i.e. new miners), we use this key in the checkpoint
+			// Problem: when a participant leave, no access to this key
+			//if c.newTaprootConfig != nil {
+			if c.newDKGComplete {
+				//pubkey = c.newTaprootConfig.PublicKey // change this to update from the actor
+				pubkey = taproot.PublicKey(c.newKey)
+				fmt.Println("Keys from DKG: ", c.newTaprootConfig.PublicKey, pubkey)
+			}
 			// change this to use the new actor
-			pubkey := taproot.PublicKey(pk)
+			//pubkey := taproot.PublicKey(pk)
 			// ifnew
 
 			pubkeyShort := genCheckpointPublicKeyTaproot(pubkey, cp)
