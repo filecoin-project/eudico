@@ -655,11 +655,11 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 			// 	fmt.Println("Keys from DKG: ", c.newTaprootConfig.PublicKey, pubkey)
 			// }
 
-			// pubkeyShort := genCheckpointPublicKeyTaproot(pubkey, cp)
-			// newTaprootAddress, err := pubkeyToTapprootAddress(pubkeyShort)
-			// if err != nil {
-			// 	return err
-			// }
+			pubkeyShort := genCheckpointPublicKeyTaproot(pubkey, cp)
+			newTaprootAddress, err := pubkeyToTapprootAddress(pubkeyShort)
+			if err != nil {
+				return err
+			}
 
 			// the list of participants is ordered
 			// we will chose the "first" half of participants
