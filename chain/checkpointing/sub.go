@@ -584,7 +584,8 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 
 			if c.host.ID().String()== "12D3KooWMBbLLKTM9Voo89TXLd98w4MjkJUych6QvECptousGtR4"{
 				addp := &mpower.NewTaprootAddressParam{
-					PublicKey: []byte(c.newTaprootConfig.PublicKey), // new public key that was just generated
+					//PublicKey: []byte(c.newTaprootConfig.PublicKey), // new public key that was just generated
+					PublicKey: []string(c.newTaprootConfig.PublicKey),
 				}
 
 				seraddp, err1 := actors.SerializeParams(addp)

@@ -10,7 +10,7 @@ import (
 type State struct {
 	MinerCount int64
 	Miners     []string
-	PublicKey []byte //taproot address
+	PublicKey []string //taproot address
 }
 
 func ConstructState(store adt.Store) (*State, error) {
