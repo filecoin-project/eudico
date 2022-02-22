@@ -340,6 +340,10 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 		if err := cst.Get(ctx, newAct.Head, &newSt); err != nil {
 			return false, nil, err
 		}
+
+		log.Infow("Height:", "height", newTs.Height().String())
+		fmt.Println("Height:", newTs.Height())
+
 		change, err := c.matchNewConfig(ctx , oldTs, newTs, oldSt, newSt, diff) 
 		if err != nil {
 			log.Errorw("Error checking for new configuration", "err", err)
@@ -378,11 +382,11 @@ func (c *CheckpointingSub) matchNewConfig(ctx context.Context, oldTs, newTs *typ
 	if sameStringSlice(oldSt.Miners, newSt.Miners) {
 		return false, nil
 	}
+	c.newParticipants = newSt.Miners
 	// only the participants in the new config need to trigger the DKG
 	for _, participant := range(newSt.Miners){
 		if participant == c.host.ID().String(){
 			diff.newMiners = newSt.Miners
-			c.newParticipants = newSt.Miners
 			return true , nil
 		}
 	}
@@ -418,6 +422,7 @@ func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *ty
 			c.participants = newSt.Miners // we add ourselves to the list of participants
 			c.newDKGComplete = false
 			//c.newKey = 
+			return false, nil
 
 
 		} else {
@@ -443,11 +448,12 @@ func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *ty
 				log.Errorf("could not push miners config: %v", err)
 				return false, err
 			}
-		}
 
-		return true, nil
+			diff.newPublicKey = newSt.PublicKey
+			return true, nil
+		}
 	}
-	return true, nil
+	return false, nil
 }
 
 func (c *CheckpointingSub) triggerChange(ctx context.Context, diff *diffInfo) (more bool, err error) {
@@ -467,7 +473,7 @@ func (c *CheckpointingSub) triggerChange(ctx context.Context, diff *diffInfo) (m
 	if diff.cp!=nil && diff.hash !=nil {
 		// the checkpoint is created by the "previous" set of miners
 		// so that the new key is updated
-		err = c.CreateCheckpoint(ctx, diff.cp, diff.hash, c.participants)
+		err = c.CreateCheckpoint(ctx, diff.cp, diff.hash, c.participants, diff.newPublicKey)
 		if err != nil {
 			log.Errorw("could not create checkpoint: %v", err)
 			return true, err
@@ -611,7 +617,7 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	return nil
 }
 
-func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte, participants []string) error {
+func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte, participants []string, pk []byte) error {
 
 	// check if self is included in the set of participants (e.g., a new miner that
 	// wasn't part of the last DKG, does not sign because they don't have a share of the private key)
@@ -626,17 +632,17 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 				return err
 			}
 
-			pubkey := c.taprootConfig.PublicKey 
-			// if a new public key was generated (i.e. new miners), we use this key in the checkpoint
-			// Problem: when a participant leave, no access to this key
-			//if c.newTaprootConfig != nil {
-			if c.newDKGComplete {
-				//pubkey = c.newTaprootConfig.PublicKey // change this to update from the actor
-				pubkey = taproot.PublicKey(c.newKey)
-				fmt.Println("Keys from DKG: ", c.newTaprootConfig.PublicKey, pubkey)
-			}
+			// pubkey := c.taprootConfig.PublicKey 
+			// // if a new public key was generated (i.e. new miners), we use this key in the checkpoint
+			// // Problem: when a participant leave, no access to this key
+			// //if c.newTaprootConfig != nil {
+			// if c.newDKGComplete {
+			// 	//pubkey = c.newTaprootConfig.PublicKey // change this to update from the actor
+			// 	pubkey = taproot.PublicKey(c.newKey)
+			// 	fmt.Println("Keys from DKG: ", c.newTaprootConfig.PublicKey, pubkey)
+			// }
 			// change this to use the new actor
-
+			pubkey := taproot.PublicKey(pk)
 			// ifnew
 
 			pubkeyShort := genCheckpointPublicKeyTaproot(pubkey, cp)
