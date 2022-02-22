@@ -120,9 +120,11 @@ func (a Actor) UpdateTaprootAddress(rt Runtime, addr *NewTaprootAddressParam) *a
 	var st State
 	rt.StateTransaction(&st, func() {
 		// Miners list is replaced with the one passed as parameters
+		fmt.Println("actor address before",st.PublicKey)
 		st.PublicKey = addr.PublicKey
 		fmt.Println("address updated",st.PublicKey)
 	})
+	fmt.Println("actor address after",st.PublicKey)
 	return nil
 }
 
