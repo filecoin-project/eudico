@@ -348,18 +348,13 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 		if err != nil {
 			log.Errorw("Error checking for new configuration", "err", err)
 			return false, nil, err
-		}
-
-		if !reflect.DeepEqual(oldSt.PublicKey,newSt.PublicKey) {
-			c.newDKGComplete = true
-			c.newKey = newSt.PublicKey
-			c.keysUpdated = false
-
-		}		
+		}	
 
 		change2, err := c.matchCheckpoint(ctx, oldTs, newTs,oldSt, newSt, diff)
 
-		return change || change2 , diff, nil
+		change3, err := c.matchNewPublicKey(ctx, oldTs, newTs,oldSt, newSt, diff)
+
+		return change || change2 || change3, diff, nil
 	}
 
 	// Listen to changes in Eudico
@@ -371,8 +366,16 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 		return
 	}
 }
-
-
+func (c *CheckpointingSub) matchNewPublicKey(ctx context.Context, oldTs, newTs *types.TipSet,oldSt, newSt mpower.State, diff *diffInfo) (bool, error) {
+		if !reflect.DeepEqual(oldSt.PublicKey,newSt.PublicKey) {
+			c.newDKGComplete = true
+			c.newKey = newSt.PublicKey
+			c.keysUpdated = false
+			diff.newPublicKey = newSt.PublicKey
+			return true, nil
+		}	
+		return false, nil
+}
 func (c *CheckpointingSub) matchNewConfig(ctx context.Context, oldTs, newTs *types.TipSet, oldSt, newSt mpower.State, diff *diffInfo) (bool, error) {
 	/*
 		Now we compared old Power Actor State and new Power Actor State
@@ -449,7 +452,7 @@ func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *ty
 				return false, err
 			}
 
-			diff.newPublicKey = newSt.PublicKey
+			//diff.newPublicKey = newSt.PublicKey
 			return true, nil
 		}
 	}
@@ -636,14 +639,18 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 			// if a new public key was generated (i.e. new miners), we use this key in the checkpoint
 			// Problem: when a participant leave, no access to this key
 			//if c.newTaprootConfig != nil {
-			if c.newDKGComplete {
+			// if c.newDKGComplete {
+			// 	//pubkey = c.newTaprootConfig.PublicKey // change this to update from the actor
+			// 	pubkey = taproot.PublicKey(c.newKey)
+			// 	fmt.Println("Keys from DKG: ", c.newTaprootConfig.PublicKey, pubkey)
+			// }
+			// change this to use the new actor
+			//pubkey := taproot.PublicKey(pk)
+			if len(pk)>0 {
 				//pubkey = c.newTaprootConfig.PublicKey // change this to update from the actor
 				pubkey = taproot.PublicKey(c.newKey)
 				fmt.Println("Keys from DKG: ", c.newTaprootConfig.PublicKey, pubkey)
 			}
-			// change this to use the new actor
-			//pubkey := taproot.PublicKey(pk)
-			// ifnew
 
 			pubkeyShort := genCheckpointPublicKeyTaproot(pubkey, cp)
 			newTaprootAddress, err := pubkeyToTapprootAddress(pubkeyShort)
