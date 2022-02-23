@@ -1,13 +1,15 @@
 package replace_test
 
 import (
+	"fmt"
 	"testing"
 
 	replace "github.com/filecoin-project/lotus/chain/consensus/actors/atomic-replace"
-	"github.com/filecoin-project/specs-actors/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v7/support/mock"
 	tutil "github.com/filecoin-project/specs-actors/v7/support/testing"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestExports(t *testing.T) {
@@ -15,7 +17,6 @@ func TestExports(t *testing.T) {
 }
 
 func TestConstruction(t *testing.T) {
-
 	t.Run("simple construction", func(t *testing.T) {
 		actor := newHarness(t)
 		rt := getRuntime(t)
@@ -23,7 +24,22 @@ func TestConstruction(t *testing.T) {
 	})
 
 }
+
 func TestOwn(t *testing.T) {
+	h := newHarness(t)
+	rt := getRuntime(t)
+	h.constructAndVerify(t, rt)
+	caller := tutil.NewIDAddr(t, 1000)
+	rt.SetCaller(caller, builtin.AccountActorCodeID)
+	rt.ExpectValidateCallerAny()
+	rt.Call(h.ReplaceActor.Own, &replace.OwnParams{Seed: "test"})
+	rt.Verify()
+
+	st := getState(rt)
+	owners := st.Owners.State().(*replace.Owners)
+	_, ok := owners.M[caller.String()]
+	require.True(t, ok)
+	fmt.Println(owners.M)
 }
 
 type shActorHarness struct {

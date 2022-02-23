@@ -15,50 +15,63 @@ import (
 
 func TestMarshal(t *testing.T) {
 	s := &SampleState{S: "something to test"}
-	l := atomic.WrapLockableState(s)
+	l, err := atomic.WrapLockableState(s)
+	require.NoError(t, err)
 	var buf bytes.Buffer
 
-	err := l.LockState()
+	err = l.LockState()
 	require.NoError(t, err)
 	err = l.MarshalCBOR(&buf)
 	require.NoError(t, err)
 
 	// Unmarshal and check equal
-	l2 := atomic.WrapLockableState(&SampleState{})
+	l2, err := atomic.WrapLockableState(&SampleState{})
+	require.NoError(t, err)
 	err = l2.UnmarshalCBOR(&buf)
 	require.NoError(t, err)
 	require.True(t, reflect.DeepEqual(l2, l))
-	sm := l2.State().(*SampleState)
+	sm := &SampleState{}
+	err = atomic.UnwrapLockableState(l2, sm)
 	require.Equal(t, s, sm)
 
-	p := atomic.WrapLockParams(12, s)
+	p, err := atomic.WrapLockParams(12, s)
+	require.NoError(t, err)
 	err = p.MarshalCBOR(&buf)
 	require.NoError(t, err)
 
 	// Unmarshal and check equal
-	p2 := atomic.NewLockParamsForType(&SampleState{})
+	p2 := &atomic.LockParams{}
 	err = p2.UnmarshalCBOR(&buf)
 	require.NoError(t, err)
 	require.Equal(t, p, p2)
+	out := &SampleState{}
+	err = atomic.UnwrapLockParams(p2, out)
+	require.NoError(t, err)
+	require.Equal(t, out, s)
 
-	o := &SampleState{S: "some output"}
-	u := atomic.WrapUnlockParams(12, s, o)
+	so := &SampleState{S: "some output"}
+	u, err := atomic.WrapUnlockParams(p, so)
+	require.NoError(t, err)
 	err = u.MarshalCBOR(&buf)
 	require.NoError(t, err)
 
 	// Unmarshal and check equal
-	u2 := atomic.NewUnlockParamsForTypes(&SampleState{}, &SampleState{})
+	u2 := &atomic.UnlockParams{}
 	err = u2.UnmarshalCBOR(&buf)
 	require.NoError(t, err)
 	require.Equal(t, p, p2)
+	err = atomic.UnwrapUnlockParams(u2, out)
+	require.NoError(t, err)
+	require.Equal(t, out, so)
 
 	// TODO: Marshal wrapping the wrong type.
 }
 
 func TestLock(t *testing.T) {
 	s := &SampleState{S: "something to test"}
-	l := atomic.WrapLockableState(s)
-	err := l.LockState()
+	l, err := atomic.WrapLockableState(s)
+	require.NoError(t, err)
+	err = l.LockState()
 	require.NoError(t, err)
 	err = l.LockState()
 	require.Error(t, err)

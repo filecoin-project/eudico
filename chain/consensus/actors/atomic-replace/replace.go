@@ -51,9 +51,10 @@ func (o *Owners) Merge(other atomic.LockableState) error {
 
 }
 
-func ConstructState() *ReplaceState {
-	owners := &Owners{M: map[string]cid.Cid{}}
-	return &ReplaceState{Owners: atomic.WrapLockableState(owners)}
+func ConstructState(rt runtime.Runtime) *ReplaceState {
+	owners, err := atomic.WrapLockableState(&Owners{M: map[string]cid.Cid{}})
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error wrapping lockable state")
+	return &ReplaceState{Owners: owners}
 }
 
 type ReplaceActor struct{}
@@ -83,7 +84,7 @@ func (a ReplaceActor) State() cbor.Er {
 
 func (a ReplaceActor) Constructor(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.InitActorCodeID)
-	rt.StateCreate(ConstructState())
+	rt.StateCreate(ConstructState(rt))
 	return nil
 }
 
@@ -100,13 +101,14 @@ func (a ReplaceActor) Own(rt runtime.Runtime, params *OwnParams) *abi.EmptyValue
 	)
 	rt.StateTransaction(&st, func() {
 		ValidateLockedState(rt, &st)
-		own := st.Owners.State().(*Owners)
+		own := st.unwrapOwners(rt)
 		_, ok := own.M[rt.Caller().String()]
 		if ok {
 			rt.Abortf(exitcode.ErrIllegalState, "address already owning something")
 		}
 		own.M[rt.Caller().String()], err = abi.CidBuilder.Sum([]byte(params.Seed))
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "error computing cid")
+		st.wrapOwners(rt, own)
 	})
 
 	return nil
@@ -122,16 +124,17 @@ func (a ReplaceActor) Replace(rt runtime.Runtime, params *ReplaceParams) *abi.Em
 	var st ReplaceState
 	rt.StateTransaction(&st, func() {
 		ValidateLockedState(rt, &st)
-		own := st.Owners.State().(*Owners)
+		own := st.unwrapOwners(rt)
 		// Replace
 		own.M[rt.Caller().String()], own.M[params.Addr.String()] =
 			own.M[params.Addr.String()], own.M[rt.Caller().String()]
+		st.wrapOwners(rt, own)
 	})
 
 	return nil
 }
 
-func (a ReplaceActor) Lock(rt runtime.Runtime, params *atomic.LockParams) cid.Cid {
+func (a ReplaceActor) Lock(rt runtime.Runtime, params *atomic.LockParams) *atomic.LockedOutput {
 	// Anyone can lock the state
 	rt.ValidateImmediateCallerAcceptAny()
 
@@ -147,7 +150,7 @@ func (a ReplaceActor) Lock(rt runtime.Runtime, params *atomic.LockParams) cid.Ci
 
 	c, err := st.Owners.Cid()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "error computing Cid for locked state")
-	return c
+	return &atomic.LockedOutput{Cid: c}
 }
 
 func (st *ReplaceState) unlock(rt runtime.Runtime) {
@@ -163,7 +166,10 @@ func (a ReplaceActor) Merge(rt runtime.Runtime, params *atomic.UnlockParams) *ab
 	rt.StateTransaction(&st, func() {
 		switch params.Params.Method {
 		case 5:
-			builtin.RequireNoErr(rt, st.Owners.S.Merge(params.Output), exitcode.ErrIllegalState, "error merging output")
+			output := &Owners{}
+			err := atomic.UnwrapUnlockParams(params, output)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error unwrapping output from unlockParams")
+			builtin.RequireNoErr(rt, st.Owners.S.Merge(output), exitcode.ErrIllegalState, "error merging output")
 			st.unlock(rt)
 		default:
 			rt.Abortf(exitcode.ErrIllegalArgument, "this method has nothing to merge")
@@ -195,4 +201,17 @@ func ValidateLockedState(rt runtime.Runtime, st *ReplaceState) {
 	builtin.RequireNoErr(rt,
 		atomic.ValidateIfLocked([]*atomic.LockedState{st.Owners}...),
 		exitcode.ErrIllegalState, "state locked")
+}
+
+func (st *ReplaceState) unwrapOwners(rt runtime.Runtime) *Owners {
+	own := &Owners{}
+	err := atomic.UnwrapLockableState(st.Owners, own)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error unwrapping lockable state")
+	return own
+}
+
+func (st *ReplaceState) storeOwners(rt runtime.Runtime, owners *Owners) {
+	var err error
+	err = st.Owners.SetState(owners)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error wrapping lockable state")
 }
