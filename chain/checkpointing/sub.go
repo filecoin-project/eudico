@@ -297,6 +297,8 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 			return false, nil, err
 		}
 
+		fmt.Println("start syncing")
+
 		if !c.synced {
 			// Are we synced ?
 			// Replace this WaitForSync logic with this function
@@ -352,11 +354,9 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 
 		fmt.Println("Public key in actor: ", oldSt.PublicKey,newSt.PublicKey)
 
-		change2 := false
-		change3 := false
-		// change2, err := c.matchCheckpoint(ctx, oldTs, newTs,oldSt, newSt, diff)
+		change2, err := c.matchCheckpoint(ctx, oldTs, newTs,oldSt, newSt, diff)
 
-		// change3, err := c.matchNewPublicKey(ctx, oldTs, newTs,oldSt, newSt, diff)
+		change3, err := c.matchNewPublicKey(ctx, oldTs, newTs,oldSt, newSt, diff)
 
 		return change || change2 || change3, diff, nil
 	}
