@@ -1,8 +1,8 @@
 package mpower
 
 import (
-	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
 	address "github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
 	//"github.com/Zondax/multi-party-sig/pkg/taproot"
 )
 
@@ -11,7 +11,7 @@ import (
 type State struct {
 	MinerCount int64
 	Miners     []address.Address
-	PublicKey []byte //taproot address
+	PublicKey  []byte //taproot address
 }
 
 // func ConstructState(store adt.Store) (*State, error) {
@@ -26,7 +26,7 @@ func ConstructState(store adt.Store) (*State, error) {
 	return &State{
 		MinerCount: 0,
 		// should have participants with pre generated key
-		Miners: make([]address.Address, 0),
+		Miners:    make([]address.Address, 0),
 		PublicKey: make([]byte, 0),
 	}, nil
 }
