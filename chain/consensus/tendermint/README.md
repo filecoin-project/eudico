@@ -18,7 +18,7 @@ cd tendermint
 
 We don't recommend running the code from `master` branch. Instead, use the last stable version:
 ```
-git checkout $(git describe --tags `git rev-list --tags --max-count=1`
+git checkout $(git describe --tags `git rev-list --tags --max-count=1)`
 ```
 
 Then install and run it:
@@ -33,7 +33,7 @@ See the Tendermint [install instructions](https://github.com/tendermint/tendermi
 ```
 git clone git@github.com:filecoin-project/eudico.git
 cd eudico
-git submodules update
+git submodule update --init --recursive
 make eudico
 ```
 
@@ -67,7 +67,8 @@ localnet-start: localnet-stop build-docker-localnode
     docker-compose up
 ```
 
-Add the following command into the Tendermint's testnet [docker-compose](https://github.com/tendermint/tendermint/blob/master/docker-compose.yml) file for each node:
+Add the following command into the Tendermint's testnet [docker-compose](https://github.com/tendermint/tendermint/blob/master/docker-compose.yml) file for each node 
+and ports in 26650-26653:
 
 ```
 command: node --proxy-app=tcp://host.docker.internal:$PORT
@@ -111,6 +112,13 @@ curl -s 'http://localhost:26657/broadcast_tx_sync?tx=0x828a0055017642efe6162dfc3
 ```
 ./eudico tspow miner --default-key
 
+```
+
+### Tmux
+
+To stop a demo running via tmux:
+```
+tmux kill-session -t tendermint
 ```
 
 ### Subnet Demo
