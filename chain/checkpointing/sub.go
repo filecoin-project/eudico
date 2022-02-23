@@ -351,7 +351,6 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 		}	
 
 		fmt.Println("Public key in actor: ", oldSt.PublicKey,newSt.PublicKey)
-		fmt.Println("List of miners in actor: ", oldSt.Miners, newSt.Miners)
 
 		change2, err := c.matchCheckpoint(ctx, oldTs, newTs,oldSt, newSt, diff)
 
