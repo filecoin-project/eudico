@@ -2,8 +2,6 @@ package atomic
 
 import (
 	"bytes"
-	"encoding/binary"
-	"io"
 
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/cbor"
@@ -18,90 +16,56 @@ const (
 	MethodAbort abi.MethodNum = 4
 )
 
-type Marshaler interface {
-	cbor.Marshaler
-	cbor.Unmarshaler
-}
-
 // LockableState defines the interface required for states
 // that needs to be lockable.
 type LockableState interface {
-	Marshaler
+	cbor.Marshaler
+	cbor.Unmarshaler
 	Merge(other LockableState) error
 }
 
+type LockedOutput struct {
+	Cid cid.Cid
+}
+
 type LockableActor interface {
-	Lock(rt runtime.Runtime, params *LockParams) cid.Cid
+	Lock(rt runtime.Runtime, params *LockParams) *LockedOutput
 	Merge(rt runtime.Runtime, params *UnlockParams) *abi.EmptyValue
 	Abort(rt runtime.Runtime, params *LockParams) *abi.EmptyValue
 }
 
 type LockParams struct {
 	Method abi.MethodNum
-	Params Marshaler
+	Params []byte
 }
 
-func (l *LockParams) MarshalCBOR(w io.Writer) error {
-	buf := make([]byte, binary.MaxVarintLen64)
-	binary.LittleEndian.PutUint64(buf, uint64(l.Method))
-	w.Write(buf)
-	return l.Params.MarshalCBOR(w)
-}
-
-func (l *LockParams) UnmarshalCBOR(r io.Reader) error {
-	buf := make([]byte, binary.MaxVarintLen64)
-	_, err := r.Read(buf)
-	if err != nil {
-		return err
+func WrapLockParams(m abi.MethodNum, params LockableState) (*LockParams, error) {
+	var buf bytes.Buffer
+	if err := params.MarshalCBOR(&buf); err != nil {
+		return nil, err
 	}
-	l.Method = abi.MethodNum(binary.LittleEndian.Uint64(buf))
-	return l.Params.UnmarshalCBOR(r)
+	return &LockParams{m, buf.Bytes()}, nil
 }
 
-// WrapLockableState takes a lockableState and wraps it with
-// its own lock ready to use.
-func WrapLockableState(s LockableState) *LockedState {
-	return &LockedState{S: s}
+func UnwrapLockParams(params *LockParams, out LockableState) error {
+	return out.UnmarshalCBOR(bytes.NewReader(params.Params))
 }
 
 type UnlockParams struct {
 	Params *LockParams
-	Output LockableState
+	Output []byte
 }
 
-func NewUnlockParamsForTypes(params Marshaler, output LockableState) *UnlockParams {
-	return &UnlockParams{
-		Params: &LockParams{Params: params},
-		Output: output,
+func WrapUnlockParams(params *LockParams, out LockableState) (*UnlockParams, error) {
+	var buf bytes.Buffer
+	if err := out.MarshalCBOR(&buf); err != nil {
+		return nil, err
 	}
+	return &UnlockParams{params, buf.Bytes()}, nil
 }
 
-func WrapUnlockParams(m abi.MethodNum, params Marshaler, output LockableState) *UnlockParams {
-	return &UnlockParams{Params: &LockParams{Method: m, Params: params}, Output: output}
-}
-
-func (u *UnlockParams) MarshalCBOR(w io.Writer) error {
-	err := u.Params.MarshalCBOR(w)
-	if err != nil {
-		return err
-	}
-	return u.Output.MarshalCBOR(w)
-}
-
-func (u *UnlockParams) UnmarshalCBOR(r io.Reader) error {
-	err := u.Params.UnmarshalCBOR(r)
-	if err != nil {
-		return err
-	}
-	return u.Output.UnmarshalCBOR(r)
-}
-
-func WrapLockParams(m abi.MethodNum, params Marshaler) *LockParams {
-	return &LockParams{m, params}
-}
-
-func NewLockParamsForType(params Marshaler) *LockParams {
-	return &LockParams{Params: params}
+func UnwrapUnlockParams(params *UnlockParams, out LockableState) error {
+	return out.UnmarshalCBOR(bytes.NewReader(params.Output))
 }
 
 func ValidateIfLocked(states ...*LockedState) error {
@@ -141,13 +105,34 @@ func (s *LockedState) UnlockState() error {
 	return nil
 }
 
-func (s *LockedState) IsLocked() bool {
-	return s.Lock
-}
-
 type LockedState struct {
 	Lock bool
-	S    LockableState
+	S    []byte
+}
+
+func WrapLockableState(s LockableState) (*LockedState, error) {
+	var buf bytes.Buffer
+	if err := s.MarshalCBOR(&buf); err != nil {
+		return nil, err
+	}
+	return &LockedState{S: buf.Bytes()}, nil
+}
+
+func (l *LockedState) SetState(s LockableState) error {
+	var buf bytes.Buffer
+	if err := s.MarshalCBOR(&buf); err != nil {
+		return err
+	}
+	l.S = buf.Bytes()
+	return nil
+}
+
+func UnwrapLockableState(s *LockedState, out LockableState) error {
+	return out.UnmarshalCBOR(bytes.NewReader(s.S))
+}
+
+func (s *LockedState) IsLocked() bool {
+	return s.Lock
 }
 
 func (t *LockedState) lockInt() []byte {
@@ -163,26 +148,6 @@ func (t *LockedState) lockFromByte(b []byte) {
 		return
 	}
 	t.Lock = false
-}
-
-func (t *LockedState) State() LockableState {
-	return t.S
-}
-
-func (l *LockedState) MarshalCBOR(w io.Writer) error {
-	buf := l.lockInt()
-	w.Write(buf)
-	return l.S.MarshalCBOR(w)
-}
-
-func (l *LockedState) UnmarshalCBOR(r io.Reader) error {
-	buf := make([]byte, 1)
-	_, err := r.Read(buf)
-	if err != nil {
-		return err
-	}
-	l.lockFromByte(buf)
-	return l.S.UnmarshalCBOR(r)
 }
 
 func CidFromOutput(s LockableState) (cid.Cid, error) {
