@@ -18,7 +18,7 @@ cd tendermint
 
 We don't recommend running the code from `master` branch. Instead, use the last stable version:
 ```
-git checkout $(git describe --tags `git rev-list --tags --max-count=1)`
+git checkout $(git describe --tags `git rev-list --tags --max-count=1`)
 ```
 
 Then install and run it:
