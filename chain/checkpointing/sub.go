@@ -352,9 +352,9 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 
 		fmt.Println("Public key in actor: ", oldSt.PublicKey,newSt.PublicKey)
 
-		change2, err := c.matchCheckpoint(ctx, oldTs, newTs,oldSt, newSt, diff)
+		// change2, err := c.matchCheckpoint(ctx, oldTs, newTs,oldSt, newSt, diff)
 
-		change3, err := c.matchNewPublicKey(ctx, oldTs, newTs,oldSt, newSt, diff)
+		// change3, err := c.matchNewPublicKey(ctx, oldTs, newTs,oldSt, newSt, diff)
 
 		return change || change2 || change3, diff, nil
 	}
