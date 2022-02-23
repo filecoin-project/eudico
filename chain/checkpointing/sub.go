@@ -332,6 +332,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 			return false,nil, err
 		}
 		fmt.Println("Got actor, now trying to get actor state")
+		fmt.Println(oldAct)
 		// Get state from specified actors
 		var oldSt, newSt mpower.State
 		bs := blockstore.NewAPIBlockstore(c.api)
