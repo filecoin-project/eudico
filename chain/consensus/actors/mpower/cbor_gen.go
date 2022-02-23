@@ -8,6 +8,7 @@ import (
 	"math"
 	"sort"
 
+	address "github.com/filecoin-project/go-address"
 	cid "github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	xerrors "golang.org/x/xerrors"
@@ -42,7 +43,7 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 		}
 	}
 
-	// t.Miners ([][]uint8) (slice)
+	// t.Miners ([]address.Address) (slice)
 	if len(t.Miners) > cbg.MaxLength {
 		return xerrors.Errorf("Slice value in field t.Miners was too long")
 	}
@@ -51,15 +52,7 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 	for _, v := range t.Miners {
-		if len(v) > cbg.ByteArrayMaxLen {
-			return xerrors.Errorf("Byte array in field v was too long")
-		}
-
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajByteString, uint64(len(v))); err != nil {
-			return err
-		}
-
-		if _, err := w.Write(v[:]); err != nil {
+		if err := v.MarshalCBOR(w); err != nil {
 			return err
 		}
 	}
@@ -122,7 +115,7 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 
 		t.MinerCount = int64(extraI)
 	}
-	// t.Miners ([][]uint8) (slice)
+	// t.Miners ([]address.Address) (slice)
 
 	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
 	if err != nil {
@@ -138,35 +131,17 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 	}
 
 	if extra > 0 {
-		t.Miners = make([][]uint8, extra)
+		t.Miners = make([]address.Address, extra)
 	}
 
 	for i := 0; i < int(extra); i++ {
-		{
-			var maj byte
-			var extra uint64
-			var err error
 
-			maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
-			if err != nil {
-				return err
-			}
-
-			if extra > cbg.ByteArrayMaxLen {
-				return fmt.Errorf("t.Miners[i]: byte array too large (%d)", extra)
-			}
-			if maj != cbg.MajByteString {
-				return fmt.Errorf("expected byte array")
-			}
-
-			if extra > 0 {
-				t.Miners[i] = make([]uint8, extra)
-			}
-
-			if _, err := io.ReadFull(br, t.Miners[i][:]); err != nil {
-				return err
-			}
+		var v address.Address
+		if err := v.UnmarshalCBOR(br); err != nil {
+			return err
 		}
+
+		t.Miners[i] = v
 	}
 
 	// t.PublicKey ([]uint8) (slice)
@@ -193,7 +168,6 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-
 var lengthBufAddMinerParams = []byte{129}
 
 func (t *AddMinerParams) MarshalCBOR(w io.Writer) error {
@@ -207,7 +181,7 @@ func (t *AddMinerParams) MarshalCBOR(w io.Writer) error {
 
 	scratch := make([]byte, 9)
 
-	// t.Miners ([]string) (slice)
+	// t.Miners ([]address.Address) (slice)
 	if len(t.Miners) > cbg.MaxLength {
 		return xerrors.Errorf("Slice value in field t.Miners was too long")
 	}
@@ -216,11 +190,10 @@ func (t *AddMinerParams) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 	for _, v := range t.Miners {
-		if err := marshalCBORString(w, v); err != nil {
+		if err := v.MarshalCBOR(w); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -242,7 +215,8 @@ func (t *AddMinerParams) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.Miners ([]string) (slice)
+	// t.Miners ([]address.Address) (slice)
+
 	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
 	if err != nil {
 		return err
@@ -257,29 +231,17 @@ func (t *AddMinerParams) UnmarshalCBOR(r io.Reader) error {
 	}
 
 	if extra > 0 {
-		t.Miners = make([]string, extra)
+		t.Miners = make([]address.Address, extra)
 	}
 
 	for i := 0; i < int(extra); i++ {
 
-		m, err := cbg.ReadString(br)
-		if err != nil {
+		var v address.Address
+		if err := v.UnmarshalCBOR(br); err != nil {
 			return err
 		}
 
-		t.Miners[i] = m
-	}
-
-	return nil
-}
-
-func marshalCBORString(w io.Writer, s string) error {
-	if err := cbg.WriteMajorTypeHeader(w, cbg.MajTextString, uint64(len(s))); err != nil {
-		return err
-	}
-
-	if _, err := io.WriteString(w, s); err != nil {
-		return err
+		t.Miners[i] = v
 	}
 
 	return nil

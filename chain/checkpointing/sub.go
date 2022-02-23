@@ -49,7 +49,7 @@ var log = logging.Logger("checkpointing")
 
 // struct used to propagate detected changes.
 type diffInfo struct {
-	newMiners [][]byte
+	newMiners []address.Address
 	newPublicKey []byte
 	hash []byte
 	cp []byte
@@ -322,7 +322,6 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 			}
 		}
 		// Get actors at specified tipset
-		fmt.Println("trying to get actor")
 		newAct, err := c.api.StateGetActor(ctx, mpower.PowerActorAddr, newTs.Key())
 		if err != nil {
 			return false, nil, err
@@ -394,11 +393,9 @@ func (c *CheckpointingSub) matchNewConfig(ctx context.Context, oldTs, newTs *typ
 		return false, nil
 	}
 	//c.newParticipants = newSt.Miners
-	c.newParticipants = make([]string, 0)
 	// only the participants in the new config need to trigger the DKG
 	for _, participant := range(newSt.Miners){
-		c.newParticipants = append(c.newParticipants,string(participant))
-		if string(participant) == (c.host.ID().String()){
+		if participant.String() == c.host.ID().String(){
 			diff.newMiners = newSt.Miners
 			return true , nil
 		}
@@ -435,7 +432,7 @@ func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *ty
 			c.newParticipants = make([]string, 0)
 			// we add ourselves to the list of participants
 			for _, participant := range(newSt.Miners){
-				c.newParticipants = append(c.newParticipants,string(participant))
+				c.newParticipants = append(c.newParticipants,participant.String())
 			}
 			c.newDKGComplete = false
 			//c.newKey = 
@@ -448,7 +445,7 @@ func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *ty
 			// c.orderParticipantsList() orders the miners from the taproot config --> to change
 			//for _, partyId := range c.orderParticipantsList() {
 			for _, partyId := range newSt.Miners{ // list of new miners
-				minersConfig += string(partyId) + "\n"
+				minersConfig += partyId.String() + "\n"
 			}
 
 			// This creates the file that will be stored in minio (or any storage)
@@ -479,7 +476,7 @@ func (c *CheckpointingSub) triggerChange(ctx context.Context, diff *diffInfo) (m
 		log.Infow("Generate new aggregated key")
 		participants := make([]string, 0)
 		for _,participant := range(diff.newMiners){
-			participants = append(participants,string(participant))
+			participants = append(participants,participant.String())
 		} 
 		err := c.GenerateNewKeys(ctx, participants)
 		if err != nil {
