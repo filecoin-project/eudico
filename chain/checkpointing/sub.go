@@ -297,10 +297,9 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 			return false, nil, err
 		}
 
-		fmt.Println("start syncing")
+		
 
 		if !c.synced {
-			fmt.Println("not synced")
 			// Are we synced ?
 			// Replace this WaitForSync logic with this function
 			// https://github.com/Zondax/eudico/blob/1de9d0f773e49b61cd405add93c3c28c9f74cb38/node/modules/services.go#L104
