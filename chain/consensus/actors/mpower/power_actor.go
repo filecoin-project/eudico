@@ -1,7 +1,6 @@
 package mpower
 
 import (
-	"fmt"
 	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/cbor"
@@ -13,9 +12,7 @@ import (
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
-
 	//"github.com/Zondax/multi-party-sig/pkg/taproot"
-
 )
 
 type Runtime = runtime.Runtime
@@ -34,9 +31,9 @@ var PowerActorAddr = func() address.Address {
 func (a Actor) Exports() []interface{} {
 	return []interface{}{
 		builtin.MethodConstructor: a.Constructor, // Initialiazed the actor; always required
-		2:                         a.AddMiners,    // Add a miner to the list (specificaly crafted for checkpointing)
+		//2:                         a.AddMiners,    // Add a miner to the list (specificaly crafted for checkpointing)
 		//3:						   a.RemoveMiners, // Remove miners from the list
-		4: 						   a.UpdateTaprootAddress, // Update the taproot address
+		//4: 						   a.UpdateTaprootAddress, // Update the taproot address
 	}
 }
 
@@ -87,19 +84,19 @@ type AddMinerParams struct {
 // 	return nil
 // }
 
-func (a Actor) AddMiners(rt Runtime, params *AddMinerParams) *abi.EmptyValue {
-	rt.ValidateImmediateCallerAcceptAny()
-	var st State
-	rt.StateTransaction(&st, func() {
-		// Miners list is replaced with the one passed as parameters
-		for _, minerToAdd := range params.Miners {
-			st.Miners = append(st.Miners, address.Address(minerToAdd))
-		}
-    	//st.Miners = unique(st.Miners)
-    	st.MinerCount = int64(len(st.Miners))
-	})
-	return nil
-}
+// func (a Actor) AddMiners(rt Runtime, params *AddMinerParams) *abi.EmptyValue {
+// 	rt.ValidateImmediateCallerAcceptAny()
+// 	var st State
+// 	rt.StateTransaction(&st, func() {
+// 		// Miners list is replaced with the one passed as parameters
+// 		for _, minerToAdd := range params.Miners {
+// 			st.Miners = append(st.Miners, address.Address(minerToAdd))
+// 		}
+//     	//st.Miners = unique(st.Miners)
+//     	st.MinerCount = int64(len(st.Miners))
+// 	})
+// 	return nil
+// }
 
 // Removes claimed power for the calling actor.
 // May only be invoked by a miner actor.
@@ -117,28 +114,27 @@ func (a Actor) AddMiners(rt Runtime, params *AddMinerParams) *abi.EmptyValue {
 // 				}
 // 			}
 
-// 		} 
+// 		}
 // 		fmt.Println("New list of miners after removal: ",st.Miners)
 // 		st.MinerCount = int64(len(st.Miners))
 // 	})
 // 	return nil
 // }
 
-
 type NewTaprootAddressParam struct {
 	PublicKey []byte
 }
 
-func (a Actor) UpdateTaprootAddress(rt Runtime, addr *NewTaprootAddressParam) *abi.EmptyValue {
-	rt.ValidateImmediateCallerAcceptAny()
-	var st State
-	rt.StateTransaction(&st, func() {
-		// Miners list is replaced with the one passed as parameters
-		st.PublicKey = addr.PublicKey
-		fmt.Println("address updated",st.PublicKey)
-	})
-	return nil
-}
+// func (a Actor) UpdateTaprootAddress(rt Runtime, addr *NewTaprootAddressParam) *abi.EmptyValue {
+// 	rt.ValidateImmediateCallerAcceptAny()
+// 	var st State
+// 	rt.StateTransaction(&st, func() {
+// 		// Miners list is replaced with the one passed as parameters
+// 		st.PublicKey = addr.PublicKey
+// 		fmt.Println("address updated",st.PublicKey)
+// 	})
+// 	return nil
+// }
 
 // func (a Actor) UpdateTaprootAddress(rt Runtime, addr *AddMinerParams) *abi.EmptyValue {
 // 	rt.ValidateImmediateCallerAcceptAny()
@@ -152,14 +148,14 @@ func (a Actor) UpdateTaprootAddress(rt Runtime, addr *NewTaprootAddressParam) *a
 // 	return nil
 // }
 
-func unique(strSlice []string) []string {
-    keys := make(map[string]bool)
-    list := []string{}	
-    for _, entry := range strSlice {
-        if _, value := keys[entry]; !value {
-            keys[entry] = true
-            list = append(list, entry)
-        }
-    }    
-    return list
-}
+// func unique(strSlice []string) []string {
+//     keys := make(map[string]bool)
+//     list := []string{}
+//     for _, entry := range strSlice {
+//         if _, value := keys[entry]; !value {
+//             keys[entry] = true
+//             list = append(list, entry)
+//         }
+//     }
+//     return list
+// }
