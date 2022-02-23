@@ -49,7 +49,7 @@ var log = logging.Logger("checkpointing")
 
 // struct used to propagate detected changes.
 type diffInfo struct {
-	newMiners []string
+	newMiners [][]byte
 	newPublicKey []byte
 	hash []byte
 	cp []byte
@@ -387,13 +387,16 @@ func (c *CheckpointingSub) matchNewConfig(ctx context.Context, oldTs, newTs *typ
 	*/
 
 	// If no changes in configuration
-	if sameStringSlice(oldSt.Miners, newSt.Miners) {
+	if reflect.DeepEqual(oldSt.Miners, newSt.Miners) {
+	//if sameStringSlice(oldSt.Miners, newSt.Miners) {
 		return false, nil
 	}
-	c.newParticipants = newSt.Miners
+	//c.newParticipants = newSt.Miners
+	c.newParticipants = make([]string, 0)
 	// only the participants in the new config need to trigger the DKG
 	for _, participant := range(newSt.Miners){
-		if participant == c.host.ID().String(){
+		c.newParticipants = append(c.newParticipants,string(participant))
+		if string(participant) == (c.host.ID().String()){
 			diff.newMiners = newSt.Miners
 			return true , nil
 		}
@@ -427,7 +430,11 @@ func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *ty
 			c.tweakedValue = hashTweakedValue(pubkey, merkleRoot)
 			c.pubkey = pubkeyShort
 			c.newTaprootConfig = nil
-			c.participants = newSt.Miners // we add ourselves to the list of participants
+			c.newParticipants = make([]string, 0)
+			// we add ourselves to the list of participants
+			for _, participant := range(newSt.Miners){
+				c.newParticipants = append(c.newParticipants,string(participant))
+			}
 			c.newDKGComplete = false
 			//c.newKey = 
 			return false, nil
@@ -439,7 +446,7 @@ func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *ty
 			// c.orderParticipantsList() orders the miners from the taproot config --> to change
 			//for _, partyId := range c.orderParticipantsList() {
 			for _, partyId := range newSt.Miners{ // list of new miners
-				minersConfig += partyId + "\n"
+				minersConfig += string(partyId) + "\n"
 			}
 
 			// This creates the file that will be stored in minio (or any storage)
@@ -468,7 +475,11 @@ func (c *CheckpointingSub) triggerChange(ctx context.Context, diff *diffInfo) (m
 	//If there is a new configuration, trigger the checkpoint
 	if len(diff.newMiners) >0 {
 		log.Infow("Generate new aggregated key")
-		err := c.GenerateNewKeys(ctx, diff.newMiners)
+		participants := make([]string, 0)
+		for _,participant := range(diff.newMiners){
+			participants = append(participants,string(participant))
+		} 
+		err := c.GenerateNewKeys(ctx, participants)
 		if err != nil {
 			log.Errorw("error while generating new key: %v", err)
 			// If generating new key failed, checkpointing should not be possible

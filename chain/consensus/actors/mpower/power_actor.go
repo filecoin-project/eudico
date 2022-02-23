@@ -35,7 +35,7 @@ func (a Actor) Exports() []interface{} {
 	return []interface{}{
 		builtin.MethodConstructor: a.Constructor, // Initialiazed the actor; always required
 		2:                         a.AddMiners,    // Add a miner to the list (specificaly crafted for checkpointing)
-		3:						   a.RemoveMiners, // Remove miners from the list
+		//3:						   a.RemoveMiners, // Remove miners from the list
 		4: 						   a.UpdateTaprootAddress, // Update the taproot address
 	}
 }
@@ -75,13 +75,27 @@ type AddMinerParams struct {
 
 // Adds claimed power for the calling actor.
 // May only be invoked by a miner actor.
+// func (a Actor) AddMiners(rt Runtime, params *AddMinerParams) *abi.EmptyValue {
+// 	rt.ValidateImmediateCallerAcceptAny()
+// 	var st State
+// 	rt.StateTransaction(&st, func() {
+// 		// Miners list is replaced with the one passed as parameters
+// 		st.Miners = append(st.Miners,params.Miners...)
+//     	st.Miners = unique(st.Miners)
+//     	st.MinerCount = int64(len(st.Miners))
+// 	})
+// 	return nil
+// }
+
 func (a Actor) AddMiners(rt Runtime, params *AddMinerParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerAcceptAny()
 	var st State
 	rt.StateTransaction(&st, func() {
 		// Miners list is replaced with the one passed as parameters
-		st.Miners = append(st.Miners,params.Miners...)
-    	st.Miners = unique(st.Miners)
+		for _, minerToAdd := range params.Miners {
+			st.Miners = append(st.Miners, []byte(minerToAdd))
+		}
+    	//st.Miners = unique(st.Miners)
     	st.MinerCount = int64(len(st.Miners))
 	})
 	return nil
@@ -89,26 +103,26 @@ func (a Actor) AddMiners(rt Runtime, params *AddMinerParams) *abi.EmptyValue {
 
 // Removes claimed power for the calling actor.
 // May only be invoked by a miner actor.
-func (a Actor) RemoveMiners(rt Runtime, params *AddMinerParams) *abi.EmptyValue {
-	rt.ValidateImmediateCallerAcceptAny()
-	var st State
-	rt.StateTransaction(&st, func() {
-		// Miners list is replaced with the one passed as parameters
+// func (a Actor) RemoveMiners(rt Runtime, params *AddMinerParams) *abi.EmptyValue {
+// 	rt.ValidateImmediateCallerAcceptAny()
+// 	var st State
+// 	rt.StateTransaction(&st, func() {
+// 		// Miners list is replaced with the one passed as parameters
 
-		for _, minerToRemove := range params.Miners{
-			for i, oldMiner := range st.Miners{
-				if minerToRemove == oldMiner{
-					st.Miners = append(st.Miners[:i], st.Miners[i+1:]...)
-					break
-				}
-			}
+// 		for _, minerToRemove := range params.Miners{
+// 			for i, oldMiner := range st.Miners{
+// 				if minerToRemove == oldMiner{
+// 					st.Miners = append(st.Miners[:i], st.Miners[i+1:]...)
+// 					break
+// 				}
+// 			}
 
-		} 
-		fmt.Println("New list of miners after removal: ",st.Miners)
-		st.MinerCount = int64(len(st.Miners))
-	})
-	return nil
-}
+// 		} 
+// 		fmt.Println("New list of miners after removal: ",st.Miners)
+// 		st.MinerCount = int64(len(st.Miners))
+// 	})
+// 	return nil
+// }
 
 
 type NewTaprootAddressParam struct {
