@@ -16,11 +16,15 @@ const (
 	MethodAbort abi.MethodNum = 4
 )
 
+type Marshalable interface {
+	cbor.Marshaler
+	cbor.Unmarshaler
+}
+
 // LockableState defines the interface required for states
 // that needs to be lockable.
 type LockableState interface {
-	cbor.Marshaler
-	cbor.Unmarshaler
+	Marshalable
 	Merge(other LockableState) error
 }
 
@@ -39,7 +43,7 @@ type LockParams struct {
 	Params []byte
 }
 
-func WrapLockParams(m abi.MethodNum, params LockableState) (*LockParams, error) {
+func WrapLockParams(m abi.MethodNum, params Marshalable) (*LockParams, error) {
 	var buf bytes.Buffer
 	if err := params.MarshalCBOR(&buf); err != nil {
 		return nil, err
@@ -47,7 +51,7 @@ func WrapLockParams(m abi.MethodNum, params LockableState) (*LockParams, error) 
 	return &LockParams{m, buf.Bytes()}, nil
 }
 
-func UnwrapLockParams(params *LockParams, out LockableState) error {
+func UnwrapLockParams(params *LockParams, out Marshalable) error {
 	return out.UnmarshalCBOR(bytes.NewReader(params.Params))
 }
 

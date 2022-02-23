@@ -101,14 +101,14 @@ func (a ReplaceActor) Own(rt runtime.Runtime, params *OwnParams) *abi.EmptyValue
 	)
 	rt.StateTransaction(&st, func() {
 		ValidateLockedState(rt, &st)
-		own := st.unwrapOwners(rt)
+		own := st.UnwrapOwners(rt)
 		_, ok := own.M[rt.Caller().String()]
 		if ok {
 			rt.Abortf(exitcode.ErrIllegalState, "address already owning something")
 		}
 		own.M[rt.Caller().String()], err = abi.CidBuilder.Sum([]byte(params.Seed))
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "error computing cid")
-		st.wrapOwners(rt, own)
+		st.storeOwners(rt, own)
 	})
 
 	return nil
@@ -124,11 +124,16 @@ func (a ReplaceActor) Replace(rt runtime.Runtime, params *ReplaceParams) *abi.Em
 	var st ReplaceState
 	rt.StateTransaction(&st, func() {
 		ValidateLockedState(rt, &st)
-		own := st.unwrapOwners(rt)
+		own := st.UnwrapOwners(rt)
+		_, ok1 := own.M[rt.Caller().String()]
+		_, ok2 := own.M[params.Addr.String()]
+		if !ok1 || !ok2 {
+			rt.Abortf(exitcode.ErrIllegalState, "one (or both) parties don't have an asset to replace")
+		}
 		// Replace
 		own.M[rt.Caller().String()], own.M[params.Addr.String()] =
 			own.M[params.Addr.String()], own.M[rt.Caller().String()]
-		st.wrapOwners(rt, own)
+		st.storeOwners(rt, own)
 	})
 
 	return nil
@@ -169,7 +174,11 @@ func (a ReplaceActor) Merge(rt runtime.Runtime, params *atomic.UnlockParams) *ab
 			output := &Owners{}
 			err := atomic.UnwrapUnlockParams(params, output)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error unwrapping output from unlockParams")
-			builtin.RequireNoErr(rt, st.Owners.S.Merge(output), exitcode.ErrIllegalState, "error merging output")
+			owners := &Owners{}
+			err = atomic.UnwrapLockableState(st.Owners, owners)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error unwrapping owners")
+			builtin.RequireNoErr(rt, owners.Merge(output), exitcode.ErrIllegalState, "error merging output")
+			st.storeOwners(rt, owners)
 			st.unlock(rt)
 		default:
 			rt.Abortf(exitcode.ErrIllegalArgument, "this method has nothing to merge")
@@ -203,7 +212,7 @@ func ValidateLockedState(rt runtime.Runtime, st *ReplaceState) {
 		exitcode.ErrIllegalState, "state locked")
 }
 
-func (st *ReplaceState) unwrapOwners(rt runtime.Runtime) *Owners {
+func (st *ReplaceState) UnwrapOwners(rt runtime.Runtime) *Owners {
 	own := &Owners{}
 	err := atomic.UnwrapLockableState(st.Owners, own)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error unwrapping lockable state")
