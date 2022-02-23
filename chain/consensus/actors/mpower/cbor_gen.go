@@ -33,15 +33,15 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 	scratch := make([]byte, 9)
 
 	// t.MinerCount (int64) (int64)
-	if t.MinerCount >= 0 {
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.MinerCount)); err != nil {
-			return err
-		}
-	} else {
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.MinerCount-1)); err != nil {
-			return err
-		}
-	}
+	// if t.MinerCount >= 0 {
+	// 	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.MinerCount)); err != nil {
+	// 		return err
+	// 	}
+	// } else {
+	// 	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.MinerCount-1)); err != nil {
+	// 		return err
+	// 	}
+	// }
 
 	// t.Miners ([]address.Address) (slice)
 	if len(t.Miners) > cbg.MaxLength {
@@ -57,18 +57,18 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 		}
 	}
 
-	// // t.PublicKey ([]uint8) (slice)
-	// if len(t.PublicKey) > cbg.ByteArrayMaxLen {
-	// 	return xerrors.Errorf("Byte array in field t.PublicKey was too long")
-	// }
+	// t.PublicKey ([]uint8) (slice)
+	if len(t.PublicKey) > cbg.ByteArrayMaxLen {
+		return xerrors.Errorf("Byte array in field t.PublicKey was too long")
+	}
 
-	// if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajByteString, uint64(len(t.PublicKey))); err != nil {
-	// 	return err
-	// }
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajByteString, uint64(len(t.PublicKey))); err != nil {
+		return err
+	}
 
-	// if _, err := w.Write(t.PublicKey[:]); err != nil {
-	// 	return err
-	// }
+	if _, err := w.Write(t.PublicKey[:]); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -91,30 +91,30 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 	}
 
 	// t.MinerCount (int64) (int64)
-	{
-		maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
-		var extraI int64
-		if err != nil {
-			return err
-		}
-		switch maj {
-		case cbg.MajUnsignedInt:
-			extraI = int64(extra)
-			if extraI < 0 {
-				return fmt.Errorf("int64 positive overflow")
-			}
-		case cbg.MajNegativeInt:
-			extraI = int64(extra)
-			if extraI < 0 {
-				return fmt.Errorf("int64 negative oveflow")
-			}
-			extraI = -1 - extraI
-		default:
-			return fmt.Errorf("wrong type for int64 field: %d", maj)
-		}
+	// {
+	// 	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	// 	var extraI int64
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	switch maj {
+	// 	case cbg.MajUnsignedInt:
+	// 		extraI = int64(extra)
+	// 		if extraI < 0 {
+	// 			return fmt.Errorf("int64 positive overflow")
+	// 		}
+	// 	case cbg.MajNegativeInt:
+	// 		extraI = int64(extra)
+	// 		if extraI < 0 {
+	// 			return fmt.Errorf("int64 negative oveflow")
+	// 		}
+	// 		extraI = -1 - extraI
+	// 	default:
+	// 		return fmt.Errorf("wrong type for int64 field: %d", maj)
+	// 	}
 
-		t.MinerCount = int64(extraI)
-	}
+	// 	t.MinerCount = int64(extraI)
+	// }
 	// t.Miners ([]address.Address) (slice)
 
 	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
@@ -146,25 +146,25 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 
 	// t.PublicKey ([]uint8) (slice)
 
-	// maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
-	// if err != nil {
-	// 	return err
-	// }
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
 
-	// if extra > cbg.ByteArrayMaxLen {
-	// 	return fmt.Errorf("t.PublicKey: byte array too large (%d)", extra)
-	// }
-	// if maj != cbg.MajByteString {
-	// 	return fmt.Errorf("expected byte array")
-	// }
+	if extra > cbg.ByteArrayMaxLen {
+		return fmt.Errorf("t.PublicKey: byte array too large (%d)", extra)
+	}
+	if maj != cbg.MajByteString {
+		return fmt.Errorf("expected byte array")
+	}
 
-	// if extra > 0 {
-	// 	t.PublicKey = make([]uint8, extra)
-	// }
+	if extra > 0 {
+		t.PublicKey = make([]uint8, extra)
+	}
 
-	// if _, err := io.ReadFull(br, t.PublicKey[:]); err != nil {
-	// 	return err
-	// }
+	if _, err := io.ReadFull(br, t.PublicKey[:]); err != nil {
+		return err
+	}
 	return nil
 }
 
