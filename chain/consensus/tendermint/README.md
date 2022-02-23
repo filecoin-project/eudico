@@ -12,10 +12,18 @@ The most important one is Go1.17+.
 ### Tendermint
 
 ```
-go get github.com/tendermint/tendermint
-cd $GOPATH/src/github.com/tendermint/tendermint
+git clone https://github.com/tendermint/tendermint.git
+cd tendermint
+```
+
+We don't recommend running the code from `master` branch. Instead, use the last stable version:
+```
+git checkout $(git describe --tags `git rev-list --tags --max-count=1`
+```
+
+Then install and run it:
+```
 make install
-make build
 tendermint version
 ```
 
@@ -38,36 +46,38 @@ To start a one-node Tendermint blockchain use the following commands:
 ./eudico tendermint application
 ```
 
+Please make sure that Tendermint uses secp256k1 keys.
+
 ```
 tendermint init validator --key=secp256k1
 tendermint start
-./
 ```
 
-Please make sure that Tendermint uses secp256k1 keys.
 
 ### Tendermint Local Testnet
 
 Use the following Tendermint [instructions](https://github.com/tendermint/tendermint/blob/master/docs/tools/docker-compose.md) as a basis.
 
-Use the following target in Tendermint makefile to use secp256k1 keys:
+Edit `localnet-start` target in the Tendermint [makefile](https://github.com/tendermint/tendermint/blob/2ffb26260053c87e4b44c0d00063494d771dcfec/Makefile#L269-L271) and add `--key secp256k1` option.
+
+The edited target should look like the follows:
 ```
 localnet-start: localnet-stop build-docker-localnode
-    @if ! [ -f build/node0/config/genesis.json ]; then docker run --rm -v $(CURDIR)/build:/tendermint:Z tendermint/localnode testnet --key secp256k1 --config /etc/tendermint/config-template.toml --o . --starting-ip-address 192.167.10.
+    @if ! [ -f build/node0/config/genesis.json ]; then docker run --rm -v $(CURDIR)/build:/tendermint:Z tendermint/localnode testnet --key secp256k1 --config /etc/tendermint/config-template.toml --o . --starting-ip-address 192.167.10.2; fi
     docker-compose up
 ```
 
-Add the following command into Tendermint's testnet docker-compose file for each node:
+Add the following command into the Tendermint's testnet [docker-compose](https://github.com/tendermint/tendermint/blob/master/docker-compose.yml) file for each node:
 
 ```
 command: node --proxy-app=tcp://host.docker.internal:$PORT
 ```
 
-After that you can run `./scripts/eud-tendermint-testnet.sh` script.
+After that you should be able to run `./scripts/eud-tendermint-testnet.sh` script.
 
-## Commands
+## Useful Commands
 
-The following is lists of useful commands that can be used in Eudico-Tendermint setup for testing and demonstration purposes.
+The following commands can be used in Eudico-Tendermint setup for testing and demonstration purposes.
 
 ### Eudico
 
@@ -90,6 +100,7 @@ curl -s 'localhost:26657/abci_query?data="1"'
 curl -s 'http://localhost:26657/broadcast_tx_sync?tx=0x828a0055017642efe6162dfc3e4e01df770743f22bf903e04455017642efe6162dfc3e4e01df770743f22bf903e0440049000de0b6b3a76400001a00084873450018aef1bd44000187c600405842018172eb88f4f9a59a1e0f0b820d69681403b69a129daed4831729336c6534036b701e4b22572f19c3e89a7341fc4e435ae8b7accf75cf7b3d1e1200108af7640c01'
 
 ```
+
 ### Networking
 ```
 ./eudico net listen
@@ -112,7 +123,7 @@ curl -s 'http://localhost:26657/broadcast_tx_sync?tx=0x828a0055017642efe6162dfc3
  ./eudico subnet list-subnets
 ```
 
-### Fault Tolerance Demo
+### Fault Injection Demo
 
 To run a deployment:
 ```
@@ -130,13 +141,3 @@ start-app1
 start-node1
 
 ```
-
-## How to Add a Consensus Protocol to Eudico
-- Register a consensus constant in `chain/consensus/hierarchical/types.go`
-- Instantiate a consensus miner in a subnet in `chain/consensus/hierarchical/subnet/consensus/consensus.go`
-- Implement genesis block functions in `chain/consensus/hierarchical/actors/subnet/tendermint.go`
-- Return the consensus' `TipsExecutor` and `Weight` in `chain/consensus/hierarchical/subnet/utils.go`
-- Decide how to compute a state and implement the corresponding logic in `chain/consensus/$CONSENSUS/compute_state.go`
-- Implement `Consensus interface` defined in `chain/consensus/iface.go` for the consensus algorithm
-- Add the corresponding CLI commands in `cmd/eudico/$CONSENSUS.go`
-- Adapt [bad blocks cache](https://github.com/filecoin-project/eudico/blob/0306742e553f6bd6260332b501bb65a5bfc16a76/chain/sync.go#L725) for the case when Tendermint nodes were unreachable
