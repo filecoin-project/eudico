@@ -129,6 +129,7 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 	}
 
 // t.Miners ([]string) (slice)
+	{
 	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
 	if err != nil {
 		return err
@@ -155,10 +156,10 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 
 		t.Miners[i] = m
 	}
-
+	}
 
 	// t.PublicKey ([]uint8) (slice)
-
+	{
 	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
 	if err != nil {
 		return err
@@ -177,6 +178,7 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 
 	if _, err := io.ReadFull(br, t.PublicKey[:]); err != nil {
 		return err
+	}
 	}
 	return nil
 }
