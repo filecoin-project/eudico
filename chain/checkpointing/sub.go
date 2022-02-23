@@ -322,6 +322,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 			}
 		}
 		// Get actors at specified tipset
+		fmt.Println("trying to get actor")
 		newAct, err := c.api.StateGetActor(ctx, mpower.PowerActorAddr, newTs.Key())
 		if err != nil {
 			return false, nil, err
@@ -331,7 +332,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 		if err != nil {
 			return false,nil, err
 		}
-
+		fmt.Println("Got actor, now trying to get actor state")
 		// Get state from specified actors
 		var oldSt, newSt mpower.State
 		bs := blockstore.NewAPIBlockstore(c.api)
@@ -370,6 +371,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 		return
 	}
 }
+
 func (c *CheckpointingSub) matchNewPublicKey(ctx context.Context, oldTs, newTs *types.TipSet,oldSt, newSt mpower.State, diff *diffInfo) (bool, error) {
 		if !reflect.DeepEqual(oldSt.PublicKey,newSt.PublicKey) {
 			c.newDKGComplete = true
