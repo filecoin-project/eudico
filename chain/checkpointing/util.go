@@ -14,6 +14,7 @@ import (
 	"github.com/Zondax/multi-party-sig/pkg/math/curve"
 	"github.com/btcsuite/btcutil/bech32"
 	"github.com/cronokirby/safenum"
+	address "github.com/filecoin-project/go-address"
 )
 
 type VerificationShare struct {
