@@ -332,18 +332,21 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 			return false,nil, err
 		}
 		fmt.Println("Got actor, now trying to get actor state")
-		fmt.Println(oldAct)
+		fmt.Println("old actor: ",oldAct)
+		fmt.Println("new actor: ",newAct)
 		// Get state from specified actors
 		var oldSt, newSt mpower.State
 		bs := blockstore.NewAPIBlockstore(c.api)
 		cst := cbor.NewCborStore(bs)
+		fmt.Println("1 ",bs,cst,oldSt,newSt)
 		if err := cst.Get(ctx, oldAct.Head, &oldSt); err != nil {
 			return false, nil, err
 		}
+		fmt.Println("2 ",bs,cst,oldSt,newSt)
 		if err := cst.Get(ctx, newAct.Head, &newSt); err != nil {
 			return false, nil, err
 		}
-
+		fmt.Println("3 ",bs,cst,oldSt,newSt)
 		log.Infow("Height:", "height", newTs.Height().String())
 		fmt.Println("Height:", newTs.Height())
 
