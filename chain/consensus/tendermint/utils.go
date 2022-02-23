@@ -33,7 +33,7 @@ func NodeAddr() string {
 	return addr
 }
 
-func parseTendermintBlock(b *tmtypes.Block, dst *tendermintBlockInfo, tag []byte) *tendermintBlockInfo {
+func parseTendermintBlock(b *tmtypes.Block, tag []byte) ([]*types.SignedMessage, []*types.Message) {
 	var msgs []*types.SignedMessage
 	var crossMsgs []*types.Message
 
@@ -70,10 +70,7 @@ func parseTendermintBlock(b *tmtypes.Block, dst *tendermintBlockInfo, tag []byte
 			log.Info("unknown message type")
 		}
 	}
-	dst.messages = msgs
-	dst.crossMsgs = crossMsgs
-
-	return dst
+	return msgs, crossMsgs
 }
 
 func getMessageMapFromTendermintBlock(tb *tmtypes.Block) (map[[32]byte]bool, error) {

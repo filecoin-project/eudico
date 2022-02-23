@@ -3,10 +3,7 @@ package tendermint
 import (
 	"bytes"
 
-	"github.com/tendermint/tendermint/crypto"
-
 	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/lotus/chain/types"
 )
 
 const (
@@ -90,12 +87,4 @@ func NewCrossMessageBytes(msg, tag []byte) []byte {
 	payload = append(msg, tag[:tagLength]...)
 	payload = append(payload, CrossMessageType)
 	return payload
-}
-
-type tendermintBlockInfo struct {
-	timestamp       uint64
-	messages        []*types.SignedMessage
-	crossMsgs       []*types.Message
-	hash            []byte
-	proposerAddress crypto.Address
 }

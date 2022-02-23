@@ -150,14 +150,14 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 	log.Infof("starting creating block for epoch %d", bt.Epoch)
 	defer log.Infof("stopping creating block for epoch %d", bt.Epoch)
 
-	ticker := time.NewTicker(1000 * time.Millisecond)
+	ticker := time.NewTicker(300 * time.Millisecond)
 	defer ticker.Stop()
 
 	// Calculate actual target height of the Tendermint blockchain.
 	height := int64(bt.Epoch) + tm.offset
 
 	try := true
-	var resp *coretypes.ResultBlock
+	var next *coretypes.ResultBlock
 	var err error
 	for try {
 		select {
@@ -165,7 +165,7 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 			log.Info("create block was stopped")
 			return nil, nil
 		case <-ticker.C:
-			resp, err = tm.client.Block(ctx, &height)
+			next, err = tm.client.Block(ctx, &height)
 			if err != nil {
 				log.Infof("unable to get the Tendermint block @%d: %s", height, err)
 				continue
@@ -173,14 +173,15 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 			try = false
 		}
 	}
-	tb := &tendermintBlockInfo{
-		timestamp:       uint64(resp.Block.Time.Unix()),
-		hash:            resp.Block.Hash().Bytes(),
-		proposerAddress: resp.Block.ProposerAddress,
-	}
-	tb = parseTendermintBlock(resp.Block, tb, tm.tag)
-	proposerAddrStr := tb.proposerAddress.String()
 
+	msgs, crossMsgs := parseTendermintBlock(next.Block, tm.tag)
+	bt.Messages = msgs
+	bt.CrossMessages = crossMsgs
+	bt.Timestamp = uint64(next.Block.Time.Unix())
+	bt.Ticket = &types.Ticket{next.Block.Hash().Bytes()}
+
+	proposerAddress := next.Block.ProposerAddress
+	proposerAddrStr := proposerAddress.String()
 	// if another Tendermint node proposed the block.
 	if proposerAddrStr != tm.tendermintValidatorAddress {
 		eudicoAddress, ok := tm.tendermintEudicoAddresses[proposerAddrStr]
@@ -195,7 +196,7 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 				return nil, err
 			}
 
-			proposerPubKey := findValidatorPubKeyByAddress(resp.Validators, tb.proposerAddress)
+			proposerPubKey := findValidatorPubKeyByAddress(resp.Validators, proposerAddress)
 			if proposerPubKey == nil {
 				return nil, xerrors.New("unable to find the proposer's public key")
 			}
@@ -211,10 +212,6 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 	} else {
 		bt.Miner = tm.eudicoClientAddress
 	}
-
-	bt.Messages = tb.messages
-	bt.CrossMessages = tb.crossMsgs
-	bt.Timestamp = tb.timestamp
 
 	b, err := sanitizeMessagesAndPrepareBlockForSignature(ctx, tm.sm, bt)
 	if err != nil {
@@ -239,7 +236,7 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 		b.CrossMessages = validMsgs.CrossMsgs
 	}
 
-	b.Header.Ticket = &types.Ticket{VRFProof: tb.hash}
+	//b.Header.Ticket = &types.Ticket{resp.Block.Hash().Bytes()}
 
 	log.Infof("!!! %s mined a block", b.Header.Miner)
 
