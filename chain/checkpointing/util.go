@@ -14,7 +14,6 @@ import (
 	"github.com/Zondax/multi-party-sig/pkg/math/curve"
 	"github.com/btcsuite/btcutil/bech32"
 	"github.com/cronokirby/safenum"
-	address "github.com/filecoin-project/go-address"
 )
 
 type VerificationShare struct {
@@ -258,12 +257,12 @@ func jsonRPC(url, payload string) map[string]interface{} {
 }
 
 
-func sameStringSlice(x, y []address.Address) bool {
+func sameStringSlice(x, y []string) bool {
     if len(x) != len(y) {
         return false
     }
     // create a map of string -> int
-    diff := make(map[address.Address]int, len(x))
+    diff := make(map[string]int, len(x))
     for _, _x := range x {
         // 0 value for int is 0, so just increment a counter for the string
         diff[_x]++
@@ -280,10 +279,3 @@ func sameStringSlice(x, y []address.Address) bool {
     }
     return len(diff) == 0
 }
-
-// func sameByteArraySlice(x,y [][]byte) bool {
-// 	    if len(x) != len(y) {
-//         return false
-//     }
-//     for 
-// }

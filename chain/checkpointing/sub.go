@@ -4,16 +4,15 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
-
 	//"encoding/json"
 	"fmt"
 	"os"
-	"reflect"
 	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
+	"reflect"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/Zondax/multi-party-sig/pkg/math/curve"
@@ -22,13 +21,12 @@ import (
 	"github.com/Zondax/multi-party-sig/pkg/taproot"
 	"github.com/Zondax/multi-party-sig/protocols/frost"
 	"github.com/Zondax/multi-party-sig/protocols/frost/keygen"
-	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/blockstore"
-	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/consensus/actors/mpower"
 	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/types"
+	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/node/config"
 	"github.com/filecoin-project/lotus/node/impl"
 	"github.com/filecoin-project/lotus/node/modules/helpers"
@@ -40,6 +38,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
+	address "github.com/filecoin-project/go-address"
 	// act "github.com/filecoin-project/lotus/chain/consensus/actors"
 	// init_ "github.com/filecoin-project/specs-actors/actors/builtin/init"
 	// "github.com/filecoin-project/lotus/build"
@@ -50,10 +49,10 @@ var log = logging.Logger("checkpointing")
 
 // struct used to propagate detected changes.
 type diffInfo struct {
-	newMiners    []address.Address
+	newMiners []string
 	newPublicKey []byte
-	hash         []byte
-	cp           []byte
+	hash []byte
+	cp []byte
 }
 
 /*
@@ -91,8 +90,8 @@ type CheckpointingSub struct {
 	// Participants list identified with their libp2p cid
 	participants []string
 	// Participants list identified with their libp2p cid
-	newParticipants []string
-	// boolean to keep track of when the new config has finished the DKG
+	newParticipants []string	
+	// boolean to keep track of when the new config has finished the DKG 
 	newDKGComplete bool
 	// boolean to keep
 	keysUpdated bool
@@ -114,6 +113,7 @@ type CheckpointingSub struct {
 	synced bool
 	// height verified! (the height of the latest checkpoint)
 	height abi.ChainEpoch
+
 
 	// add intitial taproot address here
 }
@@ -215,13 +215,19 @@ func NewCheckpointSub(
 			VerificationShares: verificationShares,
 		}
 
+
+
+		
+
 		// this is where we append the original list of signers
 		// note: they are not added in the mocked power actor (they probably should? TODO)
 		for id := range taprootConfig.VerificationShares {
 			minerSigners = append(minerSigners, string(id))
 		}
 
+
 	}
+
 
 	// Initialize minio client object
 	minioClient, err := minio.New(cpconfig.MinioHost, &minio.Options{
@@ -232,22 +238,23 @@ func NewCheckpointSub(
 		return nil, err
 	}
 
+
 	return &CheckpointingSub{
-		pubsub:           pubsub,
-		topic:            nil,
-		sub:              nil,
-		host:             host,
-		api:              &api,
-		events:           e,
-		ptxid:            "",
-		taprootConfig:    taprootConfig, //either nil (if no shares) or the configuration pre-generated for Alice, Bob and Charlie
-		participants:     minerSigners,
-		newDKGComplete:   false,
-		keysUpdated:      true,
-		newTaprootConfig: nil,
-		cpconfig:         &cpconfig,
-		minioClient:      minioClient,
-		synced:           synced,
+		pubsub:       pubsub,
+		topic:        nil,
+		sub:          nil,
+		host:         host,
+		api:          &api,
+		events:       e,
+		ptxid:        "",
+		taprootConfig:       taprootConfig, //either nil (if no shares) or the configuration pre-generated for Alice, Bob and Charlie
+		participants: minerSigners,
+		newDKGComplete: false,
+		keysUpdated: true,
+		newTaprootConfig:    nil,
+		cpconfig:     &cpconfig,
+		minioClient:  minioClient,
+		synced:       synced,
 	}, nil
 }
 
@@ -299,7 +306,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 
 				log.Infow("we are synced")
 				// Yes then verify our checkpoint from Bitcoin and verify if we find in it in our Eudico chain
-				ts, err := c.api.ChainGetTipSet(ctx, c.latestConfigCheckpoint)
+				ts, err := c.api.ChainGetTipSet(ctx, c.latestConfigCheckpoint) 
 				if err != nil {
 					log.Errorf("couldnt get tipset: %v", err)
 					return false, nil, err
@@ -320,37 +327,35 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 
 		oldAct, err := c.api.StateGetActor(ctx, mpower.PowerActorAddr, oldTs.Key())
 		if err != nil {
-			return false, nil, err
+			return false,nil, err
 		}
+
 		// Get state from specified actors
 		var oldSt, newSt mpower.State
 		bs := blockstore.NewAPIBlockstore(c.api)
 		cst := cbor.NewCborStore(bs)
-
 		if err := cst.Get(ctx, oldAct.Head, &oldSt); err != nil {
 			return false, nil, err
 		}
-
 		if err := cst.Get(ctx, newAct.Head, &newSt); err != nil {
 			return false, nil, err
 		}
-
-		log.Infow("Height:", "height", newTs.Height().String())
-		fmt.Println("Height:", newTs.Height())
-
-		change, err := c.matchNewConfig(ctx, oldTs, newTs, oldSt, newSt, diff)
+		change, err := c.matchNewConfig(ctx , oldTs, newTs, oldSt, newSt, diff) 
 		if err != nil {
 			log.Errorw("Error checking for new configuration", "err", err)
 			return false, nil, err
 		}
 
-		//fmt.Println("Public key in actor: ", oldSt.PublicKey, newSt.PublicKey)
+		if !reflect.DeepEqual(oldSt.PublicKey,newSt.PublicKey) {
+			c.newDKGComplete = true
+			c.newKey = newSt.PublicKey
+			c.keysUpdated = false
 
-		change2, err := c.matchCheckpoint(ctx, oldTs, newTs, oldSt, newSt, diff)
+		}		
 
-		change3, err := c.matchNewPublicKey(ctx, oldTs, newTs, oldSt, newSt, diff)
+		change2, err := c.matchCheckpoint(ctx, oldTs, newTs,oldSt, newSt, diff)
 
-		return change || change2 || change3, diff, nil
+		return change || change2 , diff, nil
 	}
 
 	// Listen to changes in Eudico
@@ -363,51 +368,41 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 	}
 }
 
-func (c *CheckpointingSub) matchNewPublicKey(ctx context.Context, oldTs, newTs *types.TipSet, oldSt, newSt mpower.State, diff *diffInfo) (bool, error) {
-	// if !reflect.DeepEqual(oldSt.PublicKey, newSt.PublicKey) {
-	// 	c.newDKGComplete = true
-	// 	c.newKey = newSt.PublicKey
-	// 	c.keysUpdated = false
-	// 	diff.newPublicKey = newSt.PublicKey
-	// 	fmt.Println("The new public key has correctly been updated")
-	// 	return true, nil
-	// }
-	return false, nil
-}
+
 func (c *CheckpointingSub) matchNewConfig(ctx context.Context, oldTs, newTs *types.TipSet, oldSt, newSt mpower.State, diff *diffInfo) (bool, error) {
 	/*
 		Now we compared old Power Actor State and new Power Actor State
 	*/
 
 	// If no changes in configuration
-	if reflect.DeepEqual(oldSt.Miners, newSt.Miners) {
-		//if sameStringSlice(oldSt.Miners, newSt.Miners) {
+	if sameStringSlice(oldSt.Miners, newSt.Miners) {
 		return false, nil
 	}
-	//c.newParticipants = newSt.Miners
 	// only the participants in the new config need to trigger the DKG
-	for _, participant := range newSt.Miners {
-		if participant.String() == c.host.ID().String() {
+	for _, participant := range(newSt.Miners){
+		if participant == c.host.ID().String(){
 			diff.newMiners = newSt.Miners
-			return true, nil
+			c.newParticipants = newSt.Miners
+			return true , nil
 		}
 	}
 	return false, nil
 
+	
 }
 
 func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *types.TipSet, oldSt, newSt mpower.State, diff *diffInfo) (bool, error) {
 	// we are checking that the list of mocked actor is not empty before starting the checkpoint
 	if newTs.Height()%15 == 0 && len(oldSt.Miners) > 0 && (c.taprootConfig != nil || c.newTaprootConfig != nil) {
-		cp := oldTs.Key().Bytes() // this is the checkpoint
+		cp := oldTs.Key().Bytes() // this is the checkpoint 
 		diff.cp = cp
 
-		// If we don't have a taprootconfig we don't sign because it means we were not part
-		// of the previous DKG and hence we need to let the "previous" miners update the aggregated
-		// key on bitcoin before starting signing.
-		// We update our config to be ready for next checkpointing
-		// This is the case for any "new" miner (i.e., not Alice, Bob and Charlie)
-		// Basically we skip the next
+	// If we don't have a taprootconfig we don't sign because it means we were not part
+	// of the previous DKG and hence we need to let the "previous" miners update the aggregated
+	// key on bitcoin before starting signing.
+	// We update our config to be ready for next checkpointing 
+	// This is the case for any "new" miner (i.e., not Alice, Bob and Charlie)
+	// Basically we skip the next
 		if c.taprootConfig == nil {
 			log.Infow("We don't have any config")
 			pubkey := c.newTaprootConfig.PublicKey // the new taproot config has been initialized
@@ -420,22 +415,18 @@ func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *ty
 			c.tweakedValue = hashTweakedValue(pubkey, merkleRoot)
 			c.pubkey = pubkeyShort
 			c.newTaprootConfig = nil
-			c.newParticipants = make([]string, 0)
-			// we add ourselves to the list of participants
-			for _, participant := range newSt.Miners {
-				c.newParticipants = append(c.newParticipants, participant.String())
-			}
+			c.participants = newSt.Miners // we add ourselves to the list of participants
 			c.newDKGComplete = false
-			//c.newKey =
-			return false, nil
+			//c.newKey = 
+
 
 		} else {
 			// Miners config is the data that will be stored for now in Minio, later on a eudico-KVS
 			var minersConfig string = hex.EncodeToString(cp) + "\n"
 			// c.orderParticipantsList() orders the miners from the taproot config --> to change
 			//for _, partyId := range c.orderParticipantsList() {
-			for _, partyId := range newSt.Miners { // list of new miners
-				minersConfig += partyId.String() + "\n"
+			for _, partyId := range newSt.Miners{ // list of new miners
+				minersConfig += partyId + "\n"
 			}
 
 			// This creates the file that will be stored in minio (or any storage)
@@ -452,23 +443,18 @@ func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *ty
 				log.Errorf("could not push miners config: %v", err)
 				return false, err
 			}
-
-			//diff.newPublicKey = newSt.PublicKey
-			return true, nil
 		}
+
+		return true, nil
 	}
-	return false, nil
+	return true, nil
 }
 
 func (c *CheckpointingSub) triggerChange(ctx context.Context, diff *diffInfo) (more bool, err error) {
 	//If there is a new configuration, trigger the checkpoint
-	if len(diff.newMiners) > 0 {
+	if len(diff.newMiners) >0 {
 		log.Infow("Generate new aggregated key")
-		participants := make([]string, 0)
-		for _, participant := range diff.newMiners {
-			participants = append(participants, participant.String())
-		}
-		err := c.GenerateNewKeys(ctx, participants)
+		err := c.GenerateNewKeys(ctx, diff.newMiners)
 		if err != nil {
 			log.Errorw("error while generating new key: %v", err)
 			// If generating new key failed, checkpointing should not be possible
@@ -478,15 +464,15 @@ func (c *CheckpointingSub) triggerChange(ctx context.Context, diff *diffInfo) (m
 		log.Infow("Successful DKG")
 	}
 
-	if diff.cp != nil && diff.hash != nil {
+	if diff.cp!=nil && diff.hash !=nil {
 		// the checkpoint is created by the "previous" set of miners
 		// so that the new key is updated
-		err = c.CreateCheckpoint(ctx, diff.cp, diff.hash, c.participants, diff.newPublicKey)
+		err = c.CreateCheckpoint(ctx, diff.cp, diff.hash, c.participants)
 		if err != nil {
 			log.Errorw("could not create checkpoint: %v", err)
 			return true, err
+			}
 		}
-	}
 	return true, nil
 }
 
@@ -518,263 +504,259 @@ func (c *CheckpointingSub) Start(ctx context.Context) error {
 }
 
 func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []string) error {
-	fmt.Println("DKG participants: ", participants)
-	fmt.Println("Myself (DKG): ", c.host.ID().String())
-	//only the set of new miners take part in the DKG (e.g., a leaving miner does not)
-	// not working for some reason
+	fmt.Println("DKG participants: ",participants)
+	fmt.Println("Myself (DKG): ",c.host.ID().String())
+//only the set of new miners take part in the DKG (e.g., a leaving miner does not)
+// not working for some reason
 	// for _, participant := range(participants){
 	// 	if participant == c.host.ID().String(){
-	idsStrings := participants
-	sort.Strings(idsStrings)
+			idsStrings := participants
+			sort.Strings(idsStrings)
 
-	log.Infow("participants list :", "participants", idsStrings)
+			log.Infow("participants list :", "participants", idsStrings)
 
-	ids := c.formIDSlice(idsStrings)
+			ids := c.formIDSlice(idsStrings)
 
-	id := party.ID(c.host.ID().String())
+			id := party.ID(c.host.ID().String())
 
-	threshold := (len(idsStrings) / 2) + 1
-	//starting a new ceremony with the subscription and topic that were
-	// already defined
-	//why not call the checkpointing sub directly?
-	n := NewNetwork(c.sub, c.topic)
+			threshold := (len(idsStrings) / 2) + 1
+			//starting a new ceremony with the subscription and topic that were
+			// already defined 
+			//why not call the checkpointing sub directly?
+			n := NewNetwork(c.sub, c.topic)
 
-	// Keygen with Gennaro protocol if failing
-	//f := frost.KeygenTaprootGennaro(id, ids, threshold)
-	f := frost.KeygenTaproot(id, ids, threshold)
+			// Keygen with Gennaro protocol if failing
+			//f := frost.KeygenTaprootGennaro(id, ids, threshold)
+			f := frost.KeygenTaproot(id, ids, threshold)
 
-	//{1,2,3} is session ID, it is hardcoded
-	// change it for a unique identifier
-	// we only need this identifier to be the same for every participants
-	// it could be for example the hash of the checkpointed block
-	// or hash of participants list
-	// problem with 1,2,3: people on different sessions could be on the same execution
-	// try nil --> it probably uses the hash of the participants list
-	// look at the library for DKG (taurus fork)
-	// for signing this is already updated
-	// for testing hardcoded is ok to ensure everyone is on the same session
-	// but for production this needs to be updated.
-	//handler, err := protocol.NewMultiHandler(f, []byte{1, 2, 3})
-	sessionID := strings.Join(idsStrings, "")
-	handler, err := protocol.NewMultiHandler(f, []byte(sessionID))
-	if err != nil {
-		return err
-	}
-	LoopHandler(ctx, handler, n) //use the new network, could be re-written
-	r, err := handler.Result()
-	if err != nil {
-		// if a participant is mibehaving the DKG entirely fail (no fallback)
-		return err
-	}
-	log.Infow("result :", "result", r)
+			//{1,2,3} is session ID, it is hardcoded
+			// change it for a unique identifier
+			// we only need this identifier to be the same for every participants
+			// it could be for example the hash of the checkpointed block
+			// or hash of participants list
+			// problem with 1,2,3: people on different sessions could be on the same execution
+			// try nil --> it probably uses the hash of the participants list
+			// look at the library for DKG (taurus fork)
+			// for signing this is already updated
+			// for testing hardcoded is ok to ensure everyone is on the same session
+			// but for production this needs to be updated.
+			//handler, err := protocol.NewMultiHandler(f, []byte{1, 2, 3})
+			sessionID := strings.Join(idsStrings, "")
+			handler, err := protocol.NewMultiHandler(f, []byte(sessionID))
+			if err != nil {
+				return err
+			}
+			LoopHandler(ctx, handler, n)//use the new network, could be re-written
+			r, err := handler.Result()
+			if err != nil {
+				// if a participant is mibehaving the DKG entirely fail (no fallback)
+				return err
+			}
+			log.Infow("result :", "result", r)
 
-	var ok bool
-	c.newTaprootConfig, ok = r.(*keygen.TaprootConfig)
-	if !ok {
-		return xerrors.Errorf("state change propagated is the wrong type")
-	}
-	c.newDKGComplete = true
-	c.newKey = []byte(c.newTaprootConfig.PublicKey)
+			var ok bool
+			c.newTaprootConfig, ok = r.(*keygen.TaprootConfig)
+			if !ok {
+				return xerrors.Errorf("state change propagated is the wrong type")
+			}
+			c.newDKGComplete = true
+			c.newKey = []byte(c.newTaprootConfig.PublicKey)
 
-	//we need to update the taproot public key in the mocked actor
-	// this is done by sending a transaction with method 4 (which
-	// corresponds to the "add new public key method")
+			//we need to update the taproot public key in the mocked actor
+			// this is done by sending a transaction with method 4 (which
+			// corresponds to the "add new public key method")
 
-	// for now only alice sends the transaction (will need to be changed TODO)
-	//
+			// for now only alice sends the transaction (will need to be changed TODO)
+			//
 
-	if c.host.ID().String() == "12D3KooWMBbLLKTM9Voo89TXLd98w4MjkJUych6QvECptousGtR4" {
-		addp := &mpower.NewTaprootAddressParam{
-			PublicKey: []byte(c.newTaprootConfig.PublicKey), // new public key that was just generated
+			if c.host.ID().String()== "12D3KooWMBbLLKTM9Voo89TXLd98w4MjkJUych6QvECptousGtR4"{
+				addp := &mpower.NewTaprootAddressParam{
+					PublicKey: []byte(c.newTaprootConfig.PublicKey), // new public key that was just generated
+				}
+
+				seraddp, err1 := actors.SerializeParams(addp)
+				if err1 != nil {
+					return  err1
+				}
+
+				a, err2 := address.NewIDAddress(65)
+				if err2 != nil{
+					return xerrors.Errorf("mocked actor address not working")
+				}
+
+				//TODO: change this, import the wallet automatically
+				// right now we are just copying Alice's address manually (short-term solution)
+				aliceaddr, err3 := address. NewFromString("t1d2xrzcslx7xlbbylc5c3d5lvandqw4iwl6epxba")
+				if err3 != nil{
+					return xerrors.Errorf("alice address not working")
+				}
+
+				_, aerr := c.api.MpoolPushMessage(ctx, &types.Message{
+					To:     a, //this is the mocked actor address
+					From:   aliceaddr, // this is alice address, will need to be changed at some point
+					Value:  abi.NewTokenAmount(0),
+					Method: 4,
+					//Params: []byte(c.newTaprootConfig.PublicKey),
+					Params: seraddp,
+				}, nil)
+
+				if aerr != nil {
+					return  aerr
+				}
+
+				fmt.Println("message sent")
 		}
-
-		seraddp, err1 := actors.SerializeParams(addp)
-		if err1 != nil {
-			return err1
-		}
-
-		a, err2 := address.NewIDAddress(65)
-		if err2 != nil {
-			return xerrors.Errorf("mocked actor address not working")
-		}
-
-		//TODO: change this, import the wallet automatically
-		// right now we are just copying Alice's address manually (short-term solution)
-		aliceaddr, err3 := address.NewFromString("t1d2xrzcslx7xlbbylc5c3d5lvandqw4iwl6epxba")
-		if err3 != nil {
-			return xerrors.Errorf("alice address not working")
-		}
-
-		_, aerr := c.api.MpoolPushMessage(ctx, &types.Message{
-			To:     a,         //this is the mocked actor address
-			From:   aliceaddr, // this is alice address, will need to be changed at some point
-			Value:  abi.NewTokenAmount(0),
-			Method: 4,
-			//Params: []byte(c.newTaprootConfig.PublicKey),
-			Params: seraddp,
-		}, nil)
-
-		if aerr != nil {
-			return aerr
-		}
-
-		fmt.Println("message sent")
-	}
 	// 	}
 	// }
 	return nil
 }
 
-func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte, participants []string, pk []byte) error {
+func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte, participants []string) error {
 
 	// check if self is included in the set of participants (e.g., a new miner that
 	// wasn't part of the last DKG, does not sign because they don't have a share of the private key)
 
-	fmt.Println("Checkpoint participants: ", participants)
-	fmt.Println("Myself: ", c.host.ID().String())
+	fmt.Println("Checkpoint participants: ",participants)
+	fmt.Println("Myself: ",c.host.ID().String())
 	// for _, participant := range(participants){
 	// 	if participant == c.host.ID().String(){
-	fmt.Println("I'm a checkpointer")
-	taprootAddress, err := pubkeyToTapprootAddress(c.pubkey)
-	if err != nil {
-		return err
-	}
+			fmt.Println("I'm a checkpointer")
+			taprootAddress, err := pubkeyToTapprootAddress(c.pubkey)
+			if err != nil {
+				return err
+			}
 
-	pubkey := c.taprootConfig.PublicKey
-	// if a new public key was generated (i.e. new miners), we use this key in the checkpoint
-	// Problem: when a participant leave, no access to this key
-	//if c.newTaprootConfig != nil {
-	if c.newDKGComplete {
-		//pubkey = c.newTaprootConfig.PublicKey // change this to update from the actor
-		pubkey = taproot.PublicKey(c.newKey)
-		fmt.Println("Keys from DKG: ", c.newTaprootConfig.PublicKey, pubkey)
-	}
-	// change this to use the new actor
-	//pubkey := taproot.PublicKey(pk)
-	// if len(pk)>0 {
-	// 	//pubkey = c.newTaprootConfig.PublicKey // change this to update from the actor
-	// 	pubkey = taproot.PublicKey(pk)
-	// 	fmt.Println("Keys from DKG: ", c.newTaprootConfig.PublicKey, pubkey)
-	// }
+			pubkey := c.taprootConfig.PublicKey 
+			// if a new public key was generated (i.e. new miners), we use this key in the checkpoint
+			// Problem: when a participant leave, no access to this key
+			//if c.newTaprootConfig != nil {
+			if c.newDKGComplete {
+				//pubkey = c.newTaprootConfig.PublicKey // change this to update from the actor
+				pubkey = taproot.PublicKey(c.newKey)
+				fmt.Println("Keys from DKG: ", c.newTaprootConfig.PublicKey, pubkey)
+			}
+			// change this to use the new actor
 
-	pubkeyShort := genCheckpointPublicKeyTaproot(pubkey, cp)
-	newTaprootAddress, err := pubkeyToTapprootAddress(pubkeyShort)
-	if err != nil {
-		return err
-	}
+			// ifnew
 
-	// the list of participants is ordered
-	// we will chose the "first" half of participants
-	// in order to sign the transaction in the threshold signing.
-	// In later improvement we will choose them randomly.
-	//idsStrings := c.orderParticipantsList() // this needs to be changed
-	// the ordered list should not be taken from the mocked actor, not the taproot config
+			pubkeyShort := genCheckpointPublicKeyTaproot(pubkey, cp)
+			newTaprootAddress, err := pubkeyToTapprootAddress(pubkeyShort)
+			if err != nil {
+				return err
+			}
 
-	// list from mocked power actor:
-	sort.Strings(participants)
-	idsStrings := participants
+			// the list of participants is ordered
+			// we will chose the "first" half of participants
+			// in order to sign the transaction in the threshold signing.
+			// In later improvement we will choose them randomly.
+			//idsStrings := c.orderParticipantsList() // this needs to be changed
+			// the ordered list should not be taken from the mocked actor, not the taproot config
 
-	log.Infow("participants list :", "participants", idsStrings)
-	log.Infow("precedent tx", "txid", c.ptxid)
-	ids := c.formIDSlice(idsStrings)
+			// list from mocked power actor:
+			sort.Strings(participants)
+			idsStrings := participants
+			
+			log.Infow("participants list :", "participants", idsStrings)
+			log.Infow("precedent tx", "txid", c.ptxid)
+			ids := c.formIDSlice(idsStrings)
 
-	if c.ptxid == "" {
-		log.Infow("missing precedent txid")
-		taprootScript := getTaprootScript(c.pubkey)
-		//we add our public key to our bitcoin wallet
-		success := addTaprootToWallet(c.cpconfig.BitcoinHost, taprootScript)
-		if !success {
-			return xerrors.Errorf("failed to add taproot address to wallet")
-		}
+			if c.ptxid == "" {
+				log.Infow("missing precedent txid")
+				taprootScript := getTaprootScript(c.pubkey)
+				//we add our public key to our bitcoin wallet
+				success := addTaprootToWallet(c.cpconfig.BitcoinHost, taprootScript)
+				if !success {
+					return xerrors.Errorf("failed to add taproot address to wallet")
+				}
 
-		// sleep an arbitrary long time to be sure it has been scanned
-		time.Sleep(6 * time.Second)
+				// sleep an arbitrary long time to be sure it has been scanned
+				time.Sleep(6 * time.Second)
 
-		//we get the transaction id using our bitcoin client
-		ptxid, err := walletGetTxidFromAddress(c.cpconfig.BitcoinHost, taprootAddress)
-		if err != nil {
-			return err
-		}
-		c.ptxid = ptxid
-		log.Infow("found precedent txid:", "txid", c.ptxid)
-	}
+				//we get the transaction id using our bitcoin client
+				ptxid, err := walletGetTxidFromAddress(c.cpconfig.BitcoinHost, taprootAddress)
+				if err != nil {
+					return err
+				}
+				c.ptxid = ptxid
+				log.Infow("found precedent txid:", "txid", c.ptxid)
+			}
 
-	index := 0
-	value, scriptPubkeyBytes := getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
+			index := 0
+			value, scriptPubkeyBytes := getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
 
-	if scriptPubkeyBytes[0] != 0x51 {
-		log.Infow("wrong txout")
-		index = 1
-		value, scriptPubkeyBytes = getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
-	}
-	newValue := value - c.cpconfig.Fee
+			if scriptPubkeyBytes[0] != 0x51 {
+				log.Infow("wrong txout")
+				index = 1
+				value, scriptPubkeyBytes = getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
+			}
+			newValue := value - c.cpconfig.Fee
 
-	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.2f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
-	result := jsonRPC(c.cpconfig.BitcoinHost, payload)
-	if result == nil {
-		return xerrors.Errorf("can not create new transaction")
-	}
+			payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.2f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
+			result := jsonRPC(c.cpconfig.BitcoinHost, payload)
+			if result == nil {
+				return xerrors.Errorf("can not create new transaction")
+			}
 
-	rawTransaction := result["result"].(string)
+			rawTransaction := result["result"].(string)
 
-	tx, err := hex.DecodeString(rawTransaction)
-	if err != nil {
-		return err
-	}
+			tx, err := hex.DecodeString(rawTransaction)
+			if err != nil {
+				return err
+			}
 
-	var buf [8]byte
-	binary.LittleEndian.PutUint64(buf[:], uint64(value*100000000))
-	utxo := append(buf[:], []byte{34}...)
-	utxo = append(utxo, scriptPubkeyBytes...)
+			var buf [8]byte
+			binary.LittleEndian.PutUint64(buf[:], uint64(value*100000000))
+			utxo := append(buf[:], []byte{34}...)
+			utxo = append(utxo, scriptPubkeyBytes...)
 
-	hashedTx, err := TaprootSignatureHash(tx, utxo, 0x00)
-	if err != nil {
-		return err
-	}
+			hashedTx, err := TaprootSignatureHash(tx, utxo, 0x00)
+			if err != nil {
+				return err
+			}
 
-	/*
-	 * Orchestrate the signing message
-	 */
-	fmt.Println("I'm starting the checkpointing")
-	log.Infow("starting signing")
-	// Here all the participants sign the transaction
-	// in practice we only need "threshold" of them to sign
-	f := frost.SignTaprootWithTweak(c.taprootConfig, ids, hashedTx[:], c.tweakedValue[:])
-	n := NewNetwork(c.sub, c.topic)
-	// hashedTx[:] is the session id
-	// ensure everyone is on the same session id
-	handler, err := protocol.NewMultiHandler(f, hashedTx[:])
-	if err != nil {
-		return err
-	}
-	LoopHandler(ctx, handler, n)
-	r, err := handler.Result()
-	if err != nil {
-		return err
-	}
-	log.Infow("result :", "result", r)
+			/*
+			 * Orchestrate the signing message
+			 */
+			fmt.Println("I'm starting the checkpointing")
+			log.Infow("starting signing")
+			// Here all the participants sign the transaction
+			// in practice we only need "threshold" of them to sign
+			f := frost.SignTaprootWithTweak(c.taprootConfig, ids, hashedTx[:], c.tweakedValue[:])
+			n := NewNetwork(c.sub, c.topic)
+			// hashedTx[:] is the session id
+			// ensure everyone is on the same session id
+			handler, err := protocol.NewMultiHandler(f, hashedTx[:])
+			if err != nil {
+				return err
+			}
+			LoopHandler(ctx, handler, n)
+			r, err := handler.Result()
+			if err != nil {
+				return err
+			}
+			log.Infow("result :", "result", r)
 
-	// if signing is a success we register the new value
-	merkleRoot := hashMerkleRoot(pubkey, cp)
-	c.tweakedValue = hashTweakedValue(pubkey, merkleRoot)
-	c.pubkey = pubkeyShort //updates the public key to the new key
+			// if signing is a success we register the new value
+			merkleRoot := hashMerkleRoot(pubkey, cp)
+			c.tweakedValue = hashTweakedValue(pubkey, merkleRoot)
+			c.pubkey = pubkeyShort //updates the public key to the new key
 
-	c.ptxid = ""
+			c.ptxid = ""
 
-	// Only first one broadcast the transaction ?
-	// Actually all participants can broadcast the transcation. It will be the same everywhere.
-	rawtx := prepareWitnessRawTransaction(rawTransaction, r.(taproot.Signature))
+			// Only first one broadcast the transaction ?
+			// Actually all participants can broadcast the transcation. It will be the same everywhere.
+			rawtx := prepareWitnessRawTransaction(rawTransaction, r.(taproot.Signature))
 
-	payload = "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendrawtransaction\", \"params\": [\"" + rawtx + "\"]}"
-	result = jsonRPC(c.cpconfig.BitcoinHost, payload)
-	if result["error"] != nil {
-		return xerrors.Errorf("failed to broadcast transaction")
-	}
+			payload = "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendrawtransaction\", \"params\": [\"" + rawtx + "\"]}"
+			result = jsonRPC(c.cpconfig.BitcoinHost, payload)
+			if result["error"] != nil {
+				return xerrors.Errorf("failed to broadcast transaction")
+			}
 
-	/* Need to keep this to build next one */
-	newtxid := result["result"].(string)
-	log.Infow("new Txid:", "newtxid", newtxid)
-	c.ptxid = newtxid
+			/* Need to keep this to build next one */
+			newtxid := result["result"].(string)
+			log.Infow("new Txid:", "newtxid", newtxid)
+			c.ptxid = newtxid
 
 	// 		break
 	// 	}
@@ -848,7 +830,7 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 		log.Errorf("could not get genesis tipset: %v", err)
 		return
 	}
-	cidBytes := ts.Key().Bytes()                             // this is the checkpoint (i.e. hash of block)
+	cidBytes := ts.Key().Bytes()// this is the checkpoint (i.e. hash of block)
 	publickey, err := hex.DecodeString(c.cpconfig.PublicKey) //publickey pre-generated
 	if err != nil {
 		log.Errorf("could not decode public key: %v", err)
@@ -893,7 +875,7 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 		fmt.Println(address)
 
 		//why not send the transaction from here?
-		payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendtoaddress\", \"params\": [\"" + address + "\", 50]}"
+		payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendtoaddress\", \"params\": [\""+address+"\", 50]}"
 		result := jsonRPC(c.cpconfig.BitcoinHost, payload)
 		if result == nil {
 			log.Errorf("could not send initial Bitcoin transaction to: %v", address)
@@ -910,6 +892,7 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 	if err != nil {
 		log.Errorf("could not start checkpointing module: %v", err)
 	}
+
 
 	lc.Append(fx.Hook{
 		OnStop: func(ctx context.Context) error {
