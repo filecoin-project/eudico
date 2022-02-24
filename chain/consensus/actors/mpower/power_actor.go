@@ -11,13 +11,11 @@ import (
 
 	"github.com/ipfs/go-cid"
 
-	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
-	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
+	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
+	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
 	//"github.com/Zondax/multi-party-sig/pkg/taproot"
 )
-
-type Runtime = runtime.Runtime
 
 type Actor struct{}
 
@@ -58,7 +56,7 @@ var _ runtime.VMActor = Actor{}
 ////////////////////////////////////////////////////////////////////////////////
 
 // see https://github.com/filecoin-project/specs-actors/blob/master/actors/builtin/power/power_actor.go#L83
-func (a Actor) Constructor(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
+func (a Actor) Constructor(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
 
 	st, err := ConstructState(adt.AsStore(rt))
@@ -86,7 +84,7 @@ type AddMinerParams struct {
 // 	return nil
 // }
 
-func (a Actor) AddMiners(rt Runtime, params *AddMinerParams) *abi.EmptyValue {
+func (a Actor) AddMiners(rt runtime.Runtime, params *AddMinerParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerAcceptAny()
 	var st State
 	rt.StateTransaction(&st, func() {
@@ -102,7 +100,7 @@ func (a Actor) AddMiners(rt Runtime, params *AddMinerParams) *abi.EmptyValue {
 
 // Removes claimed power for the calling actor.
 // May only be invoked by a miner actor.
-func (a Actor) RemoveMiners(rt Runtime, params *AddMinerParams) *abi.EmptyValue {
+func (a Actor) RemoveMiners(rt runtime.Runtime, params *AddMinerParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerAcceptAny()
 	var st State
 	rt.StateTransaction(&st, func() {
@@ -127,7 +125,7 @@ type NewTaprootAddressParam struct {
 	PublicKey []byte
 }
 
-func (a Actor) UpdateTaprootAddress(rt Runtime, addr *NewTaprootAddressParam) *abi.EmptyValue {
+func (a Actor) UpdateTaprootAddress(rt runtime.Runtime, addr *NewTaprootAddressParam) *abi.EmptyValue {
 	rt.ValidateImmediateCallerAcceptAny()
 	var st State
 	rt.StateTransaction(&st, func() {
