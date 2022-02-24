@@ -58,17 +58,17 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 	}
 
 	// t.PublicKey ([]uint8) (slice)
-	if len(t.PublicKey) > cbg.ByteArrayMaxLen {
-		return xerrors.Errorf("Byte array in field t.PublicKey was too long")
-	}
+	// if len(t.PublicKey) > cbg.ByteArrayMaxLen {
+	// 	return xerrors.Errorf("Byte array in field t.PublicKey was too long")
+	// }
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajByteString, uint64(len(t.PublicKey))); err != nil {
-		return err
-	}
+	// if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajByteString, uint64(len(t.PublicKey))); err != nil {
+	// 	return err
+	// }
 
-	if _, err := w.Write(t.PublicKey[:]); err != nil {
-		return err
-	}
+	// if _, err := w.Write(t.PublicKey[:]); err != nil {
+	// 	return err
+	// }
 	return nil
 }
 
@@ -146,25 +146,25 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 
 	// t.PublicKey ([]uint8) (slice)
 
-	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
-	if err != nil {
-		return err
-	}
+	//maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	// if err != nil {
+	// 	return err
+	// }
 
-	if extra > cbg.ByteArrayMaxLen {
-		return fmt.Errorf("t.PublicKey: byte array too large (%d)", extra)
-	}
-	if maj != cbg.MajByteString {
-		return fmt.Errorf("expected byte array")
-	}
+	// if extra > cbg.ByteArrayMaxLen {
+	// 	return fmt.Errorf("t.PublicKey: byte array too large (%d)", extra)
+	// }
+	// if maj != cbg.MajByteString {
+	// 	return fmt.Errorf("expected byte array")
+	// }
 
-	if extra > 0 {
-		t.PublicKey = make([]uint8, extra)
-	}
+	// if extra > 0 {
+	// 	t.PublicKey = make([]uint8, extra)
+	// }
 
-	if _, err := io.ReadFull(br, t.PublicKey[:]); err != nil {
-		return err
-	}
+	// if _, err := io.ReadFull(br, t.PublicKey[:]); err != nil {
+	// 	return err
+	// }
 	return nil
 }
 
@@ -258,20 +258,20 @@ func (t *NewTaprootAddressParam) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	scratch := make([]byte, 9)
+	//scratch := make([]byte, 9)
 
 	// t.PublicKey ([]uint8) (slice)
-	if len(t.PublicKey) > cbg.ByteArrayMaxLen {
-		return xerrors.Errorf("Byte array in field t.PublicKey was too long")
-	}
+	// if len(t.PublicKey) > cbg.ByteArrayMaxLen {
+	// 	return xerrors.Errorf("Byte array in field t.PublicKey was too long")
+	// }
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajByteString, uint64(len(t.PublicKey))); err != nil {
-		return err
-	}
+	// if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajByteString, uint64(len(t.PublicKey))); err != nil {
+	// 	return err
+	// }
 
-	if _, err := w.Write(t.PublicKey[:]); err != nil {
-		return err
-	}
+	// if _, err := w.Write(t.PublicKey[:]); err != nil {
+	// 	return err
+	// }
 	return nil
 }
 
@@ -295,24 +295,24 @@ func (t *NewTaprootAddressParam) UnmarshalCBOR(r io.Reader) error {
 
 	// t.PublicKey ([]uint8) (slice)
 
-	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
-	if err != nil {
-		return err
-	}
+	// maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	// if err != nil {
+	// 	return err
+	// }
 
-	if extra > cbg.ByteArrayMaxLen {
-		return fmt.Errorf("t.PublicKey: byte array too large (%d)", extra)
-	}
-	if maj != cbg.MajByteString {
-		return fmt.Errorf("expected byte array")
-	}
+	// if extra > cbg.ByteArrayMaxLen {
+	// 	return fmt.Errorf("t.PublicKey: byte array too large (%d)", extra)
+	// }
+	// if maj != cbg.MajByteString {
+	// 	return fmt.Errorf("expected byte array")
+	// }
 
-	if extra > 0 {
-		t.PublicKey = make([]uint8, extra)
-	}
+	// if extra > 0 {
+	// 	t.PublicKey = make([]uint8, extra)
+	// }
 
-	if _, err := io.ReadFull(br, t.PublicKey[:]); err != nil {
-		return err
-	}
+	// if _, err := io.ReadFull(br, t.PublicKey[:]); err != nil {
+	// 	return err
+	// }
 	return nil
 }

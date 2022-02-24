@@ -40,19 +40,19 @@ func TestAddMiner(t *testing.T) {
 	require.Equal(t, len(st.Miners), 1)
 }
 
-func TestAddPkey(t *testing.T) {
-	h := newHarness(t)
-	rt := getRuntime(t)
-	h.constructAndVerify(t, rt)
-	caller := tutil.NewIDAddr(t, 1000)
-	rt.SetCaller(caller, builtin.AccountActorCodeID)
-	rt.ExpectValidateCallerAny()
-	rt.Call(h.Actor.UpdateTaprootAddress, &mpower.NewTaprootAddressParam{PublicKey: []byte("test")})
-	rt.Verify()
+// func TestAddPkey(t *testing.T) {
+// 	h := newHarness(t)
+// 	rt := getRuntime(t)
+// 	h.constructAndVerify(t, rt)
+// 	caller := tutil.NewIDAddr(t, 1000)
+// 	rt.SetCaller(caller, builtin.AccountActorCodeID)
+// 	rt.ExpectValidateCallerAny()
+// 	rt.Call(h.Actor.UpdateTaprootAddress, &mpower.NewTaprootAddressParam{PublicKey: []byte("test")})
+// 	rt.Verify()
 
-	st := getState(rt)
-	require.Equal(t, st.PublicKey, []byte("test"))
-}
+// 	st := getState(rt)
+// 	require.Equal(t, st.PublicKey, []byte("test"))
+// }
 
 type shActorHarness struct {
 	mpower.Actor
