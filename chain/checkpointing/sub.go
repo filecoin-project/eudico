@@ -344,7 +344,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 			return false, nil, err
 		}
 
-		fmt.Println("Public key in actor: ", oldSt.PublicKey, newSt.PublicKey)
+		//fmt.Println("Public key in actor: ", oldSt.PublicKey, newSt.PublicKey)
 
 		change2, err := c.matchCheckpoint(ctx, oldTs, newTs, oldSt, newSt, diff)
 
@@ -364,14 +364,14 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 }
 
 func (c *CheckpointingSub) matchNewPublicKey(ctx context.Context, oldTs, newTs *types.TipSet, oldSt, newSt mpower.State, diff *diffInfo) (bool, error) {
-	if !reflect.DeepEqual(oldSt.PublicKey, newSt.PublicKey) {
-		c.newDKGComplete = true
-		c.newKey = newSt.PublicKey
-		c.keysUpdated = false
-		diff.newPublicKey = newSt.PublicKey
-		fmt.Println("The new public key has correctly been updated")
-		return true, nil
-	}
+	// if !reflect.DeepEqual(oldSt.PublicKey, newSt.PublicKey) {
+	// 	c.newDKGComplete = true
+	// 	c.newKey = newSt.PublicKey
+	// 	c.keysUpdated = false
+	// 	diff.newPublicKey = newSt.PublicKey
+	// 	fmt.Println("The new public key has correctly been updated")
+	// 	return true, nil
+	// }
 	return false, nil
 }
 func (c *CheckpointingSub) matchNewConfig(ctx context.Context, oldTs, newTs *types.TipSet, oldSt, newSt mpower.State, diff *diffInfo) (bool, error) {
