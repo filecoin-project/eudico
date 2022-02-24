@@ -90,7 +90,7 @@ func (a Actor) AddMiners(rt runtime.Runtime, params *AddMinerParams) *abi.EmptyV
 	rt.StateTransaction(&st, func() {
 		// Miners list is replaced with the one passed as parameters
 		for _, minerToAdd := range params.Miners {
-			st.Miners = append(st.Miners, address.Address(minerToAdd))
+			st.Miners = append(st.Miners, minerToAdd)
 		}
 		//st.Miners = unique(st.Miners)
 		st.MinerCount = int64(len(st.Miners))
