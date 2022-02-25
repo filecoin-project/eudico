@@ -1,25 +1,30 @@
 #! /bin/bash
 
-# create Bitcoin wallet
-curl -u satoshi:amiens -X POST \
-    127.0.0.1:18443 \
-    -d "{\"jsonrpc\":\"2.0\",\"id\":\"0\",\"method\":\"createwallet\", \"params\": [\"wow\"]}" \
-    -H 'Content-Type:application/json'
+# the creation of the wallet must be done priorly as the address needs
+# to be funded using the bitcoin faucet
+## create Bitcoin wallet
+#curl -u satoshi:amiens -X POST \
+#    127.0.0.1:18443 \
+#    -d "{\"jsonrpc\":\"2.0\",\"id\":\"0\",\"method\":\"createwallet\", \"params\": [\"wow\"]}" \
+#    -H 'Content-Type:application/json'
+#
+## create a new address with getnewadress
+#ADDRESS=$(curl -u satoshi:amiens -X POST \
+#    127.0.0.1:18443 \
+#    -d "{\"jsonrpc\":\"2.0\",\"id\":\"0\",\"method\":\"getnewaddress\", \"params\": [\"wow\"]}" \
+#    -H 'Content-Type:application/json' | jq -r '.result')
+#
 
-# create a new address with getnewadress
-ADDRESS=$(curl -u satoshi:amiens -X POST \
-    127.0.0.1:18443 \
-    -d "{\"jsonrpc\":\"2.0\",\"id\":\"0\",\"method\":\"getnewaddress\", \"params\": [\"wow\"]}" \
-    -H 'Content-Type:application/json' | jq -r '.result')
-
+# manually paste the address
+ADDRESS= "tb1qfc3stujw72xjusugh2wm3g9wmqdm6hwnxzwkx5"
 echo "$ADDRESS"
 
 # create 150 Bitcoin blocks with the coinbase rewards that goes to our own address
 # (note: according to Bitcoin's rules, we need to wait before being able to access the coinbase rewards)
-curl -u satoshi:amiens -X POST \
-    127.0.0.1:18443 \
-    -d "{\"jsonrpc\":\"2.0\",\"id\":\"0\",\"method\":\"generatetoaddress\", \"params\": [150, \"$ADDRESS\"]}" \
-    -H 'Content-Type:application/json'
+#curl -u satoshi:amiens -X POST \
+#    127.0.0.1:18443 \
+#    -d "{\"jsonrpc\":\"2.0\",\"id\":\"0\",\"method\":\"generatetoaddress\", \"params\": [150, \"$ADDRESS\"]}" \
+#    -H 'Content-Type:application/json'
 # Note: after this we do not mine Bitcoin blocks anymore.
 # To create more Bitcoin blocks, we need to run another script: generate-bitcoin-blocks.sh in
 # a new window.

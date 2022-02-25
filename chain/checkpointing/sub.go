@@ -871,8 +871,18 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 		address, _ := pubkeyToTapprootAddress(c.pubkey)
 		fmt.Println(address)
 
+		// to do: write method to get the total amount in the wallet we are using
+		//value, scriptPubkeyBytes := getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
+
+		// if scriptPubkeyBytes[0] != 0x51 {
+		// 	log.Infow("wrong txout")
+		// 	index = 1
+		// 	value, scriptPubkeyBytes = getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
+		// }
+		value = 0.02
+		newValue := value - c.cpconfig.Fee
 		//why not send the transaction from here?
-		payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendtoaddress\", \"params\": [\"" + address + "\", 50]}"
+		payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendtoaddress\", \"params\": [\"" + address + "\", newValue]}"
 		result := jsonRPC(c.cpconfig.BitcoinHost, payload)
 		if result == nil {
 			log.Errorf("could not send initial Bitcoin transaction to: %v", address)
