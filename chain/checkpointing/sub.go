@@ -343,6 +343,9 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 			return false, nil, err
 		}
 
+		// note: due to a bug we can't make the public key field of the
+		// actor so the following check will never return true (the
+		// public key is never updated)
 		if !reflect.DeepEqual(oldSt.PublicKey, newSt.PublicKey) {
 			c.newDKGComplete = true
 			c.newKey = newSt.PublicKey
