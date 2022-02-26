@@ -59,16 +59,20 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		}
 
 		// Get cross-message pool from subnet.
-		nn, err := api.StateNetworkName(ctx)
-		if err != nil {
-			return err
-		}
-		crossmsgs, err := api.GetCrossMsgsPool(ctx, address.SubnetID(nn), base.Height()+1)
-		if err != nil {
-			log.Errorw("selecting cross-messages failed", "error", err)
-		}
-		log.Debugf("CrossMsgs being proposed in block @%s: %d", base.Height()+1, len(crossmsgs))
+		/*
+			nn, err := api.StateNetworkName(ctx)
+			if err != nil {
+				return err
+			}
 
+			crossmsgs, err := api.GetCrossMsgsPool(ctx, address.SubnetID(nn), base.Height()+1)
+			if err != nil {
+				log.Errorw("selecting cross-messages failed", "error", err)
+			}
+
+
+			log.Debugf("CrossMsgs being proposed in block @%s: %d", base.Height()+1, len(crossmsgs))
+		*/
 		bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
 			Miner:            miner,
 			Parents:          types.NewTipSetKey(BestWorkBlock(base).Cid()),
@@ -78,7 +82,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			Epoch:            base.Height() + 1,
 			Timestamp:        uint64(time.Now().Unix()),
 			WinningPoStProof: nil,
-			CrossMessages:    crossmsgs,
+			CrossMessages:    nil,
 		})
 		if err != nil {
 			log.Errorw("creating block failed", "error", err)
@@ -105,6 +109,8 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 }
 
 func (tsp *TSPoW) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.BlockTemplate) (*types.FullBlock, error) {
+	//_, err := w.WalletSign(ctx, bt.Miner, []byte{1}, lapi.MsgMeta{})
+	//panic(err)
 	b, err := common.PrepareBlockForSignature(ctx, tsp.sm, bt)
 	if err != nil {
 		return nil, err

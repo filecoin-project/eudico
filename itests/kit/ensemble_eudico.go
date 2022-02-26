@@ -4,43 +4,53 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"fmt"
+	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
+	"github.com/filecoin-project/lotus/cmd/lotus-seed/seed"
+	"github.com/filecoin-project/lotus/storage/mockstorage"
 	"io/ioutil"
 	"net"
+	"net/http"
+	"path"
 	"testing"
 	"time"
 
+	"github.com/gorilla/mux"
 	libp2pcrypto "github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
+	"github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-jsonrpc"
 	"github.com/filecoin-project/go-state-types/network"
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain"
-	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/beacon"
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
-	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
+	snmgr "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/manager"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
+	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/gen"
 	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
+	"github.com/filecoin-project/lotus/chain/gen/slashfilter"
 	"github.com/filecoin-project/lotus/chain/messagepool"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/wallet"
-	"github.com/filecoin-project/lotus/cmd/lotus-seed/seed"
 	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
 	"github.com/filecoin-project/lotus/extern/sector-storage/mock"
 	"github.com/filecoin-project/lotus/genesis"
+	"github.com/filecoin-project/lotus/lib/peermgr"
 	"github.com/filecoin-project/lotus/node"
+	"github.com/filecoin-project/lotus/node/impl"
 	"github.com/filecoin-project/lotus/node/modules"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
-	testing2 "github.com/filecoin-project/lotus/node/modules/testing"
 	"github.com/filecoin-project/lotus/node/repo"
-	"github.com/filecoin-project/lotus/storage/mockstorage"
 )
 
 func init() {
@@ -165,6 +175,8 @@ func (n *EudicoEnsemble) FullNode(full *TestFullNode, opts ...NodeOpt) *EudicoEn
 		n.genesis.accounts = append(n.genesis.accounts, genacc)
 	}
 
+	n.t.Log("!!!! First key:", key.Address)
+
 	*full = TestFullNode{t: n.t, options: options, DefaultKey: key}
 	n.inactive.fullnodes = append(n.inactive.fullnodes, full)
 	return n
@@ -200,6 +212,8 @@ func (n *EudicoEnsemble) Miner(minerNode *TestMiner, full *TestFullNode, opts ..
 	}
 
 	ownerKey := options.ownerKey
+	//n.t.Logf("!!! owner key %x", ownerKey.Address)
+
 	if !n.bootstrapped {
 		var (
 			sectors = options.sectors
@@ -212,6 +226,7 @@ func (n *EudicoEnsemble) Miner(minerNode *TestMiner, full *TestFullNode, opts ..
 		require.NoError(n.t, err)
 
 		// Create the preseal commitment.
+
 		if n.options.mockProofs {
 			genm, k, err = mockstorage.PreSeal(proofType, actorAddr, sectors)
 		} else {
@@ -220,10 +235,12 @@ func (n *EudicoEnsemble) Miner(minerNode *TestMiner, full *TestFullNode, opts ..
 		require.NoError(n.t, err)
 
 		genm.PeerId = peerId
+		_ = k
 
 		// create an owner key, and assign it some FIL.
-		ownerKey, err = wallet.NewKey(*k)
-		require.NoError(n.t, err)
+		ownerKey, err = wallet.GenerateKey(types.KTSecp256k1)
+
+		n.t.Log("!!!! Some key:", ownerKey.Address)
 
 		genacc := genesis.Actor{
 			Type:    genesis.TAccount,
@@ -258,9 +275,9 @@ func (n *EudicoEnsemble) Miner(minerNode *TestMiner, full *TestFullNode, opts ..
 	return n
 }
 
-func NewRootDelegatedConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
+func NewRootTSPoWConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
 	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
-	return delegcns.NewDelegatedConsensus(sm, nil, beacon, r, verifier, genesis, netName)
+	return tspow.NewTSPoWConsensus(sm, nil, beacon, r, verifier, genesis, netName)
 }
 
 // Start starts all enrolled nodes.
@@ -273,6 +290,41 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		// create the networking backbone.
 		gtempl = n.generateGenesis()
 		n.mn = mocknet.New()
+	}
+
+	serverOptions := make([]jsonrpc.ServerOption, 0)
+	globalMux := mux.NewRouter()
+	subnetMux := mux.NewRouter()
+	globalMux.NewRoute().PathPrefix("/subnet/").Handler(subnetMux)
+
+	var err error
+	serveNamedApi := func(p string, iapi api.FullNode) error {
+		pp := path.Join("/subnet/", p+"/")
+
+		var h http.Handler
+		// If this is a full node API
+		api, ok := iapi.(*impl.FullNodeAPI)
+		if ok {
+			// Instantiate the full node handler.
+			h, err = node.FullNodeHandler(pp, api, true, serverOptions...)
+			if err != nil {
+				return fmt.Errorf("failed to instantiate rpc handler: %s", err)
+			}
+		} else {
+			// If not instantiate a subnet api
+			api, ok := iapi.(*snmgr.API)
+			if !ok {
+				return xerrors.Errorf("Couldn't instantiate new subnet API. Something went wrong: %s", err)
+			}
+			// Instantiate the full node handler.
+			h, err = snmgr.FullNodeHandler(pp, api, true, serverOptions...)
+			if err != nil {
+				return fmt.Errorf("failed to instantiate rpc handler: %s", err)
+			}
+		}
+		fmt.Println("[*] serve new subnet API", pp)
+		subnetMux.NewRoute().PathPrefix(pp).Handler(h)
+		return nil
 	}
 
 	// ---------------------
@@ -291,26 +343,45 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 			node.MockHost(n.mn),
 			node.Test(),
 
-			node.Override(new(consensus.Consensus), NewRootDelegatedConsensus),
-			node.Override(new(store.WeightFunc), delegcns.Weight),
+			node.Override(new(consensus.Consensus), NewRootTSPoWConsensus),
+			node.Override(new(store.WeightFunc), tspow.Weight),
+			node.Unset(new(*slashfilter.SlashFilter)),
 			node.Override(new(stmgr.Executor), common.RootTipSetExecutor),
 			node.Override(new(stmgr.UpgradeSchedule), common.DefaultUpgradeSchedule()),
 
 			// so that we subscribe to pubsub topics immediately
 			node.Override(new(dtypes.Bootstrapper), dtypes.Bootstrapper(true)),
 
+			node.Override(new(api.FullNodeServer), serveNamedApi),
+
+			node.Override(node.SetApiEndpointKey, func(lr repo.LockedRepo) error {
+				apima, err := multiaddr.NewMultiaddr("/ip4/127.0.0.1/tcp/1234")
+				if err != nil {
+					return err
+				}
+				return lr.SetAPIEndpoint(apima)
+			}),
+			node.Unset(node.RunPeerMgrKey),
+			node.Unset(new(*peermgr.PeerMgr)),
+
 			// upgrades
-			node.Override(new(stmgr.UpgradeSchedule), n.options.upgradeSchedule),
+			//node.Override(new(stmgr.UpgradeSchedule), n.options.upgradeSchedule),
 		}
 
 		// append any node builder options.
 		opts = append(opts, full.options.extraNodeOpts...)
 
+		var genBytes []byte
+		genBytes, err := ioutil.ReadFile("../testdata/tspow.gen")
+		require.NoError(n.t, err)
+
 		// Either generate the genesis or inject it.
 		if i == 0 && !n.bootstrapped {
-			opts = append(opts, node.Override(new(modules.Genesis), testing2.MakeGenesisMem(&n.genesisBlock, *gtempl)))
+			opts = append(opts, node.Override(new(modules.Genesis), modules.LoadGenesis(genBytes)))
+			_ = gtempl
+			//opts = append(opts, node.Override(new(modules.Genesis), testing2.MakeGenesisMem(&n.genesisBlock, *gtempl)))
 		} else {
-			opts = append(opts, node.Override(new(modules.Genesis), modules.LoadGenesis(n.genesisBlock.Bytes())))
+			opts = append(opts, node.Override(new(modules.Genesis), modules.LoadGenesis(genBytes)))
 		}
 
 		// Are we mocking proofs?
@@ -353,7 +424,7 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 	n.inactive.fullnodes = n.inactive.fullnodes[:0]
 
 	// Link all the nodes.
-	err := n.mn.LinkAll()
+	err = n.mn.LinkAll()
 	require.NoError(n.t, err)
 	/*
 

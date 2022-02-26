@@ -2,7 +2,6 @@ package common
 
 import (
 	"context"
-
 	"github.com/filecoin-project/go-state-types/crypto"
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/consensus"
@@ -134,7 +133,7 @@ func SignBlock(ctx context.Context, w lapi.Wallet, b *types.FullBlock) error {
 		Type: lapi.MTBlock,
 	})
 	if err != nil {
-		return xerrors.Errorf("failed to sign new block: %w", err)
+		return xerrors.Errorf("failed to sign new block %x: %w", next.Miner, err)
 	}
 
 	next.BlockSig = sig

@@ -3,6 +3,7 @@ package itests
 
 import (
 	"context"
+	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -31,14 +32,19 @@ type consensusSuite struct {
 func runConsensusTest(t *testing.T, opts ...interface{}) {
 	ts := consensusSuite{opts: opts}
 
-	t.Run("testDelegatedConsensusMining", ts.testDelegatedMining)
+	t.Run("testTSpoWConsensusMining", ts.testTSPoWMining)
 }
 
-func (ts *consensusSuite) testDelegatedMining(t *testing.T) {
+func (ts *consensusSuite) testTSPoWMining(t *testing.T) {
 	ctx := context.Background()
 
 	full, _, _ := kit.EudicoEnsembleMinimal(t, ts.opts...)
-	go delegcns.Mine(ctx, full)
+	l, err := full.WalletList(ctx)
+	require.NoError(t, err)
+	if len(l) != 1 {
+		t.Fatal("empty list of wallet keys")
+	}
+	go tspow.Mine(ctx, l[0], full)
 
 	newHeads, err := full.ChainNotify(ctx)
 	require.NoError(t, err)
@@ -50,10 +56,6 @@ func (ts *consensusSuite) testDelegatedMining(t *testing.T) {
 	require.Equal(t, int64(h1.Height()), int64(baseHeight))
 
 	<-newHeads
-
-	h2, err := full.ChainHead(ctx)
-	require.NoError(t, err)
-	require.Greater(t, int64(h2.Height()), int64(h1.Height()))
 
 }
 
