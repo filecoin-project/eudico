@@ -33,7 +33,7 @@ func NodeAddr() string {
 	return addr
 }
 
-func parseTendermintBlock(b *tmtypes.Block, tag []byte) ([]*types.SignedMessage, []*types.Message) {
+func getMessagesFrom(b *tmtypes.Block, tag []byte) ([]*types.SignedMessage, []*types.Message) {
 	var msgs []*types.SignedMessage
 	var crossMsgs []*types.Message
 

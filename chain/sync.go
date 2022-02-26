@@ -5,14 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"sort"
 	"sync"
 	"time"
-
-	"github.com/filecoin-project/lotus/chain/consensus"
-
-	"github.com/filecoin-project/lotus/node/modules/dtypes"
 
 	"github.com/Gurpartap/async"
 	"github.com/hashicorp/go-multierror"
@@ -37,16 +32,15 @@ import (
 	bstore "github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/beacon"
+	"github.com/filecoin-project/lotus/chain/consensus"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/exchange"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/vm"
 	"github.com/filecoin-project/lotus/metrics"
-)
-
-const (
-	tendermintRPCErrorStr = "connect: connection refused"
+	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
 var (
@@ -782,6 +776,9 @@ loop:
 	for blockSet[len(blockSet)-1].Height() > untilHeight {
 		for _, bc := range at.Cids() {
 			if reason, ok := syncer.bad.Has(bc); ok {
+				if syncer.consensus.Type() == hierarchical.Tendermint {
+					continue
+				}
 				newReason := reason.Linked("change contained %s", bc)
 				for _, b := range acceptedBlocks {
 					syncer.bad.Add(b, newReason)

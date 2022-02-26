@@ -59,7 +59,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		if err != nil {
 			log.Errorw("selecting cross-messages failed", "error", err)
 		}
-		log.Infof("[%s] %d - msgs, %d - crossmsgs retrieved for the block @%s", subnetID, len(msgs), len(crossMsgs), base.Height()+1)
+		log.Infof("[%s] retrieved %d - msgs, %d - crossmsgs from the pool for @%s", subnetID, len(msgs), len(crossMsgs), base.Height()+1)
 
 		for _, msg := range msgs {
 			msgBytes, err := msg.Serialize()
@@ -150,7 +150,7 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 	log.Infof("starting creating block for epoch %d", bt.Epoch)
 	defer log.Infof("stopping creating block for epoch %d", bt.Epoch)
 
-	ticker := time.NewTicker(300 * time.Millisecond)
+	ticker := time.NewTicker(1000 * time.Millisecond)
 	defer ticker.Stop()
 
 	// Calculate actual target height of the Tendermint blockchain.
@@ -174,7 +174,7 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 		}
 	}
 
-	msgs, crossMsgs := parseTendermintBlock(next.Block, tm.tag)
+	msgs, crossMsgs := getMessagesFrom(next.Block, tm.tag)
 	bt.Messages = msgs
 	bt.CrossMessages = crossMsgs
 	bt.Timestamp = uint64(next.Block.Time.Unix())
@@ -182,8 +182,8 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 
 	proposerAddress := next.Block.ProposerAddress
 	proposerAddrStr := proposerAddress.String()
-	// if another Tendermint node proposed the block.
 	if proposerAddrStr != tm.tendermintValidatorAddress {
+		// if another Tendermint node proposed the block.
 		eudicoAddress, ok := tm.tendermintEudicoAddresses[proposerAddrStr]
 		// We have already known the eudico address of the proposer
 		if ok {
@@ -208,8 +208,8 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 			tm.tendermintEudicoAddresses[proposerAddrStr] = newEudicoAddress
 			bt.Miner = newEudicoAddress
 		}
-		// Our Tendermint node proposed the block
 	} else {
+		// Our Tendermint node proposed the block
 		bt.Miner = tm.eudicoClientAddress
 	}
 
@@ -235,8 +235,6 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 	if validMsgs.CrossMsgs != nil {
 		b.CrossMessages = validMsgs.CrossMsgs
 	}
-
-	//b.Header.Ticket = &types.Ticket{resp.Block.Hash().Bytes()}
 
 	log.Infof("!!! %s mined a block", b.Header.Miner)
 

@@ -121,6 +121,8 @@ To stop a demo running via tmux:
 tmux kill-session -t tendermint
 ```
 
+All other Tmux commands can be found in the [Tmux Cheat Sheet](https://tmuxcheatsheet.com/).
+
 ### Subnet Demo
 ```
  ./eudico subnet add --consensus 2 --name tendermint

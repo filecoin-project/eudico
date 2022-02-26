@@ -17,8 +17,8 @@ NODE_1_APP_DATA="$TENDERMINT_PATH/build/node1/data/"
 
 (cd "$TENDERMINT_PATH" && make localnet-stop)
 
-rm -rf ./eudico
-make eudico
+#rm -rf ./eudico
+#make eudico
 
 rm -rvf ~/.eudico
 rm -rvf ~/.eudico-node0
