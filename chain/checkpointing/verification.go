@@ -75,6 +75,7 @@ func GetLatestCheckpoint(url string, first_pk []byte, first_cp []byte) (*Checkpo
 	firstscript := getTaprootScript(first_pubkeyTaproot)
 	taprootAddress, err := pubkeyToTapprootAddress(first_pubkeyTaproot)
 	if err != nil {
+		log.Errorf("Error when getting the last checkpoint from bitcoin",err)
 		return nil, err
 	}
 
@@ -85,7 +86,7 @@ func GetLatestCheckpoint(url string, first_pk []byte, first_cp []byte) (*Checkpo
 	*/
 	addTaprootToWallet(url, firstscript)
 	checkpoint, done := GetFirstCheckpointAddress(url, taprootAddress)
-	// Aging we add taproot "address" (actually the script) to the wallet in the Bitcoin node
+	// Again we add taproot "address" (actually the script) to the wallet in the Bitcoin node
 	addTaprootToWallet(url, checkpoint.address)
 	var new_checkpoint Checkpoint
 	for {
