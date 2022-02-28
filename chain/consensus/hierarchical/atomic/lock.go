@@ -11,9 +11,10 @@ import (
 )
 
 const (
-	MethodLock  abi.MethodNum = 2
-	MethodMerge abi.MethodNum = 3
-	MethodAbort abi.MethodNum = 4
+	MethodLock   abi.MethodNum = 2
+	MethodMerge  abi.MethodNum = 3
+	MethodAbort  abi.MethodNum = 4
+	MethodUnlock abi.MethodNum = 5
 )
 
 type Marshalable interface {
@@ -34,7 +35,8 @@ type LockedOutput struct {
 
 type LockableActor interface {
 	Lock(rt runtime.Runtime, params *LockParams) *LockedOutput
-	Merge(rt runtime.Runtime, params *UnlockParams) *abi.EmptyValue
+	Merge(rt runtime.Runtime, params *MergeParams) *abi.EmptyValue
+	Unlock(rt runtime.Runtime, params *UnlockParams) *abi.EmptyValue
 	Abort(rt runtime.Runtime, params *LockParams) *abi.EmptyValue
 }
 
@@ -51,13 +53,17 @@ func WrapLockParams(m abi.MethodNum, params Marshalable) (*LockParams, error) {
 	return &LockParams{m, buf.Bytes()}, nil
 }
 
+func WrapSerializedParams(m abi.MethodNum, params []byte) (*LockParams, error) {
+	return &LockParams{m, params}, nil
+}
+
 func UnwrapLockParams(params *LockParams, out Marshalable) error {
 	return out.UnmarshalCBOR(bytes.NewReader(params.Params))
 }
 
 type UnlockParams struct {
 	Params *LockParams
-	Output []byte
+	State  []byte
 }
 
 func WrapUnlockParams(params *LockParams, out LockableState) (*UnlockParams, error) {
@@ -69,7 +75,23 @@ func WrapUnlockParams(params *LockParams, out LockableState) (*UnlockParams, err
 }
 
 func UnwrapUnlockParams(params *UnlockParams, out LockableState) error {
-	return out.UnmarshalCBOR(bytes.NewReader(params.Output))
+	return out.UnmarshalCBOR(bytes.NewReader(params.State))
+}
+
+type MergeParams struct {
+	State []byte
+}
+
+func WrapMergeParams(out LockableState) (*MergeParams, error) {
+	var buf bytes.Buffer
+	if err := out.MarshalCBOR(&buf); err != nil {
+		return nil, err
+	}
+	return &MergeParams{buf.Bytes()}, nil
+}
+
+func UnwrapMergeParams(params *MergeParams, out LockableState) error {
+	return out.UnmarshalCBOR(bytes.NewReader(params.State))
 }
 
 func ValidateIfLocked(states ...*LockedState) error {
@@ -137,21 +159,6 @@ func UnwrapLockableState(s *LockedState, out LockableState) error {
 
 func (s *LockedState) IsLocked() bool {
 	return s.Lock
-}
-
-func (t *LockedState) lockInt() []byte {
-	if t.Lock {
-		return []byte{1}
-	}
-	return []byte{0}
-}
-
-func (t *LockedState) lockFromByte(b []byte) {
-	if b[0] == 1 {
-		t.Lock = true
-		return
-	}
-	t.Lock = false
 }
 
 func CidFromOutput(s LockableState) (cid.Cid, error) {

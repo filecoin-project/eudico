@@ -33,6 +33,7 @@ import (
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/blockstore"
+	bstore "github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors/policy"
 	"github.com/filecoin-project/lotus/chain/beacon"
@@ -236,7 +237,14 @@ func NewGeneratorWithSectorsAndUpgradeSchedule(numSectors int, us stmgr.UpgradeS
 		return nil, xerrors.Errorf("make genesis block failed: %w", err)
 	}
 
-	cs := store.NewChainStore(bs, bs, ds, nil, j)
+	weight := func(ctx context.Context, stateBs bstore.Blockstore, ts *types.TipSet) (types.BigInt, error) {
+		if ts == nil {
+			return types.NewInt(0), nil
+		}
+
+		return big.NewInt(int64(ts.Height() + 1)), nil
+	}
+	cs := store.NewChainStore(bs, bs, ds, weight, j)
 
 	genfb := &types.FullBlock{Header: genb.Genesis}
 	gents := store.NewFullTipSet([]*types.FullBlock{genfb})

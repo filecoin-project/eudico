@@ -51,11 +51,18 @@ func (o *Owners) Merge(other atomic.LockableState) error {
 
 }
 
-func ConstructState(rt runtime.Runtime) *ReplaceState {
+func ConstructState() (*ReplaceState, error) {
 	owners, err := atomic.WrapLockableState(&Owners{M: map[string]cid.Cid{}})
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error wrapping lockable state")
-	return &ReplaceState{Owners: owners}
+	if err != nil {
+		return nil, err
+	}
+	return &ReplaceState{Owners: owners}, nil
 }
+
+const (
+	MethodReplace = 6
+	MethodOwn     = 7
+)
 
 type ReplaceActor struct{}
 
@@ -65,8 +72,9 @@ func (a ReplaceActor) Exports() []interface{} {
 		atomic.MethodLock:         a.Lock,
 		atomic.MethodMerge:        a.Merge,
 		atomic.MethodAbort:        a.Abort,
-		5:                         a.Replace,
-		6:                         a.Own,
+		atomic.MethodUnlock:       a.Unlock,
+		MethodReplace:             a.Replace,
+		MethodOwn:                 a.Own,
 	}
 }
 
@@ -84,7 +92,9 @@ func (a ReplaceActor) State() cbor.Er {
 
 func (a ReplaceActor) Constructor(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.InitActorCodeID)
-	rt.StateCreate(ConstructState(rt))
+	st, err := ConstructState()
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error computing initial state")
+	rt.StateCreate(st)
 	return nil
 }
 
@@ -95,13 +105,11 @@ type OwnParams struct {
 func (a ReplaceActor) Own(rt runtime.Runtime, params *OwnParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerAcceptAny()
 
-	var (
-		st  ReplaceState
-		err error
-	)
+	var st ReplaceState
 	rt.StateTransaction(&st, func() {
 		ValidateLockedState(rt, &st)
-		own := st.UnwrapOwners(rt)
+		own, err := st.UnwrapOwners()
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error unwrapping lockable state")
 		_, ok := own.M[rt.Caller().String()]
 		if ok {
 			rt.Abortf(exitcode.ErrIllegalState, "address already owning something")
@@ -124,7 +132,8 @@ func (a ReplaceActor) Replace(rt runtime.Runtime, params *ReplaceParams) *abi.Em
 	var st ReplaceState
 	rt.StateTransaction(&st, func() {
 		ValidateLockedState(rt, &st)
-		own := st.UnwrapOwners(rt)
+		own, err := st.UnwrapOwners()
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error unwrapping lockable state")
 		_, ok1 := own.M[rt.Caller().String()]
 		_, ok2 := own.M[params.Addr.String()]
 		if !ok1 || !ok2 {
@@ -162,23 +171,32 @@ func (st *ReplaceState) unlock(rt runtime.Runtime) {
 	builtin.RequireNoErr(rt, st.Owners.UnlockState(), exitcode.ErrIllegalArgument, "error unlocking state")
 }
 
-func (a ReplaceActor) Merge(rt runtime.Runtime, params *atomic.UnlockParams) *abi.EmptyValue {
-	// FIXME: Who should call this function? System actor or the caller of Lock()?
-	// Deferring to when we figure out the end-to-end protocol.
-	rt.ValidateImmediateCallerAcceptAny()
+func (a ReplaceActor) Merge(rt runtime.Runtime, params *atomic.MergeParams) *abi.EmptyValue {
+	// Only system actor can trigger this function.
+	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
+	var st ReplaceState
+	rt.StateTransaction(&st, func() {
+		merge := &Owners{}
+		err := atomic.UnwrapMergeParams(params, merge)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error unwrapping output from mergeParams")
+		st.merge(rt, merge)
+	})
+
+	return nil
+}
+
+func (a ReplaceActor) Unlock(rt runtime.Runtime, params *atomic.UnlockParams) *abi.EmptyValue {
+	// Only system actor can trigger this function.
+	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
 
 	var st ReplaceState
 	rt.StateTransaction(&st, func() {
+		output := &Owners{}
+		err := atomic.UnwrapUnlockParams(params, output)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error unwrapping output from unlockParams")
 		switch params.Params.Method {
 		case 5:
-			output := &Owners{}
-			err := atomic.UnwrapUnlockParams(params, output)
-			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error unwrapping output from unlockParams")
-			owners := &Owners{}
-			err = atomic.UnwrapLockableState(st.Owners, owners)
-			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error unwrapping owners")
-			builtin.RequireNoErr(rt, owners.Merge(output), exitcode.ErrIllegalState, "error merging output")
-			st.storeOwners(rt, owners)
+			st.merge(rt, output)
 			st.unlock(rt)
 		default:
 			rt.Abortf(exitcode.ErrIllegalArgument, "this method has nothing to merge")
@@ -188,9 +206,18 @@ func (a ReplaceActor) Merge(rt runtime.Runtime, params *atomic.UnlockParams) *ab
 	return nil
 }
 
+func (st *ReplaceState) merge(rt runtime.Runtime, state atomic.LockableState) {
+	owners := &Owners{}
+	err := atomic.UnwrapLockableState(st.Owners, owners)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error unwrapping owners")
+	builtin.RequireNoErr(rt, owners.Merge(state), exitcode.ErrIllegalState, "error merging output")
+	st.storeOwners(rt, owners)
+}
+
 func (a ReplaceActor) Abort(rt runtime.Runtime, params *atomic.LockParams) *abi.EmptyValue {
-	// FIXME: Who should call this function? System actor or the caller of Lock()?
-	// Deferring to when we figure out the end-to-end protocol.
+	// FIXME: We should check here that the only one allowed to abort an execuetion is
+	// the rt.Caller() that locked the state? Or is the system.actor because is triggered
+	// through a top-down transaction?
 	rt.ValidateImmediateCallerAcceptAny()
 
 	var st ReplaceState
@@ -212,15 +239,15 @@ func ValidateLockedState(rt runtime.Runtime, st *ReplaceState) {
 		exitcode.ErrIllegalState, "state locked")
 }
 
-func (st *ReplaceState) UnwrapOwners(rt runtime.Runtime) *Owners {
+func (st *ReplaceState) UnwrapOwners() (*Owners, error) {
 	own := &Owners{}
-	err := atomic.UnwrapLockableState(st.Owners, own)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error unwrapping lockable state")
-	return own
+	if err := atomic.UnwrapLockableState(st.Owners, own); err != nil {
+		return nil, err
+	}
+	return own, nil
 }
 
 func (st *ReplaceState) storeOwners(rt runtime.Runtime, owners *Owners) {
-	var err error
-	err = st.Owners.SetState(owners)
+	err := st.Owners.SetState(owners)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error wrapping lockable state")
 }
