@@ -16,8 +16,8 @@
 #
 
 # manually paste the address
-ADDRESS= "tb1qfc3stujw72xjusugh2wm3g9wmqdm6hwnxzwkx5"
-echo "$ADDRESS"
+#ADDRESS= "tb1qfc3stujw72xjusugh2wm3g9wmqdm6hwnxzwkx5"
+#echo "$ADDRESS"
 
 # create 150 Bitcoin blocks with the coinbase rewards that goes to our own address
 # (note: according to Bitcoin's rules, we need to wait before being able to access the coinbase rewards)
