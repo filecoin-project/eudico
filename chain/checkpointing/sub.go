@@ -689,7 +689,9 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 	newValue := value - c.cpconfig.Fee
 	fmt.Println("Fee for next transaction is: ", c.cpconfig.Fee)
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.2f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
+	fmt.Println("Raw tx: ", payload)
 	result := jsonRPC(c.cpconfig.BitcoinHost, payload)
+	fmt.Println("Result from Raw tx: ", result)
 	if result == nil {
 		return xerrors.Errorf("can not create new transaction")
 	}
