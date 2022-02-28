@@ -2,6 +2,7 @@ package checkpointing
 
 import (
 	"errors"
+	"fmt"
 )
 
 type BitcoinTx struct {
@@ -46,6 +47,7 @@ func GetFirstCheckpointAddress(url, taprootAddress string) (Checkpoint, error) {
 func GetNextCheckpointFixed(url, txid string) (Checkpoint, error) {
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"listtransactions\", \"params\": [\"*\", 500000000, 0, true]}"
 	result := jsonRPC(url, payload)
+	fmt.Println(result)
 	list := result["result"].([]interface{})
 	for _, item := range list {
 		item_map := item.(map[string]interface{})
@@ -75,7 +77,7 @@ func GetLatestCheckpoint(url string, first_pk []byte, first_cp []byte) (*Checkpo
 	firstscript := getTaprootScript(first_pubkeyTaproot)
 	taprootAddress, err := pubkeyToTapprootAddress(first_pubkeyTaproot)
 	if err != nil {
-		log.Errorf("Error when getting the last checkpoint from bitcoin",err)
+		log.Errorf("Error when getting the last checkpoint from bitcoin", err)
 		return nil, err
 	}
 
