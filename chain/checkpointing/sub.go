@@ -688,7 +688,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 	}
 	newValue := value - c.cpconfig.Fee
 	fmt.Println("Fee for next transaction is: ", c.cpconfig.Fee)
-	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.2f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
+	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.5f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
 	fmt.Println("Raw tx: ", payload)
 	result := jsonRPC(c.cpconfig.BitcoinHost, payload)
 	fmt.Println("Result from Raw tx: ", result)
@@ -893,7 +893,7 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 		newValue := value - c.cpconfig.Fee
 		//why not send the transaction from here?
 		fmt.Println("Creating the initial transaction now")
-		payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendtoaddress\", \"params\": [\"" + address + "\", \"" + fmt.Sprintf("%.2f", newValue) + "\" ]}"
+		payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendtoaddress\", \"params\": [\"" + address + "\", \"" + fmt.Sprintf("%.5f", newValue) + "\" ]}"
 		fmt.Println(payload)
 		// payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.2f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
 		result := jsonRPC(c.cpconfig.BitcoinHost, payload)
