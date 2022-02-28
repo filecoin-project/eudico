@@ -47,13 +47,13 @@ func GetFirstCheckpointAddress(url, taprootAddress string) (Checkpoint, error) {
 func GetNextCheckpointFixed(url, txid string) (Checkpoint, error) {
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"listtransactions\", \"params\": [\"*\", 500000000, 0, true]}"
 	result := jsonRPC(url, payload)
-	fmt.Println(result)
 	list := result["result"].([]interface{})
 	for _, item := range list {
 		item_map := item.(map[string]interface{})
 		tx_id := item_map["txid"].(string)
 		payload = "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"getrawtransaction\", \"params\": [\"" + tx_id + "\", true]}"
 		result = jsonRPC(url, payload)
+		fmt.Println(result)
 		reader := result["result"].(map[string]interface{})
 		new_txid := reader["txid"].(string)
 		vin := reader["vin"].([]interface{})[0].(map[string]interface{})["txid"]
