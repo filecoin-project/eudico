@@ -827,6 +827,7 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 		log.Errorf("could not get genesis tipset: %v", err)
 		return
 	}
+
 	cidBytes := ts.Key().Bytes()                             // this is the checkpoint (i.e. hash of block)
 	publickey, err := hex.DecodeString(c.cpconfig.PublicKey) //publickey pre-generated
 	if err != nil {
@@ -882,8 +883,9 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 		value := 0.02
 		newValue := value - c.cpconfig.Fee
 		//why not send the transaction from here?
+		fmt.Println("Creating the initial transaction now")
 		payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendtoaddress\", \"params\": [\"" + address + "\", \"" + fmt.Sprintf("%.2f", newValue) + "\" ]}"
-
+		fmt.Println(payload)
 		// payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.2f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
 		result := jsonRPC(c.cpconfig.BitcoinHost, payload)
 		if result == nil {
