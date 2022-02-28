@@ -746,6 +746,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 
 	payload = "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendrawtransaction\", \"params\": [\"" + rawtx + "\"]}"
 	result = jsonRPC(c.cpconfig.BitcoinHost, payload)
+	fmt.Println("Transaction to be sent: ", result)
 	if result["error"] != nil {
 		return xerrors.Errorf("failed to broadcast transaction")
 	}
