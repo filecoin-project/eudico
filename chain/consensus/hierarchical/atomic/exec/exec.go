@@ -14,6 +14,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/actors/registry"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
 	"github.com/filecoin-project/lotus/chain/rand"
+	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/vm"
@@ -164,4 +165,47 @@ func mergeMsg(to address.Address, mparams *atomic.MergeParams) (*types.Message, 
 	}
 	m.GasLimit = build.BlockGasLimit
 	return m, nil
+}
+
+func (sg *StateSurgeon) transplantActors(src *state.StateTree, pluck []address.Address) (*state.StateTree, error) {
+	log.Printf("transplanting actor states: %v", pluck)
+
+	dst, err := state.NewStateTree(sg.stores.CBORStore, src.Version())
+	if err != nil {
+		return nil, err
+	}
+
+	for _, a := range pluck {
+		actor, err := src.GetActor(a)
+		if err != nil {
+			return nil, fmt.Errorf("get actor %s failed: %w", a, err)
+		}
+
+		err = dst.SetActor(a, actor)
+		if err != nil {
+			return nil, err
+		}
+
+		// recursive copy of the actor state.
+		err = vm.Copy(context.TODO(), sg.stores.Blockstore, sg.stores.Blockstore, actor.Head)
+		if err != nil {
+			return nil, err
+		}
+
+		actorState, err := sg.api.ChainReadObj(sg.ctx, actor.Head)
+		if err != nil {
+			return nil, err
+		}
+
+		cid, err := sg.stores.CBORStore.Put(sg.ctx, &cbg.Deferred{Raw: actorState})
+		if err != nil {
+			return nil, err
+		}
+
+		if cid != actor.Head {
+			panic("mismatched cids")
+		}
+	}
+
+	return dst, nil
 }
