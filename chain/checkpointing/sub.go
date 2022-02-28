@@ -879,10 +879,12 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 		// 	index = 1
 		// 	value, scriptPubkeyBytes = getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
 		// }
-		value = 0.02
+		value := 0.02
 		newValue := value - c.cpconfig.Fee
 		//why not send the transaction from here?
-		payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendtoaddress\", \"params\": [\"" + address + "\", newValue]}"
+		payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendtoaddress\", \"params\": [\"" + address + "\", \"" + fmt.Sprintf("%.2f", newValue) + "\" ]}"
+
+		// payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.2f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
 		result := jsonRPC(c.cpconfig.BitcoinHost, payload)
 		if result == nil {
 			log.Errorf("could not send initial Bitcoin transaction to: %v", address)
