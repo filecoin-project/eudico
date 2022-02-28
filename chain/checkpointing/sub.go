@@ -826,6 +826,8 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 	if err != nil {
 		log.Errorf("could not get genesis tipset: %v", err)
 		return
+	} else {
+		log.Infow("Got genesis tipset")
 	}
 
 	cidBytes := ts.Key().Bytes()                             // this is the checkpoint (i.e. hash of block)
@@ -833,13 +835,17 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 	if err != nil {
 		log.Errorf("could not decode public key: %v", err)
 		return
+	} else {
+		log.Infow("Decoded Public key")
 	}
 
 	// Get the last checkpoint from the bitcoin node
 	btccp, err := GetLatestCheckpoint(c.cpconfig.BitcoinHost, publickey, cidBytes)
 	if err != nil {
-		log.Errorf("could not decode public key: %v", err)
+		log.Errorf("could not get last checkpoint from Bitcoin: %v", err)
 		return
+	} else {
+		log.Infow("Got last checkpoint from Bitcoin node")
 	}
 
 	// Get the config in minio using the last checkpoint found through Bitcoin.
