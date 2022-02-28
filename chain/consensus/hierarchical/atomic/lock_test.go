@@ -32,6 +32,7 @@ func TestMarshal(t *testing.T) {
 	require.True(t, reflect.DeepEqual(l2, l))
 	sm := &SampleState{}
 	err = atomic.UnwrapLockableState(l2, sm)
+	require.NoError(t, err)
 	require.Equal(t, s, sm)
 
 	p, err := atomic.WrapLockParams(12, s)
@@ -64,6 +65,18 @@ func TestMarshal(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, out, so)
 
+	m, err := atomic.WrapMergeParams(so)
+	require.NoError(t, err)
+	err = m.MarshalCBOR(&buf)
+	require.NoError(t, err)
+
+	// Unmarshal and check equal
+	m2 := &atomic.MergeParams{}
+	err = m2.UnmarshalCBOR(&buf)
+	require.NoError(t, err)
+	err = atomic.UnwrapMergeParams(m2, out)
+	require.NoError(t, err)
+	require.Equal(t, out, so)
 	// TODO: Marshal wrapping the wrong type.
 }
 

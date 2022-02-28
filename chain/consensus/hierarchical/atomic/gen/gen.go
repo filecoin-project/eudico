@@ -7,6 +7,7 @@ import (
 
 func main() {
 	if err := gen.WriteTupleEncodersToFile("./cbor_gen.go", "atomic",
+		atomic.MergeParams{},
 		atomic.UnlockParams{},
 		atomic.LockParams{},
 		atomic.LockedOutput{},
