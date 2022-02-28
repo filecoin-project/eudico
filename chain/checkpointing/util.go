@@ -107,7 +107,7 @@ func pubkeyToTapprootAddress(pubkey []byte) (string, error) {
 
 	// regtest human-readable part is "bcrt" according to no documentation ever... (see https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki)
 	// Using EncodeM becasue we want bech32m... which has a new checksum
-	taprootAddress, err := bech32.EncodeM("bcrt", conv)
+	taprootAddress, err := bech32.EncodeM("tb", conv)
 	if err != nil {
 		return "", err
 	}
