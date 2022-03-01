@@ -679,6 +679,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 	}
 
 	index := 0
+	fmt.Println("Previous tx id: ", c.ptxid)
 	value, scriptPubkeyBytes := getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
 
 	if scriptPubkeyBytes[0] != 0x51 {
