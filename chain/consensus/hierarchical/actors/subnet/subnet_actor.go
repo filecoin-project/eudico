@@ -24,6 +24,7 @@ import (
 )
 
 var _ runtime.VMActor = SubnetActor{}
+var _ SubnetIface = SubnetActor{}
 
 var log = logging.Logger("subnet-actor")
 
