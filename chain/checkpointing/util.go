@@ -214,6 +214,10 @@ func getTxOut(url, txid string, index int) (float64, []byte) {
 	if result == nil {
 		panic("Cannot retrieve previous transaction.")
 	}
+	if result["result"] == nil {
+		panic("No transaction returned (maybe the output has already be spent")
+
+	}
 	taprootTxOut := result["result"].(map[string]interface{})
 	scriptPubkey := taprootTxOut["scriptPubKey"].(map[string]interface{})
 	scriptPubkeyBytes, _ := hex.DecodeString(scriptPubkey["hex"].(string))

@@ -48,6 +48,9 @@ import (
 
 var log = logging.Logger("checkpointing")
 
+//update this value with the amount you have in your wallet
+//const initialValueInWallet = 0.0126963
+
 // struct used to propagate detected changes.
 type diffInfo struct {
 	newMiners    []string
@@ -682,6 +685,9 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 	fmt.Println("Previous tx id: ", c.ptxid)
 	value, scriptPubkeyBytes := getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
 
+	// TODO: instead of calling getTxOUt we need to check for the latest transaction
+	// same as is done in the verification.sh script
+
 	if scriptPubkeyBytes[0] != 0x51 {
 		log.Infow("wrong txout")
 		index = 1
@@ -689,7 +695,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 	}
 	newValue := value - c.cpconfig.Fee
 	fmt.Println("Fee for next transaction is: ", c.cpconfig.Fee)
-	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.5f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
+	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.8f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
 	fmt.Println("Raw tx: ", payload)
 	result := jsonRPC(c.cpconfig.BitcoinHost, payload)
 	fmt.Println("Result from Raw tx: ", result)
@@ -874,11 +880,14 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 	// Pre-compute values from participants in the signing process
 	if c.taprootConfig != nil {
 		// save public key taproot
-		// NOTE: cidBytes is the tipset key value (aka checkpoint) from the genesis block. When Eudico is stopped it should remember what was the last tipset key value
+		// NOTE: cidBytes is the tipset key value (aka checkpoint) from the genesis block.
+		// When Eudico is stopped it should remember what was the last tipset key value
 		// it signed and replace it with it. Config is not saved, neither when new DKG is done.
 		c.pubkey = genCheckpointPublicKeyTaproot(c.taprootConfig.PublicKey, cidBytes)
 
 		// Get the taproot address used in taproot.sh
+		// this should be changed such that the public key is updated when eudico is stopped
+		// (so that we can continue the checkpointing without restarting from scratch each time)
 		address, _ := pubkeyToTapprootAddress(c.pubkey)
 		fmt.Println(address)
 
@@ -890,11 +899,17 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 		// 	index = 1
 		// 	value, scriptPubkeyBytes = getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
 		// }
-		value := 0.02
+		// get the initial amount in the wallet
+		payload1 := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"getbalances\", \"params\": []}"
+		result1 := jsonRPC(c.cpconfig.BitcoinHost, payload1)
+		taprootTxOut := result1["mine"].(map[string]interface{})
+		value := taprootTxOut["trusted"].(float64)
+		fmt.Println("Initial value in walet: ", value)
+		//value := initialValueInWallet
 		newValue := value - c.cpconfig.Fee
 		//why not send the transaction from here?
 		fmt.Println("Creating the initial transaction now")
-		payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendtoaddress\", \"params\": [\"" + address + "\", \"" + fmt.Sprintf("%.5f", newValue) + "\" ]}"
+		payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendtoaddress\", \"params\": [\"" + address + "\", \"" + fmt.Sprintf("%.8f", newValue) + "\" ]}"
 		fmt.Println(payload)
 		// payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.2f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
 		result := jsonRPC(c.cpconfig.BitcoinHost, payload)
