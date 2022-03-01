@@ -903,8 +903,9 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 		payload1 := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"getbalances\", \"params\": []}"
 		result1 := jsonRPC(c.cpconfig.BitcoinHost, payload1)
 		fmt.Println("Getbalances result: ", result1)
-		taprootTxOut := result1["result"].(map[string]interface{})
-		value := taprootTxOut["trusted"].(float64)
+		intermediary1 := result1["result"].(map[string]interface{})
+		intermediary2 := intermediary1["mine"].(map[string]interface{})
+		value := intermediary2["trusted"].(float64)
 		fmt.Println("Initial value in walet: ", value)
 		//value := initialValueInWallet
 		newValue := value - c.cpconfig.Fee
