@@ -3,14 +3,11 @@ package itests
 
 import (
 	"context"
-	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	addr "github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
-	"github.com/filecoin-project/lotus/chain/types"
+	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/itests/kit"
 )
 
@@ -42,8 +39,9 @@ func (ts *consensusSuite) testTSPoWMining(t *testing.T) {
 	l, err := full.WalletList(ctx)
 	require.NoError(t, err)
 	if len(l) != 1 {
-		t.Fatal("empty list of wallet keys")
+		t.Fatal("wallet keys list is empty")
 	}
+
 	go tspow.Mine(ctx, l[0], full)
 
 	newHeads, err := full.ChainNotify(ctx)
@@ -56,33 +54,4 @@ func (ts *consensusSuite) testTSPoWMining(t *testing.T) {
 	require.Equal(t, int64(h1.Height()), int64(baseHeight))
 
 	<-newHeads
-
-}
-
-func mineUntilBlock(ctx context.Context, addr addr.Address, full *kit.TestFullNode) (*types.TipSet, error) {
-	b, err := full.ChainHead(ctx)
-	if err != nil {
-		return nil, err
-	}
-	h := b.Height()
-	mctx, cancel := context.WithCancel(ctx)
-	go delegcns.Mine(mctx, full)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, nil
-		default:
-			b, err := full.ChainHead(ctx)
-			if err != nil {
-				cancel()
-				return nil, err
-			}
-			hn := b.Height()
-			if h < hn {
-				cancel()
-				return b, nil
-			}
-		}
-	}
 }

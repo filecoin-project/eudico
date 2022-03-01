@@ -6,8 +6,11 @@ import (
 	"crypto/rand"
 	"fmt"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
+	"github.com/filecoin-project/lotus/chain/vm"
 	"github.com/filecoin-project/lotus/cmd/lotus-seed/seed"
+	"github.com/filecoin-project/lotus/node/modules/helpers"
 	"github.com/filecoin-project/lotus/storage/mockstorage"
+	"go.uber.org/fx"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -175,8 +178,6 @@ func (n *EudicoEnsemble) FullNode(full *TestFullNode, opts ...NodeOpt) *EudicoEn
 		n.genesis.accounts = append(n.genesis.accounts, genacc)
 	}
 
-	n.t.Log("!!!! First key:", key.Address)
-
 	*full = TestFullNode{t: n.t, options: options, DefaultKey: key}
 	n.inactive.fullnodes = append(n.inactive.fullnodes, full)
 	return n
@@ -280,6 +281,27 @@ func NewRootTSPoWConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, r *re
 	return tspow.NewTSPoWConsensus(sm, nil, beacon, r, verifier, genesis, netName)
 }
 
+func NetworkName(mctx helpers.MetricsCtx,
+	lc fx.Lifecycle,
+	cs *store.ChainStore,
+	tsexec stmgr.Executor,
+	syscalls vm.SyscallBuilder,
+	us stmgr.UpgradeSchedule,
+	_ dtypes.AfterGenesisSet) (dtypes.NetworkName, error) {
+
+	ctx := helpers.LifecycleCtx(mctx, lc)
+
+	// The statemanager is initialized here only get the network name
+	// so we can use a nil resolver
+	sm, err := stmgr.NewStateManager(cs, tsexec, nil, syscalls, us, nil)
+	if err != nil {
+		return "", err
+	}
+
+	netName, err := stmgr.GetNetworkName(ctx, sm, cs.GetHeaviestTipSet().ParentState())
+	return netName, err
+}
+
 // Start starts all enrolled nodes.
 func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 	ctx := context.Background()
@@ -343,6 +365,7 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 			node.MockHost(n.mn),
 			node.Test(),
 
+			node.Override(new(dtypes.NetworkName), NetworkName),
 			node.Override(new(consensus.Consensus), NewRootTSPoWConsensus),
 			node.Override(new(store.WeightFunc), tspow.Weight),
 			node.Unset(new(*slashfilter.SlashFilter)),
@@ -377,6 +400,7 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 
 		// Either generate the genesis or inject it.
 		if i == 0 && !n.bootstrapped {
+			//TODO: compare with original itests and fix
 			opts = append(opts, node.Override(new(modules.Genesis), modules.LoadGenesis(genBytes)))
 			_ = gtempl
 			//opts = append(opts, node.Override(new(modules.Genesis), testing2.MakeGenesisMem(&n.genesisBlock, *gtempl)))
