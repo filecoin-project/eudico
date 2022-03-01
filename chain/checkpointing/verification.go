@@ -2,7 +2,6 @@ package checkpointing
 
 import (
 	"errors"
-	"fmt"
 )
 
 type BitcoinTx struct {
@@ -53,7 +52,7 @@ func GetNextCheckpointFixed(url, txid string) (Checkpoint, error) {
 		tx_id := item_map["txid"].(string)
 		payload = "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"getrawtransaction\", \"params\": [\"" + tx_id + "\", true]}"
 		result = jsonRPC(url, payload)
-		fmt.Println(result)
+		//fmt.Println(result)
 		reader := result["result"].(map[string]interface{})
 		new_txid := reader["txid"].(string)
 		vin := reader["vin"].([]interface{})[0].(map[string]interface{})["txid"]
