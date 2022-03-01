@@ -1,5 +1,9 @@
 package replace
 
+// Sample actor that replaces the cid from one address to the other.
+// This actor is used as an example of how to use the actor execution
+// protocol.
+
 import (
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -24,8 +28,9 @@ var _ atomic.LockableActor = ReplaceActor{}
 // ReplaceState determines the actor state.
 // FIXME: We are using a non-efficient locking strategy for now
 // where the whole map is locked for an atomic execution.
-// We could use a more fine-grained approach. Consider it in the next
-// iteration.
+// We could use a more fine-grained approach, but this actor
+// has illustrative purposes for now. Consider improving it in
+// future iterations.
 type ReplaceState struct {
 	Owners *atomic.LockedState
 }
@@ -34,6 +39,8 @@ type Owners struct {
 	M map[string]cid.Cid
 }
 
+// Merge implement the merge strategy to follow for our lockable state
+// in the actor.
 func (o *Owners) Merge(other atomic.LockableState) error {
 	tt, ok := other.(*Owners)
 	if !ok {
@@ -148,6 +155,9 @@ func (a ReplaceActor) Replace(rt runtime.Runtime, params *ReplaceParams) *abi.Em
 	return nil
 }
 
+///////
+// Atomic function definitions.
+//////
 func (a ReplaceActor) Lock(rt runtime.Runtime, params *atomic.LockParams) *atomic.LockedOutput {
 	// Anyone can lock the state
 	rt.ValidateImmediateCallerAcceptAny()
@@ -239,6 +249,7 @@ func ValidateLockedState(rt runtime.Runtime, st *ReplaceState) {
 		exitcode.ErrIllegalState, "state locked")
 }
 
+// UnwrapOwners is a convenient function to handle the locked state from the actor.
 func (st *ReplaceState) UnwrapOwners() (*Owners, error) {
 	own := &Owners{}
 	if err := atomic.UnwrapLockableState(st.Owners, own); err != nil {

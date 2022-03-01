@@ -1,5 +1,7 @@
 package atomic
 
+//go:generate go run ./gen/gen.go
+
 import (
 	"bytes"
 
@@ -33,13 +35,20 @@ type LockedOutput struct {
 	Cid cid.Cid
 }
 
+// LockableActor defines the interface that needs to be implemented by actors
+// that want to support the atomic execution of some (or all) of their functions.
 type LockableActor interface {
+	// Lock defines how to lock the state in the actor.
 	Lock(rt runtime.Runtime, params *LockParams) *LockedOutput
+	// Merge takes external locked state and merges it to the current actors state.
 	Merge(rt runtime.Runtime, params *MergeParams) *abi.EmptyValue
+	// Unlock merges the output of an execution and unlocks the state.
 	Unlock(rt runtime.Runtime, params *UnlockParams) *abi.EmptyValue
+	// Abort unlocks the state and aborts the atomic execution.
 	Abort(rt runtime.Runtime, params *LockParams) *abi.EmptyValue
 }
 
+// LockParams wraps serialized params from a message with the requested methodnum.
 type LockParams struct {
 	Method abi.MethodNum
 	Params []byte
@@ -61,6 +70,8 @@ func UnwrapLockParams(params *LockParams, out Marshalable) error {
 	return out.UnmarshalCBOR(bytes.NewReader(params.Params))
 }
 
+// UnlockParams identifies the input params of a message
+// along with the ouput state to merge.
 type UnlockParams struct {
 	Params *LockParams
 	State  []byte
@@ -78,6 +89,7 @@ func UnwrapUnlockParams(params *UnlockParams, out LockableState) error {
 	return out.UnmarshalCBOR(bytes.NewReader(params.State))
 }
 
+// MergeParams wraps locked state to merge in params.
 type MergeParams struct {
 	State []byte
 }
@@ -94,6 +106,8 @@ func UnwrapMergeParams(params *MergeParams, out LockableState) error {
 	return out.UnmarshalCBOR(bytes.NewReader(params.State))
 }
 
+// ValidateIfLocked checks if certain state in locked and thus can be
+// modified.
 func ValidateIfLocked(states ...*LockedState) error {
 	for _, s := range states {
 		if s.IsLocked() {
@@ -131,6 +145,7 @@ func (s *LockedState) UnlockState() error {
 	return nil
 }
 
+// LockedState includes a lock in some state.
 type LockedState struct {
 	Lock bool
 	S    []byte
