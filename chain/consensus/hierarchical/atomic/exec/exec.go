@@ -2,12 +2,10 @@ package exec
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/lotus/api"
-	bstore "github.com/filecoin-project/lotus/blockstore"
+	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
@@ -18,51 +16,54 @@ import (
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/vm"
+	"github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
 	logging "github.com/ipfs/go-log/v2"
+	cbg "github.com/whyrusleeping/cbor-gen"
 	xerrors "golang.org/x/xerrors"
 )
 
-var log = logging.Logger("atomic")
+var log = logging.Logger("atomic-exec")
 
-func ComputeAtomicOutput(ctx context.Context, sm *stmgr.StateManager, to address.Address, actorState interface{}, locked []atomic.LockableState, msgs []*types.Message) (*api.InvocResult, error) {
-
-	tmpbs := bstore.NewMemory()
-	fmt.Println("Call compute state")
+// ComputeAtomicOutput receives as input a list of locked states from other subnets, and a list of
+// messages to execute atomically in an actor, and output the final state for the actor after the execution
+// in actorState. This output needs to be committed to the SCA in the parent chain to finalize the execution.
+func ComputeAtomicOutput(ctx context.Context, sm *stmgr.StateManager, to address.Address, actorState interface{}, locked []atomic.LockableState, msgs []*types.Message) error {
+	log.Info("triggering off-chain execution for locked state")
+	// Get heaviest tipset
 	ts := sm.ChainStore().GetHeaviestTipSet()
 	// Search back till we find a height with no fork, or we reach the beginning.
 	for ts.Height() > 0 {
 		pts, err := sm.ChainStore().GetTipSetFromKey(ctx, ts.Parents())
 		if err != nil {
-			return nil, xerrors.Errorf("failed to find a non-forking epoch: %w", err)
+			return xerrors.Errorf("failed to find a non-forking epoch: %w", err)
 		}
 		ts = pts
 	}
 
+	// Get base state parameters
 	pheight := ts.Height()
 	bstate := ts.ParentState()
 	tst, err := sm.StateTree(bstate)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	toActor, err := tst.GetActor(to)
-	fmt.Println(">>>>>><< head", toActor.Head)
+	// transplant actor state and state tree to temporary blockstore for off-chain computation
+	tmpbs, err := tmpState(ctx, sm.ChainStore().StateBlockstore(), tst, []address.Address{to})
 	if err != nil {
-		return nil, xerrors.Errorf("call raw get actor: %s", err)
+		return err
 	}
 	if err := vm.Copy(ctx, sm.ChainStore().StateBlockstore(), tmpbs, bstate); err != nil {
-		return nil, err
-	}
-	if err := vm.Copy(ctx, sm.ChainStore().StateBlockstore(), tmpbs, toActor.Head); err != nil {
-		return nil, err
+		return err
 	}
 
+	// vm init
 	vmopt := &vm.VMOpts{
 		StateBase: bstate,
 		Epoch:     pheight + 1,
 		Rand:      rand.NewStateRand(sm.ChainStore(), ts.Cids(), sm.Beacon(), sm.GetNetworkVersion),
-		Bstore:    sm.ChainStore().StateBlockstore(),
-		// Bstore:         tmpbs,
+		// Bstore:    sm.ChainStore().StateBlockstore(),
+		Bstore:         tmpbs,
 		Actors:         registry.NewActorRegistry(),
 		Syscalls:       sm.Syscalls,
 		CircSupplyCalc: sm.GetCirculatingSupply,
@@ -72,26 +73,27 @@ func ComputeAtomicOutput(ctx context.Context, sm *stmgr.StateManager, to address
 	}
 	vmi, err := sm.VMConstructor()(ctx, vmopt)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to set up vm: %w", err)
+		return xerrors.Errorf("failed to set up vm: %w", err)
 	}
 
 	// Merge locked state to actor state.
 	for _, l := range locked {
 		mparams, err := atomic.WrapMergeParams(l)
+		if err != nil {
+			return xerrors.Errorf("error wrapping merge params: %w", err)
+		}
 		lmsg, err := mergeMsg(to, mparams)
 		if err != nil {
-			return nil, err
+			return xerrors.Errorf("error creating merge msg: %w", err)
 		}
 		err = computeMsg(ctx, vmi, lmsg)
 		if err != nil {
-			return nil, xerrors.Errorf("error merging locked states", err)
+			return xerrors.Errorf("error merging locked states: %w", err)
 		}
-		fmt.Println(">>>>> Merged locked state")
 	}
 
-	fmt.Println("Messages: ", msgs)
+	// execute messages
 	for _, m := range msgs {
-		fmt.Println(">>>>> Computing for msg", m)
 		if m.GasLimit == 0 {
 			m.GasLimit = build.BlockGasLimit
 		}
@@ -108,38 +110,37 @@ func ComputeAtomicOutput(ctx context.Context, sm *stmgr.StateManager, to address
 
 		fromActor, err := vmi.StateTree().GetActor(m.From)
 		if err != nil {
-			return nil, xerrors.Errorf("call raw get actor: %s", err)
+			return xerrors.Errorf("call raw get actor: %w", err)
 		}
 
 		m.Nonce = fromActor.Nonce
 		err = computeMsg(ctx, vmi, m)
 		if err != nil {
-			return nil, xerrors.Errorf("error executing atomic msg", err)
+			return xerrors.Errorf("error executing atomic msg: %w", err)
 		}
 	}
 
-	// _, err = vmi.Flush(ctx)
-	// if err != nil {
-	//         return nil, err
-	// }
-	toActor, err = vmi.StateTree().GetActor(to)
+	// flush state to process it.
+	_, err = vmi.Flush(ctx)
 	if err != nil {
-		return nil, xerrors.Errorf("call raw get actor: %s", err)
+		return err
 	}
-	fmt.Println(">>>>>><< head", toActor.Head)
-	bs := sm.ChainStore().ChainBlockstore()
-	cst := cbor.NewCborStore(bs)
-	if err := cst.Get(ctx, toActor.Head, actorState); err != nil {
-		return nil, err
-	}
-	fmt.Println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>", actorState)
 
-	// FIXME: Pending results
-	return nil, nil
+	// output state from actor in actorState
+	toActor, err := vmi.StateTree().GetActor(to)
+	if err != nil {
+		return xerrors.Errorf("call raw get actor: %s", err)
+	}
+	cst := cbor.NewCborStore(tmpbs)
+	if err := cst.Get(ctx, toActor.Head, actorState); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func computeMsg(ctx context.Context, vmi *vm.VM, m *types.Message) error {
-	// TODO: maybe just use the invoker directly?
+	// apply msg implicitly to execute new state
 	ret, err := vmi.ApplyImplicitMessage(ctx, m)
 	if err != nil {
 		return xerrors.Errorf("apply message failed: %w", err)
@@ -167,18 +168,20 @@ func mergeMsg(to address.Address, mparams *atomic.MergeParams) (*types.Message, 
 	return m, nil
 }
 
-func (sg *StateSurgeon) transplantActors(src *state.StateTree, pluck []address.Address) (*state.StateTree, error) {
-	log.Printf("transplanting actor states: %v", pluck)
+// tmpState creates a temporary blockstore with all the state required to perform
+// the off-chain execution.
+func tmpState(ctx context.Context, frombs blockstore.Blockstore, src *state.StateTree, pluck []address.Address) (blockstore.Blockstore, error) {
 
-	dst, err := state.NewStateTree(sg.stores.CBORStore, src.Version())
+	tmpbs := blockstore.NewMemory()
+	cstore := cbor.NewCborStore(tmpbs)
+	dst, err := state.NewStateTree(cstore, src.Version())
 	if err != nil {
 		return nil, err
 	}
-
 	for _, a := range pluck {
 		actor, err := src.GetActor(a)
 		if err != nil {
-			return nil, fmt.Errorf("get actor %s failed: %w", a, err)
+			return nil, xerrors.Errorf("get actor %s failed: %w", a, err)
 		}
 
 		err = dst.SetActor(a, actor)
@@ -187,25 +190,34 @@ func (sg *StateSurgeon) transplantActors(src *state.StateTree, pluck []address.A
 		}
 
 		// recursive copy of the actor state.
-		err = vm.Copy(context.TODO(), sg.stores.Blockstore, sg.stores.Blockstore, actor.Head)
+		err = vm.Copy(context.TODO(), frombs, tmpbs, actor.Head)
 		if err != nil {
 			return nil, err
 		}
 
-		actorState, err := sg.api.ChainReadObj(sg.ctx, actor.Head)
+		actorState, err := chainReadObj(ctx, frombs, actor.Head)
 		if err != nil {
 			return nil, err
 		}
 
-		cid, err := sg.stores.CBORStore.Put(sg.ctx, &cbg.Deferred{Raw: actorState})
+		cid, err := cstore.Put(ctx, &cbg.Deferred{Raw: actorState})
 		if err != nil {
 			return nil, err
 		}
 
 		if cid != actor.Head {
-			panic("mismatched cids")
+			return nil, xerrors.Errorf("mismatch in head cid after actor transplant")
 		}
 	}
 
-	return dst, nil
+	return tmpbs, nil
+}
+
+func chainReadObj(ctx context.Context, bs blockstore.Blockstore, obj cid.Cid) ([]byte, error) {
+	blk, err := bs.Get(ctx, obj)
+	if err != nil {
+		return nil, xerrors.Errorf("blockstore get: %w", err)
+	}
+
+	return blk.RawData(), nil
 }
