@@ -39,10 +39,10 @@ func DefaultUpgradeSchedule() stmgr.UpgradeSchedule {
 	}
 
 	for _, u := range updates {
-		if u.Height < 0 {
-			// upgrade disabled
-			continue
-		}
+		// if u.Height < 0 {
+		// 	// upgrade disabled
+		// 	continue
+		// }
 		us = append(us, u)
 	}
 	return us
