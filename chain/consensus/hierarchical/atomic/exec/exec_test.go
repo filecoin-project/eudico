@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -19,7 +18,6 @@ import (
 	"github.com/filecoin-project/go-state-types/network"
 
 	"github.com/filecoin-project/go-state-types/big"
-	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors"
@@ -29,7 +27,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin/market"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/power"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/system"
-	"github.com/filecoin-project/lotus/chain/actors/policy"
 	"github.com/filecoin-project/lotus/chain/beacon"
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
 	replace "github.com/filecoin-project/lotus/chain/consensus/actors/atomic-replace"
@@ -78,7 +75,7 @@ func TestComputeState(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Add some messages to compute atomically.
+	t.Log("Execute messages atomically from cg.Banker()")
 	target, err := address.NewIDAddress(101)
 	if err != nil {
 		t.Fatal(err)
@@ -108,7 +105,7 @@ func TestComputeState(t *testing.T) {
 	})
 	own1 := &replace.Owners{M: map[string]cid.Cid{target.String(): cidUndef}}
 	var st replace.ReplaceState
-	_, err = exec.ComputeAtomicOutput(ctx, cg.StateManager(), msgs[0].To, &st, []atom.LockableState{own1}, msgs)
+	err = exec.ComputeAtomicOutput(ctx, cg.StateManager(), msgs[0].To, &st, []atom.LockableState{own1}, msgs)
 	require.NoError(t, err)
 	owners, err := st.UnwrapOwners()
 	require.NoError(t, err)
@@ -129,7 +126,9 @@ func TestComputeState(t *testing.T) {
 	exp, _ := abi.CidBuilder.Sum([]byte("testSeed"))
 	require.Equal(t, c, exp)
 
+	t.Log("Execute messages atomically from target's view")
 	// Compute the opposite and compare output CID
+	msgs = []*types.Message{}
 	enc, err = actors.SerializeParams(&replace.OwnParams{Seed: "test"})
 	if err != nil {
 		t.Fatal(err)
@@ -141,7 +140,7 @@ func TestComputeState(t *testing.T) {
 		Method: replace.MethodOwn,
 		Params: enc,
 	})
-	enc, err = actors.SerializeParams(&replace.ReplaceParams{Addr: target})
+	enc, err = actors.SerializeParams(&replace.ReplaceParams{Addr: taddr})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,12 +151,30 @@ func TestComputeState(t *testing.T) {
 		Method: replace.MethodReplace,
 		Params: enc,
 	})
-	own1 = &replace.Owners{M: map[string]cid.Cid{target.String(): exp}}
+	own1 = &replace.Owners{M: map[string]cid.Cid{taddr.String(): exp}}
 	var st2 replace.ReplaceState
-	_, err = exec.ComputeAtomicOutput(ctx, cg.StateManager(), msgs[0].To, &st2, []atom.LockableState{own1}, msgs)
+	err = exec.ComputeAtomicOutput(ctx, cg.StateManager(), msgs[0].To, &st2, []atom.LockableState{own1}, msgs)
 	require.NoError(t, err)
+
+	// Check that the atomic replace happened.
 	owners, err = st.UnwrapOwners()
 	require.NoError(t, err)
+	c, ok = owners.M[taddr.String()]
+	require.True(t, ok)
+	require.Equal(t, c, cidUndef)
+	c, ok = owners.M[target.String()]
+	require.True(t, ok)
+	exp, _ = abi.CidBuilder.Sum([]byte("testSeed"))
+	require.Equal(t, c, exp)
+
+	t.Log("Comparing outputs of independent off-chain execution through CID")
+	// Compare output cids.
+	oc1, err := st.Owners.Cid()
+	require.NoError(t, err)
+	oc2, err := st2.Owners.Cid()
+	require.NoError(t, err)
+	require.Equal(t, oc1, oc2)
+
 }
 
 var rootkeyMultisig = genesis.MultisigMeta{
@@ -199,17 +216,12 @@ type ChainGen struct {
 	genesis   *types.BlockHeader
 	CurTipset *store.FullTipSet
 
-	Timestamper func(*types.TipSet, abi.ChainEpoch) uint64
-
-	GetMessages func(*ChainGen) ([]*types.SignedMessage, error)
-
 	w *wallet.LocalWallet
 
 	Miners    []address.Address
 	receivers []address.Address
 	// a SecP address
-	banker      address.Address
-	bankerNonce uint64
+	banker address.Address
 
 	r  repo.Repo
 	lr repo.LockedRepo
@@ -219,8 +231,6 @@ const msgsPerBlock = 20
 
 func NewGenerator(t *testing.T) (*ChainGen, error) {
 	j := journal.NilJournal()
-	// TODO: we really shouldn't modify a global variable here.
-	policy.SetSupportedProofTypes(abi.RegisteredSealProof_StackedDrg2KiBV1)
 
 	mr := repo.NewMemory(nil)
 	lr, err := mr.Lock(repo.StorageMiner)
@@ -269,11 +279,6 @@ func NewGenerator(t *testing.T) (*ChainGen, error) {
 		}
 	}
 
-	// miner := tutil.NewIDAddr(t, 1000)
-	// vreg, err := w.WalletNew(context.TODO(), types.KTBLS)
-	// require.NoError(t, err)
-	// rem, err := w.WalletNew(context.TODO(), types.KTBLS)
-	// require.NoError(t, err)
 	template := genesis.Template{
 		NetworkVersion: network.Version15,
 		Accounts: []genesis.Actor{
@@ -288,8 +293,7 @@ func NewGenerator(t *testing.T) (*ChainGen, error) {
 		NetworkName:      uuid.New().String(),
 		Timestamp:        uint64(build.Clock.Now().Add(-500 * time.Duration(build.BlockDelaySecs) * time.Second).Unix()),
 	}
-	// template, err := delegatedGenTemplate("test", banker, banker, banker, 0)
-	// require.NoError(t, err)
+
 	genb, err := makeDelegatedGenesisBlock(context.TODO(), bs, template, abi.ChainEpoch(100))
 	require.NoError(t, err)
 	weight := func(ctx context.Context, stateBs blockstore.Blockstore, ts *types.TipSet) (types.BigInt, error) {
@@ -311,10 +315,6 @@ func NewGenerator(t *testing.T) (*ChainGen, error) {
 	miners := []address.Address{}
 
 	beac := beacon.Schedule{{Start: 0, Beacon: beacon.NewMockBeacon(time.Second)}}
-	//beac, err := drand.NewDrandBeacon(tpl.Timestamp, build.BlockDelaySecs)
-	//if err != nil {
-	//return nil, xerrors.Errorf("creating drand beacon: %w", err)
-	//}
 
 	sys := vm.Syscalls(&genFakeVerifier{})
 	sm, err := stmgr.NewStateManager(cs, common.RootTipSetExecutor(), nil, sys, common.DefaultUpgradeSchedule(), beac)
@@ -331,10 +331,9 @@ func NewGenerator(t *testing.T) (*ChainGen, error) {
 		beacon:       beac,
 		w:            w,
 
-		GetMessages: getRandomMessages,
-		Miners:      miners,
-		banker:      banker,
-		receivers:   receievers,
+		Miners:    miners,
+		banker:    banker,
+		receivers: receievers,
 
 		CurTipset: gents,
 
@@ -343,68 +342,6 @@ func NewGenerator(t *testing.T) (*ChainGen, error) {
 	}
 
 	return gen, nil
-}
-
-func delegatedGenTemplate(subnetID string, miner, vreg, rem address.Address, seq uint64) (*genesis.Template, error) {
-
-	return &genesis.Template{
-		NetworkVersion: 15,
-		Accounts: []genesis.Actor{{
-			Type:    genesis.TAccount,
-			Balance: types.FromFil(20),
-			Meta:    json.RawMessage(`{"Owner":"` + miner.String() + `"}`),
-		}},
-		Miners:      nil,
-		NetworkName: subnetID,
-		// NOTE: We can't use a Timestamp for this
-		// because then the genesis generation in the subnet
-		// is non-deterministic. We use a swquence number for now.
-		// Timestamp:   uint64(time.Now().Unix()),
-		Timestamp: seq,
-
-		VerifregRootKey: genesis.Actor{
-			Type:    genesis.TAccount,
-			Balance: types.FromFil(2),
-			Meta:    json.RawMessage(`{"Owner":"` + vreg.String() + `"}`), // correct??
-		},
-		RemainderAccount: genesis.Actor{
-			Type: genesis.TAccount,
-			Meta: json.RawMessage(`{"Owner":"` + rem.String() + `"}`), // correct??
-		},
-	}, nil
-}
-func getRandomMessages(cg *ChainGen) ([]*types.SignedMessage, error) {
-	msgs := make([]*types.SignedMessage, cg.msgsPerBlock)
-	for m := range msgs {
-		msg := types.Message{
-			To:   cg.receivers[m%len(cg.receivers)],
-			From: cg.banker,
-
-			Nonce: atomic.AddUint64(&cg.bankerNonce, 1) - 1,
-
-			Value: types.NewInt(uint64(m + 1)),
-
-			Method: 0,
-
-			GasLimit:   100_000_000,
-			GasFeeCap:  types.NewInt(0),
-			GasPremium: types.NewInt(0),
-		}
-
-		sig, err := cg.w.WalletSign(context.TODO(), cg.banker, msg.Cid().Bytes(), api.MsgMeta{
-			Type: api.MTUnknown, // testing
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		msgs[m] = &types.SignedMessage{
-			Message:   msg,
-			Signature: *sig,
-		}
-	}
-
-	return msgs, nil
 }
 
 func makeDelegatedGenesisBlock(ctx context.Context, bs blockstore.Blockstore, template genesis.Template, checkPeriod abi.ChainEpoch) (*genesis2.GenesisBootstrap, error) {
@@ -515,7 +452,6 @@ func MakeInitialStateTree(ctx context.Context, bs blockstore.Blockstore, templat
 		return nil, nil, xerrors.Errorf("making new state tree: %w", err)
 	}
 
-	fmt.Println(">>>>>>>>>>>>>>>>>>>>>><", template.NetworkVersion)
 	av, err := actors.VersionForNetwork(template.NetworkVersion)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("getting network version: %w", err)
