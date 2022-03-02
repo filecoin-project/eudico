@@ -127,7 +127,7 @@ func GetLatestCheckpoint(url string, first_pk []byte, first_cp []byte) (*Checkpo
 
 func CheckIfFirstTxHasBeenSent(url string, first_pk []byte, first_cp []byte) (bool, error) {
 	first_pubkeyTaproot := genCheckpointPublicKeyTaproot(first_pk, first_cp)
-	firstscript := getTaprootScript(first_pubkeyTaproot)
+	//firstscript := getTaprootScript(first_pubkeyTaproot)
 	taprootAddress, err := pubkeyToTapprootAddress(first_pubkeyTaproot)
 	if err != nil {
 		log.Errorf("Error when getting the last checkpoint from bitcoin", err)
@@ -139,7 +139,7 @@ func CheckIfFirstTxHasBeenSent(url string, first_pk []byte, first_cp []byte) (bo
 		In this step we import taproot script (and not the address) in the wallet node to then be able to ask
 		for transaction linked to it.
 	*/
-	addTaprootToWallet(url, firstscript)
+	//addTaprootToWallet(url, firstscript)
 
 	//now we check the transactions associated with our taproot address
 	//first list the tx

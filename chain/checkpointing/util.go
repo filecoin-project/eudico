@@ -154,7 +154,7 @@ func genCheckpointPublicKeyTaproot(internal_pubkey []byte, checkpoint []byte) []
 }
 
 func addTaprootToWallet(url, taprootScript string) bool {
-	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"importaddress\", \"params\": [\"" + taprootScript + "\", \"\", true]}"
+	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"importaddress\", \"params\": [\"" + taprootScript + "\", \"\", false]}"
 	result := jsonRPC(url, payload)
 	fmt.Println("Add address to wallet: ", taprootScript)
 	fmt.Println(result)
@@ -163,10 +163,11 @@ func addTaprootToWallet(url, taprootScript string) bool {
 	}
 
 	err := result["error"].(map[string]interface{})
+	fmt.Println(err["code"].(float64))
 	if err["code"].(float64) == -4 {
 		// Particular case where we are already in the process of adding the key
 		// because we are using 1 bitcoin node for all
-		return true
+		return false
 	}
 
 	return false

@@ -49,7 +49,7 @@ import (
 var log = logging.Logger("checkpointing")
 
 //update this value with the amount you have in your wallet
-//const initialValueInWallet = 0.0126963
+const initialValueInWallet = 0.001
 
 // struct used to propagate detected changes.
 type diffInfo struct {
@@ -851,22 +851,25 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 
 	//eiher send the initial transaction (if needed) or get the latest checkpoint
 	// of the transaction has already been sent
-	init, err := CheckIfFirstTxHasBeenSent(c.cpconfig.BitcoinHost, publickey, cidBytes)
-	if !init && c.taprootConfig != nil{
-		c.pubkey = genCheckpointPublicKeyTaproot(c.taprootConfig.PublicKey, cidBytes)
 
-		// Get the taproot address used in taproot.sh
-		// this should be changed such that the public key is updated when eudico is stopped
-		// (so that we can continue the checkpointing without restarting from scratch each time)
-		address, _ := pubkeyToTapprootAddress(c.pubkey)
+	c.pubkey = genCheckpointPublicKeyTaproot(c.taprootConfig.PublicKey, cidBytes)
+
+	// Get the taproot address used in taproot.sh
+	// this should be changed such that the public key is updated when eudico is stopped
+	// (so that we can continue the checkpointing without restarting from scratch each time)
+	address, _ := pubkeyToTapprootAddress(c.pubkey)
+	fmt.Println("Address: ", address)
+	init, err := CheckIfFirstTxHasBeenSent(c.cpconfig.BitcoinHost, publickey, cidBytes)
+	if !init && c.taprootConfig != nil {
 		//start by getting the balance in our wallet
-		payload1 := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"getbalances\", \"params\": []}"
-		result1 := jsonRPC(c.cpconfig.BitcoinHost, payload1)
-		fmt.Println("Getbalances result: ", result1)
-		intermediary1 := result1["result"].(map[string]interface{})
-		intermediary2 := intermediary1["mine"].(map[string]interface{})
-		value := intermediary2["trusted"].(float64)
-		fmt.Println("Initial value in walet: ", value)
+		// payload1 := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"getbalances\", \"params\": []}"
+		// result1 := jsonRPC(c.cpconfig.BitcoinHost, payload1)
+		// fmt.Println("Getbalances result: ", result1)
+		// intermediary1 := result1["result"].(map[string]interface{})
+		// intermediary2 := intermediary1["mine"].(map[string]interface{})
+		// value := intermediary2["trusted"].(float64)
+		// fmt.Println("Initial value in walet: ", value)
+		value := initialValueInWallet
 		newValue := value - c.cpconfig.Fee
 		//why not send the transaction from here?
 		fmt.Println("Creating the initial transaction now")
