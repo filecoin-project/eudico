@@ -139,7 +139,7 @@ func CheckIfFirstTxHasBeenSent(url string, first_pk []byte, first_cp []byte) (bo
 		In this step we import taproot script (and not the address) in the wallet node to then be able to ask
 		for transaction linked to it.
 	*/
-	//addTaprootToWallet(url, firstscript)
+	addTaprootToWallet(url, firstscript)
 
 	//now we check the transactions associated with our taproot address
 	//first list the tx

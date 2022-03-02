@@ -49,7 +49,7 @@ import (
 var log = logging.Logger("checkpointing")
 
 //update this value with the amount you have in your wallet
-const initialValueInWallet = 0.001
+const initialValueInWallet = 0.0001
 
 // struct used to propagate detected changes.
 type diffInfo struct {
@@ -684,7 +684,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 	index := 0
 	fmt.Println("Previous tx id: ", c.ptxid)
 	value, scriptPubkeyBytes := getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
-
+	
 	// TODO: instead of calling getTxOUt we need to check for the latest transaction
 	// same as is done in the verification.sh script
 
