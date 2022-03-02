@@ -171,7 +171,7 @@ func (t *CheckpointParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufSCAState = []byte{140}
+var lengthBufSCAState = []byte{141}
 
 func (t *SCAState) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -266,6 +266,12 @@ func (t *SCAState) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
+	// t.AtomicExecRegistry (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.AtomicExecRegistry); err != nil {
+		return xerrors.Errorf("failed to write cid field t.AtomicExecRegistry: %w", err)
+	}
+
 	return nil
 }
 
@@ -283,7 +289,7 @@ func (t *SCAState) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 12 {
+	if extra != 13 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -447,6 +453,18 @@ func (t *SCAState) UnmarshalCBOR(r io.Reader) error {
 			return fmt.Errorf("wrong type for uint64 field")
 		}
 		t.AppliedTopDownNonce = uint64(extra)
+
+	}
+	// t.AtomicExecRegistry (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.AtomicExecRegistry: %w", err)
+		}
+
+		t.AtomicExecRegistry = c
 
 	}
 	return nil
@@ -1073,6 +1091,436 @@ func (t *ErrorParam) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		t.Code = int64(extraI)
+	}
+	return nil
+}
+
+var lengthBufAtomicExec = []byte{131}
+
+func (t *AtomicExec) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufAtomicExec); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.Params (sca.AtomicExecParams) (struct)
+	if err := t.Params.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.Output (map[string]cid.Cid) (map)
+	{
+		if len(t.Output) > 4096 {
+			return xerrors.Errorf("cannot marshal t.Output map too large")
+		}
+
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajMap, uint64(len(t.Output))); err != nil {
+			return err
+		}
+
+		keys := make([]string, 0, len(t.Output))
+		for k := range t.Output {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			v := t.Output[k]
+
+			if len(k) > cbg.MaxLength {
+				return xerrors.Errorf("Value in field k was too long")
+			}
+
+			if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(k))); err != nil {
+				return err
+			}
+			if _, err := io.WriteString(w, string(k)); err != nil {
+				return err
+			}
+
+			if err := cbg.WriteCidBuf(scratch, w, v); err != nil {
+				return xerrors.Errorf("failed to write cid field v: %w", err)
+			}
+
+		}
+	}
+
+	// t.Status (sca.ExecStatus) (uint64)
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.Status)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (t *AtomicExec) UnmarshalCBOR(r io.Reader) error {
+	*t = AtomicExec{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 3 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.Params (sca.AtomicExecParams) (struct)
+
+	{
+
+		if err := t.Params.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Params: %w", err)
+		}
+
+	}
+	// t.Output (map[string]cid.Cid) (map)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajMap {
+		return fmt.Errorf("expected a map (major type 5)")
+	}
+	if extra > 4096 {
+		return fmt.Errorf("t.Output: map too large")
+	}
+
+	t.Output = make(map[string]cid.Cid, extra)
+
+	for i, l := 0, int(extra); i < l; i++ {
+
+		var k string
+
+		{
+			sval, err := cbg.ReadStringBuf(br, scratch)
+			if err != nil {
+				return err
+			}
+
+			k = string(sval)
+		}
+
+		var v cid.Cid
+
+		{
+
+			c, err := cbg.ReadCid(br)
+			if err != nil {
+				return xerrors.Errorf("failed to read cid field v: %w", err)
+			}
+
+			v = c
+
+		}
+
+		t.Output[k] = v
+
+	}
+	// t.Status (sca.ExecStatus) (uint64)
+
+	{
+
+		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+		if maj != cbg.MajUnsignedInt {
+			return fmt.Errorf("wrong type for uint64 field")
+		}
+		t.Status = ExecStatus(extra)
+
+	}
+	return nil
+}
+
+var lengthBufAtomicExecParams = []byte{130}
+
+func (t *AtomicExecParams) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufAtomicExecParams); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.Msgs ([]types.Message) (slice)
+	if len(t.Msgs) > cbg.MaxLength {
+		return xerrors.Errorf("Slice value in field t.Msgs was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajArray, uint64(len(t.Msgs))); err != nil {
+		return err
+	}
+	for _, v := range t.Msgs {
+		if err := v.MarshalCBOR(w); err != nil {
+			return err
+		}
+	}
+
+	// t.Inputs ([]sca.LockedState) (slice)
+	if len(t.Inputs) > cbg.MaxLength {
+		return xerrors.Errorf("Slice value in field t.Inputs was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajArray, uint64(len(t.Inputs))); err != nil {
+		return err
+	}
+	for _, v := range t.Inputs {
+		if err := v.MarshalCBOR(w); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (t *AtomicExecParams) UnmarshalCBOR(r io.Reader) error {
+	*t = AtomicExecParams{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 2 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.Msgs ([]types.Message) (slice)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+
+	if extra > cbg.MaxLength {
+		return fmt.Errorf("t.Msgs: array too large (%d)", extra)
+	}
+
+	if maj != cbg.MajArray {
+		return fmt.Errorf("expected cbor array")
+	}
+
+	if extra > 0 {
+		t.Msgs = make([]types.Message, extra)
+	}
+
+	for i := 0; i < int(extra); i++ {
+
+		var v types.Message
+		if err := v.UnmarshalCBOR(br); err != nil {
+			return err
+		}
+
+		t.Msgs[i] = v
+	}
+
+	// t.Inputs ([]sca.LockedState) (slice)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+
+	if extra > cbg.MaxLength {
+		return fmt.Errorf("t.Inputs: array too large (%d)", extra)
+	}
+
+	if maj != cbg.MajArray {
+		return fmt.Errorf("expected cbor array")
+	}
+
+	if extra > 0 {
+		t.Inputs = make([]LockedState, extra)
+	}
+
+	for i := 0; i < int(extra); i++ {
+
+		var v LockedState
+		if err := v.UnmarshalCBOR(br); err != nil {
+			return err
+		}
+
+		t.Inputs[i] = v
+	}
+
+	return nil
+}
+
+var lengthBufLockedState = []byte{130}
+
+func (t *LockedState) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufLockedState); err != nil {
+		return err
+	}
+
+	// t.From (address.Address) (struct)
+	if err := t.From.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.State (atomic.LockedState) (struct)
+	if err := t.State.MarshalCBOR(w); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *LockedState) UnmarshalCBOR(r io.Reader) error {
+	*t = LockedState{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 2 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.From (address.Address) (struct)
+
+	{
+
+		if err := t.From.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.From: %w", err)
+		}
+
+	}
+	// t.State (atomic.LockedState) (struct)
+
+	{
+
+		if err := t.State.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.State: %w", err)
+		}
+
+	}
+	return nil
+}
+
+var lengthBufSubmitExecParams = []byte{131}
+
+func (t *SubmitExecParams) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufSubmitExecParams); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.ID (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.ID); err != nil {
+		return xerrors.Errorf("failed to write cid field t.ID: %w", err)
+	}
+
+	// t.Abort (bool) (bool)
+	if err := cbg.WriteBool(w, t.Abort); err != nil {
+		return err
+	}
+
+	// t.Output (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.Output); err != nil {
+		return xerrors.Errorf("failed to write cid field t.Output: %w", err)
+	}
+
+	return nil
+}
+
+func (t *SubmitExecParams) UnmarshalCBOR(r io.Reader) error {
+	*t = SubmitExecParams{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 3 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.ID (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.ID: %w", err)
+		}
+
+		t.ID = c
+
+	}
+	// t.Abort (bool) (bool)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajOther {
+		return fmt.Errorf("booleans must be major type 7")
+	}
+	switch extra {
+	case 20:
+		t.Abort = false
+	case 21:
+		t.Abort = true
+	default:
+		return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
+	}
+	// t.Output (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.Output: %w", err)
+		}
+
+		t.Output = c
+
 	}
 	return nil
 }

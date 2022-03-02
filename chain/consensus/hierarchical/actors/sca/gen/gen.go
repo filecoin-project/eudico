@@ -18,6 +18,11 @@ func main() {
 		actor.MetaTag{},
 		actor.CrossMsgParams{},
 		actor.ErrorParam{},
+		actor.AtomicExec{},
+		actor.AtomicExecParams{},
+		actor.LockedState{},
+		actor.SubmitExecParams{},
+		actor.SubmitOutput{},
 	); err != nil {
 		panic(err)
 	}
