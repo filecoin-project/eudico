@@ -22,6 +22,7 @@ func main() {
 		actor.AtomicExecParams{},
 		actor.SubmitExecParams{},
 		actor.SubmitOutput{},
+		actor.LockedState{},
 	); err != nil {
 		panic(err)
 	}

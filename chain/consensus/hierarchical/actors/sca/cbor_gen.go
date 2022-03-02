@@ -10,7 +10,6 @@ import (
 
 	address "github.com/filecoin-project/go-address"
 	abi "github.com/filecoin-project/go-state-types/abi"
-	atomic "github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
 	schema "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	types "github.com/filecoin-project/lotus/chain/types"
 	cid "github.com/ipfs/go-cid"
@@ -1274,7 +1273,7 @@ func (t *AtomicExecParams) MarshalCBOR(w io.Writer) error {
 		}
 	}
 
-	// t.Inputs (map[string]atomic.LockedState) (map)
+	// t.Inputs (map[string]sca.LockedState) (map)
 	{
 		if len(t.Inputs) > 4096 {
 			return xerrors.Errorf("cannot marshal t.Inputs map too large")
@@ -1359,7 +1358,7 @@ func (t *AtomicExecParams) UnmarshalCBOR(r io.Reader) error {
 		t.Msgs[i] = v
 	}
 
-	// t.Inputs (map[string]atomic.LockedState) (map)
+	// t.Inputs (map[string]sca.LockedState) (map)
 
 	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
 	if err != nil {
@@ -1372,7 +1371,7 @@ func (t *AtomicExecParams) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("t.Inputs: map too large")
 	}
 
-	t.Inputs = make(map[string]atomic.LockedState, extra)
+	t.Inputs = make(map[string]LockedState, extra)
 
 	for i, l := 0, int(extra); i < l; i++ {
 
@@ -1387,7 +1386,7 @@ func (t *AtomicExecParams) UnmarshalCBOR(r io.Reader) error {
 			k = string(sval)
 		}
 
-		var v atomic.LockedState
+		var v LockedState
 
 		{
 
@@ -1416,15 +1415,15 @@ func (t *SubmitExecParams) MarshalCBOR(w io.Writer) error {
 
 	scratch := make([]byte, 9)
 
-	// t.ID (string) (string)
-	if len(t.ID) > cbg.MaxLength {
-		return xerrors.Errorf("Value in field t.ID was too long")
+	// t.Cid (string) (string)
+	if len(t.Cid) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.Cid was too long")
 	}
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.ID))); err != nil {
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Cid))); err != nil {
 		return err
 	}
-	if _, err := io.WriteString(w, string(t.ID)); err != nil {
+	if _, err := io.WriteString(w, string(t.Cid)); err != nil {
 		return err
 	}
 
@@ -1458,7 +1457,7 @@ func (t *SubmitExecParams) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.ID (string) (string)
+	// t.Cid (string) (string)
 
 	{
 		sval, err := cbg.ReadStringBuf(br, scratch)
@@ -1466,7 +1465,7 @@ func (t *SubmitExecParams) UnmarshalCBOR(r io.Reader) error {
 			return err
 		}
 
-		t.ID = string(sval)
+		t.Cid = string(sval)
 	}
 	// t.Abort (bool) (bool)
 
@@ -1550,6 +1549,86 @@ func (t *SubmitOutput) UnmarshalCBOR(r io.Reader) error {
 		}
 		t.Status = ExecStatus(extra)
 
+	}
+	return nil
+}
+
+var lengthBufLockedState = []byte{130}
+
+func (t *LockedState) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufLockedState); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.From (address.SubnetID) (string)
+	if len(t.From) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.From was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.From))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.From)); err != nil {
+		return err
+	}
+
+	// t.Cid (string) (string)
+	if len(t.Cid) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.Cid was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Cid))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.Cid)); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *LockedState) UnmarshalCBOR(r io.Reader) error {
+	*t = LockedState{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 2 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.From (address.SubnetID) (string)
+
+	{
+		sval, err := cbg.ReadStringBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+
+		t.From = address.SubnetID(sval)
+	}
+	// t.Cid (string) (string)
+
+	{
+		sval, err := cbg.ReadStringBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+
+		t.Cid = string(sval)
 	}
 	return nil
 }

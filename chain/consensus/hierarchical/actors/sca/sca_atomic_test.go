@@ -57,7 +57,7 @@ func TestAtomicExec(t *testing.T) {
 	output, err := atomic.WrapLockableState(&replace.Owners{M: map[string]cid.Cid{other.String(): cidOut}})
 	require.NoError(t, err)
 	oparams := &actor.SubmitExecParams{
-		ID:     execCid.String(),
+		Cid:    execCid.String(),
 		Output: *output,
 	}
 	ret = rt.Call(h.SubnetCoordActor.SubmitAtomicExec, oparams)
@@ -83,7 +83,7 @@ func TestAtomicExec(t *testing.T) {
 		output, err := atomic.WrapLockableState(&replace.Owners{M: map[string]cid.Cid{other.String(): c}})
 		require.NoError(t, err)
 		ps := &actor.SubmitExecParams{
-			ID:     execCid.String(),
+			Cid:    execCid.String(),
 			Output: *output,
 		}
 		rt.Call(h.SubnetCoordActor.SubmitAtomicExec, ps)
@@ -127,7 +127,7 @@ func TestAbort(t *testing.T) {
 	rt.SetCaller(caller, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
 	oparams := &actor.SubmitExecParams{
-		ID:    execCid.String(),
+		Cid:   execCid.String(),
 		Abort: true,
 	}
 	ret = rt.Call(h.SubnetCoordActor.SubmitAtomicExec, oparams)
@@ -158,17 +158,11 @@ func execMsgs(t *testing.T, addr address.Address) []types.Message {
 	}
 }
 
-func lockedStates(t *testing.T, caller, other address.Address) map[string]atomic.LockedState {
+func lockedStates(t *testing.T, caller, other address.Address) map[string]actor.LockedState {
 	c1, _ := abi.CidBuilder.Sum([]byte("test1"))
 	c2, _ := abi.CidBuilder.Sum([]byte("test2"))
-	own1 := &replace.Owners{M: map[string]cid.Cid{caller.String(): c1}}
-	own2 := &replace.Owners{M: map[string]cid.Cid{other.String(): c2}}
-	wown1, err := atomic.WrapLockableState(own1)
-	require.NoError(t, err)
-	wown2, err := atomic.WrapLockableState(own2)
-	require.NoError(t, err)
-	return map[string]atomic.LockedState{
-		caller.String(): *wown1,
-		other.String():  *wown2,
+	return map[string]actor.LockedState{
+		caller.String(): {From: address.SubnetID("test1"), Cid: c1.String()},
+		other.String():  {From: address.SubnetID("tes2"), Cid: c2.String()},
 	}
 }
