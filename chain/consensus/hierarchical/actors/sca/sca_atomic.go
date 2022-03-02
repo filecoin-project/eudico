@@ -16,14 +16,20 @@ import (
 	xerrors "golang.org/x/xerrors"
 )
 
+// ExecStatus defines the different state an execution can be in
 type ExecStatus uint64
 
 const (
+	// ExecInitialized and waiting for submissions.
 	ExecInitialized ExecStatus = iota
+	// ExecSuccess - all submissions matched.
 	ExecSuccess
+	// ExecAborted - some party aborted the execution
 	ExecAborted
 )
 
+// AtomicExec is the data structure held by SCA for
+// atomic executions.
 type AtomicExec struct {
 	Params AtomicExecParams
 	Output map[string]cid.Cid
@@ -40,6 +46,11 @@ type SubmitOutput struct {
 	Status ExecStatus
 }
 
+// AtomicExecParams determines the conditions (input, msgs) for the atomic
+// execution.
+//
+// Parties involved in the protocol use this information to perform their
+// off-chain execution stage.
 type AtomicExecParams struct {
 	Msgs   []types.Message
 	Inputs map[string]atomic.LockedState
