@@ -3,6 +3,7 @@ package sca
 import (
 	"context"
 
+	address "github.com/filecoin-project/go-address"
 	abi "github.com/filecoin-project/go-state-types/abi"
 	bstore "github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
@@ -37,7 +38,7 @@ type AtomicExec struct {
 }
 
 type SubmitExecParams struct {
-	ID     string
+	Cid    string // NOTE: Using Cid as string so it can be sed as input parameter
 	Abort  bool
 	Output atomic.LockedState
 }
@@ -53,7 +54,12 @@ type SubmitOutput struct {
 // off-chain execution stage.
 type AtomicExecParams struct {
 	Msgs   []types.Message
-	Inputs map[string]atomic.LockedState
+	Inputs map[string]LockedState
+}
+
+type LockedState struct {
+	From address.SubnetID
+	Cid  string // NOTE: Storing cid as string so it can be used as input parameter in actor fn.
 }
 
 func (st *SCAState) putExecWithCid(execMap *adt.Map, c cid.Cid, exec *AtomicExec) error {
@@ -101,7 +107,7 @@ func (ae *AtomicExecParams) Cid() (cid.Cid, error) {
 	}
 
 	for _, input := range ae.Inputs {
-		mc, err := input.Cid()
+		mc, err := abi.CidBuilder.Sum([]byte(input.From.String() + input.Cid))
 		if err != nil {
 			return cid.Undef, err
 		}

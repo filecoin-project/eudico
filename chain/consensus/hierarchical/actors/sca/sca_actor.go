@@ -678,12 +678,12 @@ func (a SubnetCoordActor) SubmitAtomicExec(rt runtime.Runtime, params *SubmitExe
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting exec map")
 		// Check if execution exists.
 		var found bool
-		execCid, err := cid.Decode(params.ID)
+		execCid, err := cid.Decode(params.Cid)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "error getting exec map")
 		exec, found, err = getAtomicExec(execMap, execCid)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting exec map")
 		if !found {
-			rt.Abortf(exitcode.ErrIllegalArgument, "execution with cid %s not found", params.ID)
+			rt.Abortf(exitcode.ErrIllegalArgument, "execution with cid %s not found", params.Cid)
 		}
 
 		// Check if the output has been aborted or succeeded.
