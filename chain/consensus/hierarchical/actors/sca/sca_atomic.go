@@ -5,11 +5,15 @@ import (
 
 	address "github.com/filecoin-project/go-address"
 	abi "github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-state-types/exitcode"
 	bstore "github.com/filecoin-project/lotus/blockstore"
+	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
 	types "github.com/filecoin-project/lotus/chain/types"
 	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
 	cid "github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
@@ -32,9 +36,9 @@ const (
 // AtomicExec is the data structure held by SCA for
 // atomic executions.
 type AtomicExec struct {
-	Params AtomicExecParams
-	Output map[string]cid.Cid
-	Status ExecStatus
+	Params    AtomicExecParams
+	Submitted map[string]cid.Cid
+	Status    ExecStatus
 }
 
 type SubmitExecParams struct {
@@ -130,4 +134,59 @@ func (ae *AtomicExecParams) Cid() (cid.Cid, error) {
 		MsgsCid:  croot,
 		MetasCid: mroot,
 	})
+}
+
+func (st *SCAState) propagateExecResult(rt runtime.Runtime, ae *AtomicExec, output atomic.LockedState, abort bool) {
+	visited := map[address.SubnetID]struct{}{}
+	for _, l := range ae.Params.Inputs {
+		_, ok := visited[l.From]
+		if ok {
+			continue
+		}
+		// Send result of the execution as cross-msg
+		st.sendCrossMsg(rt, st.execResultMsg(rt, address.SubnetID(l.From), ae.Params.Msgs[0], output, abort))
+		visited[l.From] = struct{}{}
+	}
+}
+
+func (st *SCAState) execResultMsg(rt runtime.Runtime, toSub address.SubnetID, msg types.Message, output atomic.LockedState, abort bool) types.Message {
+	source := builtin.SystemActorAddr
+
+	// to actor address responsible for execution
+	to, err := address.NewHAddress(toSub, msg.To)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
+	from, err := address.NewHAddress(st.NetworkName, source)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
+
+	// lock params
+	lparams, err := atomic.WrapSerializedParams(msg.Method, msg.Params)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error wrapping serialized lock params")
+	var (
+		method abi.MethodNum
+		enc    []byte
+	)
+	if abort {
+		method = atomic.MethodAbort
+		enc, err = actors.SerializeParams(lparams)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
+	} else {
+		method = atomic.MethodUnlock
+		uparams, err := atomic.WrapSerializedUnlockParams(lparams, output.S)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error wrapping merge params")
+		enc, err = actors.SerializeParams(uparams)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
+	}
+
+	// Build message.
+	return types.Message{
+		To:         to,
+		From:       from,
+		Value:      big.Zero(),
+		Nonce:      st.Nonce,
+		Method:     method,
+		GasLimit:   1 << 30, // This is will be applied as an implicit msg, add enough gas
+		GasFeeCap:  types.NewInt(0),
+		GasPremium: types.NewInt(0),
+		Params:     enc,
+	}
 }

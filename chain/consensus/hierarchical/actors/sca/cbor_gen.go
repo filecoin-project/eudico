@@ -1113,23 +1113,23 @@ func (t *AtomicExec) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.Output (map[string]cid.Cid) (map)
+	// t.Submitted (map[string]cid.Cid) (map)
 	{
-		if len(t.Output) > 4096 {
-			return xerrors.Errorf("cannot marshal t.Output map too large")
+		if len(t.Submitted) > 4096 {
+			return xerrors.Errorf("cannot marshal t.Submitted map too large")
 		}
 
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajMap, uint64(len(t.Output))); err != nil {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajMap, uint64(len(t.Submitted))); err != nil {
 			return err
 		}
 
-		keys := make([]string, 0, len(t.Output))
-		for k := range t.Output {
+		keys := make([]string, 0, len(t.Submitted))
+		for k := range t.Submitted {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			v := t.Output[k]
+			v := t.Submitted[k]
 
 			if len(k) > cbg.MaxLength {
 				return xerrors.Errorf("Value in field k was too long")
@@ -1185,7 +1185,7 @@ func (t *AtomicExec) UnmarshalCBOR(r io.Reader) error {
 		}
 
 	}
-	// t.Output (map[string]cid.Cid) (map)
+	// t.Submitted (map[string]cid.Cid) (map)
 
 	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
 	if err != nil {
@@ -1195,10 +1195,10 @@ func (t *AtomicExec) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("expected a map (major type 5)")
 	}
 	if extra > 4096 {
-		return fmt.Errorf("t.Output: map too large")
+		return fmt.Errorf("t.Submitted: map too large")
 	}
 
-	t.Output = make(map[string]cid.Cid, extra)
+	t.Submitted = make(map[string]cid.Cid, extra)
 
 	for i, l := 0, int(extra); i < l; i++ {
 
@@ -1226,7 +1226,7 @@ func (t *AtomicExec) UnmarshalCBOR(r io.Reader) error {
 
 		}
 
-		t.Output[k] = v
+		t.Submitted[k] = v
 
 	}
 	// t.Status (sca.ExecStatus) (uint64)

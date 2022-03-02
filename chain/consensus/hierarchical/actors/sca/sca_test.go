@@ -350,7 +350,7 @@ func verifyEmptyMap(t testing.TB, rt *mock.Runtime, cid cid.Cid) {
 	assert.Empty(t, keys)
 }
 
-func (h *shActorHarness) registerSubnet(rt *mock.Runtime, parent address.SubnetID, snAddr address.Address) {
+func (h *shActorHarness) registerSubnet(rt *mock.Runtime, parent address.SubnetID, snAddr address.Address) address.SubnetID {
 	h.t.Log("register new subnet successfully")
 	// Send 2FIL of stake
 	value := abi.NewTokenAmount(2e18)
@@ -368,6 +368,7 @@ func (h *shActorHarness) registerSubnet(rt *mock.Runtime, parent address.SubnetI
 	require.Equal(h.t, res.ID, shid.String())
 	rt.Verify()
 	h.sn = shid
+	return shid
 }
 
 func getState(rt *mock.Runtime) *actor.SCAState {
