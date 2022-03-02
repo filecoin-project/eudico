@@ -658,8 +658,19 @@ func (a SubnetCoordActor) InitAtomicExec(rt runtime.Runtime, params *AtomicExecP
 		if found {
 			rt.Abortf(exitcode.ErrIllegalArgument, "execution with cid %s already initialized", c)
 		}
+
+		// sanity-check: verify that all messages have same method and are directed to the same actor.
+		method := params.Msgs[0].Method
+		to := params.Msgs[0].To
+		for i := 1; i < len(params.Msgs); i++ {
+			// FIXME: this requirement can probably be relaxed, but leaving it like that until
+			// the level of generalization has been tested with other actors.
+			if method != params.Msgs[i].Method || to != params.Msgs[i].To {
+				rt.Abortf(exitcode.ErrIllegalArgument, "atomic exec does not support messages to different actors and methods right now")
+			}
+		}
 		// Store new initialized execution
-		err = st.putExecWithCid(execMap, c, &AtomicExec{Params: *params, Output: make(map[string]cid.Cid), Status: ExecInitialized})
+		err = st.putExecWithCid(execMap, c, &AtomicExec{Params: *params, Submitted: make(map[string]cid.Cid), Status: ExecInitialized})
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error storing new atomic execution")
 	})
 
@@ -696,13 +707,14 @@ func (a SubnetCoordActor) SubmitAtomicExec(rt runtime.Runtime, params *SubmitExe
 			rt.Abortf(exitcode.ErrIllegalArgument, "caller not involved in the execution")
 		}
 		// Check if he already submitted the output.
-		_, ok = exec.Output[rt.Caller().String()]
+		_, ok = exec.Submitted[rt.Caller().String()]
 		if ok {
 			rt.Abortf(exitcode.ErrIllegalArgument, "caller already submitted an execution output")
 		}
 		// Check if this is an abort
 		if params.Abort {
 			exec.Status = ExecAborted
+			st.propagateExecResult(rt, exec, atomic.LockedState{}, params.Abort)
 			return
 		}
 		outputCid, err := params.Output.Cid()
@@ -710,7 +722,7 @@ func (a SubnetCoordActor) SubmitAtomicExec(rt runtime.Runtime, params *SubmitExe
 		// Append the output only if it matches the existing ones.
 		// NOTE: checking here the cid of the lockedState (including the lock), consider
 		// making the comparison without the lock if we face inconsistencies in the e2e protocol.
-		for _, o := range exec.Output {
+		for _, o := range exec.Submitted {
 			// NOTE: checking one should be enough and we could make it more efficient
 			// like that, but checking all for now as a sanity-check.
 			if o != outputCid {
@@ -718,12 +730,13 @@ func (a SubnetCoordActor) SubmitAtomicExec(rt runtime.Runtime, params *SubmitExe
 				// FIXME: Should we abort right-away if this happens.
 			}
 		}
-		exec.Output[rt.Caller().String()] = outputCid
+		exec.Submitted[rt.Caller().String()] = outputCid
 		err = st.putExecWithCid(execMap, execCid, exec)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error putting exec state")
 		// If it is the final output update state of the execution.
-		if len(exec.Output) == len(exec.Params.Inputs) {
+		if len(exec.Submitted) == len(exec.Params.Inputs) {
 			exec.Status = ExecSuccess
+			st.propagateExecResult(rt, exec, params.Output, params.Abort)
 		}
 
 	})
