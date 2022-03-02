@@ -659,7 +659,7 @@ func (a SubnetCoordActor) InitAtomicExec(rt runtime.Runtime, params *AtomicExecP
 			rt.Abortf(exitcode.ErrIllegalArgument, "execution with cid %s already initialized", c)
 		}
 		// Store new initialized execution
-		err = st.putExecWithCid(execMap, c, &AtomicExec{Params: *params, Output: make(map[string]cid.Cid), Status: Initialized})
+		err = st.putExecWithCid(execMap, c, &AtomicExec{Params: *params, Output: make(map[string]cid.Cid), Status: ExecInitialized})
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error storing new atomic execution")
 	})
 
@@ -669,25 +669,65 @@ func (a SubnetCoordActor) InitAtomicExec(rt runtime.Runtime, params *AtomicExecP
 
 func (a SubnetCoordActor) SubmitAtomicExec(rt runtime.Runtime, params *SubmitExecParams) *SubmitOutput {
 	rt.ValidateImmediateCallerType(builtin.AccountActorCodeID)
-	var st SCAState
+	var (
+		st   SCAState
+		exec *AtomicExec
+	)
 	rt.StateTransaction(&st, func() {
 		execMap, err := adt.AsMap(adt.AsStore(rt), st.AtomicExecRegistry, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting exec map")
 		// Check if execution exists.
-		exec, found, err := getAtomicExec(execMap, params.ID)
+		var found bool
+		execCid, err := cid.Decode(params.ID)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "error getting exec map")
+		exec, found, err = getAtomicExec(execMap, execCid)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting exec map")
 		if !found {
 			rt.Abortf(exitcode.ErrIllegalArgument, "execution with cid %s not found", params.ID)
 		}
 
 		// Check if the output has been aborted or succeeded.
+		if exec.Status != ExecInitialized {
+			rt.Abortf(exitcode.ErrIllegalState, "execution already aborted/succeeded. No need for additional submissions")
+		}
 		// Check if the user is involved in the execution.
+		_, ok := exec.Params.Inputs[rt.Caller().String()]
+		if !ok {
+			rt.Abortf(exitcode.ErrIllegalArgument, "caller not involved in the execution")
+		}
 		// Check if he already submitted the output.
-		// Append the output.
+		_, ok = exec.Output[rt.Caller().String()]
+		if ok {
+			rt.Abortf(exitcode.ErrIllegalArgument, "caller already submitted an execution output")
+		}
+		// Check if this is an abort
+		if params.Abort {
+			exec.Status = ExecAborted
+			return
+		}
+		outputCid, err := params.Output.Cid()
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error computing Cid for output state")
+		// Append the output only if it matches the existing ones.
+		// NOTE: checking here the cid of the lockedState (including the lock), consider
+		// making the comparison without the lock if we face inconsistencies in the e2e protocol.
+		for _, o := range exec.Output {
+			// NOTE: checking one should be enough and we could make it more efficient
+			// like that, but checking all for now as a sanity-check.
+			if o != outputCid {
+				rt.Abortf(exitcode.ErrIllegalArgument, "outputs don't match")
+				// FIXME: Should we abort right-away if this happens.
+			}
+		}
+		exec.Output[rt.Caller().String()] = outputCid
+		err = st.putExecWithCid(execMap, execCid, exec)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error putting exec state")
 		// If it is the final output update state of the execution.
+		if len(exec.Output) == len(exec.Params.Inputs) {
+			exec.Status = ExecSuccess
+		}
 
 	})
 
 	// Return status of the execution
-	return &SubmitOutput{}
+	return &SubmitOutput{exec.Status}
 }

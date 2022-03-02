@@ -3,7 +3,6 @@ package sca
 import (
 	"context"
 
-	address "github.com/filecoin-project/go-address"
 	abi "github.com/filecoin-project/go-state-types/abi"
 	bstore "github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
@@ -20,9 +19,9 @@ import (
 type ExecStatus uint64
 
 const (
-	Initialized ExecStatus = iota
-	Success
-	Aborted
+	ExecInitialized ExecStatus = iota
+	ExecSuccess
+	ExecAborted
 )
 
 type AtomicExec struct {
@@ -32,9 +31,9 @@ type AtomicExec struct {
 }
 
 type SubmitExecParams struct {
-	ID     cid.Cid
+	ID     string
 	Abort  bool
-	Output cid.Cid
+	Output atomic.LockedState
 }
 
 type SubmitOutput struct {
@@ -43,20 +42,7 @@ type SubmitOutput struct {
 
 type AtomicExecParams struct {
 	Msgs   []types.Message
-	Inputs []LockedState
-}
-
-type LockedState struct {
-	From  address.Address
-	State atomic.LockedState
-}
-
-func (st *SCAState) putExec(execMap *adt.Map, exec *AtomicExec) (cid.Cid, error) {
-	execCid, err := exec.Params.Cid()
-	if err != nil {
-		return cid.Undef, err
-	}
-	return execCid, st.putExecWithCid(execMap, execCid, exec)
+	Inputs map[string]atomic.LockedState
 }
 
 func (st *SCAState) putExecWithCid(execMap *adt.Map, c cid.Cid, exec *AtomicExec) error {
@@ -88,34 +74,12 @@ func getAtomicExec(execMap *adt.Map, c cid.Cid) (*AtomicExec, bool, error) {
 	return &out, true, nil
 }
 
-/*
-func putExec(execMap *adt.Map, exec *AtomicExec) (cid.Cid, error) {
-	execCid, err := exec.Params.Cid()
-	if err != nil {
-		return cid.Undef, err
-	}
-	return execCid, execMap.Put(abi.CidKey(execCid), exec)
-}
-
-
-func (st *SCAState) flushCheckpoint(rt runtime.Runtime, ch *schema.Checkpoint) {
-	// Update subnet in the list of checkpoints.
-	checks, err := adt.AsMap(adt.AsStore(rt), st.Checkpoints, builtin.DefaultHamtBitwidth)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state for checkpoints")
-	err = checks.Put(abi.UIntKey(uint64(ch.Data.Epoch)), ch)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put checkpoint in map")
-	// Flush checkpoints
-	st.Checkpoints, err = checks.Root()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush checkpoints")
-}
-*/
-
 // Cid computes the cid for the CrossMsg
 func (ae *AtomicExecParams) Cid() (cid.Cid, error) {
 	cst := cbor.NewCborStore(bstore.NewMemory())
 	store := blockadt.WrapStore(context.TODO(), cst)
 	cArr := blockadt.MakeEmptyArray(store)
-	mArr := blockadt.MakeEmptyArray(store)
+	mArr := blockadt.MakeEmptyMap(store)
 
 	// Compute CID for list of messages generated in subnet
 	for i, m := range ae.Msgs {
@@ -125,13 +89,13 @@ func (ae *AtomicExecParams) Cid() (cid.Cid, error) {
 		}
 	}
 
-	for i, input := range ae.Inputs {
-		mc, err := input.State.Cid()
+	for _, input := range ae.Inputs {
+		mc, err := input.Cid()
 		if err != nil {
 			return cid.Undef, err
 		}
 		c := cbg.CborCid(mc)
-		if err := mArr.Set(uint64(i), &c); err != nil {
+		if err := mArr.Put(abi.CidKey(mc), &c); err != nil {
 			return cid.Undef, err
 		}
 	}
