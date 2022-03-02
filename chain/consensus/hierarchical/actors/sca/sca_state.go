@@ -82,6 +82,9 @@ type SCAState struct {
 	// Keep track of the next nonce of the message to be applied.
 	AppliedBottomUpNonce uint64
 	AppliedTopDownNonce  uint64
+
+	// Atomic execution state
+	AtomicExecRegistry cid.Cid // HAMT[cid]
 }
 
 func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, error) {
@@ -94,6 +97,10 @@ func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, e
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}
 	emptyMsgsMetaMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create empty map: %w", err)
+	}
+	emptyAtomicMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}
@@ -119,6 +126,7 @@ func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, e
 		CheckMsgsRegistry:    emptyMsgsMetaMapCid,
 		BottomUpMsgsMeta:     emptyBottomUpMsgsAMT,
 		AppliedBottomUpNonce: MaxNonce, // We need inital nonce+1 to be 0 due to how msgs are applied.
+		AtomicExecRegistry:   emptyAtomicMapCid,
 	}, nil
 }
 

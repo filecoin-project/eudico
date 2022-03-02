@@ -10,6 +10,7 @@ import (
 	"github.com/filecoin-project/go-state-types/exitcode"
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	types "github.com/filecoin-project/lotus/chain/types"
 	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
@@ -33,7 +34,9 @@ var Methods = struct {
 	Release               abi.MethodNum
 	SendCross             abi.MethodNum
 	ApplyMessage          abi.MethodNum
-}{builtin0.MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	InitAtomicExec        abi.MethodNum
+	SubmitAtomicExec      abi.MethodNum
+}{builtin0.MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
 
 type SubnetIDParam struct {
 	ID string
@@ -53,6 +56,8 @@ func (a SubnetCoordActor) Exports() []interface{} {
 		8:                         a.Release,
 		9:                         a.SendCross,
 		10:                        a.ApplyMessage,
+		11:                        a.InitAtomicExec,
+		12:                        a.SubmitAtomicExec,
 	}
 }
 
@@ -633,4 +638,56 @@ func requireSuccessWithNoop(rt runtime.Runtime, msg types.Message, code exitcode
 		return true
 	}
 	return false
+}
+
+func (a SubnetCoordActor) InitAtomicExec(rt runtime.Runtime, params *AtomicExecParams) *atomic.LockedOutput {
+	rt.ValidateImmediateCallerType(builtin.AccountActorCodeID)
+	var (
+		st  SCAState
+		c   cid.Cid
+		err error
+	)
+	rt.StateTransaction(&st, func() {
+		c, err = params.Cid()
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "error computing cid for atomic exec params")
+		execMap, err := adt.AsMap(adt.AsStore(rt), st.AtomicExecRegistry, builtin.DefaultHamtBitwidth)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting exec map")
+		// Check if execution already exists.
+		_, found, err := getAtomicExec(execMap, c)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting exec map")
+		if found {
+			rt.Abortf(exitcode.ErrIllegalArgument, "execution with cid %s already initialized", c)
+		}
+		// Store new initialized execution
+		err = st.putExecWithCid(execMap, c, &AtomicExec{Params: *params, Output: make(map[string]cid.Cid), Status: Initialized})
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error storing new atomic execution")
+	})
+
+	// Return cid that identifies the execution.
+	return &atomic.LockedOutput{Cid: c}
+}
+
+func (a SubnetCoordActor) SubmitAtomicExec(rt runtime.Runtime, params *SubmitExecParams) *SubmitOutput {
+	rt.ValidateImmediateCallerType(builtin.AccountActorCodeID)
+	var st SCAState
+	rt.StateTransaction(&st, func() {
+		execMap, err := adt.AsMap(adt.AsStore(rt), st.AtomicExecRegistry, builtin.DefaultHamtBitwidth)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting exec map")
+		// Check if execution exists.
+		exec, found, err := getAtomicExec(execMap, params.ID)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting exec map")
+		if !found {
+			rt.Abortf(exitcode.ErrIllegalArgument, "execution with cid %s not found", params.ID)
+		}
+
+		// Check if the output has been aborted or succeeded.
+		// Check if the user is involved in the execution.
+		// Check if he already submitted the output.
+		// Append the output.
+		// If it is the final output update state of the execution.
+
+	})
+
+	// Return status of the execution
+	return &SubmitOutput{}
 }
