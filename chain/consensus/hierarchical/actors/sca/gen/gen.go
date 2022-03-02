@@ -20,7 +20,6 @@ func main() {
 		actor.ErrorParam{},
 		actor.AtomicExec{},
 		actor.AtomicExecParams{},
-		actor.LockedState{},
 		actor.SubmitExecParams{},
 		actor.SubmitOutput{},
 	); err != nil {
