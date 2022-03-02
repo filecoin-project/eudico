@@ -849,13 +849,45 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 		log.Infow("Decoded Public key")
 	}
 
+	//eiher send the initial transaction (if needed) or get the latest checkpoint
+	// of the transaction has already been sent
+	init, err := CheckIfFirstTxHasBeenSent(c.cpconfig.BitcoinHost, publickey, cidBytes)
+	if !init && c.taprootConfig != nil{
+		c.pubkey = genCheckpointPublicKeyTaproot(c.taprootConfig.PublicKey, cidBytes)
+
+		// Get the taproot address used in taproot.sh
+		// this should be changed such that the public key is updated when eudico is stopped
+		// (so that we can continue the checkpointing without restarting from scratch each time)
+		address, _ := pubkeyToTapprootAddress(c.pubkey)
+		//start by getting the balance in our wallet
+		payload1 := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"getbalances\", \"params\": []}"
+		result1 := jsonRPC(c.cpconfig.BitcoinHost, payload1)
+		fmt.Println("Getbalances result: ", result1)
+		intermediary1 := result1["result"].(map[string]interface{})
+		intermediary2 := intermediary1["mine"].(map[string]interface{})
+		value := intermediary2["trusted"].(float64)
+		fmt.Println("Initial value in walet: ", value)
+		newValue := value - c.cpconfig.Fee
+		//why not send the transaction from here?
+		fmt.Println("Creating the initial transaction now")
+		payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendtoaddress\", \"params\": [\"" + address + "\", \"" + fmt.Sprintf("%.8f", newValue) + "\" ]}"
+		fmt.Println(payload)
+		// payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.2f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
+		result := jsonRPC(c.cpconfig.BitcoinHost, payload)
+		if result["error"] != nil {
+			log.Errorf("could not send initial Bitcoin transaction to: %v", address)
+		} else {
+			log.Infow("successfully sent first bitcoin tx")
+		}
+	}
+
 	// Get the last checkpoint from the bitcoin node
 	btccp, err := GetLatestCheckpoint(c.cpconfig.BitcoinHost, publickey, cidBytes)
 	if err != nil {
 		log.Errorf("could not get last checkpoint from Bitcoin: %v", err)
 		return
 	} else {
-		log.Infow("Got last checkpoint from Bitcoin node")
+		log.Infow("Got last checkpoint from Bitcoin node, it is: ", btccp)
 	}
 
 	// Get the config in minio using the last checkpoint found through Bitcoin.
@@ -899,27 +931,7 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 		// 	index = 1
 		// 	value, scriptPubkeyBytes = getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
 		// }
-		// get the initial amount in the wallet
-		payload1 := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"getbalances\", \"params\": []}"
-		result1 := jsonRPC(c.cpconfig.BitcoinHost, payload1)
-		fmt.Println("Getbalances result: ", result1)
-		intermediary1 := result1["result"].(map[string]interface{})
-		intermediary2 := intermediary1["mine"].(map[string]interface{})
-		value := intermediary2["trusted"].(float64)
-		fmt.Println("Initial value in walet: ", value)
-		//value := initialValueInWallet
-		//newValue := value - c.cpconfig.Fee
-		//why not send the transaction from here?
-		fmt.Println("Creating the initial transaction now")
-		payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendtoaddress\", \"params\": [\"" + address + "\", \"" + fmt.Sprintf("%.8f", value) + "\" ]}"
-		fmt.Println(payload)
-		// payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.2f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
-		result := jsonRPC(c.cpconfig.BitcoinHost, payload)
-		if result == nil {
-			log.Errorf("could not send initial Bitcoin transaction to: %v", address)
-		} else {
-			log.Infow("successfully sent first bitcoin tx")
-		}
+
 		// Save tweaked value
 		merkleRoot := hashMerkleRoot(c.taprootConfig.PublicKey, cidBytes)
 		c.tweakedValue = hashTweakedValue(c.taprootConfig.PublicKey, merkleRoot)
