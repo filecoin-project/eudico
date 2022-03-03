@@ -127,7 +127,7 @@ func GetLatestCheckpoint(url string, first_pk []byte, first_cp []byte) (*Checkpo
 
 func CheckIfFirstTxHasBeenSent(url string, first_pk []byte, first_cp []byte) (bool, error) {
 	first_pubkeyTaproot := genCheckpointPublicKeyTaproot(first_pk, first_cp)
-	//firstscript := getTaprootScript(first_pubkeyTaproot)
+	firstscript := getTaprootScript(first_pubkeyTaproot)
 	taprootAddress, err := pubkeyToTapprootAddress(first_pubkeyTaproot)
 	if err != nil {
 		log.Errorf("Error when getting the last checkpoint from bitcoin", err)

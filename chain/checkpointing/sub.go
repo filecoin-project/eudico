@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/Zondax/multi-party-sig/pkg/math/curve"
@@ -659,18 +658,18 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 	log.Infow("participants list :", "participants", idsStrings)
 	log.Infow("precedent tx", "txid", c.ptxid)
 	ids := c.formIDSlice(idsStrings)
-
+	taprootScript := getTaprootScript(c.pubkey)
+	//we add our public key to our bitcoin wallet
+	success := addTaprootToWallet(c.cpconfig.BitcoinHost, taprootScript)
+	if !success {
+		return xerrors.Errorf("failed to add taproot address to wallet")
+	}
 	if c.ptxid == "" {
 		log.Infow("missing precedent txid")
-		taprootScript := getTaprootScript(c.pubkey)
-		//we add our public key to our bitcoin wallet
-		success := addTaprootToWallet(c.cpconfig.BitcoinHost, taprootScript)
-		if !success {
-			return xerrors.Errorf("failed to add taproot address to wallet")
-		}
 
 		// sleep an arbitrary long time to be sure it has been scanned
-		time.Sleep(6 * time.Second)
+		// removed this because now we are adding without rescanning (too long)
+		//time.Sleep(6 * time.Second)
 
 		//we get the transaction id using our bitcoin client
 		ptxid, err := walletGetTxidFromAddress(c.cpconfig.BitcoinHost, taprootAddress)
@@ -684,7 +683,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 	index := 0
 	fmt.Println("Previous tx id: ", c.ptxid)
 	value, scriptPubkeyBytes := getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
-	
+
 	// TODO: instead of calling getTxOUt we need to check for the latest transaction
 	// same as is done in the verification.sh script
 

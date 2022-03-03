@@ -10,3 +10,4 @@ chmod +x ./scripts/add-dom-power.sh
 chmod +x ./scripts/remove-dom-mpower.sh
 chmod +x ./scripts/remove-charlie.sh
 chmod +x ./scripts/genesis-newstate.sh
+chmod +x ./scripts/restart-testnet-demo.sh
