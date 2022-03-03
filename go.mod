@@ -10,7 +10,6 @@ require (
 	github.com/Gurpartap/async v0.0.0-20180927173644-4f7f499dd9ee
 	github.com/Kubuxu/imtui v0.0.0-20210401140320-41663d68d0fa
 	github.com/StackExchange/wmi v1.2.1 // indirect
-	github.com/Zondax/multi-party-sig v0.6.0-alpha-2021-09-21.0.20220119135030-8f412195b286
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d
 	github.com/alecthomas/jsonschema v0.0.0-20200530073317-71f438968921
 	github.com/btcsuite/btcutil v1.0.3-0.20210929233259-9cdf59f60c51
@@ -142,7 +141,7 @@ require (
 	github.com/prometheus/client_golang v1.11.0
 	github.com/raulk/clock v1.1.0
 	github.com/raulk/go-watchdog v1.0.1
-	github.com/sa8/multi-party-sig v0.1.1 // indirect
+	github.com/sa8/multi-party-sig v0.1.1
 	github.com/streadway/quantile v0.0.0-20150917103942-b0c588724d25
 	github.com/stretchr/testify v1.7.0
 	github.com/syndtr/goleveldb v1.0.0
@@ -174,5 +173,3 @@ replace github.com/libp2p/go-libp2p-yamux => github.com/libp2p/go-libp2p-yamux v
 replace github.com/filecoin-project/filecoin-ffi => ./extern/filecoin-ffi
 
 replace github.com/filecoin-project/test-vectors => ./extern/test-vectors
-
-replace github.com/Zondax/multi-party-sig => github.com/sa8/multi-party-sig v0.1.1

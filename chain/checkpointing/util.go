@@ -11,9 +11,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Zondax/multi-party-sig/pkg/math/curve"
 	"github.com/btcsuite/btcutil/bech32"
 	"github.com/cronokirby/safenum"
+	"github.com/sa8/multi-party-sig/pkg/math/curve"
 )
 
 type VerificationShare struct {
@@ -256,26 +256,25 @@ func jsonRPC(url, payload string) map[string]interface{} {
 	return result
 }
 
-
 func sameStringSlice(x, y []string) bool {
-    if len(x) != len(y) {
-        return false
-    }
-    // create a map of string -> int
-    diff := make(map[string]int, len(x))
-    for _, _x := range x {
-        // 0 value for int is 0, so just increment a counter for the string
-        diff[_x]++
-    }
-    for _, _y := range y {
-        // If the string _y is not in diff bail out early
-        if _, ok := diff[_y]; !ok {
-            return false
-        }
-        diff[_y] -= 1
-        if diff[_y] == 0 {
-            delete(diff, _y)
-        }
-    }
-    return len(diff) == 0
+	if len(x) != len(y) {
+		return false
+	}
+	// create a map of string -> int
+	diff := make(map[string]int, len(x))
+	for _, _x := range x {
+		// 0 value for int is 0, so just increment a counter for the string
+		diff[_x]++
+	}
+	for _, _y := range y {
+		// If the string _y is not in diff bail out early
+		if _, ok := diff[_y]; !ok {
+			return false
+		}
+		diff[_y] -= 1
+		if diff[_y] == 0 {
+			delete(diff, _y)
+		}
+	}
+	return len(diff) == 0
 }

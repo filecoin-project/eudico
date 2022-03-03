@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Zondax/multi-party-sig/pkg/protocol"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/sa8/multi-party-sig/pkg/protocol"
 )
 
 type Network struct {
@@ -25,7 +25,7 @@ func NewNetwork(sub *pubsub.Subscription, topic *pubsub.Topic) *Network {
 }
 
 // we could potentially re-use next.sub.net
-// protocol message est la structure 
+// protocol message est la structure
 func (n *Network) Next(ctx context.Context) *protocol.Message {
 	msg, err := n.sub.Next(ctx)
 	if err == context.Canceled {
