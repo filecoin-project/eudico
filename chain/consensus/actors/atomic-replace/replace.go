@@ -5,6 +5,9 @@ package replace
 // protocol.
 
 import (
+	cid "github.com/ipfs/go-cid"
+	xerrors "golang.org/x/xerrors"
+
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/cbor"
@@ -13,8 +16,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
 	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
-	cid "github.com/ipfs/go-cid"
-	xerrors "golang.org/x/xerrors"
 )
 
 //go:generate go run ./gen/gen.go
