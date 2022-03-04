@@ -659,6 +659,10 @@ func (a SubnetCoordActor) InitAtomicExec(rt runtime.Runtime, params *AtomicExecP
 			rt.Abortf(exitcode.ErrIllegalArgument, "execution with cid %s already initialized", c)
 		}
 
+		if len(params.Msgs) == 0 || len(params.Inputs) == 0 {
+			rt.Abortf(exitcode.ErrIllegalArgument, "no msgs or inputs provided for execution")
+		}
+
 		// sanity-check: verify that all messages have same method and are directed to the same actor.
 		method := params.Msgs[0].Method
 		to := params.Msgs[0].To
