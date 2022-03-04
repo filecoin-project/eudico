@@ -85,6 +85,10 @@ func WrapUnlockParams(params *LockParams, out LockableState) (*UnlockParams, err
 	return &UnlockParams{params, buf.Bytes()}, nil
 }
 
+func WrapSerializedUnlockParams(params *LockParams, out []byte) (*UnlockParams, error) {
+	return &UnlockParams{params, out}, nil
+}
+
 func UnwrapUnlockParams(params *UnlockParams, out LockableState) error {
 	return out.UnmarshalCBOR(bytes.NewReader(params.State))
 }

@@ -117,7 +117,7 @@ func TestLockAbort(t *testing.T) {
 	prev1 := owners.M[caller.String()]
 	prev2 := owners.M[target.String()]
 
-	lockparams, err := atomic.WrapLockParams(5, &replace.ReplaceParams{Addr: target})
+	lockparams, err := atomic.WrapLockParams(replace.MethodReplace, &replace.ReplaceParams{Addr: target})
 	require.NoError(t, err)
 	rt.ExpectValidateCallerAny()
 	rt.Call(h.ReplaceActor.Lock, lockparams)
@@ -158,7 +158,7 @@ func TestUnlock(t *testing.T) {
 	rt.ExpectValidateCallerAny()
 	rt.Call(h.ReplaceActor.Own, &replace.OwnParams{Seed: "test1"})
 
-	lockparams, err := atomic.WrapLockParams(5, &replace.ReplaceParams{Addr: target})
+	lockparams, err := atomic.WrapLockParams(replace.MethodReplace, &replace.ReplaceParams{Addr: target})
 	require.NoError(t, err)
 	rt.ExpectValidateCallerAny()
 	rt.Call(h.ReplaceActor.Lock, lockparams)
@@ -191,7 +191,7 @@ func TestMerge(t *testing.T) {
 	rt.ExpectValidateCallerAny()
 	rt.Call(h.ReplaceActor.Own, &replace.OwnParams{Seed: "test1"})
 
-	lockparams, err := atomic.WrapLockParams(5, &replace.ReplaceParams{Addr: target})
+	lockparams, err := atomic.WrapLockParams(replace.MethodReplace, &replace.ReplaceParams{Addr: target})
 	require.NoError(t, err)
 	rt.ExpectValidateCallerAny()
 	rt.Call(h.ReplaceActor.Lock, lockparams)
