@@ -5,6 +5,9 @@ package replace
 // protocol.
 
 import (
+	cid "github.com/ipfs/go-cid"
+	xerrors "golang.org/x/xerrors"
+
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/cbor"
@@ -13,8 +16,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
 	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
-	cid "github.com/ipfs/go-cid"
-	xerrors "golang.org/x/xerrors"
 )
 
 //go:generate go run ./gen/gen.go
@@ -39,7 +40,7 @@ type Owners struct {
 	M map[string]cid.Cid
 }
 
-// Merge implement the merge strategy to follow for our lockable state
+// Merge implements the merge strategy to follow for our lockable state
 // in the actor.
 func (o *Owners) Merge(other atomic.LockableState) error {
 	tt, ok := other.(*Owners)
@@ -165,7 +166,7 @@ func (a ReplaceActor) Lock(rt runtime.Runtime, params *atomic.LockParams) *atomi
 	var st ReplaceState
 	rt.StateTransaction(&st, func() {
 		switch params.Method {
-		case 5:
+		case MethodReplace:
 			builtin.RequireNoErr(rt, st.Owners.LockState(), exitcode.ErrIllegalArgument, "error locking state")
 		default:
 			rt.Abortf(exitcode.ErrIllegalArgument, "provided method doesn't support atomic execution. No need to lock")
@@ -205,7 +206,7 @@ func (a ReplaceActor) Unlock(rt runtime.Runtime, params *atomic.UnlockParams) *a
 		err := atomic.UnwrapUnlockParams(params, output)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error unwrapping output from unlockParams")
 		switch params.Params.Method {
-		case 5:
+		case MethodReplace:
 			st.merge(rt, output)
 			st.unlock(rt)
 		default:
@@ -217,11 +218,11 @@ func (a ReplaceActor) Unlock(rt runtime.Runtime, params *atomic.UnlockParams) *a
 }
 
 func (st *ReplaceState) merge(rt runtime.Runtime, state atomic.LockableState) {
-	owners := &Owners{}
-	err := atomic.UnwrapLockableState(st.Owners, owners)
+	var owners Owners
+	err := atomic.UnwrapLockableState(st.Owners, &owners)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error unwrapping owners")
 	builtin.RequireNoErr(rt, owners.Merge(state), exitcode.ErrIllegalState, "error merging output")
-	st.storeOwners(rt, owners)
+	st.storeOwners(rt, &owners)
 }
 
 func (a ReplaceActor) Abort(rt runtime.Runtime, params *atomic.LockParams) *abi.EmptyValue {
@@ -233,7 +234,7 @@ func (a ReplaceActor) Abort(rt runtime.Runtime, params *atomic.LockParams) *abi.
 	var st ReplaceState
 	rt.StateTransaction(&st, func() {
 		switch params.Method {
-		case 5:
+		case MethodReplace:
 			st.unlock(rt)
 		default:
 			rt.Abortf(exitcode.ErrIllegalArgument, "this method has nothing to unlock")
@@ -251,11 +252,11 @@ func ValidateLockedState(rt runtime.Runtime, st *ReplaceState) {
 
 // UnwrapOwners is a convenient function to handle the locked state from the actor.
 func (st *ReplaceState) UnwrapOwners() (*Owners, error) {
-	own := &Owners{}
-	if err := atomic.UnwrapLockableState(st.Owners, own); err != nil {
+	var own Owners
+	if err := atomic.UnwrapLockableState(st.Owners, &own); err != nil {
 		return nil, err
 	}
-	return own, nil
+	return &own, nil
 }
 
 func (st *ReplaceState) storeOwners(rt runtime.Runtime, owners *Owners) {
