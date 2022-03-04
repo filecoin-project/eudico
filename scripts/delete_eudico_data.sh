@@ -1,2 +1,2 @@
 rm -rf data/
-cp -R ../testnet-data/data ./
+cp -R ../fil-testnet-data/data ./

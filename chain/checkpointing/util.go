@@ -155,6 +155,7 @@ func genCheckpointPublicKeyTaproot(internal_pubkey []byte, checkpoint []byte) []
 
 func addTaprootToWallet(url, taprootScript string) bool {
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"importaddress\", \"params\": [\"" + taprootScript + "\", \"\", false]}"
+	//time.Sleep(6 * time.Second)
 	result := jsonRPC(url, payload)
 	fmt.Println("Add address to wallet: ", taprootScript)
 	fmt.Println(result)

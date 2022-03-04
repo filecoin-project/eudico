@@ -74,7 +74,7 @@ func GetNextCheckpointFixed(url, txid string) (Checkpoint, error) {
 		if vin == nil {
 			continue
 		}
-		fmt.Println("vin string: ", vin.(string))
+		//fmt.Println("vin string: ", vin.(string))
 		//check that the input of the transaction is equal to the txid
 		if vin.(string) == txid {
 			fmt.Println("found txid")
@@ -125,13 +125,14 @@ func GetLatestCheckpoint(url string, first_pk []byte, first_cp []byte) (*Checkpo
 	}
 }
 
-func CheckIfFirstTxHasBeenSent(url string, first_pk []byte, first_cp []byte) (bool, error) {
+func CheckIfFirstTxHasBeenSent(url string, first_pk []byte, first_cp []byte) (bool, string, error) {
+	// the following will only work if we use one bitcoin node for our demo
 	first_pubkeyTaproot := genCheckpointPublicKeyTaproot(first_pk, first_cp)
 	firstscript := getTaprootScript(first_pubkeyTaproot)
 	taprootAddress, err := pubkeyToTapprootAddress(first_pubkeyTaproot)
 	if err != nil {
 		log.Errorf("Error when getting the last checkpoint from bitcoin", err)
-		return false, err
+		return false, "", err
 	}
 
 	/*
@@ -154,12 +155,14 @@ func CheckIfFirstTxHasBeenSent(url string, first_pk []byte, first_cp []byte) (bo
 		// if yes i means there exist some transaction associTED WITH THIS address
 		if item_map["address"] == taprootAddress {
 			log.Infow("Initial transaction has already been sent")
-			return true, nil
+			txid := item_map["txid"].(string)
+			return true, txid, nil
+
 			//check if something was sent from the address (i.e. do we need to go to next checkpoint?)
 			// if item_map["category"].(string) == "sent" {
 			// }
 		}
 	}
 
-	return false, nil
+	return false, "", nil
 }

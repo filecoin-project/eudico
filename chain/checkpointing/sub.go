@@ -47,8 +47,11 @@ import (
 
 var log = logging.Logger("checkpointing")
 
-//update this value with the amount you have in your wallet
+//update this value with the amount you have in your wallet (for testing purpose)
 const initialValueInWallet = 0.0001
+
+// change this to true to alternatively send all the amount from our wallet
+const sendall = false
 
 // struct used to propagate detected changes.
 type diffInfo struct {
@@ -393,7 +396,7 @@ func (c *CheckpointingSub) matchNewConfig(ctx context.Context, oldTs, newTs *typ
 
 func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *types.TipSet, oldSt, newSt mpower.State, diff *diffInfo) (bool, error) {
 	// we are checking that the list of mocked actor is not empty before starting the checkpoint
-	if newTs.Height()%15 == 0 && len(oldSt.Miners) > 0 && (c.taprootConfig != nil || c.newTaprootConfig != nil) {
+	if newTs.Height()%30 == 0 && len(oldSt.Miners) > 0 && (c.taprootConfig != nil || c.newTaprootConfig != nil) {
 		cp := oldTs.Key().Bytes() // this is the checkpoint
 		diff.cp = cp
 
@@ -670,6 +673,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		// sleep an arbitrary long time to be sure it has been scanned
 		// removed this because now we are adding without rescanning (too long)
 		//time.Sleep(6 * time.Second)
+		//time.Sleep(20 * time.Second)
 
 		//we get the transaction id using our bitcoin client
 		ptxid, err := walletGetTxidFromAddress(c.cpconfig.BitcoinHost, taprootAddress)
@@ -694,9 +698,9 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 	}
 	newValue := value - c.cpconfig.Fee
 	fmt.Println("Fee for next transaction is: ", c.cpconfig.Fee)
-	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.8f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
-	fmt.Println("Raw tx: ", payload)
-	result := jsonRPC(c.cpconfig.BitcoinHost, payload)
+	payload1 := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.8f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
+	fmt.Println("Raw tx: ", payload1)
+	result := jsonRPC(c.cpconfig.BitcoinHost, payload1)
 	fmt.Println("Result from Raw tx: ", result)
 	if result == nil {
 		return xerrors.Errorf("can not create new transaction")
@@ -751,8 +755,9 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 	// Only first one broadcast the transaction ?
 	// Actually all participants can broadcast the transcation. It will be the same everywhere.
 	rawtx := prepareWitnessRawTransaction(rawTransaction, r.(taproot.Signature))
-
-	payload = "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendrawtransaction\", \"params\": [\"" + rawtx + "\"]}"
+	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendrawtransaction\", \"params\": [\"" + rawtx + "\"]}"
+	fmt.Println("Send raw transaction command:", payload)
+	fmt.Println("Raw tx: ", payload1)
 	result = jsonRPC(c.cpconfig.BitcoinHost, payload)
 	fmt.Println("Transaction to be sent: ", result)
 	if result["error"] != nil {
@@ -858,17 +863,21 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 	// (so that we can continue the checkpointing without restarting from scratch each time)
 	address, _ := pubkeyToTapprootAddress(c.pubkey)
 	fmt.Println("Address: ", address)
-	init, err := CheckIfFirstTxHasBeenSent(c.cpconfig.BitcoinHost, publickey, cidBytes)
+	init, txid, err := CheckIfFirstTxHasBeenSent(c.cpconfig.BitcoinHost, publickey, cidBytes)
 	if !init && c.taprootConfig != nil {
 		//start by getting the balance in our wallet
-		// payload1 := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"getbalances\", \"params\": []}"
-		// result1 := jsonRPC(c.cpconfig.BitcoinHost, payload1)
-		// fmt.Println("Getbalances result: ", result1)
-		// intermediary1 := result1["result"].(map[string]interface{})
-		// intermediary2 := intermediary1["mine"].(map[string]interface{})
-		// value := intermediary2["trusted"].(float64)
-		// fmt.Println("Initial value in walet: ", value)
-		value := initialValueInWallet
+		var value float64
+		if sendall {
+			payload1 := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"getbalances\", \"params\": []}"
+			result1 := jsonRPC(c.cpconfig.BitcoinHost, payload1)
+			fmt.Println("Getbalances result: ", result1)
+			intermediary1 := result1["result"].(map[string]interface{})
+			intermediary2 := intermediary1["mine"].(map[string]interface{})
+			value = intermediary2["trusted"].(float64)
+			fmt.Println("Initial value in walet: ", value)
+		} else {
+			value = initialValueInWallet
+		}
 		newValue := value - c.cpconfig.Fee
 		//why not send the transaction from here?
 		fmt.Println("Creating the initial transaction now")
@@ -880,10 +889,15 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 			log.Errorf("could not send initial Bitcoin transaction to: %v", address)
 		} else {
 			log.Infow("successfully sent first bitcoin tx")
+			c.ptxid = result["result"].(string)
 		}
 	}
 
+	if init {
+		c.ptxid = txid
+	}
 	// Get the last checkpoint from the bitcoin node
+
 	btccp, err := GetLatestCheckpoint(c.cpconfig.BitcoinHost, publickey, cidBytes)
 	if err != nil {
 		log.Errorf("could not get last checkpoint from Bitcoin: %v", err)
