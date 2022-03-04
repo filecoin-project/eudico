@@ -2,6 +2,7 @@ package registry
 
 import (
 	"github.com/filecoin-project/lotus/chain/actors"
+	replace "github.com/filecoin-project/lotus/chain/consensus/actors/atomic-replace"
 	initactor "github.com/filecoin-project/lotus/chain/consensus/actors/init"
 	"github.com/filecoin-project/lotus/chain/consensus/actors/reward"
 	"github.com/filecoin-project/lotus/chain/consensus/actors/split"
@@ -18,10 +19,14 @@ func NewActorRegistry() *vm.ActorRegistry {
 	inv.Register(vm.ActorsVersionPredicate(actors.Version7), exported7.BuiltinActors()...)
 	inv.Register(nil, initactor.InitActor{}) // use our custom init actor
 
+	// Hierarchical consensus
 	inv.Register(nil, reward.Actor{})
-	inv.Register(nil, split.SplitActor{})
 	inv.Register(nil, subnet.SubnetActor{})
 	inv.Register(nil, sca.SubnetCoordActor{})
+
+	// Custom actors
+	inv.Register(nil, split.SplitActor{})
+	inv.Register(nil, replace.ReplaceActor{})
 
 	return inv
 }
