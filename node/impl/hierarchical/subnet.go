@@ -84,3 +84,9 @@ func (a *HierarchicalAPI) CrossMsgResolve(ctx context.Context, id address.Subnet
 	c cid.Cid, from address.SubnetID) ([]types.Message, error) {
 	return a.Sub.CrossMsgResolve(ctx, id, c, from)
 }
+
+func (a *HierarchicalAPI) LockState(
+	ctx context.Context, wallet address.Address, actor address.Address,
+	subnet address.SubnetID, method abi.MethodNum) (cid.Cid, error) {
+	return a.Sub.LockState(ctx, wallet, actor, subnet, method)
+}

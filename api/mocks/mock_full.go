@@ -1100,6 +1100,21 @@ func (mr *MockFullNodeMockRecorder) ListCheckpoints(arg0, arg1, arg2 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListCheckpoints", reflect.TypeOf((*MockFullNode)(nil).ListCheckpoints), arg0, arg1, arg2)
 }
 
+// LockState mocks base method.
+func (m *MockFullNode) LockState(arg0 context.Context, arg1, arg2 address.Address, arg3 address.SubnetID, arg4 abi.MethodNum) (cid.Cid, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LockState", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(cid.Cid)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LockState indicates an expected call of LockState.
+func (mr *MockFullNodeMockRecorder) LockState(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockState", reflect.TypeOf((*MockFullNode)(nil).LockState), arg0, arg1, arg2, arg3, arg4)
+}
+
 // LogAlerts mocks base method.
 func (m *MockFullNode) LogAlerts(arg0 context.Context) ([]alerting.Alert, error) {
 	m.ctrl.T.Helper()

@@ -38,6 +38,7 @@ var subnetCmds = &cli.Command{
 		leaveCmd,
 		killCmd,
 		checkpointCmds,
+		atomicExecCmds,
 		fundCmd,
 		releaseCmd,
 		sendCmd,
