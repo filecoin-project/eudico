@@ -1553,7 +1553,7 @@ func (t *SubmitOutput) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufLockedState = []byte{130}
+var lengthBufLockedState = []byte{131}
 
 func (t *LockedState) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -1589,6 +1589,11 @@ func (t *LockedState) MarshalCBOR(w io.Writer) error {
 	if _, err := io.WriteString(w, string(t.Cid)); err != nil {
 		return err
 	}
+
+	// t.Actor (address.Address) (struct)
+	if err := t.Actor.MarshalCBOR(w); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1606,7 +1611,7 @@ func (t *LockedState) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 2 {
+	if extra != 3 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -1629,6 +1634,15 @@ func (t *LockedState) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		t.Cid = string(sval)
+	}
+	// t.Actor (address.Address) (struct)
+
+	{
+
+		if err := t.Actor.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Actor: %w", err)
+		}
+
 	}
 	return nil
 }

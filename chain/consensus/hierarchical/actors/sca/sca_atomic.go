@@ -62,8 +62,9 @@ type AtomicExecParams struct {
 }
 
 type LockedState struct {
-	From address.SubnetID
-	Cid  string // NOTE: Storing cid as string so it can be used as input parameter in actor fn.
+	From  address.SubnetID
+	Cid   string // NOTE: Storing cid as string so it can be used as input parameter in actor fn.
+	Actor address.Address
 }
 
 func (st *SCAState) putExecWithCid(execMap *adt.Map, c cid.Cid, exec *AtomicExec) error {
@@ -111,7 +112,7 @@ func (ae *AtomicExecParams) Cid() (cid.Cid, error) {
 	}
 
 	for _, input := range ae.Inputs {
-		mc, err := abi.CidBuilder.Sum([]byte(input.From.String() + input.Cid))
+		mc, err := abi.CidBuilder.Sum([]byte(input.From.String() + input.Cid + input.Actor.String()))
 		if err != nil {
 			return cid.Undef, err
 		}

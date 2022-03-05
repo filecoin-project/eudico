@@ -238,8 +238,10 @@ func execMsgs(t *testing.T, addr address.Address) []types.Message {
 func lockedStates(t *testing.T, sn1, sn2 address.SubnetID, caller, other address.Address) map[string]actor.LockedState {
 	c1, _ := abi.CidBuilder.Sum([]byte("test1"))
 	c2, _ := abi.CidBuilder.Sum([]byte("test2"))
+	act1 := tutil.NewIDAddr(t, 900)
+	act2 := tutil.NewIDAddr(t, 901)
 	return map[string]actor.LockedState{
-		caller.String(): {From: sn1, Cid: c1.String()},
-		other.String():  {From: sn2, Cid: c2.String()},
+		caller.String(): {From: sn1, Cid: c1.String(), Actor: act1},
+		other.String():  {From: sn2, Cid: c2.String(), Actor: act2},
 	}
 }
