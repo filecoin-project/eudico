@@ -1553,7 +1553,7 @@ func (t *SubmitOutput) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufLockedState = []byte{131}
+var lengthBufLockedState = []byte{130}
 
 func (t *LockedState) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -1565,18 +1565,6 @@ func (t *LockedState) MarshalCBOR(w io.Writer) error {
 	}
 
 	scratch := make([]byte, 9)
-
-	// t.From (address.SubnetID) (string)
-	if len(t.From) > cbg.MaxLength {
-		return xerrors.Errorf("Value in field t.From was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.From))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string(t.From)); err != nil {
-		return err
-	}
 
 	// t.Cid (string) (string)
 	if len(t.Cid) > cbg.MaxLength {
@@ -1611,20 +1599,10 @@ func (t *LockedState) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 3 {
+	if extra != 2 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.From (address.SubnetID) (string)
-
-	{
-		sval, err := cbg.ReadStringBuf(br, scratch)
-		if err != nil {
-			return err
-		}
-
-		t.From = address.SubnetID(sval)
-	}
 	// t.Cid (string) (string)
 
 	{

@@ -62,7 +62,6 @@ type AtomicExecParams struct {
 }
 
 type LockedState struct {
-	From  address.SubnetID
 	Cid   string // NOTE: Storing cid as string so it can be used as input parameter in actor fn.
 	Actor address.Address
 }
@@ -74,6 +73,72 @@ func (st *SCAState) putExecWithCid(execMap *adt.Map, c cid.Cid, exec *AtomicExec
 	}
 	st.AtomicExecRegistry, err = execMap.Root()
 	return err
+}
+
+func execForRawAddr(m map[string]LockedState, target address.Address) (*LockedState, bool, error) {
+	for k := range m {
+		addr, err := address.NewFromString(k)
+		if err != nil {
+			return nil, false, err
+		}
+		raddr, err := addr.RawAddr()
+		if err != nil {
+			return nil, false, err
+		}
+		if raddr == target {
+			out := m[k]
+			return &out, true, nil
+		}
+	}
+	return nil, false, nil
+}
+
+func sameRawAddr(inputs map[string]LockedState) (bool, error) {
+	seen := map[address.Address]struct{}{}
+	for k := range inputs {
+		addr, err := address.NewFromString(k)
+		if err != nil {
+			return false, err
+		}
+		raddr, err := addr.RawAddr()
+		if err != nil {
+			return false, err
+		}
+		if _, ok := seen[raddr]; ok {
+			return true, nil
+		}
+		seen[raddr] = struct{}{}
+	}
+	return false, nil
+}
+
+func isCommonParent(curr address.SubnetID, inputs map[string]LockedState) (bool, error) {
+	var cp address.SubnetID
+	// Get first subnet to use as reference
+	for k := range inputs {
+		addr, err := address.NewFromString(k)
+		if err != nil {
+			return false, err
+		}
+		cp, err = addr.Subnet()
+		if err != nil {
+			return false, err
+		}
+		break
+	}
+	// Iterate through map
+	for k := range inputs {
+		addr, err := address.NewFromString(k)
+		if err != nil {
+			return false, err
+		}
+		sub, err := addr.Subnet()
+		if err != nil {
+			return false, err
+		}
+		cp, _ = cp.CommonParent(sub)
+	}
+	return cp == curr, nil
 }
 
 func (st *SCAState) GetAtomicExec(s adt.Store, c cid.Cid) (*AtomicExec, bool, error) {
@@ -112,7 +177,7 @@ func (ae *AtomicExecParams) Cid() (cid.Cid, error) {
 	}
 
 	for _, input := range ae.Inputs {
-		mc, err := abi.CidBuilder.Sum([]byte(input.From.String() + input.Cid + input.Actor.String()))
+		mc, err := abi.CidBuilder.Sum([]byte(input.Cid + input.Actor.String()))
 		if err != nil {
 			return cid.Undef, err
 		}
@@ -139,14 +204,18 @@ func (ae *AtomicExecParams) Cid() (cid.Cid, error) {
 
 func (st *SCAState) propagateExecResult(rt runtime.Runtime, ae *AtomicExec, output atomic.LockedState, abort bool) {
 	visited := map[address.SubnetID]struct{}{}
-	for _, l := range ae.Params.Inputs {
-		_, ok := visited[l.From]
+	for k := range ae.Params.Inputs {
+		addr, err := address.NewFromString(k)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error parsing address")
+		from, err := addr.Subnet()
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting subnet from address")
+		_, ok := visited[from]
 		if ok {
 			continue
 		}
 		// Send result of the execution as cross-msg
-		st.sendCrossMsg(rt, st.execResultMsg(rt, address.SubnetID(l.From), ae.Params.Msgs[0], output, abort))
-		visited[l.From] = struct{}{}
+		st.sendCrossMsg(rt, st.execResultMsg(rt, address.SubnetID(from), ae.Params.Msgs[0], output, abort))
+		visited[from] = struct{}{}
 	}
 }
 

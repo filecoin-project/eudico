@@ -659,8 +659,22 @@ func (a SubnetCoordActor) InitAtomicExec(rt runtime.Runtime, params *AtomicExecP
 			rt.Abortf(exitcode.ErrIllegalArgument, "execution with cid %s already initialized", c)
 		}
 
-		if len(params.Msgs) == 0 || len(params.Inputs) == 0 {
-			rt.Abortf(exitcode.ErrIllegalArgument, "no msgs or inputs provided for execution")
+		if len(params.Msgs) == 0 || len(params.Inputs) < 2 {
+			rt.Abortf(exitcode.ErrIllegalArgument, "no msgs or not enough inputs provided for execution")
+		}
+
+		// Check if we are common parent of execution and thus the atomic execution is being executed
+		// in the right subnet.
+		if iscp, err := isCommonParent(st.NetworkName, params.Inputs); !iscp {
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error verifying if we are common parent")
+			rt.Abortf(exitcode.ErrIllegalArgument, "can't initialize atomic execution if we are not the common parent")
+		}
+
+		// Check if the atomic execution is initiated by the same address from different subnets.
+		// FIXME: If needed this can be easily supported.
+		if ok, err := sameRawAddr(params.Inputs); ok {
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error verifying same address")
+			rt.Abortf(exitcode.ErrIllegalArgument, "atomic execution for same address from different subnets not yet supported")
 		}
 
 		// sanity-check: verify that all messages have same method and are directed to the same actor.
@@ -706,11 +720,15 @@ func (a SubnetCoordActor) SubmitAtomicExec(rt runtime.Runtime, params *SubmitExe
 			rt.Abortf(exitcode.ErrIllegalState, "execution already aborted/succeeded. No need for additional submissions")
 		}
 		// Check if the user is involved in the execution.
-		_, ok := exec.Params.Inputs[rt.Caller().String()]
+		// _, ok := exec.Params.Inputs[rt.Caller().String()]
+		_, ok, err := execForRawAddr(exec.Params.Inputs, rt.Caller())
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error searching exec on inputs from raw addr")
 		if !ok {
 			rt.Abortf(exitcode.ErrIllegalArgument, "caller not involved in the execution")
 		}
 		// Check if he already submitted the output.
+		// FIXME: At this point we don't support the atomic execution between
+		// the same address in different subnets. This can be easily supported if needed.
 		_, ok = exec.Submitted[rt.Caller().String()]
 		if ok {
 			rt.Abortf(exitcode.ErrIllegalArgument, "caller already submitted an execution output")

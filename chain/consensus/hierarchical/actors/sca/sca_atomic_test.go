@@ -240,8 +240,12 @@ func lockedStates(t *testing.T, sn1, sn2 address.SubnetID, caller, other address
 	c2, _ := abi.CidBuilder.Sum([]byte("test2"))
 	act1 := tutil.NewIDAddr(t, 900)
 	act2 := tutil.NewIDAddr(t, 901)
+	addr1, err := address.NewHAddress(sn1, caller)
+	require.NoError(t, err)
+	addr2, err := address.NewHAddress(sn2, other)
+	require.NoError(t, err)
 	return map[string]actor.LockedState{
-		caller.String(): {From: sn1, Cid: c1.String(), Actor: act1},
-		other.String():  {From: sn2, Cid: c2.String(), Actor: act2},
+		addr1.String(): {Cid: c1.String(), Actor: act1},
+		addr2.String(): {Cid: c2.String(), Actor: act2},
 	}
 }
