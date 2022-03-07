@@ -48,10 +48,10 @@ import (
 var log = logging.Logger("checkpointing")
 
 //update this value with the amount you have in your wallet (for testing purpose)
-const initialValueInWallet = 0.002
+const initialValueInWallet = 50
 
 // change this to true to alternatively send all the amount from our wallet
-const sendall = false
+var sendall = false
 
 // we use this bool to write the transactions locally and remove the need
 // to scan the whole blockchaain when new nodes join as this takes a long time
@@ -60,6 +60,9 @@ const writeTxLocally = true
 
 // this variable is the number of blocks (in eudico) we want between each checkpoints
 const checkpointFrequency = 20
+
+//change to true if regtest is used
+const Regtest = true
 
 // struct used to propagate detected changes.
 type diffInfo struct {
@@ -852,14 +855,13 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 		log.Infow("Got genesis tipset")
 	}
 
-	cidBytes := ts.Key().Bytes()
-	fmt.Println("here")                                      // this is the checkpoint (i.e. hash of block)
+	cidBytes := ts.Key().Bytes()                             // this is the checkpoint (i.e. hash of block)
 	publickey, err := hex.DecodeString(c.cpconfig.PublicKey) //publickey pre-generated
 	if err != nil {
 		log.Errorf("could not decode public key: %v", err)
 		return
 	} else {
-		fmt.Println("public key", publickey)
+		//fmt.Println("public key", publickey)
 		log.Infow("Pub key", publickey)
 		log.Infow("Decoded Public key")
 	}
@@ -896,6 +898,7 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 		fmt.Println(payload)
 		// payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.2f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
 		result := jsonRPC(c.cpconfig.BitcoinHost, payload)
+		fmt.Println(result)
 		if result["error"] != nil {
 			log.Errorf("could not send initial Bitcoin transaction to: %v", address)
 		} else {

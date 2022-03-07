@@ -107,7 +107,14 @@ func pubkeyToTapprootAddress(pubkey []byte) (string, error) {
 
 	// regtest human-readable part is "bcrt" according to no documentation ever... (see https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki)
 	// Using EncodeM becasue we want bech32m... which has a new checksum
-	//
+	if Regtest {
+		taprootAddress, err := bech32.EncodeM("bcrt", conv)
+		if err != nil {
+			return "", err
+		}
+		return taprootAddress, nil
+	}
+	// for testnet the human-readable part is "tb"
 	taprootAddress, err := bech32.EncodeM("tb", conv)
 	if err != nil {
 		return "", err
@@ -155,6 +162,9 @@ func genCheckpointPublicKeyTaproot(internal_pubkey []byte, checkpoint []byte) []
 
 func addTaprootToWallet(url, taprootScript string) bool {
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"importaddress\", \"params\": [\"" + taprootScript + "\", \"\", false]}"
+	if Regtest {
+		payload = "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"importaddress\", \"params\": [\"" + taprootScript + "\", \"\", true]}"
+	}
 	//time.Sleep(6 * time.Second)
 	result := jsonRPC(url, payload)
 	fmt.Println("Add address to wallet: ", taprootScript)
@@ -197,6 +207,7 @@ func walletGetTxidFromAddress(url, taprootAddress string) (string, error) {
 func bitcoindPing(url string) bool {
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"ping\", \"params\": []}"
 	result := jsonRPC(url, payload)
+	fmt.Println("bitcoin ping", result)
 	return result != nil
 }
 
@@ -233,9 +244,12 @@ func jsonRPC(url, payload string) map[string]interface{} {
 	// ZONDAX TODO
 	// This needs to be in a config file
 	method := "POST"
-
 	user := "sarah"
 	password := "pikachutestnetB2"
+	if Regtest {
+		user = "satoshi"
+		password = "amiens"
+	}
 
 	client := &http.Client{}
 
