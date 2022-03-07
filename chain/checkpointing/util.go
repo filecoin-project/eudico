@@ -158,7 +158,8 @@ func addTaprootToWallet(url, taprootScript string) bool {
 	if result["error"] == nil {
 		return true
 	}
-
+	fmt.Println("Add address to wallet: ", taprootScript)
+	fmt.Println(result)
 	err := result["error"].(map[string]interface{})
 	if err["code"].(float64) == -4 {
 		// Particular case where we are already in the process of adding the key
