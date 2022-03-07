@@ -48,10 +48,18 @@ import (
 var log = logging.Logger("checkpointing")
 
 //update this value with the amount you have in your wallet (for testing purpose)
-const initialValueInWallet = 0.0001
+const initialValueInWallet = 0.002
 
 // change this to true to alternatively send all the amount from our wallet
 const sendall = false
+
+// we use this bool to write the transactions locally and remove the need
+// to scan the whole blockchaain when new nodes join as this takes a long time
+// this is only for demo purpose and works only if the nodes are launch from the same machine
+const writeTxLocally = true
+
+// this variable is the number of blocks (in eudico) we want between each checkpoints
+const checkpointFrequency = 20
 
 // struct used to propagate detected changes.
 type diffInfo struct {
@@ -396,7 +404,7 @@ func (c *CheckpointingSub) matchNewConfig(ctx context.Context, oldTs, newTs *typ
 
 func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *types.TipSet, oldSt, newSt mpower.State, diff *diffInfo) (bool, error) {
 	// we are checking that the list of mocked actor is not empty before starting the checkpoint
-	if newTs.Height()%30 == 0 && len(oldSt.Miners) > 0 && (c.taprootConfig != nil || c.newTaprootConfig != nil) {
+	if newTs.Height()%checkpointFrequency == 0 && len(oldSt.Miners) > 0 && (c.taprootConfig != nil || c.newTaprootConfig != nil) {
 		cp := oldTs.Key().Bytes() // this is the checkpoint
 		diff.cp = cp
 
@@ -844,12 +852,15 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 		log.Infow("Got genesis tipset")
 	}
 
-	cidBytes := ts.Key().Bytes()                             // this is the checkpoint (i.e. hash of block)
+	cidBytes := ts.Key().Bytes()
+	fmt.Println("here")                                      // this is the checkpoint (i.e. hash of block)
 	publickey, err := hex.DecodeString(c.cpconfig.PublicKey) //publickey pre-generated
 	if err != nil {
 		log.Errorf("could not decode public key: %v", err)
 		return
 	} else {
+		fmt.Println("public key", publickey)
+		log.Infow("Pub key", publickey)
 		log.Infow("Decoded Public key")
 	}
 
