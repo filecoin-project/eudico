@@ -881,11 +881,7 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 		// (so that we can continue the checkpointing without restarting from scratch each time)
 		address, _ := pubkeyToTapprootAddress(c.pubkey)
 		fmt.Println("Address: ", address)
-		init, txid, err := CheckIfFirstTxHasBeenSent(c.cpconfig.BitcoinHost, publickey, cidBytes)
-		if err != nil {
-			log.Errorf("Error with check if first tx has been sent")
-		}
-		if !init {
+		if c.host.ID().String() == "12D3KooWMBbLLKTM9Voo89TXLd98w4MjkJUych6QvECptousGtR4" {
 			//start by getting the balance in our wallet
 			var value float64
 			if sendall {
@@ -914,8 +910,27 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 				c.ptxid = result["result"].(string)
 			}
 		}
-		if init {
-			c.ptxid = txid
+		// init, txid, err := CheckIfFirstTxHasBeenSent(c.cpconfig.BitcoinHost, publickey, cidBytes)
+		// if err != nil {
+		// 	log.Errorf("Error with check if first tx has been sent")
+		// }
+		// if init {
+		// 	c.ptxid = txid
+		// }
+		// else {
+		// 	time.Sleep(2 * time.Second)
+		// 	init, txid, err := CheckIfFirstTxHasBeenSent(c.cpconfig.BitcoinHost, publickey, cidBytes)
+		// 	c.ptxid = txid
+		// }
+		for {
+			init, txid, err := CheckIfFirstTxHasBeenSent(c.cpconfig.BitcoinHost, publickey, cidBytes)
+			if init {
+				c.ptxid = txid
+				if err != nil {
+					log.Errorf("Error with check if first tx has been sent")
+				}
+				break
+			}
 		}
 	}
 
