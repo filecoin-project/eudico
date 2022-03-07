@@ -64,6 +64,16 @@ func (ts *consensusSuite) testTSPoWMining(t *testing.T) {
 	require.Equal(t, int64(h1.Height()), int64(baseHeight))
 
 	<-newHeads
+
+	h2, err := full.ChainHead(ctx)
+	require.NoError(t, err)
+	require.Greater(t, int64(h2.Height()), int64(h1.Height()))
+
+	<-newHeads
+
+	h3, err := full.ChainHead(ctx)
+	require.NoError(t, err)
+	require.Greater(t, int64(h3.Height()), int64(h2.Height()))
 }
 
 func (ts *consensusSuite) testDelegatedMining(t *testing.T) {
@@ -88,4 +98,14 @@ func (ts *consensusSuite) testDelegatedMining(t *testing.T) {
 	require.Equal(t, int64(h1.Height()), int64(baseHeight))
 
 	<-newHeads
+
+	h2, err := full.ChainHead(ctx)
+	require.NoError(t, err)
+	require.Greater(t, int64(h2.Height()), int64(h1.Height()))
+
+	<-newHeads
+
+	h3, err := full.ChainHead(ctx)
+	require.NoError(t, err)
+	require.Greater(t, int64(h3.Height()), int64(h2.Height()))
 }
