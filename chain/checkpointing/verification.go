@@ -87,7 +87,7 @@ func GetNextCheckpointFixed(url, txid string) (Checkpoint, error) {
 			return Checkpoint{txid: new_txid, address: new_address, cid: cid[4:]}, nil
 		}
 	}
-	fmt.Println("Did not work fine")
+	//fmt.Println("Did not work fine")
 	return Checkpoint{}, errors.New("Did not find checkpoint")
 }
 

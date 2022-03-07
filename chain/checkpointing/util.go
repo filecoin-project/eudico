@@ -168,7 +168,7 @@ func addTaprootToWallet(url, taprootScript string) bool {
 	//time.Sleep(6 * time.Second)
 	result := jsonRPC(url, payload)
 	fmt.Println("Add address to wallet: ", taprootScript)
-	fmt.Println(result)
+	fmt.Println("Result from add", result)
 	if result["error"] == nil {
 		return true
 	}
@@ -178,7 +178,7 @@ func addTaprootToWallet(url, taprootScript string) bool {
 	if err["code"].(float64) == -4 {
 		// Particular case where we are already in the process of adding the key
 		// because we are using 1 bitcoin node for all
-		return false
+		return true
 	}
 
 	return false
