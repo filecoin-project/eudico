@@ -4,8 +4,12 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
+	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/vm"
 	"github.com/filecoin-project/lotus/cmd/lotus-seed/seed"
 	"github.com/filecoin-project/lotus/node/modules/helpers"
@@ -15,6 +19,7 @@ import (
 	"net"
 	"net/http"
 	"path"
+	"strings"
 	"testing"
 	"time"
 
@@ -213,7 +218,6 @@ func (n *EudicoEnsemble) Miner(minerNode *TestMiner, full *TestFullNode, opts ..
 	}
 
 	ownerKey := options.ownerKey
-	//n.t.Logf("!!! owner key %x", ownerKey.Address)
 
 	if !n.bootstrapped {
 		var (
@@ -240,8 +244,6 @@ func (n *EudicoEnsemble) Miner(minerNode *TestMiner, full *TestFullNode, opts ..
 
 		// create an owner key, and assign it some FIL.
 		ownerKey, err = wallet.GenerateKey(types.KTSecp256k1)
-
-		n.t.Log("!!!! Some key:", ownerKey.Address)
 
 		genacc := genesis.Actor{
 			Type:    genesis.TAccount,
@@ -279,6 +281,11 @@ func (n *EudicoEnsemble) Miner(minerNode *TestMiner, full *TestFullNode, opts ..
 func NewRootTSPoWConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
 	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
 	return tspow.NewTSPoWConsensus(sm, nil, beacon, r, verifier, genesis, netName)
+}
+
+func NewRootDelegatedConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
+	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
+	return delegcns.NewDelegatedConsensus(sm, nil, beacon, r, verifier, genesis, netName)
 }
 
 func NetworkName(mctx helpers.MetricsCtx,
@@ -349,6 +356,26 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		return nil
 	}
 
+	var consensusConstructor interface{}
+	switch n.options.consensus {
+	case hierarchical.PoW:
+		consensusConstructor = NewRootTSPoWConsensus
+	case hierarchical.Delegated:
+		consensusConstructor = NewRootDelegatedConsensus
+	default:
+		panic("unsupported consensus")
+	}
+
+	var weightConstructor interface{}
+	switch n.options.consensus {
+	case hierarchical.PoW:
+		weightConstructor = tspow.Weight
+	case hierarchical.Delegated:
+		weightConstructor = delegcns.Weight
+	default:
+		panic("unsupported consensus")
+	}
+
 	// ---------------------
 	//  FULL NODES
 	// ---------------------
@@ -366,8 +393,8 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 			node.Test(),
 
 			node.Override(new(dtypes.NetworkName), NetworkName),
-			node.Override(new(consensus.Consensus), NewRootTSPoWConsensus),
-			node.Override(new(store.WeightFunc), tspow.Weight),
+			node.Override(new(consensus.Consensus), consensusConstructor),
+			node.Override(new(store.WeightFunc), weightConstructor),
 			node.Unset(new(*slashfilter.SlashFilter)),
 			node.Override(new(stmgr.Executor), common.RootTipSetExecutor),
 			node.Override(new(stmgr.UpgradeSchedule), common.DefaultUpgradeSchedule()),
@@ -386,17 +413,23 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 			}),
 			node.Unset(node.RunPeerMgrKey),
 			node.Unset(new(*peermgr.PeerMgr)),
-
-			// upgrades
-			//node.Override(new(stmgr.UpgradeSchedule), n.options.upgradeSchedule),
 		}
 
 		// append any node builder options.
 		opts = append(opts, full.options.extraNodeOpts...)
 
 		var genBytes []byte
-		genBytes, err := ioutil.ReadFile("../testdata/tspow.gen")
-		require.NoError(n.t, err)
+		var testDataFileErr error
+		switch n.options.consensus {
+		case hierarchical.PoW:
+			genBytes, testDataFileErr = ioutil.ReadFile("../testdata/tspow.gen")
+		case hierarchical.Delegated:
+			genBytes, testDataFileErr = ioutil.ReadFile("../testdata/deleg.gen")
+		default:
+			n.t.Fatalf("unknown consensus type %d", n.options.consensus)
+		}
+
+		require.NoError(n.t, testDataFileErr)
 
 		// Either generate the genesis or inject it.
 		if i == 0 && !n.bootstrapped {
@@ -423,10 +456,28 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 
 		// Construct the full node.
 		stop, err := node.New(ctx, opts...)
-
 		require.NoError(n.t, err)
 
-		addr, err := full.WalletImport(context.Background(), &full.DefaultKey.KeyInfo)
+		//
+		hexdata, err := ioutil.ReadFile("../testdata/f1ozbo7zqwfx6d4tqb353qoq7sfp4qhycefx6ftgy.key")
+		require.NoError(n.t, err)
+
+		data, err := hex.DecodeString(strings.TrimSpace(string(hexdata)))
+		require.NoError(n.t, err)
+
+		var ki types.KeyInfo
+		err = json.Unmarshal(data, &ki)
+		require.NoError(n.t, err)
+
+		var addr address.Address
+		switch n.options.consensus {
+		case hierarchical.PoW:
+			addr, err = full.WalletImport(context.Background(), &full.DefaultKey.KeyInfo)
+		case hierarchical.Delegated:
+			addr, err = full.WalletImport(context.Background(), &ki)
+		default:
+			n.t.Fatalf("unknown consensus type %d", n.options.consensus)
+		}
 		require.NoError(n.t, err)
 
 		err = full.WalletSetDefault(context.Background(), addr)
