@@ -13,9 +13,7 @@ import (
 	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
-
-	//"github.com/Zondax/multi-party-sig/pkg/taproot"
-
+	//"github.com/sa8/multi-party-sig/pkg/taproot"
 )
 
 type Runtime = runtime.Runtime
@@ -33,10 +31,10 @@ var PowerActorAddr = func() address.Address {
 
 func (a Actor) Exports() []interface{} {
 	return []interface{}{
-		builtin.MethodConstructor: a.Constructor, // Initialiazed the actor; always required
-		2:                         a.AddMiners,    // Add a miner to the list (specificaly crafted for checkpointing)
-		3:						   a.RemoveMiners, // Remove miners from the list
-		4: 						   a.UpdateTaprootAddress, // Update the taproot address
+		builtin.MethodConstructor: a.Constructor,          // Initialiazed the actor; always required
+		2:                         a.AddMiners,            // Add a miner to the list (specificaly crafted for checkpointing)
+		3:                         a.RemoveMiners,         // Remove miners from the list
+		4:                         a.UpdateTaprootAddress, // Update the taproot address
 	}
 }
 
@@ -80,9 +78,9 @@ func (a Actor) AddMiners(rt Runtime, params *AddMinerParams) *abi.EmptyValue {
 	var st State
 	rt.StateTransaction(&st, func() {
 		// Miners list is replaced with the one passed as parameters
-		st.Miners = append(st.Miners,params.Miners...)
-    	st.Miners = unique(st.Miners)
-    	st.MinerCount = int64(len(st.Miners))
+		st.Miners = append(st.Miners, params.Miners...)
+		st.Miners = unique(st.Miners)
+		st.MinerCount = int64(len(st.Miners))
 	})
 	return nil
 }
@@ -95,21 +93,20 @@ func (a Actor) RemoveMiners(rt Runtime, params *AddMinerParams) *abi.EmptyValue 
 	rt.StateTransaction(&st, func() {
 		// Miners list is replaced with the one passed as parameters
 
-		for _, minerToRemove := range params.Miners{
-			for i, oldMiner := range st.Miners{
-				if minerToRemove == oldMiner{
+		for _, minerToRemove := range params.Miners {
+			for i, oldMiner := range st.Miners {
+				if minerToRemove == oldMiner {
 					st.Miners = append(st.Miners[:i], st.Miners[i+1:]...)
 					break
 				}
 			}
 
-		} 
-		fmt.Println("New list of miners after removal: ",st.Miners)
+		}
+		fmt.Println("New list of miners after removal: ", st.Miners)
 		st.MinerCount = int64(len(st.Miners))
 	})
 	return nil
 }
-
 
 type NewTaprootAddressParam struct {
 	PublicKey []byte
@@ -121,19 +118,19 @@ func (a Actor) UpdateTaprootAddress(rt Runtime, addr *NewTaprootAddressParam) *a
 	rt.StateTransaction(&st, func() {
 		// Miners list is replaced with the one passed as parameters
 		st.PublicKey = addr.PublicKey
-		fmt.Println("address updated",st.PublicKey)
+		fmt.Println("address updated", st.PublicKey)
 	})
 	return nil
 }
 
 func unique(strSlice []string) []string {
-    keys := make(map[string]bool)
-    list := []string{}	
-    for _, entry := range strSlice {
-        if _, value := keys[entry]; !value {
-            keys[entry] = true
-            list = append(list, entry)
-        }
-    }    
-    return list
+	keys := make(map[string]bool)
+	list := []string{}
+	for _, entry := range strSlice {
+		if _, value := keys[entry]; !value {
+			keys[entry] = true
+			list = append(list, entry)
+		}
+	}
+	return list
 }

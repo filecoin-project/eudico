@@ -11,9 +11,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Zondax/multi-party-sig/pkg/math/curve"
 	"github.com/btcsuite/btcutil/bech32"
 	"github.com/cronokirby/safenum"
+	"github.com/sa8/multi-party-sig/pkg/math/curve"
 )
 
 type VerificationShare struct {
@@ -172,7 +172,8 @@ func addTaprootToWallet(url, taprootScript string) bool {
 	if result["error"] == nil {
 		return true
 	}
-
+	fmt.Println("Add address to wallet: ", taprootScript)
+	fmt.Println(result)
 	err := result["error"].(map[string]interface{})
 	fmt.Println(err["code"].(float64))
 	if err["code"].(float64) == -4 {

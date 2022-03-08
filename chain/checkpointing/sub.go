@@ -15,12 +15,6 @@ import (
 	"sync"
 
 	"github.com/BurntSushi/toml"
-	"github.com/Zondax/multi-party-sig/pkg/math/curve"
-	"github.com/Zondax/multi-party-sig/pkg/party"
-	"github.com/Zondax/multi-party-sig/pkg/protocol"
-	"github.com/Zondax/multi-party-sig/pkg/taproot"
-	"github.com/Zondax/multi-party-sig/protocols/frost"
-	"github.com/Zondax/multi-party-sig/protocols/frost/keygen"
 	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/blockstore"
@@ -37,6 +31,12 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/sa8/multi-party-sig/pkg/math/curve"
+	"github.com/sa8/multi-party-sig/pkg/party"
+	"github.com/sa8/multi-party-sig/pkg/protocol"
+	"github.com/sa8/multi-party-sig/pkg/taproot"
+	"github.com/sa8/multi-party-sig/protocols/frost"
+	"github.com/sa8/multi-party-sig/protocols/frost/keygen"
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
 	// act "github.com/filecoin-project/lotus/chain/consensus/actors"
@@ -772,6 +772,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 	fmt.Println("Send raw transaction command:", payload)
 	fmt.Println("Raw tx: ", payload1)
 	result = jsonRPC(c.cpconfig.BitcoinHost, payload)
+
 	fmt.Println("Transaction to be sent: ", result)
 	if result["error"] != nil {
 		return xerrors.Errorf("failed to broadcast transaction")
