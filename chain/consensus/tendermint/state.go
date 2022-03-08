@@ -1,6 +1,7 @@
 package tendermint
 
 import (
+	"encoding/binary"
 	"fmt"
 	"sync"
 
@@ -8,22 +9,23 @@ import (
 )
 
 type State struct {
-	m              sync.Mutex
+	m sync.Mutex
+
 	filecoinBlocks map[[32]byte][]byte
 	subnets        map[string]int64
-	commitCount    int64
 	height         int64
+	hash           []byte
 }
 
 func NewState() *State {
 	return &State{
 		filecoinBlocks: make(map[[32]byte][]byte),
-		commitCount:    0,
-		height:         0,
 		subnets:        make(map[string]int64),
+		height:         0,
 	}
 }
 
+// GetBlock returns the block by the given ID.
 func (s *State) GetBlock(id [32]byte) ([]byte, bool) {
 	s.m.Lock()
 	defer s.m.Unlock()
@@ -33,33 +35,33 @@ func (s *State) GetBlock(id [32]byte) ([]byte, bool) {
 	return b, ok
 }
 
-func (s *State) SetSubnetOffset(subnetName []byte) int64 {
+// SetOrGetSubnetOffset sets the offset value for the subnet if it hasn't beet already set.
+// In the latter case, the function returns the set value.
+func (s *State) SetOrGetSubnetOffset(subnetName []byte) int64 {
 	s.m.Lock()
 	defer s.m.Unlock()
 
-	log.Info("common state height:", s.height)
+	name := string(subnetName)
 
-	id := string(subnetName)
-
-	log.Info("map height:", s.subnets[id])
-
-	h, ok := s.subnets[id]
+	h, ok := s.subnets[name]
 	if !ok {
-		s.subnets[id] = s.height
-		return s.subnets[id]
+		s.subnets[name] = s.height
+		return s.subnets[name]
 	}
 	return h
 }
 
+// GetSubnetOffset returns the offset of the given subnet.
 func (s *State) GetSubnetOffset(subnetName []byte) (int64, bool) {
 	s.m.Lock()
 	defer s.m.Unlock()
 
-	id := string(subnetName)
-	h, ok := s.subnets[id]
+	name := string(subnetName)
+	h, ok := s.subnets[name]
 	return h, ok
 }
 
+// AddBlock adds a block into the map, if the same block has not been already added.
 func (s *State) AddBlock(block []byte) error {
 	s.m.Lock()
 	defer s.m.Unlock()
@@ -75,31 +77,30 @@ func (s *State) AddBlock(block []byte) error {
 	return nil
 }
 
+// Commit commits the state.
 func (s *State) Commit() error {
 	s.m.Lock()
 	defer s.m.Unlock()
 
-	s.commitCount++
+	s.height++
+	appHash := make([]byte, 8)
+	binary.PutVarint(appHash, int64(len(s.filecoinBlocks)))
+	s.hash = appHash
 	return nil
 }
 
-func (s *State) Commits() int64 {
+// Height returns the current height.
+func (s *State) Height() int64 {
 	s.m.Lock()
 	defer s.m.Unlock()
 
-	return s.commitCount
+	return s.height
 }
 
-func copyState(dst, src *State) {
-	src.m.Lock()
-	defer src.m.Unlock()
+// Hash returns the hash of the state.
+func (s *State) Hash() []byte {
+	s.m.Lock()
+	defer s.m.Unlock()
 
-	dst.m.Lock()
-	defer dst.m.Unlock()
-
-	dst.filecoinBlocks = make(map[[32]byte][]byte, len(src.filecoinBlocks))
-	for k, v := range src.filecoinBlocks {
-		dst.filecoinBlocks[k] = v
-	}
-	dst.commitCount = src.commitCount
+	return s.hash
 }
