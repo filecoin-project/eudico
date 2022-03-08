@@ -7,13 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
-	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
-	"github.com/filecoin-project/lotus/chain/vm"
-	"github.com/filecoin-project/lotus/cmd/lotus-seed/seed"
-	"github.com/filecoin-project/lotus/node/modules/helpers"
-	"github.com/filecoin-project/lotus/storage/mockstorage"
 	"go.uber.org/fx"
 	"io/ioutil"
 	"net"
@@ -36,9 +29,12 @@ import (
 	"github.com/filecoin-project/go-state-types/network"
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain"
+	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/beacon"
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
+	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	snmgr "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/manager"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
@@ -49,7 +45,9 @@ import (
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
+	"github.com/filecoin-project/lotus/chain/vm"
 	"github.com/filecoin-project/lotus/chain/wallet"
+	"github.com/filecoin-project/lotus/cmd/lotus-seed/seed"
 	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
 	"github.com/filecoin-project/lotus/extern/sector-storage/mock"
 	"github.com/filecoin-project/lotus/genesis"
@@ -58,7 +56,15 @@ import (
 	"github.com/filecoin-project/lotus/node/impl"
 	"github.com/filecoin-project/lotus/node/modules"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
+	"github.com/filecoin-project/lotus/node/modules/helpers"
 	"github.com/filecoin-project/lotus/node/repo"
+	"github.com/filecoin-project/lotus/storage/mockstorage"
+)
+
+const (
+	TSPoWGenesisTestFile              = "../testdata/tspow.gen"
+	DelegatedConsensusGenesisTestFile = "../testdata/deleg.gen"
+	DelegatedConsensusKeyFile         = "../testdata/f1ozbo7zqwfx6d4tqb353qoq7sfp4qhycefx6ftgy.key"
 )
 
 func init() {
@@ -399,6 +405,8 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 			node.Override(new(stmgr.Executor), common.RootTipSetExecutor),
 			node.Override(new(stmgr.UpgradeSchedule), common.DefaultUpgradeSchedule()),
 
+			//node.Override(builtin2.EpochDurationSeconds, time.Second),
+
 			// so that we subscribe to pubsub topics immediately
 			node.Override(new(dtypes.Bootstrapper), dtypes.Bootstrapper(true)),
 
@@ -422,9 +430,9 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		var testDataFileErr error
 		switch n.options.consensus {
 		case hierarchical.PoW:
-			genBytes, testDataFileErr = ioutil.ReadFile("../testdata/tspow.gen")
+			genBytes, testDataFileErr = ioutil.ReadFile(TSPoWGenesisTestFile)
 		case hierarchical.Delegated:
-			genBytes, testDataFileErr = ioutil.ReadFile("../testdata/deleg.gen")
+			genBytes, testDataFileErr = ioutil.ReadFile(DelegatedConsensusGenesisTestFile)
 		default:
 			n.t.Fatalf("unknown consensus type %d", n.options.consensus)
 		}
@@ -458,22 +466,14 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		stop, err := node.New(ctx, opts...)
 		require.NoError(n.t, err)
 
-		//
-		hexdata, err := ioutil.ReadFile("../testdata/f1ozbo7zqwfx6d4tqb353qoq7sfp4qhycefx6ftgy.key")
-		require.NoError(n.t, err)
-
-		data, err := hex.DecodeString(strings.TrimSpace(string(hexdata)))
-		require.NoError(n.t, err)
-
-		var ki types.KeyInfo
-		err = json.Unmarshal(data, &ki)
-		require.NoError(n.t, err)
-
 		var addr address.Address
 		switch n.options.consensus {
 		case hierarchical.PoW:
 			addr, err = full.WalletImport(context.Background(), &full.DefaultKey.KeyInfo)
 		case hierarchical.Delegated:
+			var ki types.KeyInfo
+			err = ReadKeyInfoFromFile(DelegatedConsensusKeyFile, &ki)
+			require.NoError(n.t, err)
 			addr, err = full.WalletImport(context.Background(), &ki)
 		default:
 			n.t.Fatalf("unknown consensus type %d", n.options.consensus)
@@ -1001,4 +1001,23 @@ func EudicoEnsembleOneTwo(t *testing.T, opts ...interface{}) (*TestFullNode, *Te
 		Start()
 
 	return &full, &one, &two, ens
+}
+
+func ReadKeyInfoFromFile(name string, key interface{}) error {
+	hexdata, err := ioutil.ReadFile(name)
+	if err != nil {
+		return err
+	}
+
+	data, err := hex.DecodeString(strings.TrimSpace(string(hexdata)))
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal(data, &key)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
