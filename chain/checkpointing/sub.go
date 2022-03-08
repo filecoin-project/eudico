@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/BurntSushi/toml"
 	address "github.com/filecoin-project/go-address"
@@ -47,6 +46,24 @@ import (
 )
 
 var log = logging.Logger("checkpointing")
+
+//update this value with the amount you have in your wallet (for testing purpose)
+//const initialValueInWallet = 50
+const initialValueInWallet = 0.0001
+
+// change this to true to alternatively send all the amount from our wallet
+var sendall = false
+
+// we use this bool to write the transactions locally and remove the need
+// to scan the whole blockchaain when new nodes join as this takes a long time
+// this is only for demo purpose and works only if the nodes are launch from the same machine
+const writeTxLocally = true
+
+// this variable is the number of blocks (in eudico) we want between each checkpoints
+const checkpointFrequency = 15
+
+//change to true if regtest is used
+const Regtest = true
 
 // struct used to propagate detected changes.
 type diffInfo struct {
@@ -239,6 +256,7 @@ func NewCheckpointSub(
 		host:             host,
 		api:              &api,
 		events:           e,
+		pubkey:           make([]byte, 0),
 		ptxid:            "",
 		taprootConfig:    taprootConfig, //either nil (if no shares) or the configuration pre-generated for Alice, Bob and Charlie
 		participants:     minerSigners,
@@ -391,7 +409,7 @@ func (c *CheckpointingSub) matchNewConfig(ctx context.Context, oldTs, newTs *typ
 
 func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *types.TipSet, oldSt, newSt mpower.State, diff *diffInfo) (bool, error) {
 	// we are checking that the list of mocked actor is not empty before starting the checkpoint
-	if newTs.Height()%15 == 0 && len(oldSt.Miners) > 0 && (c.taprootConfig != nil || c.newTaprootConfig != nil) {
+	if newTs.Height()%checkpointFrequency == 0 && len(oldSt.Miners) > 0 && (c.taprootConfig != nil || c.newTaprootConfig != nil) {
 		cp := oldTs.Key().Bytes() // this is the checkpoint
 		diff.cp = cp
 
@@ -656,18 +674,19 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 	log.Infow("participants list :", "participants", idsStrings)
 	log.Infow("precedent tx", "txid", c.ptxid)
 	ids := c.formIDSlice(idsStrings)
-
+	taprootScript := getTaprootScript(c.pubkey)
+	//we add our public key to our bitcoin wallet
+	success := addTaprootToWallet(c.cpconfig.BitcoinHost, taprootScript)
+	if !success {
+		return xerrors.Errorf("failed to add taproot address to wallet")
+	}
 	if c.ptxid == "" {
 		log.Infow("missing precedent txid")
-		taprootScript := getTaprootScript(c.pubkey)
-		//we add our public key to our bitcoin wallet
-		success := addTaprootToWallet(c.cpconfig.BitcoinHost, taprootScript)
-		if !success {
-			return xerrors.Errorf("failed to add taproot address to wallet")
-		}
 
 		// sleep an arbitrary long time to be sure it has been scanned
-		time.Sleep(6 * time.Second)
+		// removed this because now we are adding without rescanning (too long)
+		//time.Sleep(6 * time.Second)
+		//time.Sleep(20 * time.Second)
 
 		//we get the transaction id using our bitcoin client
 		ptxid, err := walletGetTxidFromAddress(c.cpconfig.BitcoinHost, taprootAddress)
@@ -679,7 +698,11 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 	}
 
 	index := 0
+	fmt.Println("Previous tx id: ", c.ptxid)
 	value, scriptPubkeyBytes := getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
+
+	// TODO: instead of calling getTxOUt we need to check for the latest transaction
+	// same as is done in the verification.sh script
 
 	if scriptPubkeyBytes[0] != 0x51 {
 		log.Infow("wrong txout")
@@ -687,9 +710,11 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		value, scriptPubkeyBytes = getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
 	}
 	newValue := value - c.cpconfig.Fee
-
-	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.2f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
-	result := jsonRPC(c.cpconfig.BitcoinHost, payload)
+	fmt.Println("Fee for next transaction is: ", c.cpconfig.Fee)
+	payload1 := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.8f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
+	fmt.Println("Raw tx: ", payload1)
+	result := jsonRPC(c.cpconfig.BitcoinHost, payload1)
+	fmt.Println("Result from Raw tx: ", result)
 	if result == nil {
 		return xerrors.Errorf("can not create new transaction")
 	}
@@ -743,10 +768,12 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 	// Only first one broadcast the transaction ?
 	// Actually all participants can broadcast the transcation. It will be the same everywhere.
 	rawtx := prepareWitnessRawTransaction(rawTransaction, r.(taproot.Signature))
-
-	payload = "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendrawtransaction\", \"params\": [\"" + rawtx + "\"]}"
+	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendrawtransaction\", \"params\": [\"" + rawtx + "\"]}"
+	fmt.Println("Send raw transaction command:", payload)
+	fmt.Println("Raw tx: ", payload1)
 	result = jsonRPC(c.cpconfig.BitcoinHost, payload)
-	fmt.Println("Tx sent: ", result)
+
+	fmt.Println("Transaction to be sent: ", result)
 	if result["error"] != nil {
 		return xerrors.Errorf("failed to broadcast transaction")
 	}
@@ -827,19 +854,95 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 	if err != nil {
 		log.Errorf("could not get genesis tipset: %v", err)
 		return
+	} else {
+		log.Infow("Got genesis tipset")
 	}
-	cidBytes := ts.Key().Bytes()                             // this is the checkpoint (i.e. hash of block)
-	publickey, err := hex.DecodeString(c.cpconfig.PublicKey) //publickey pre-generated
+
+	cidBytes := ts.Key().Bytes()
+	fmt.Println("cidbytes: ", cidBytes)
+	fmt.Println("public key before decoding: ", c.cpconfig.PublicKey) // this is the checkpoint (i.e. hash of block)
+	publickey, err := hex.DecodeString(c.cpconfig.PublicKey)          //publickey pre-generated
+	fmt.Println("public key after: ", publickey)
 	if err != nil {
 		log.Errorf("could not decode public key: %v", err)
 		return
+	} else {
+		//fmt.Println("public key", publickey)
+		fmt.Println("Pub key", publickey)
+		log.Infow("Decoded Public key")
+	}
+
+	//eiher send the initial transaction (if needed) or get the latest checkpoint
+	// of the transaction has already been sent
+	if c.taprootConfig != nil {
+		c.pubkey = genCheckpointPublicKeyTaproot(c.taprootConfig.PublicKey, cidBytes)
+
+		// Get the taproot address used in taproot.sh
+		// this should be changed such that the public key is updated when eudico is stopped
+		// (so that we can continue the checkpointing without restarting from scratch each time)
+		address, _ := pubkeyToTapprootAddress(c.pubkey)
+		fmt.Println("Address: ", address)
+		if c.host.ID().String() == "12D3KooWMBbLLKTM9Voo89TXLd98w4MjkJUych6QvECptousGtR4" {
+			//start by getting the balance in our wallet
+			var value float64
+			if sendall {
+				payload1 := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"getbalances\", \"params\": []}"
+				result1 := jsonRPC(c.cpconfig.BitcoinHost, payload1)
+				fmt.Println("Getbalances result: ", result1)
+				intermediary1 := result1["result"].(map[string]interface{})
+				intermediary2 := intermediary1["mine"].(map[string]interface{})
+				value = intermediary2["trusted"].(float64)
+				fmt.Println("Initial value in walet: ", value)
+			} else {
+				value = initialValueInWallet
+			}
+			newValue := value - c.cpconfig.Fee
+			//why not send the transaction from here?
+			fmt.Println("Creating the initial transaction now")
+			payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendtoaddress\", \"params\": [\"" + address + "\", \"" + fmt.Sprintf("%.8f", newValue) + "\" ]}"
+			fmt.Println(payload)
+			// payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.2f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
+			result := jsonRPC(c.cpconfig.BitcoinHost, payload)
+			fmt.Println(result)
+			if result["error"] != nil {
+				log.Errorf("could not send initial Bitcoin transaction to: %v", address)
+			} else {
+				log.Infow("successfully sent first bitcoin tx")
+				c.ptxid = result["result"].(string)
+			}
+		}
+		// init, txid, err := CheckIfFirstTxHasBeenSent(c.cpconfig.BitcoinHost, publickey, cidBytes)
+		// if err != nil {
+		// 	log.Errorf("Error with check if first tx has been sent")
+		// }
+		// if init {
+		// 	c.ptxid = txid
+		// }
+		// else {
+		// 	time.Sleep(2 * time.Second)
+		// 	init, txid, err := CheckIfFirstTxHasBeenSent(c.cpconfig.BitcoinHost, publickey, cidBytes)
+		// 	c.ptxid = txid
+		// }
+		for {
+			init, txid, err := CheckIfFirstTxHasBeenSent(c.cpconfig.BitcoinHost, publickey, cidBytes)
+			if init {
+				c.ptxid = txid
+				if err != nil {
+					log.Errorf("Error with check if first tx has been sent")
+				}
+				break
+			}
+		}
 	}
 
 	// Get the last checkpoint from the bitcoin node
+
 	btccp, err := GetLatestCheckpoint(c.cpconfig.BitcoinHost, publickey, cidBytes)
 	if err != nil {
-		log.Errorf("could not decode public key: %v", err)
+		log.Errorf("could not get last checkpoint from Bitcoin: %v", err)
 		return
+	} else {
+		log.Infow("Got last checkpoint from Bitcoin node")
 	}
 
 	// Get the config in minio using the last checkpoint found through Bitcoin.
@@ -864,22 +967,26 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 	// Pre-compute values from participants in the signing process
 	if c.taprootConfig != nil {
 		// save public key taproot
-		// NOTE: cidBytes is the tipset key value (aka checkpoint) from the genesis block. When Eudico is stopped it should remember what was the last tipset key value
+		// NOTE: cidBytes is the tipset key value (aka checkpoint) from the genesis block.
+		// When Eudico is stopped it should remember what was the last tipset key value
 		// it signed and replace it with it. Config is not saved, neither when new DKG is done.
 		c.pubkey = genCheckpointPublicKeyTaproot(c.taprootConfig.PublicKey, cidBytes)
 
 		// Get the taproot address used in taproot.sh
+		// this should be changed such that the public key is updated when eudico is stopped
+		// (so that we can continue the checkpointing without restarting from scratch each time)
 		address, _ := pubkeyToTapprootAddress(c.pubkey)
 		fmt.Println(address)
 
-		//why not send the transaction from here?
-		payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendtoaddress\", \"params\": [\"" + address + "\", 50]}"
-		result := jsonRPC(c.cpconfig.BitcoinHost, payload)
-		if result == nil {
-			log.Errorf("could not send initial Bitcoin transaction to: %v", address)
-		} else {
-			log.Infow("successfully sent first bitcoin tx")
-		}
+		// to do: write method to get the total amount in the wallet we are using
+		//value, scriptPubkeyBytes := getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
+
+		// if scriptPubkeyBytes[0] != 0x51 {
+		// 	log.Infow("wrong txout")
+		// 	index = 1
+		// 	value, scriptPubkeyBytes = getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
+		// }
+
 		// Save tweaked value
 		merkleRoot := hashMerkleRoot(c.taprootConfig.PublicKey, cidBytes)
 		c.tweakedValue = hashTweakedValue(c.taprootConfig.PublicKey, merkleRoot)

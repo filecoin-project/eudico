@@ -107,7 +107,15 @@ func pubkeyToTapprootAddress(pubkey []byte) (string, error) {
 
 	// regtest human-readable part is "bcrt" according to no documentation ever... (see https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki)
 	// Using EncodeM becasue we want bech32m... which has a new checksum
-	taprootAddress, err := bech32.EncodeM("bcrt", conv)
+	if Regtest {
+		taprootAddress, err := bech32.EncodeM("bcrt", conv)
+		if err != nil {
+			return "", err
+		}
+		return taprootAddress, nil
+	}
+	// for testnet the human-readable part is "tb"
+	taprootAddress, err := bech32.EncodeM("tb", conv)
 	if err != nil {
 		return "", err
 	}
@@ -153,14 +161,21 @@ func genCheckpointPublicKeyTaproot(internal_pubkey []byte, checkpoint []byte) []
 }
 
 func addTaprootToWallet(url, taprootScript string) bool {
-	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"importaddress\", \"params\": [\"" + taprootScript + "\", \"\", true]}"
+	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"importaddress\", \"params\": [\"" + taprootScript + "\", \"\", false]}"
+	if Regtest {
+		payload = "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"importaddress\", \"params\": [\"" + taprootScript + "\", \"\", true]}"
+	}
+	//time.Sleep(6 * time.Second)
 	result := jsonRPC(url, payload)
+	fmt.Println("Add address to wallet: ", taprootScript)
+	fmt.Println("Result from add", result)
 	if result["error"] == nil {
 		return true
 	}
 	fmt.Println("Add address to wallet: ", taprootScript)
 	fmt.Println(result)
 	err := result["error"].(map[string]interface{})
+	fmt.Println(err["code"].(float64))
 	if err["code"].(float64) == -4 {
 		// Particular case where we are already in the process of adding the key
 		// because we are using 1 bitcoin node for all
@@ -193,6 +208,7 @@ func walletGetTxidFromAddress(url, taprootAddress string) (string, error) {
 func bitcoindPing(url string) bool {
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"ping\", \"params\": []}"
 	result := jsonRPC(url, payload)
+	fmt.Println("bitcoin ping", result)
 	return result != nil
 }
 
@@ -210,8 +226,13 @@ func parseUnspentTxOut(utxo []byte) (amount, script []byte) {
 func getTxOut(url, txid string, index int) (float64, []byte) {
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"gettxout\", \"params\": [\"" + txid + "\", " + strconv.Itoa(index) + "]}"
 	result := jsonRPC(url, payload)
+	fmt.Println("GetTxOut result: ", result)
 	if result == nil {
 		panic("Cannot retrieve previous transaction.")
+	}
+	if result["result"] == nil {
+		panic("No transaction returned (maybe the output has already be spent")
+
 	}
 	taprootTxOut := result["result"].(map[string]interface{})
 	scriptPubkey := taprootTxOut["scriptPubKey"].(map[string]interface{})
@@ -224,9 +245,12 @@ func jsonRPC(url, payload string) map[string]interface{} {
 	// ZONDAX TODO
 	// This needs to be in a config file
 	method := "POST"
-
-	user := "satoshi"
-	password := "amiens"
+	user := "sarah"
+	password := "pikachutestnetB2"
+	if Regtest {
+		user = "satoshi"
+		password = "amiens"
+	}
 
 	client := &http.Client{}
 
