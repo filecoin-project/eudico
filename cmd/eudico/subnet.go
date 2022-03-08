@@ -43,6 +43,7 @@ var subnetCmds = &cli.Command{
 		releaseCmd,
 		sendCmd,
 		deployActorCmd,
+		hAddrCmd,
 	},
 }
 
@@ -507,6 +508,34 @@ var releaseCmd = &cli.Command{
 	},
 }
 
+var hAddrCmd = &cli.Command{
+	Name:      "hierarchical-addr",
+	Usage:     "Returns a formatted hierarchical address",
+	ArgsUsage: "[<raw address>]",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "subnet",
+			Usage: "specify the id of the subnet",
+			Value: address.RootSubnet.String(),
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+
+		if cctx.Args().Len() != 1 {
+			return lcli.ShowHelp(cctx, fmt.Errorf("'fund' expects the amount of FILs to inject to subnet, and a set of flags"))
+		}
+		addr, err := address.NewFromString(cctx.Args().Get(0))
+		if err != nil {
+			return err
+		}
+		out, err := address.NewHAddress(address.SubnetID(cctx.String("subnet")), addr)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(cctx.App.Writer, "%s\n", out)
+		return nil
+	},
+}
 var fundCmd = &cli.Command{
 	Name:      "fund",
 	Usage:     "Inject new funds to your address in a subnet",

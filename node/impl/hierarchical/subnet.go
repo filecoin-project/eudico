@@ -6,6 +6,7 @@ import (
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	snmgr "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/manager"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -89,4 +90,23 @@ func (a *HierarchicalAPI) LockState(
 	ctx context.Context, wallet address.Address, actor address.Address,
 	subnet address.SubnetID, method abi.MethodNum) (cid.Cid, error) {
 	return a.Sub.LockState(ctx, wallet, actor, subnet, method)
+}
+func (a *HierarchicalAPI) InitAtomicExec(
+	ctx context.Context, wallet address.Address, inputs map[string]sca.LockedState,
+	msgs []types.Message) (cid.Cid, error) {
+	return a.Sub.InitAtomicExec(ctx, wallet, inputs, msgs)
+}
+
+func (a *HierarchicalAPI) ListAtomicExecs(ctx context.Context, id address.SubnetID, addr address.Address) ([]*sca.AtomicExec, error) {
+	return a.Sub.ListAtomicExecs(ctx, id, addr)
+}
+
+func (a *HierarchicalAPI) ComputeAndSubmitExec(ctx context.Context, wallet address.Address,
+	id address.SubnetID, execID cid.Cid) (sca.ExecStatus, error) {
+	return a.Sub.ComputeAndSubmitExec(ctx, wallet, id, execID)
+}
+
+func (a *HierarchicalAPI) AbortAtomicExec(ctx context.Context, wallet address.Address,
+	id address.SubnetID, execID cid.Cid) (sca.ExecStatus, error) {
+	return a.Sub.AbortAtomicExec(ctx, wallet, id, execID)
 }

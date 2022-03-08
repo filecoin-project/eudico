@@ -5,6 +5,7 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/ipfs/go-cid"
@@ -26,4 +27,8 @@ type HierarchicalCns interface {
 	CrossMsgResolve(ctx context.Context, id address.SubnetID, c cid.Cid, from address.SubnetID) ([]types.Message, error)   // perm:read
 	LockState(ctx context.Context, wallet address.Address, actor address.Address, subnet address.SubnetID,
 		method abi.MethodNum) (cid.Cid, error) // perm:write
+	InitAtomicExec(ctx context.Context, wallet address.Address, inputs map[string]sca.LockedState, msgs []types.Message) (cid.Cid, error) // perm:write
+	ListAtomicExecs(ctx context.Context, id address.SubnetID, addr address.Address) ([]*sca.AtomicExec, error)                            // perm:read
+	ComputeAndSubmitExec(ctx context.Context, wallet address.Address, id address.SubnetID, execID cid.Cid) (sca.ExecStatus, error)        // perm:write
+	AbortAtomicExec(ctx context.Context, wallet address.Address, id address.SubnetID, execID cid.Cid) (sca.ExecStatus, error)             // perm:write
 }

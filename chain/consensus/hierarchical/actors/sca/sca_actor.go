@@ -647,6 +647,10 @@ func (a SubnetCoordActor) InitAtomicExec(rt runtime.Runtime, params *AtomicExecP
 		c   cid.Cid
 		err error
 	)
+
+	// translate to addresses to IDAddr in subnet.
+	params.translateInputAddrs(rt)
+
 	rt.StateTransaction(&st, func() {
 		c, err = params.Cid()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "error computing cid for atomic exec params")
@@ -702,6 +706,7 @@ func (a SubnetCoordActor) SubmitAtomicExec(rt runtime.Runtime, params *SubmitExe
 		st   SCAState
 		exec *AtomicExec
 	)
+	caller := SecpBLSAddr(rt, rt.Caller())
 	rt.StateTransaction(&st, func() {
 		execMap, err := adt.AsMap(adt.AsStore(rt), st.AtomicExecRegistry, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting exec map")
@@ -717,11 +722,10 @@ func (a SubnetCoordActor) SubmitAtomicExec(rt runtime.Runtime, params *SubmitExe
 
 		// Check if the output has been aborted or succeeded.
 		if exec.Status != ExecInitialized {
-			rt.Abortf(exitcode.ErrIllegalState, "execution already aborted/succeeded. No need for additional submissions")
+			rt.Abortf(exitcode.ErrIllegalArgument, "execution already aborted/succeeded. No need for additional submissions")
 		}
 		// Check if the user is involved in the execution.
-		// _, ok := exec.Params.Inputs[rt.Caller().String()]
-		_, ok, err := execForRawAddr(exec.Params.Inputs, rt.Caller())
+		_, ok, err := execForRawAddr(exec.Params.Inputs, caller)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error searching exec on inputs from raw addr")
 		if !ok {
 			rt.Abortf(exitcode.ErrIllegalArgument, "caller not involved in the execution")
@@ -729,7 +733,7 @@ func (a SubnetCoordActor) SubmitAtomicExec(rt runtime.Runtime, params *SubmitExe
 		// Check if he already submitted the output.
 		// FIXME: At this point we don't support the atomic execution between
 		// the same address in different subnets. This can be easily supported if needed.
-		_, ok = exec.Submitted[rt.Caller().String()]
+		_, ok = exec.Submitted[caller.String()]
 		if ok {
 			rt.Abortf(exitcode.ErrIllegalArgument, "caller already submitted an execution output")
 		}
@@ -737,6 +741,8 @@ func (a SubnetCoordActor) SubmitAtomicExec(rt runtime.Runtime, params *SubmitExe
 		if params.Abort {
 			exec.Status = ExecAborted
 			st.propagateExecResult(rt, exec, atomic.LockedState{}, params.Abort)
+			err = st.putExecWithCid(execMap, execCid, exec)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error putting exec state")
 			return
 		}
 		outputCid, err := params.Output.Cid()
@@ -752,14 +758,14 @@ func (a SubnetCoordActor) SubmitAtomicExec(rt runtime.Runtime, params *SubmitExe
 				// FIXME: Should we abort right-away if this happens.
 			}
 		}
-		exec.Submitted[rt.Caller().String()] = outputCid
-		err = st.putExecWithCid(execMap, execCid, exec)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error putting exec state")
+		exec.Submitted[caller.String()] = outputCid
 		// If it is the final output update state of the execution.
 		if len(exec.Submitted) == len(exec.Params.Inputs) {
 			exec.Status = ExecSuccess
 			st.propagateExecResult(rt, exec, params.Output, params.Abort)
 		}
+		err = st.putExecWithCid(execMap, execCid, exec)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error putting exec state")
 
 	})
 

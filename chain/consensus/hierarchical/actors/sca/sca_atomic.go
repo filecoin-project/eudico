@@ -25,13 +25,21 @@ import (
 type ExecStatus uint64
 
 const (
+	// UndefinedState status
+	ExecUndefState ExecStatus = iota
 	// ExecInitialized and waiting for submissions.
-	ExecInitialized ExecStatus = iota
+	ExecInitialized
 	// ExecSuccess - all submissions matched.
 	ExecSuccess
 	// ExecAborted - some party aborted the execution
 	ExecAborted
 )
+
+var ExecStatusStr = map[ExecStatus]string{
+	ExecInitialized: "Initialized",
+	ExecSuccess:     "Success",
+	ExecAborted:     "Aborted",
+}
 
 // AtomicExec is the data structure held by SCA for
 // atomic executions.
@@ -59,6 +67,23 @@ type SubmitOutput struct {
 type AtomicExecParams struct {
 	Msgs   []types.Message
 	Inputs map[string]LockedState
+}
+
+func (ae *AtomicExecParams) translateInputAddrs(rt runtime.Runtime) {
+	aux := make(map[string]LockedState)
+	for k := range ae.Inputs {
+		addr, err := address.NewFromString(k)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error parsing addr from string")
+		sn, err := addr.Subnet()
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error parsing subnet")
+		raw, err := addr.RawAddr()
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error parsing raw address")
+		outAddr := SecpBLSAddr(rt, raw)
+		out, err := address.NewHAddress(sn, outAddr)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error generating HAddress")
+		aux[out.String()] = ae.Inputs[k]
+	}
+	ae.Inputs = aux
 }
 
 type LockedState struct {
@@ -113,16 +138,21 @@ func sameRawAddr(inputs map[string]LockedState) (bool, error) {
 }
 
 func isCommonParent(curr address.SubnetID, inputs map[string]LockedState) (bool, error) {
+	cp, err := GetCommonParentForExec(inputs)
+	return cp == curr, err
+}
+
+func GetCommonParentForExec(inputs map[string]LockedState) (address.SubnetID, error) {
 	var cp address.SubnetID
 	// Get first subnet to use as reference
 	for k := range inputs {
 		addr, err := address.NewFromString(k)
 		if err != nil {
-			return false, err
+			return address.UndefSubnetID, err
 		}
 		cp, err = addr.Subnet()
 		if err != nil {
-			return false, err
+			return address.UndefSubnetID, err
 		}
 		break
 	}
@@ -130,15 +160,15 @@ func isCommonParent(curr address.SubnetID, inputs map[string]LockedState) (bool,
 	for k := range inputs {
 		addr, err := address.NewFromString(k)
 		if err != nil {
-			return false, err
+			return address.UndefSubnetID, err
 		}
 		sub, err := addr.Subnet()
 		if err != nil {
-			return false, err
+			return address.UndefSubnetID, err
 		}
 		cp, _ = cp.CommonParent(sub)
 	}
-	return cp == curr, nil
+	return cp, nil
 }
 
 func (st *SCAState) GetAtomicExec(s adt.Store, c cid.Cid) (*AtomicExec, bool, error) {
@@ -161,6 +191,30 @@ func getAtomicExec(execMap *adt.Map, c cid.Cid) (*AtomicExec, bool, error) {
 	return &out, true, nil
 }
 
+func (st *SCAState) ListExecs(s adt.Store, addr address.Address) (map[cid.Cid]AtomicExec, error) {
+	execMap, err := adt.AsMap(s, st.AtomicExecRegistry, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to load atomic exec: %w", err)
+	}
+	var ae AtomicExec
+	out := make(map[cid.Cid]AtomicExec)
+	err = execMap.ForEach(&ae, func(k string) error {
+		_, has, err := execForRawAddr(ae.Params.Inputs, addr)
+		if err != nil {
+			return err
+		}
+		if has {
+			_, c, err := cid.CidFromBytes([]byte(k))
+			if err != nil {
+				return err
+			}
+			out[c] = ae
+		}
+		return nil
+	})
+	return out, err
+}
+
 // Cid computes the cid for the CrossMsg
 func (ae *AtomicExecParams) Cid() (cid.Cid, error) {
 	cst := cbor.NewCborStore(bstore.NewMemory())
@@ -176,13 +230,14 @@ func (ae *AtomicExecParams) Cid() (cid.Cid, error) {
 		}
 	}
 
-	for _, input := range ae.Inputs {
+	for k, input := range ae.Inputs {
 		mc, err := abi.CidBuilder.Sum([]byte(input.Cid + input.Actor.String()))
 		if err != nil {
 			return cid.Undef, err
 		}
 		c := cbg.CborCid(mc)
-		if err := mArr.Put(abi.CidKey(mc), &c); err != nil {
+		addr, _ := address.NewFromString(k)
+		if err := mArr.Put(abi.AddrKey(addr), &c); err != nil {
 			return cid.Undef, err
 		}
 	}
@@ -204,7 +259,7 @@ func (ae *AtomicExecParams) Cid() (cid.Cid, error) {
 
 func (st *SCAState) propagateExecResult(rt runtime.Runtime, ae *AtomicExec, output atomic.LockedState, abort bool) {
 	visited := map[address.SubnetID]struct{}{}
-	for k := range ae.Params.Inputs {
+	for k, v := range ae.Params.Inputs {
 		addr, err := address.NewFromString(k)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error parsing address")
 		from, err := addr.Subnet()
@@ -214,16 +269,16 @@ func (st *SCAState) propagateExecResult(rt runtime.Runtime, ae *AtomicExec, outp
 			continue
 		}
 		// Send result of the execution as cross-msg
-		st.sendCrossMsg(rt, st.execResultMsg(rt, address.SubnetID(from), ae.Params.Msgs[0], output, abort))
+		st.sendCrossMsg(rt, st.execResultMsg(rt, from, v.Actor, ae.Params.Msgs[0], output, abort))
 		visited[from] = struct{}{}
 	}
 }
 
-func (st *SCAState) execResultMsg(rt runtime.Runtime, toSub address.SubnetID, msg types.Message, output atomic.LockedState, abort bool) types.Message {
+func (st *SCAState) execResultMsg(rt runtime.Runtime, toSub address.SubnetID, toActor address.Address, msg types.Message, output atomic.LockedState, abort bool) types.Message {
 	source := builtin.SystemActorAddr
 
 	// to actor address responsible for execution
-	to, err := address.NewHAddress(toSub, msg.To)
+	to, err := address.NewHAddress(toSub, toActor)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
 	from, err := address.NewHAddress(st.NetworkName, source)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
