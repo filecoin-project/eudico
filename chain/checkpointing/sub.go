@@ -48,8 +48,9 @@ import (
 var log = logging.Logger("checkpointing")
 
 //update this value with the amount you have in your wallet (for testing purpose)
-//const initialValueInWallet = 50
-const initialValueInWallet = 0.0001
+const initialValueInWallet = 50
+
+//const initialValueInWallet = 0.0001
 
 // change this to true to alternatively send all the amount from our wallet
 var sendall = false
