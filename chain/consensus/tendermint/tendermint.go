@@ -76,7 +76,15 @@ type Tendermint struct {
 	tendermintEudicoAddresses map[string]address.Address
 }
 
-func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, b beacon.Schedule, r *resolver.Resolver, v ffiwrapper.Verifier, g chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
+func NewConsensus(
+	sm *stmgr.StateManager,
+	submgr subnet.SubnetMgr,
+	b beacon.Schedule,
+	r *resolver.Resolver,
+	v ffiwrapper.Verifier,
+	g chain.Genesis,
+	netName dtypes.NetworkName,
+) consensus.Consensus {
 	ctx := context.TODO()
 
 	subnetID := address.SubnetID(netName)
@@ -96,7 +104,7 @@ func NewConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, b beacon.Sche
 	log.Info("Tendermint validator pub key:", valPubKey)
 	log.Info("Eudico client addr: ", clientAddr)
 
-	regSubnet, err := registerNetworkNew(ctx, c, subnetID, tag[:tagLength])
+	regSubnet, err := registerNetworkViaTxSync(ctx, c, subnetID, tag[:tagLength])
 	if err != nil {
 		log.Fatalf("unable to registrate network: %s", err)
 	}
@@ -233,7 +241,7 @@ func (tm *Tendermint) validateTendermintData(ctx context.Context, b *types.FullB
 			return xerrors.Errorf("unable to find pubKey for proposer %w", blockInfo.Block.ProposerAddress)
 		}
 
-		validMinerEudicoAddress, convErr = getFilecoinAddrByTendermintPubKey(proposerPubKey)
+		validMinerEudicoAddress, convErr = getFilecoinAddrFromTendermintPubKey(proposerPubKey)
 		if convErr != nil {
 			return xerrors.Errorf("unable to get proposer addr %w", err)
 		}

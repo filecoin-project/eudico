@@ -56,8 +56,7 @@ func (s *State) GetSubnetOffset(subnetName []byte) (int64, bool) {
 	s.m.Lock()
 	defer s.m.Unlock()
 
-	name := string(subnetName)
-	h, ok := s.subnets[name]
+	h, ok := s.subnets[string(subnetName)]
 	return h, ok
 }
 

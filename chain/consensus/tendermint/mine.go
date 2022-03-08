@@ -16,6 +16,10 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
+const (
+	tendermintConsensusBlockDelay = 1000
+)
+
 var pool = newMessagePool()
 
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {
@@ -150,7 +154,7 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 	log.Infof("starting creating block for epoch %d", bt.Epoch)
 	defer log.Infof("stopping creating block for epoch %d", bt.Epoch)
 
-	ticker := time.NewTicker(1000 * time.Millisecond)
+	ticker := time.NewTicker(time.Duration(tendermintConsensusBlockDelay) * time.Millisecond)
 	defer ticker.Stop()
 
 	// Calculate actual target height of the Tendermint blockchain.
@@ -174,11 +178,11 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 		}
 	}
 
-	msgs, crossMsgs := getMessagesFrom(next.Block, tm.tag)
+	msgs, crossMsgs := getEudicoMessagesFromTendermintBlock(next.Block, tm.tag)
 	bt.Messages = msgs
 	bt.CrossMessages = crossMsgs
 	bt.Timestamp = uint64(next.Block.Time.Unix())
-	bt.Ticket = &types.Ticket{next.Block.Hash().Bytes()}
+	bt.Ticket = &types.Ticket{VRFProof: next.Block.Hash().Bytes()}
 
 	proposerAddress := next.Block.ProposerAddress
 	proposerAddrStr := proposerAddress.String()
@@ -201,7 +205,7 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 				return nil, xerrors.New("unable to find the proposer's public key")
 			}
 
-			newEudicoAddress, err := getFilecoinAddrByTendermintPubKey(proposerPubKey)
+			newEudicoAddress, err := getFilecoinAddrFromTendermintPubKey(proposerPubKey)
 			if err != nil {
 				return nil, err
 			}
@@ -226,6 +230,9 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 	}
 
 	validMsgs, err := common.FilterBlockMessages(ctx, tm.store, tm.sm, tm.subMgr, tm.r, tm.netName, b, baseTs)
+	if err != nil {
+		return nil, xerrors.Errorf("failed filtering block messages: %w", err)
+	}
 	if validMsgs.BLSMessages != nil {
 		b.BlsMessages = validMsgs.BLSMessages
 	}

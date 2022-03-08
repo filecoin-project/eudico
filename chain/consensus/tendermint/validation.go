@@ -141,7 +141,6 @@ func sanitizeMessagesAndPrepareBlockForSignature(ctx context.Context, sm *stmgr.
 		SecpkMessages: secpkMessages,
 		CrossMessages: crossMessages,
 	}, nil
-
 }
 
 // isBlockSealed checks that the following conditions hold:

@@ -1,5 +1,8 @@
 package tendermint
 
+// This is an adaptation of the reference Tendermint application for Eudico needs.
+// The reference implementation can be found here - https://github.com/tendermint/tendermint/tree/master/abci/example.
+
 import (
 	"time"
 

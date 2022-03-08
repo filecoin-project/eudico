@@ -25,6 +25,10 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
+const (
+	randBytesLen = 16
+)
+
 func NodeAddr() string {
 	addr := os.Getenv(tendermintRPCAddressEnv)
 	if addr == "" {
@@ -33,7 +37,7 @@ func NodeAddr() string {
 	return addr
 }
 
-func getMessagesFrom(b *tmtypes.Block, tag []byte) ([]*types.SignedMessage, []*types.Message) {
+func getEudicoMessagesFromTendermintBlock(b *tmtypes.Block, tag []byte) ([]*types.SignedMessage, []*types.Message) {
 	var msgs []*types.SignedMessage
 	var crossMsgs []*types.Message
 
@@ -47,7 +51,7 @@ func getMessagesFrom(b *tmtypes.Block, tag []byte) ([]*types.SignedMessage, []*t
 			log.Error("unable to decode Tendermint tx:", err)
 			continue
 		}
-		//data = {msg...|8 byte tag| type}
+		// data = {msg...|8 byte tag| type}
 		inputTag := txoData[len(txoData)-(tagLength+1) : len(txoData)-1]
 		if !bytes.Equal(inputTag, tag) {
 			continue
@@ -92,7 +96,7 @@ func getMessageMapFromTendermintBlock(tb *tmtypes.Block) (map[[32]byte]bool, err
 
 func parseTx(tx []byte) (interface{}, uint32, error) {
 	ln := len(tx)
-	//TODO: add tag length?
+	// This is very simple input validation to be protected against invalid messages.
 	if ln <= 2 {
 		return nil, codeBadRequest, fmt.Errorf("tx len %d is too small", ln)
 	}
@@ -146,7 +150,7 @@ func findValidatorPubKeyByAddress(validators []*tmtypes.Validator, addr crypto.A
 }
 
 func getTendermintAddress(pubKey []byte) []byte {
-	if len(pubKey) != 33 {
+	if len(pubKey) != tmsecp.PubKeySize {
 		panic("length of pubkey is incorrect")
 	}
 	hasherSHA256 := sha256.New()
@@ -174,16 +178,15 @@ func getValidatorsInfo(ctx context.Context, c *tmclient.HTTP) (string, []byte, a
 				shouldRetry = false
 			}
 		case <-time.After(10 * time.Second):
-			shouldRetry = false
 			return "", nil, address.Address{}, xerrors.Errorf("unable to access Status method")
 		}
 	}
 
 	validatorAddress := resp.ValidatorInfo.Address.String()
 
-	keyType := resp.ValidatorInfo.PubKey.Type()
-	if keyType != tmsecp.KeyType {
-		return "", nil, address.Address{}, xerrors.Errorf("Tendermint validator uses unsupported key type: %s", keyType)
+	kt := resp.ValidatorInfo.PubKey.Type()
+	if kt != tmsecp.KeyType {
+		return "", nil, address.Address{}, xerrors.Errorf("Tendermint validator uses unsupported key: %s", kt)
 	}
 
 	validatorPubKey := resp.ValidatorInfo.PubKey.Bytes()
@@ -201,7 +204,12 @@ func getValidatorsInfo(ctx context.Context, c *tmclient.HTTP) (string, []byte, a
 	return validatorAddress, validatorPubKey, clientAddress, nil
 }
 
-func registerNetwork(ctx context.Context, c *tmclient.HTTP, regReq []byte) (*RegistrationMessageResponse, error) {
+// registerNetworkViaTxCommit registers a new network using the BroadcastTxCommit method that is unrecommended.
+func registerNetworkViaTxCommit(
+	ctx context.Context,
+	c *tmclient.HTTP,
+	regReq []byte,
+) (*RegistrationMessageResponse, error) {
 	// TODO: explore whether we need to remove registration functionality or improve it
 	// https://github.com/tendermint/tendermint/issues/7678
 	// https://github.com/tendermint/tendermint/issues/3414
@@ -218,7 +226,13 @@ func registerNetwork(ctx context.Context, c *tmclient.HTTP, regReq []byte) (*Reg
 	return regSubnetMsg, nil
 }
 
-func registerNetworkNew(ctx context.Context, c *tmclient.HTTP, subnetID address.SubnetID, tag []byte) (*RegistrationMessageResponse, error) {
+// registerNetworkViaTxSync registers a new network using the BroadcastTxSync method.
+func registerNetworkViaTxSync(
+	ctx context.Context,
+	c *tmclient.HTTP,
+	subnetID address.SubnetID,
+	tag []byte,
+) (*RegistrationMessageResponse, error) {
 	var err error
 
 	ticker := time.NewTicker(500 * time.Millisecond)
@@ -232,7 +246,7 @@ func registerNetworkNew(ctx context.Context, c *tmclient.HTTP, subnetID address.
 			log.Info("registering network was stopped")
 			return nil, nil
 		case <-ticker.C:
-			regMsg, derr := NewRegistrationMessageBytes(subnetID, tag[:tagLength], rand.Bytes(16))
+			regMsg, derr := NewRegistrationMessageBytes(subnetID, tag[:tagLength], rand.Bytes(randBytesLen))
 			if derr != nil {
 				return nil, xerrors.Errorf("unable to create a registration message: %s", err)
 			}
@@ -266,8 +280,11 @@ func registerNetworkNew(ctx context.Context, c *tmclient.HTTP, subnetID address.
 	return regSubnetMsg, nil
 }
 
-func getFilecoinAddrByTendermintPubKey(pubKey []byte) (address.Address, error) {
+func getFilecoinAddrFromTendermintPubKey(pubKey []byte) (address.Address, error) {
 	uncompressedProposerPubKey, err := secp.ParsePubKey(pubKey)
+	if err != nil {
+		return address.Address{}, err
+	}
 
 	eudicoAddress, err := address.NewSecp256k1Address(uncompressedProposerPubKey.SerializeUncompressed())
 	if err != nil {
