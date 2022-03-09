@@ -3,7 +3,7 @@
 NODE_PATH="~/.eudico-node2/"
 API_PORT="1235"
 NODE_KEY="t1sj56f45kttzepbo7rq3mxlvn3alwc6sp4h2jbmi"
-GEN="./testdata/gen.gen"
+GEN="./testdata/tendermint.gen"
 PEER=$1
 
 rm -rf ~/.eudico-node2/

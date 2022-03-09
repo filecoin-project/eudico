@@ -10,22 +10,16 @@ import (
 	"os"
 	"strings"
 
-	"github.com/filecoin-project/go-state-types/network"
-
-	"github.com/filecoin-project/lotus/build"
-
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
-	tmcrypto "github.com/tendermint/tendermint/crypto"
-	tmsecp "github.com/tendermint/tendermint/crypto/secp256k1"
-	tmtypes "github.com/tendermint/tendermint/types"
-	tmjson "github.com/tendermint/tendermint/libs/json"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/crypto"
-
+	"github.com/filecoin-project/go-state-types/network"
+	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/chain/consensus/tendermint"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/lib/tablewriter"
 )
@@ -397,8 +391,8 @@ var walletImport = &cli.Command{
 }
 
 var walletImportTendermintKey = &cli.Command{
-	Name:      "import-tendermint-key",
-	Usage:     "import Tendermint secp256k1 private key",
+	Name:  "import-tendermint-key",
+	Usage: "import Tendermint secp256k1 private key",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
 			Name:  "path",
@@ -419,35 +413,12 @@ var walletImportTendermintKey = &cli.Command{
 		ctx := ReqContext(cctx)
 		keyFilePath := cctx.String("path")
 
-		// Adopted from https://github.com/tendermint/tendermint/blob/5eae2e62c0bcf359c2c54a345513cb56aedab070/privval/file.go#L213
-		var pvKey  struct {
-			Address tmtypes.Address  `json:"address"`
-			PubKey  tmcrypto.PubKey  `json:"pub_key"`
-			PrivKey tmcrypto.PrivKey `json:"priv_key"`
-		}
-
-		keyJSONBytes, err := ioutil.ReadFile(keyFilePath)
+		ki, err := tendermint.GetSecp256k1TendermintKey(keyFilePath)
 		if err != nil {
 			return err
 		}
 
-		err = tmjson.Unmarshal(keyJSONBytes, &pvKey)
-		if err != nil {
-			return fmt.Errorf("error reading Tendermint private key from %v: %w", keyFilePath, err)
-		}
-
-		log.Info("read public key from file:", pvKey.PubKey.Bytes())
-
-		if pvKey.PrivKey.Type() != tmsecp.KeyType {
-			return fmt.Errorf("unsupported private key type %v", pvKey.PrivKey.Type())
-		}
-
-		ki := types.KeyInfo {
-			Type: types.KTSecp256k1,
-			PrivateKey: pvKey.PrivKey.Bytes(),
-		}
-
-		addr, err := api.WalletImport(ctx, &ki)
+		addr, err := api.WalletImport(ctx, ki)
 		if err != nil {
 			return fmt.Errorf("unable to import key: %w", err)
 		}
@@ -457,12 +428,6 @@ var walletImportTendermintKey = &cli.Command{
 				return fmt.Errorf("failed to set default key: %w", err)
 			}
 		}
-
-		fmt.Printf(
-			"imported key successfully:\n\tFilecoin address: %s\n\tTendermint address: %s\n",
-			addr.String(),
-			pvKey.Address,
-		)
 
 		return nil
 	},

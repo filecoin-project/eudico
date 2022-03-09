@@ -43,7 +43,7 @@ tmux new-session -d -s "tendermint" \; \
         export EUDICO_TENDERMINT_RPC=http://$NODE_0
         export EUDICO_PATH=$NODE_0_PATH
         ./scripts/wait-for-it.sh -t 0 $NODE_0 -- sleep 1;
-        ./eudico tendermint daemon --genesis=./testdata/gen.gen --api=$NODE_0_API > term1.log 2>&1 &
+        ./eudico tendermint daemon --genesis=./testdata/tendermint.gen --api=$NODE_0_API > term1.log 2>&1 &
             tail -f term1.log" Enter \; \
   send-keys -t "tendermint:0.2" "
         export EUDICO_TENDERMINT_RPC=http://$NODE_0
@@ -58,7 +58,7 @@ tmux new-session -d -s "tendermint" \; \
           export EUDICO_TENDERMINT_RPC=http://$NODE_1
           export EUDICO_PATH=$NODE_1_PATH
           ./scripts/wait-for-it.sh -t 0 $NODE_1 -- sleep 1;
-          ./eudico tendermint daemon --genesis=./testdata/gen.gen --api=$NODE_1_API > term3.log 2>&1 &
+          ./eudico tendermint daemon --genesis=./testdata/tendermint.gen --api=$NODE_1_API > term3.log 2>&1 &
             tail -f term3.log" Enter \; \
   send-keys -t "tendermint:0.4" "
         alias stop-node1='(cd \"${TENDERMINT_PATH}\" && docker-compose stop node1)'

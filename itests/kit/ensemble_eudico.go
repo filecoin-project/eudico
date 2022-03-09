@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/filecoin-project/lotus/chain/consensus/tendermint"
 	"go.uber.org/fx"
 	"io/ioutil"
 	"net"
@@ -62,9 +63,14 @@ import (
 )
 
 const (
-	TSPoWGenesisTestFile              = "../testdata/tspow.gen"
-	DelegatedConsensusGenesisTestFile = "../testdata/deleg.gen"
-	DelegatedConsensusKeyFile         = "../testdata/f1ozbo7zqwfx6d4tqb353qoq7sfp4qhycefx6ftgy.key"
+	TSPoWConsensusGenesisTestFile      = "../testdata/tspow.gen"
+	DelegatedConsensusGenesisTestFile  = "../testdata/deleg.gen"
+	TendermintConsensusGenesisTestFile = "../testdata/deleg.gen"
+
+	DelegatedConsensusKeyFile  = "../testdata/f1ozbo7zqwfx6d4tqb353qoq7sfp4qhycefx6ftgy.key"
+	TendermintConsensusKeyFile = "../testdata/tendermint/config/priv_validator_key.json"
+
+	TenderminApplicationAddress = "tcp://127.0.0.1:26658"
 )
 
 func init() {
@@ -294,6 +300,11 @@ func NewRootDelegatedConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, r
 	return delegcns.NewDelegatedConsensus(sm, nil, beacon, r, verifier, genesis, netName)
 }
 
+func NewRootTendermintConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
+	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
+	return tendermint.NewConsensus(sm, nil, beacon, r, verifier, genesis, netName)
+}
+
 func NetworkName(mctx helpers.MetricsCtx,
 	lc fx.Lifecycle,
 	cs *store.ChainStore,
@@ -368,8 +379,10 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		consensusConstructor = NewRootTSPoWConsensus
 	case hierarchical.Delegated:
 		consensusConstructor = NewRootDelegatedConsensus
+	case hierarchical.Tendermint:
+		consensusConstructor = NewRootTendermintConsensus
 	default:
-		panic("unsupported consensus")
+		n.t.Fatalf("unknown consensus constructor %d", n.options.consensus)
 	}
 
 	var weightConstructor interface{}
@@ -378,8 +391,10 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		weightConstructor = tspow.Weight
 	case hierarchical.Delegated:
 		weightConstructor = delegcns.Weight
+	case hierarchical.Tendermint:
+		weightConstructor = tendermint.Weight
 	default:
-		panic("unsupported consensus")
+		n.t.Fatalf("unknown consensus weight %d", n.options.consensus)
 	}
 
 	// ---------------------
@@ -405,8 +420,6 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 			node.Override(new(stmgr.Executor), common.RootTipSetExecutor),
 			node.Override(new(stmgr.UpgradeSchedule), common.DefaultUpgradeSchedule()),
 
-			//node.Override(builtin2.EpochDurationSeconds, time.Second),
-
 			// so that we subscribe to pubsub topics immediately
 			node.Override(new(dtypes.Bootstrapper), dtypes.Bootstrapper(true)),
 
@@ -430,11 +443,13 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		var testDataFileErr error
 		switch n.options.consensus {
 		case hierarchical.PoW:
-			genBytes, testDataFileErr = ioutil.ReadFile(TSPoWGenesisTestFile)
+			genBytes, testDataFileErr = ioutil.ReadFile(TSPoWConsensusGenesisTestFile)
 		case hierarchical.Delegated:
 			genBytes, testDataFileErr = ioutil.ReadFile(DelegatedConsensusGenesisTestFile)
+		case hierarchical.Tendermint:
+			genBytes, testDataFileErr = ioutil.ReadFile(TendermintConsensusGenesisTestFile)
 		default:
-			n.t.Fatalf("unknown consensus type %d", n.options.consensus)
+			n.t.Fatalf("unknown consensus genesis file %d", n.options.consensus)
 		}
 
 		require.NoError(n.t, testDataFileErr)
@@ -467,14 +482,20 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		require.NoError(n.t, err)
 
 		var addr address.Address
+		var ki types.KeyInfo
 		switch n.options.consensus {
 		case hierarchical.PoW:
 			addr, err = full.WalletImport(context.Background(), &full.DefaultKey.KeyInfo)
 		case hierarchical.Delegated:
-			var ki types.KeyInfo
 			err = ReadKeyInfoFromFile(DelegatedConsensusKeyFile, &ki)
 			require.NoError(n.t, err)
 			addr, err = full.WalletImport(context.Background(), &ki)
+			require.NoError(n.t, err)
+		case hierarchical.Tendermint:
+			ki, err := tendermint.GetSecp256k1TendermintKey(TendermintConsensusKeyFile)
+			require.NoError(n.t, err)
+			addr, err = full.WalletImport(ctx, ki)
+			require.NoError(n.t, err)
 		default:
 			n.t.Fatalf("unknown consensus type %d", n.options.consensus)
 		}

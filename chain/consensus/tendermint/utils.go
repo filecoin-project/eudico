@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"time"
 
@@ -13,7 +14,9 @@ import (
 	"github.com/minio/blake2b-simd"
 	abci "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/crypto"
+	tmcrypto "github.com/tendermint/tendermint/crypto"
 	tmsecp "github.com/tendermint/tendermint/crypto/secp256k1"
+	tmjson "github.com/tendermint/tendermint/libs/json"
 	"github.com/tendermint/tendermint/libs/rand"
 	tmclient "github.com/tendermint/tendermint/rpc/client/http"
 	"github.com/tendermint/tendermint/rpc/coretypes"
@@ -293,4 +296,33 @@ func getFilecoinAddrFromTendermintPubKey(pubKey []byte) (address.Address, error)
 	}
 
 	return eudicoAddress, nil
+}
+
+func GetSecp256k1TendermintKey(keyFilePath string) (*types.KeyInfo, error) {
+	var pvKey struct {
+		Address tmtypes.Address  `json:"address"`
+		PubKey  tmcrypto.PubKey  `json:"pub_key"`
+		PrivKey tmcrypto.PrivKey `json:"priv_key"`
+	}
+
+	keyJSONBytes, err := ioutil.ReadFile(keyFilePath)
+	if err != nil {
+		return nil, err
+	}
+
+	err = tmjson.Unmarshal(keyJSONBytes, &pvKey)
+	if err != nil {
+		return nil, fmt.Errorf("error reading Tendermint private key from %v: %w", keyFilePath, err)
+	}
+
+	if pvKey.PrivKey.Type() != tmsecp.KeyType {
+		return nil, fmt.Errorf("unsupported private key type %v", pvKey.PrivKey.Type())
+	}
+
+	ki := types.KeyInfo{
+		Type:       types.KTSecp256k1,
+		PrivateKey: pvKey.PrivKey.Bytes(),
+	}
+
+	return &ki, nil
 }

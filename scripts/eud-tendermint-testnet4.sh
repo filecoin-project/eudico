@@ -80,7 +80,7 @@ tmux new-session -d -s "tendermint" \; \
         export EUDICO_TENDERMINT_RPC=http://$NODE_0
         export EUDICO_PATH=$NODE_0_PATH
         ./scripts/wait-for-it.sh -t 0 $NODE_0 -- sleep 1;
-        ./eudico tendermint daemon --genesis=./testdata/gen.gen --api=$NODE_0_API 2>&1 | tee $NODE_0_DAEMON_LOG" Enter \; \
+        ./eudico tendermint daemon --genesis=./testdata/tendermint.gen --api=$NODE_0_API 2>&1 | tee $NODE_0_DAEMON_LOG" Enter \; \
   send-keys -t "tendermint:0.2" "
         export EUDICO_TENDERMINT_RPC=http://$NODE_0
         export EUDICO_PATH=$NODE_0_PATH
@@ -93,7 +93,7 @@ tmux new-session -d -s "tendermint" \; \
           export EUDICO_TENDERMINT_RPC=http://$NODE_1
           export EUDICO_PATH=$NODE_1_PATH
           ./scripts/wait-for-it.sh -t 0 $NODE_1 -- sleep 1;
-          ./eudico tendermint daemon --genesis=./testdata/gen.gen --api=$NODE_1_API 2>&1 | tee $NODE_1_DAEMON_LOG" Enter \; \
+          ./eudico tendermint daemon --genesis=./testdata/tendermint.gen --api=$NODE_1_API 2>&1 | tee $NODE_1_DAEMON_LOG" Enter \; \
   send-keys -t "tendermint:0.4" "
         alias stop-node1='(cd \"${TENDERMINT_PATH}\" && docker-compose stop node1)';\
         alias start-node1='(cd \"${TENDERMINT_PATH}\" && docker-compose start node1)';\
@@ -111,7 +111,7 @@ tmux new-session -d -s "tendermint" \; \
           export EUDICO_TENDERMINT_RPC=http://$NODE_2
           export EUDICO_PATH=$NODE_2_PATH
           ./scripts/wait-for-it.sh -t 0 $NODE_2 -- sleep 1;
-          ./eudico tendermint daemon --genesis=./testdata/gen.gen --api=$NODE_2_API 2>&1 | tee $NODE_2_DAEMON_LOG" Enter \; \
+          ./eudico tendermint daemon --genesis=./testdata/tendermint.gen --api=$NODE_2_API 2>&1 | tee $NODE_2_DAEMON_LOG" Enter \; \
     send-keys -t "tendermint:1.1" "
           export EUDICO_TENDERMINT_RPC=http://$NODE_2
           export EUDICO_PATH=$NODE_2_PATH
@@ -124,7 +124,7 @@ tmux new-session -d -s "tendermint" \; \
             export EUDICO_TENDERMINT_RPC=http://$NODE_3
             export EUDICO_PATH=$NODE_3_PATH
             ./scripts/wait-for-it.sh -t 0 $NODE_3 -- sleep 1;
-            ./eudico tendermint daemon --genesis=./testdata/gen.gen --api=$NODE_3_API 2>&1 | tee $NODE_3_DAEMON_LOG" Enter \; \
+            ./eudico tendermint daemon --genesis=./testdata/tendermint.gen --api=$NODE_3_API 2>&1 | tee $NODE_3_DAEMON_LOG" Enter \; \
     send-keys -t "tendermint:1.3" "
           export EUDICO_TENDERMINT_RPC=http://$NODE_3; export EUDICO_PATH=$NODE_3_PATH
           sleep 14; ./eudico wait-api;
