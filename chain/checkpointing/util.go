@@ -206,6 +206,7 @@ func walletGetTxidFromAddress(url, taprootAddress string) (string, error) {
 
 func bitcoindPing(url string) bool {
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"ping\", \"params\": []}"
+	fmt.Println(payload, url)
 	result := jsonRPC(url, payload)
 	fmt.Println("bitcoin ping", result)
 	return result != nil
