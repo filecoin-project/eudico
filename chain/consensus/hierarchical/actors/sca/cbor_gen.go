@@ -1113,7 +1113,7 @@ func (t *AtomicExec) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.Submitted (map[string]cid.Cid) (map)
+	// t.Submitted (map[string]sca.OutputCid) (map)
 	{
 		if len(t.Submitted) > 4096 {
 			return xerrors.Errorf("cannot marshal t.Submitted map too large")
@@ -1142,8 +1142,8 @@ func (t *AtomicExec) MarshalCBOR(w io.Writer) error {
 				return err
 			}
 
-			if err := cbg.WriteCidBuf(scratch, w, v); err != nil {
-				return xerrors.Errorf("failed to write cid field v: %w", err)
+			if err := v.MarshalCBOR(w); err != nil {
+				return err
 			}
 
 		}
@@ -1185,7 +1185,7 @@ func (t *AtomicExec) UnmarshalCBOR(r io.Reader) error {
 		}
 
 	}
-	// t.Submitted (map[string]cid.Cid) (map)
+	// t.Submitted (map[string]sca.OutputCid) (map)
 
 	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
 	if err != nil {
@@ -1198,7 +1198,7 @@ func (t *AtomicExec) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("t.Submitted: map too large")
 	}
 
-	t.Submitted = make(map[string]cid.Cid, extra)
+	t.Submitted = make(map[string]OutputCid, extra)
 
 	for i, l := 0, int(extra); i < l; i++ {
 
@@ -1213,16 +1213,13 @@ func (t *AtomicExec) UnmarshalCBOR(r io.Reader) error {
 			k = string(sval)
 		}
 
-		var v cid.Cid
+		var v OutputCid
 
 		{
 
-			c, err := cbg.ReadCid(br)
-			if err != nil {
-				return xerrors.Errorf("failed to read cid field v: %w", err)
+			if err := v.UnmarshalCBOR(br); err != nil {
+				return xerrors.Errorf("unmarshaling v: %w", err)
 			}
-
-			v = c
 
 		}
 
@@ -1621,6 +1618,64 @@ func (t *LockedState) UnmarshalCBOR(r io.Reader) error {
 			return xerrors.Errorf("unmarshaling t.Actor: %w", err)
 		}
 
+	}
+	return nil
+}
+
+var lengthBufOutputCid = []byte{129}
+
+func (t *OutputCid) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufOutputCid); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.Cid (string) (string)
+	if len(t.Cid) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.Cid was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Cid))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.Cid)); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *OutputCid) UnmarshalCBOR(r io.Reader) error {
+	*t = OutputCid{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 1 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.Cid (string) (string)
+
+	{
+		sval, err := cbg.ReadStringBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+
+		t.Cid = string(sval)
 	}
 	return nil
 }

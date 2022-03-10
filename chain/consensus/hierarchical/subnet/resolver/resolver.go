@@ -9,8 +9,12 @@ import (
 	"time"
 
 	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/cbor"
+	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
+	replace "github.com/filecoin-project/lotus/chain/consensus/actors/atomic-replace"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -20,6 +24,7 @@ import (
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
 	nsds "github.com/ipfs/go-datastore/namespace"
+	ipldcbor "github.com/ipfs/go-ipld-cbor"
 	logging "github.com/ipfs/go-log/v2"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -61,12 +66,16 @@ type Resolver struct {
 type MsgType uint64
 
 const (
-	// Push content to other subnet
-	Push MsgType = iota
+	// PushMeta content to other subnet
+	PushMeta MsgType = iota
 	// PullMeta requests CrossMsgs behind a CID
 	PullMeta
-	// Response is used to answer to pull requests.
-	Response
+	// ResponseMeta is used to answer to pull requests for cross-msgs.
+	ResponseMeta
+	// PullLocked requests for locked state needed to perform atomic exec.
+	PullLocked
+	// ResponseLocked is used to answer to pull requests for locked state.
+	ResponseLocked
 
 	// NOTE: For now we don't expect subnets needing to
 	// pull checkpoints from other subnets (although this
@@ -86,6 +95,9 @@ type ResolveMsg struct {
 	CrossMsgs sca.CrossMsgs
 	// Checkpoint being propagated (if any)
 	// Checkpoint schema.Checkpoint
+	// LockedState being propagated (if any).
+	Locked atomic.LockedState
+	Actor  string //address.Address wrapped as string to support undef serialization
 }
 
 type msgReceiptCache struct {
@@ -112,7 +124,7 @@ func (mrc *msgReceiptCache) add(bcid string) int {
 }
 
 func (r *Resolver) addMsgReceipt(t MsgType, bcid cid.Cid, from peer.ID) int {
-	if t == Push {
+	if t == PushMeta {
 		// All push messages are considered equal independent of
 		// the source.
 		return r.pushCache.add(bcid.String())
@@ -224,7 +236,7 @@ func (v *Validator) Validate(ctx context.Context, pid peer.ID, msg *pubsub.Messa
 
 	log.Infof("Received cross-msg resolution message of type: %v from subnet %v", rmsg.Type, rmsg.From)
 	// Check the CID and messages sent are correct for push messages
-	if rmsg.Type == Push {
+	if rmsg.Type == PushMeta {
 		msgs := rmsg.CrossMsgs
 		c, err := msgs.Cid()
 		if err != nil {
@@ -281,12 +293,16 @@ func (r *Resolver) HandleIncomingResolveMsg(ctx context.Context, sub *pubsub.Sub
 
 func (r *Resolver) processResolveMsg(ctx context.Context, submgr subnet.SubnetMgr, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
 	switch rmsg.Type {
-	case Push:
+	case PushMeta:
 		return r.processPush(ctx, rmsg)
 	case PullMeta:
-		return r.processPull(submgr, rmsg)
-	case Response:
-		return r.processResponse(ctx, rmsg)
+		return r.processPullMeta(submgr, rmsg)
+	case ResponseMeta:
+		return r.processResponseMeta(ctx, rmsg)
+	case PullLocked:
+		return r.processPullLocked(submgr, rmsg)
+	case ResponseLocked:
+		return r.processResponseLocked(ctx, rmsg)
 	}
 	return pubsub.ValidationReject, xerrors.Errorf("Resolve message type is not valid")
 
@@ -294,7 +310,8 @@ func (r *Resolver) processResolveMsg(ctx context.Context, submgr subnet.SubnetMg
 
 func (r *Resolver) processPush(ctx context.Context, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
 	// Check if we are already storing the CrossMsgs CID locally.
-	_, found, err := r.getLocal(ctx, rmsg.Cid)
+	out := &sca.CrossMsgs{}
+	found, err := r.getLocal(ctx, rmsg.Cid, out)
 	if err != nil {
 		return pubsub.ValidationIgnore, xerrors.Errorf("Error getting cross-msg locally: %w", err)
 	}
@@ -312,7 +329,7 @@ func (r *Resolver) processPush(ctx context.Context, rmsg *ResolveMsg) (pubsub.Va
 	return pubsub.ValidationAccept, nil
 }
 
-func (r *Resolver) processPull(submgr subnet.SubnetMgr, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
+func (r *Resolver) processPullMeta(submgr subnet.SubnetMgr, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
 	// Inspect the state of the SCA to get crossMsgs behind the CID.
 	st, store, err := submgr.GetSCAState(context.TODO(), r.netName)
 	if err != nil {
@@ -335,7 +352,7 @@ func (r *Resolver) processPull(submgr subnet.SubnetMgr, rmsg *ResolveMsg) (pubsu
 	return pubsub.ValidationAccept, nil
 }
 
-func (r *Resolver) processResponse(ctx context.Context, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
+func (r *Resolver) processResponseMeta(ctx context.Context, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
 	// Response messages are processed in the same way as push messages
 	// (at least for now). Is the validation what differs between them.
 	if sub, err := r.processPush(ctx, rmsg); err != nil {
@@ -346,24 +363,101 @@ func (r *Resolver) processResponse(ctx context.Context, rmsg *ResolveMsg) (pubsu
 	return pubsub.ValidationAccept, nil
 }
 
-func (r *Resolver) getLocal(ctx context.Context, c cid.Cid) (*sca.CrossMsgs, bool, error) {
+func (r *Resolver) processPullLocked(submgr subnet.SubnetMgr, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
+	// FIXME: Make this configurable
+	lstate, found, err := r.getLockedStateFromActor(context.TODO(), submgr, rmsg)
+	if err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+	if !found {
+		// Reject instead of ignore. Someone may be trying to spam us with
+		// random unvalid CIDs.
+		return pubsub.ValidationReject, xerrors.Errorf("couldn't find lockedState with cid: %s", rmsg.Cid)
+	}
+	// Send response
+	if err := r.publishLockedResponse(*lstate, rmsg.From); err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+	// Publish a Response message to the source subnet if the CID is found.
+	return pubsub.ValidationAccept, nil
+}
+
+func (r *Resolver) publishLockedResponse(lstate atomic.LockedState, to address.SubnetID) error {
+	c, err := lstate.Cid()
+	if err != nil {
+		return err
+	}
+	m := &ResolveMsg{
+		Type:   ResponseLocked,
+		From:   r.netName,
+		Cid:    c,
+		Locked: lstate,
+	}
+	return r.publishMsg(m, to)
+}
+
+func (r *Resolver) getLockedStateFromActor(ctx context.Context, submgr subnet.SubnetMgr, rmsg *ResolveMsg) (*atomic.LockedState, bool, error) {
+	api, err := submgr.GetSubnetAPI(r.netName)
+	if err != nil {
+		return nil, false, err
+	}
+	actAddr, err := address.NewFromString(rmsg.Actor)
+	if err != nil {
+		return nil, false, err
+	}
+	act, err := api.StateGetActor(ctx, actAddr, types.EmptyTSK)
+	if err != nil {
+		return nil, false, xerrors.Errorf("loading actor state: %w", err)
+	}
+	pbs := blockstore.NewAPIBlockstore(api)
+	pcst := ipldcbor.NewCborStore(pbs)
+	// FIXME: Make it configurable
+	var st replace.ReplaceState
+	if err := pcst.Get(ctx, act.Head, &st); err != nil {
+		return nil, false, xerrors.Errorf("getting actor state: %w", err)
+	}
+	return atomic.GetActorLockedState(adt.WrapStore(ctx, pcst), st.LockedMapCid(), rmsg.Cid)
+}
+
+func (r *Resolver) processResponseLocked(ctx context.Context, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
+	// Check if we are already storing the CrossMsgs CID locally.
+	out := &atomic.LockedState{}
+	found, err := r.getLocal(ctx, rmsg.Cid, out)
+	if err != nil {
+		return pubsub.ValidationIgnore, xerrors.Errorf("Error getting locked state locally: %w", err)
+	}
+	if found {
+		// Ignoring message, we already have these cross-msgs
+		return pubsub.ValidationIgnore, nil
+	}
+	// If not stored locally, store it in the datastore for future access.
+	if err := r.setLocal(ctx, rmsg.Cid, &rmsg.Locked); err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+
+	r.pullSuccess(rmsg.Cid)
+	// TODO: Introduce checks here to ensure that push messages come from the right
+	// source?
+	return pubsub.ValidationAccept, nil
+}
+
+func (r *Resolver) getLocal(ctx context.Context, c cid.Cid, out cbor.Unmarshaler) (bool, error) {
 	b, err := r.ds.Get(ctx, datastore.NewKey(c.String()))
 	if err != nil {
 		if err == datastore.ErrNotFound {
-			return nil, false, nil
+			return false, nil
 		}
-		return nil, false, err
+		return false, err
 	}
-	out := &sca.CrossMsgs{}
 	if err := out.UnmarshalCBOR(bytes.NewReader(b)); err != nil {
-		return nil, false, err
+		return false, err
 	}
-	return out, true, nil
+	return true, nil
 }
 
-func (r *Resolver) setLocal(ctx context.Context, c cid.Cid, msgs *sca.CrossMsgs) error {
+func (r *Resolver) setLocal(ctx context.Context, c cid.Cid, cnt cbor.Marshaler) error {
 	w := new(bytes.Buffer)
-	if err := msgs.MarshalCBOR(w); err != nil {
+	if err := cnt.MarshalCBOR(w); err != nil {
 		return err
 	}
 	return r.ds.Put(ctx, datastore.NewKey(c.String()), w.Bytes())
@@ -409,7 +503,8 @@ func (r *Resolver) WaitCrossMsgsResolved(ctx context.Context, c cid.Cid, from ad
 func (r *Resolver) ResolveCrossMsgs(ctx context.Context, c cid.Cid, from address.SubnetID) ([]types.Message, bool, error) {
 	// FIXME: This function should keep track of the retries that have been done,
 	// and fallback to a 1:1 exchange if this fails.
-	cross, found, err := r.getLocal(ctx, c)
+	cross := &sca.CrossMsgs{}
+	found, err := r.getLocal(ctx, c, cross)
 	if err != nil {
 		return []types.Message{}, false, err
 	}
@@ -454,19 +549,70 @@ func (r *Resolver) ResolveCrossMsgs(ctx context.Context, c cid.Cid, from address
 
 }
 
+func (r *Resolver) WaitLockedStateResolved(ctx context.Context, c cid.Cid, from address.SubnetID, actor address.Address) chan error {
+	out := make(chan error)
+	resolved := false
+	go func() {
+		var err error
+		for !resolved {
+			select {
+			case <-ctx.Done():
+				out <- xerrors.Errorf("context timeout")
+				return
+			default:
+				// Check if crossMsg fully resolved.
+				_, resolved, err = r.ResolveLockedState(ctx, c, address.SubnetID(from), actor)
+				if err != nil {
+					out <- err
+				}
+				// If not resolved wait one second to poll again and see if it has been resolved
+				// FIXME: This is not the best approach, but good enough for now.
+				if !resolved {
+					time.Sleep(1 * time.Second)
+				}
+			}
+		}
+		close(out)
+	}()
+	return out
+}
+
+func (r *Resolver) ResolveLockedState(ctx context.Context, c cid.Cid, from address.SubnetID, actor address.Address) (*atomic.LockedState, bool, error) {
+	// FIXME: This function should keep track of the retries that have been done,
+	// and fallback to a 1:1 exchange if this fails.
+	lstate := &atomic.LockedState{}
+	found, err := r.getLocal(ctx, c, lstate)
+	if err != nil {
+		return nil, false, err
+	}
+	if found {
+		return lstate, true, nil
+	}
+
+	// If not try to pull
+	if r.shouldPull(c) {
+		return nil, false, r.PullLockedState(c, from, actor)
+	}
+
+	// If we shouldn't pull yet because we pulled recently
+	// do nothing for now, and notify that is wasn't resolved yet.
+	return nil, false, nil
+
+}
+
 func (r *Resolver) PushCrossMsgs(msgs sca.CrossMsgs, id address.SubnetID, isResponse bool) error {
 	c, err := msgs.Cid()
 	if err != nil {
 		return err
 	}
 	m := &ResolveMsg{
-		Type:      Push,
+		Type:      PushMeta,
 		From:      r.netName,
 		Cid:       c,
 		CrossMsgs: msgs,
 	}
 	if isResponse {
-		m.Type = Response
+		m.Type = ResponseMeta
 	}
 	return r.publishMsg(m, id)
 }
@@ -499,6 +645,16 @@ func (r *Resolver) PullCrossMsgs(c cid.Cid, id address.SubnetID) error {
 		Type: PullMeta,
 		From: r.netName,
 		Cid:  c,
+	}
+	return r.publishMsg(m, id)
+}
+
+func (r *Resolver) PullLockedState(c cid.Cid, id address.SubnetID, actor address.Address) error {
+	m := &ResolveMsg{
+		Type:  PullLocked,
+		From:  r.netName,
+		Cid:   c,
+		Actor: actor.String(),
 	}
 	return r.publishMsg(m, id)
 }

@@ -84,7 +84,7 @@ type SCAState struct {
 	AppliedTopDownNonce  uint64
 
 	// Atomic execution state
-	AtomicExecRegistry cid.Cid // HAMT[cid]
+	AtomicExecRegistry cid.Cid // HAMT[cid]AtomicExec
 }
 
 func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, error) {

@@ -41,11 +41,15 @@ var ExecStatusStr = map[ExecStatus]string{
 	ExecAborted:     "Aborted",
 }
 
+type OutputCid struct {
+	Cid string
+}
+
 // AtomicExec is the data structure held by SCA for
 // atomic executions.
 type AtomicExec struct {
 	Params    AtomicExecParams
-	Submitted map[string]cid.Cid
+	Submitted map[string]OutputCid
 	Status    ExecStatus
 }
 

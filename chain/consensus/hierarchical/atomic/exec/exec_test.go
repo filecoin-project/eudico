@@ -80,12 +80,12 @@ func TestComputeState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	msgs := []*types.Message{}
+	msgs := []types.Message{}
 	enc, err := actors.SerializeParams(&replace.OwnParams{Seed: "testSeed"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	msgs = append(msgs, &types.Message{
+	msgs = append(msgs, types.Message{
 		From:   cg.Banker(),
 		To:     ReplaceActorAddr,
 		Value:  abi.NewTokenAmount(0),
@@ -96,7 +96,7 @@ func TestComputeState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	msgs = append(msgs, &types.Message{
+	msgs = append(msgs, types.Message{
 		From:   cg.Banker(),
 		To:     ReplaceActorAddr,
 		Value:  abi.NewTokenAmount(0),
@@ -105,7 +105,8 @@ func TestComputeState(t *testing.T) {
 	})
 	own1 := &replace.Owners{M: map[string]cid.Cid{target.String(): cidUndef}}
 	var st replace.ReplaceState
-	err = exec.ComputeAtomicOutput(ctx, cg.StateManager(), msgs[0].To, &st, []atom.LockableState{own1}, msgs)
+	ts := cg.StateManager().ChainStore().GetHeaviestTipSet()
+	err = exec.ComputeAtomicOutput(ctx, cg.StateManager(), ts, msgs[0].To, &st, []atom.LockableState{own1}, msgs)
 	require.NoError(t, err)
 	owners, err := st.UnwrapOwners()
 	require.NoError(t, err)
@@ -128,12 +129,12 @@ func TestComputeState(t *testing.T) {
 
 	t.Log("Execute messages atomically from target's view")
 	// Compute the opposite and compare output CID
-	msgs = []*types.Message{}
+	msgs = []types.Message{}
 	enc, err = actors.SerializeParams(&replace.OwnParams{Seed: "test"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	msgs = append(msgs, &types.Message{
+	msgs = append(msgs, types.Message{
 		From:   target,
 		To:     ReplaceActorAddr,
 		Value:  abi.NewTokenAmount(0),
@@ -144,7 +145,7 @@ func TestComputeState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	msgs = append(msgs, &types.Message{
+	msgs = append(msgs, types.Message{
 		From:   target,
 		To:     ReplaceActorAddr,
 		Value:  abi.NewTokenAmount(0),
@@ -153,7 +154,8 @@ func TestComputeState(t *testing.T) {
 	})
 	own1 = &replace.Owners{M: map[string]cid.Cid{taddr.String(): exp}}
 	var st2 replace.ReplaceState
-	err = exec.ComputeAtomicOutput(ctx, cg.StateManager(), msgs[0].To, &st2, []atom.LockableState{own1}, msgs)
+	ts = cg.StateManager().ChainStore().GetHeaviestTipSet()
+	err = exec.ComputeAtomicOutput(ctx, cg.StateManager(), ts, msgs[0].To, &st2, []atom.LockableState{own1}, msgs)
 	require.NoError(t, err)
 
 	// Check that the atomic replace happened.
@@ -639,7 +641,7 @@ func SetupSCAActor(ctx context.Context, bs blockstore.Blockstore, params *sca.Co
 
 func SetupReplaceActor(ctx context.Context, bs blockstore.Blockstore) (*types.Actor, error) {
 	cst := cbor.NewCborStore(bs)
-	st, err := replace.ConstructState()
+	st, err := replace.ConstructState(adt.WrapStore(ctx, cst))
 	if err != nil {
 		return nil, err
 	}

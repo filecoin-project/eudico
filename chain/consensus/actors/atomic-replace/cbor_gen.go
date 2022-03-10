@@ -19,7 +19,7 @@ var _ = cid.Undef
 var _ = math.E
 var _ = sort.Sort
 
-var lengthBufReplaceState = []byte{129}
+var lengthBufReplaceState = []byte{130}
 
 func (t *ReplaceState) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -30,10 +30,19 @@ func (t *ReplaceState) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
+	scratch := make([]byte, 9)
+
 	// t.Owners (atomic.LockedState) (struct)
 	if err := t.Owners.MarshalCBOR(w); err != nil {
 		return err
 	}
+
+	// t.LockedMap (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.LockedMap); err != nil {
+		return xerrors.Errorf("failed to write cid field t.LockedMap: %w", err)
+	}
+
 	return nil
 }
 
@@ -51,7 +60,7 @@ func (t *ReplaceState) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 1 {
+	if extra != 2 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -72,6 +81,18 @@ func (t *ReplaceState) UnmarshalCBOR(r io.Reader) error {
 				return xerrors.Errorf("unmarshaling t.Owners pointer: %w", err)
 			}
 		}
+
+	}
+	// t.LockedMap (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.LockedMap: %w", err)
+		}
+
+		t.LockedMap = c
 
 	}
 	return nil

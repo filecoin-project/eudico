@@ -7,6 +7,7 @@ import (
 	"github.com/filecoin-project/go-state-types/exitcode"
 	replace "github.com/filecoin-project/lotus/chain/consensus/actors/atomic-replace"
 	atomic "github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
+	"github.com/filecoin-project/specs-actors/v3/actors/util/adt"
 	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v7/support/mock"
 	tutil "github.com/filecoin-project/specs-actors/v7/support/testing"
@@ -120,8 +121,13 @@ func TestLockAbort(t *testing.T) {
 	lockparams, err := atomic.WrapLockParams(replace.MethodReplace, &replace.ReplaceParams{Addr: target})
 	require.NoError(t, err)
 	rt.ExpectValidateCallerAny()
-	rt.Call(h.ReplaceActor.Lock, lockparams)
+	ret := rt.Call(h.ReplaceActor.Lock, lockparams)
+	lcid := ret.(*atomic.LockedOutput).Cid
 	rt.Verify()
+	st = getState(rt)
+	_, found, err := atomic.GetActorLockedState(adt.AsStore(rt), st.LockedMap, lcid)
+	require.NoError(t, err)
+	require.True(t, found)
 
 	// It'll fail because state is locked.
 	rt.ExpectAbort(exitcode.ErrIllegalState, func() {
@@ -132,6 +138,10 @@ func TestLockAbort(t *testing.T) {
 	// Abort
 	rt.ExpectValidateCallerAny()
 	rt.Call(h.ReplaceActor.Abort, lockparams)
+	st = getState(rt)
+	_, found, err = atomic.GetActorLockedState(adt.AsStore(rt), st.LockedMap, lcid)
+	require.NoError(t, err)
+	require.False(t, found)
 
 	rt.ExpectValidateCallerAny()
 	rt.Call(h.ReplaceActor.Replace, &replace.ReplaceParams{Addr: target})
@@ -161,17 +171,23 @@ func TestUnlock(t *testing.T) {
 	lockparams, err := atomic.WrapLockParams(replace.MethodReplace, &replace.ReplaceParams{Addr: target})
 	require.NoError(t, err)
 	rt.ExpectValidateCallerAny()
-	rt.Call(h.ReplaceActor.Lock, lockparams)
+	ret := rt.Call(h.ReplaceActor.Lock, lockparams)
 	rt.Verify()
+	lcid := ret.(*atomic.LockedOutput).Cid
+	st := getState(rt)
+	_, found, err := atomic.GetActorLockedState(adt.AsStore(rt), st.LockedMap, lcid)
+	require.NoError(t, err)
+	require.True(t, found)
 
 	rt.SetCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
-	ls := &replace.Owners{M: map[string]cid.Cid{"test": cidUndef}}
+	ls := &replace.Owners{M: map[string]cid.Cid{"test": cidUndef, target.String(): cidUndef}}
 	require.NoError(t, err)
-	rt.ExpectValidateCallerAddr(builtin.SystemActorAddr)
+	// rt.ExpectValidateCallerAddr(builtin.SystemActorAddr)
+	rt.ExpectValidateCallerAny()
 	params, err := atomic.WrapUnlockParams(lockparams, ls)
 	require.NoError(t, err)
 	rt.Call(h.ReplaceActor.Unlock, params)
-	st := getState(rt)
+	st = getState(rt)
 	owners, err := st.UnwrapOwners()
 	require.NoError(t, err)
 	own1, ok := owners.M["test"]
@@ -179,6 +195,10 @@ func TestUnlock(t *testing.T) {
 	require.Equal(t, own1, cidUndef)
 	_, ok = owners.M[target.String()]
 	require.True(t, ok)
+
+	_, found, err = atomic.GetActorLockedState(adt.AsStore(rt), st.LockedMap, lcid)
+	require.NoError(t, err)
+	require.False(t, found)
 }
 
 func TestMerge(t *testing.T) {

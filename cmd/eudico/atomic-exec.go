@@ -25,6 +25,7 @@ var atomicExecCmds = &cli.Command{
 		formatMsgCmd,
 		initExecCmd,
 		abortCmd,
+		submitExecCmd,
 	},
 }
 
@@ -198,6 +199,61 @@ var abortCmd = &cli.Command{
 		return nil
 	},
 }
+
+var submitExecCmd = &cli.Command{
+	Name:      "submit-exec",
+	Usage:     "Compute off-chain and submit atomic execution result",
+	ArgsUsage: "[<cid of exec>]",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "from",
+			Usage: "optionally specify the account to send message from",
+		},
+		&cli.StringFlag{
+			Name:  "subnet",
+			Usage: "specify the id of the subnet",
+			Value: address.RootSubnet.String(),
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+
+		if cctx.Args().Len() != 1 {
+			return lcli.ShowHelp(cctx, fmt.Errorf("expects cid of execution to submit as input"))
+		}
+		api, closer, err := lcli.GetFullNodeAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+
+		ctx := lcli.ReqContext(cctx)
+
+		// Try to get default address first
+		addr, _ := api.WalletDefaultAddress(ctx)
+		if from := cctx.String("from"); from != "" {
+			addr, err = address.NewFromString(from)
+			if err != nil {
+				return err
+			}
+		}
+
+		subnet := address.RootSubnet
+		if cctx.String("subnet") != address.RootSubnet.String() {
+			subnet = address.SubnetID(cctx.String("subnet"))
+		}
+		idExec, err := cid.Parse(cctx.Args().Get(0))
+		if err != nil {
+			return err
+		}
+		state, err := api.ComputeAndSubmitExec(ctx, addr, subnet, idExec)
+		if err != nil {
+			return xerrors.Errorf("Error computing and submitting execution: %s", err)
+		}
+		fmt.Fprintf(cctx.App.Writer, "Successfully submitted execution: %s\n", sca.ExecStatusStr[state])
+		return nil
+	},
+}
+
 var initExecCmd = &cli.Command{
 	Name:      "init-exec",
 	Usage:     "Signal initialization of atomic execution to the right subnet",

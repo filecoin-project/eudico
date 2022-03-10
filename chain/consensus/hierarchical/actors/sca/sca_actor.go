@@ -692,7 +692,7 @@ func (a SubnetCoordActor) InitAtomicExec(rt runtime.Runtime, params *AtomicExecP
 			}
 		}
 		// Store new initialized execution
-		err = st.putExecWithCid(execMap, c, &AtomicExec{Params: *params, Submitted: make(map[string]cid.Cid), Status: ExecInitialized})
+		err = st.putExecWithCid(execMap, c, &AtomicExec{Params: *params, Submitted: make(map[string]OutputCid), Status: ExecInitialized})
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error storing new atomic execution")
 	})
 
@@ -753,12 +753,12 @@ func (a SubnetCoordActor) SubmitAtomicExec(rt runtime.Runtime, params *SubmitExe
 		for _, o := range exec.Submitted {
 			// NOTE: checking one should be enough and we could make it more efficient
 			// like that, but checking all for now as a sanity-check.
-			if o != outputCid {
+			if o.Cid != outputCid.String() {
 				rt.Abortf(exitcode.ErrIllegalArgument, "outputs don't match")
 				// FIXME: Should we abort right-away if this happens.
 			}
 		}
-		exec.Submitted[caller.String()] = outputCid
+		exec.Submitted[caller.String()] = OutputCid{Cid: outputCid.String()}
 		// If it is the final output update state of the execution.
 		if len(exec.Submitted) == len(exec.Params.Inputs) {
 			exec.Status = ExecSuccess
