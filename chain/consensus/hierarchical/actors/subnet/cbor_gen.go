@@ -9,6 +9,7 @@ import (
 	"sort"
 
 	address "github.com/filecoin-project/go-address"
+	abi "github.com/filecoin-project/go-state-types/abi"
 	hierarchical "github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	cid "github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
@@ -20,7 +21,7 @@ var _ = cid.Undef
 var _ = math.E
 var _ = sort.Sort
 
-var lengthBufSubnetState = []byte{138}
+var lengthBufSubnetState = []byte{140}
 
 func (t *SubnetState) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -45,13 +46,7 @@ func (t *SubnetState) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.ParentCid (cid.Cid) (struct)
-
-	if err := cbg.WriteCidBuf(scratch, w, t.ParentCid); err != nil {
-		return xerrors.Errorf("failed to write cid field t.ParentCid: %w", err)
-	}
-
-	// t.ParentID (hierarchical.SubnetID) (string)
+	// t.ParentID (address.SubnetID) (string)
 	if len(t.ParentID) > cbg.MaxLength {
 		return xerrors.Errorf("Value in field t.ParentID was too long")
 	}
@@ -63,7 +58,7 @@ func (t *SubnetState) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.Consensus (subnet.ConsensusType) (uint64)
+	// t.Consensus (hierarchical.ConsensusType) (uint64)
 
 	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.Consensus)); err != nil {
 		return err
@@ -117,6 +112,30 @@ func (t *SubnetState) MarshalCBOR(w io.Writer) error {
 	if _, err := w.Write(t.Genesis[:]); err != nil {
 		return err
 	}
+
+	// t.CheckPeriod (abi.ChainEpoch) (int64)
+	if t.CheckPeriod >= 0 {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.CheckPeriod)); err != nil {
+			return err
+		}
+	} else {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.CheckPeriod-1)); err != nil {
+			return err
+		}
+	}
+
+	// t.Checkpoints (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.Checkpoints); err != nil {
+		return xerrors.Errorf("failed to write cid field t.Checkpoints: %w", err)
+	}
+
+	// t.WindowChecks (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.WindowChecks); err != nil {
+		return xerrors.Errorf("failed to write cid field t.WindowChecks: %w", err)
+	}
+
 	return nil
 }
 
@@ -134,7 +153,7 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 10 {
+	if extra != 12 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -148,19 +167,7 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) error {
 
 		t.Name = string(sval)
 	}
-	// t.ParentCid (cid.Cid) (struct)
-
-	{
-
-		c, err := cbg.ReadCid(br)
-		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.ParentCid: %w", err)
-		}
-
-		t.ParentCid = c
-
-	}
-	// t.ParentID (hierarchical.SubnetID) (string)
+	// t.ParentID (address.SubnetID) (string)
 
 	{
 		sval, err := cbg.ReadStringBuf(br, scratch)
@@ -168,9 +175,9 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) error {
 			return err
 		}
 
-		t.ParentID = hierarchical.SubnetID(sval)
+		t.ParentID = address.SubnetID(sval)
 	}
-	// t.Consensus (subnet.ConsensusType) (uint64)
+	// t.Consensus (hierarchical.ConsensusType) (uint64)
 
 	{
 
@@ -181,7 +188,7 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) error {
 		if maj != cbg.MajUnsignedInt {
 			return fmt.Errorf("wrong type for uint64 field")
 		}
-		t.Consensus = ConsensusType(extra)
+		t.Consensus = hierarchical.ConsensusType(extra)
 
 	}
 	// t.MinMinerStake (big.Int) (struct)
@@ -278,10 +285,59 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) error {
 	if _, err := io.ReadFull(br, t.Genesis[:]); err != nil {
 		return err
 	}
+	// t.CheckPeriod (abi.ChainEpoch) (int64)
+	{
+		maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+		var extraI int64
+		if err != nil {
+			return err
+		}
+		switch maj {
+		case cbg.MajUnsignedInt:
+			extraI = int64(extra)
+			if extraI < 0 {
+				return fmt.Errorf("int64 positive overflow")
+			}
+		case cbg.MajNegativeInt:
+			extraI = int64(extra)
+			if extraI < 0 {
+				return fmt.Errorf("int64 negative oveflow")
+			}
+			extraI = -1 - extraI
+		default:
+			return fmt.Errorf("wrong type for int64 field: %d", maj)
+		}
+
+		t.CheckPeriod = abi.ChainEpoch(extraI)
+	}
+	// t.Checkpoints (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.Checkpoints: %w", err)
+		}
+
+		t.Checkpoints = c
+
+	}
+	// t.WindowChecks (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.WindowChecks: %w", err)
+		}
+
+		t.WindowChecks = c
+
+	}
 	return nil
 }
 
-var lengthBufConstructParams = []byte{133}
+var lengthBufConstructParams = []byte{134}
 
 func (t *ConstructParams) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -318,7 +374,7 @@ func (t *ConstructParams) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.Consensus (subnet.ConsensusType) (uint64)
+	// t.Consensus (hierarchical.ConsensusType) (uint64)
 
 	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.Consensus)); err != nil {
 		return err
@@ -332,6 +388,17 @@ func (t *ConstructParams) MarshalCBOR(w io.Writer) error {
 	// t.DelegMiner (address.Address) (struct)
 	if err := t.DelegMiner.MarshalCBOR(w); err != nil {
 		return err
+	}
+
+	// t.CheckPeriod (abi.ChainEpoch) (int64)
+	if t.CheckPeriod >= 0 {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.CheckPeriod)); err != nil {
+			return err
+		}
+	} else {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.CheckPeriod-1)); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -350,7 +417,7 @@ func (t *ConstructParams) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 5 {
+	if extra != 6 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -374,7 +441,7 @@ func (t *ConstructParams) UnmarshalCBOR(r io.Reader) error {
 
 		t.Name = string(sval)
 	}
-	// t.Consensus (subnet.ConsensusType) (uint64)
+	// t.Consensus (hierarchical.ConsensusType) (uint64)
 
 	{
 
@@ -385,7 +452,7 @@ func (t *ConstructParams) UnmarshalCBOR(r io.Reader) error {
 		if maj != cbg.MajUnsignedInt {
 			return fmt.Errorf("wrong type for uint64 field")
 		}
-		t.Consensus = ConsensusType(extra)
+		t.Consensus = hierarchical.ConsensusType(extra)
 
 	}
 	// t.MinMinerStake (big.Int) (struct)
@@ -406,5 +473,109 @@ func (t *ConstructParams) UnmarshalCBOR(r io.Reader) error {
 		}
 
 	}
+	// t.CheckPeriod (abi.ChainEpoch) (int64)
+	{
+		maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+		var extraI int64
+		if err != nil {
+			return err
+		}
+		switch maj {
+		case cbg.MajUnsignedInt:
+			extraI = int64(extra)
+			if extraI < 0 {
+				return fmt.Errorf("int64 positive overflow")
+			}
+		case cbg.MajNegativeInt:
+			extraI = int64(extra)
+			if extraI < 0 {
+				return fmt.Errorf("int64 negative oveflow")
+			}
+			extraI = -1 - extraI
+		default:
+			return fmt.Errorf("wrong type for int64 field: %d", maj)
+		}
+
+		t.CheckPeriod = abi.ChainEpoch(extraI)
+	}
+	return nil
+}
+
+var lengthBufCheckVotes = []byte{129}
+
+func (t *CheckVotes) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufCheckVotes); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.Miners ([]address.Address) (slice)
+	if len(t.Miners) > cbg.MaxLength {
+		return xerrors.Errorf("Slice value in field t.Miners was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajArray, uint64(len(t.Miners))); err != nil {
+		return err
+	}
+	for _, v := range t.Miners {
+		if err := v.MarshalCBOR(w); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (t *CheckVotes) UnmarshalCBOR(r io.Reader) error {
+	*t = CheckVotes{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 1 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.Miners ([]address.Address) (slice)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+
+	if extra > cbg.MaxLength {
+		return fmt.Errorf("t.Miners: array too large (%d)", extra)
+	}
+
+	if maj != cbg.MajArray {
+		return fmt.Errorf("expected cbor array")
+	}
+
+	if extra > 0 {
+		t.Miners = make([]address.Address, extra)
+	}
+
+	for i := 0; i < int(extra); i++ {
+
+		var v address.Address
+		if err := v.UnmarshalCBOR(br); err != nil {
+			return err
+		}
+
+		t.Miners[i] = v
+	}
+
 	return nil
 }

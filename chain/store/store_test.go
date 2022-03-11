@@ -109,7 +109,7 @@ func TestChainExportImport(t *testing.T) {
 	cs := store.NewChainStore(nbs, nbs, datastore.NewMapDatastore(), filcns.Weight, nil)
 	defer cs.Close() //nolint:errcheck
 
-	root, err := cs.Import(buf)
+	root, err := cs.Import(context.TODO(), buf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,12 +144,12 @@ func TestChainExportImportFull(t *testing.T) {
 	cs := store.NewChainStore(nbs, nbs, datastore.NewMapDatastore(), filcns.Weight, nil)
 	defer cs.Close() //nolint:errcheck
 
-	root, err := cs.Import(buf)
+	root, err := cs.Import(context.TODO(), buf)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = cs.SetHead(last)
+	err = cs.SetHead(context.Background(), last)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestChainExportImportFull(t *testing.T) {
 		t.Fatal("imported chain differed from exported chain")
 	}
 
-	sm, err := stmgr.NewStateManager(cs, filcns.NewTipSetExecutor(), nil, filcns.DefaultUpgradeSchedule(), cg.BeaconSchedule())
+	sm, err := stmgr.NewStateManager(cs, filcns.NewTipSetExecutor(), nil, nil, filcns.DefaultUpgradeSchedule(), cg.BeaconSchedule())
 	if err != nil {
 		t.Fatal(err)
 	}

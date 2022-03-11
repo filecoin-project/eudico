@@ -11,10 +11,11 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/types"
+	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 )
 
 func (filec *FilecoinEC) CreateBlock(ctx context.Context, w api.Wallet, bt *api.BlockTemplate) (*types.FullBlock, error) {
-	pts, err := filec.sm.ChainStore().LoadTipSet(bt.Parents)
+	pts, err := filec.sm.ChainStore().LoadTipSet(ctx, bt.Parents)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to load parent tipset: %w", err)
 	}
@@ -58,14 +59,14 @@ func (filec *FilecoinEC) CreateBlock(ctx context.Context, w api.Wallet, bt *api.
 			blsSigs = append(blsSigs, msg.Signature)
 			blsMessages = append(blsMessages, &msg.Message)
 
-			c, err := filec.sm.ChainStore().PutMessage(&msg.Message)
+			c, err := filec.sm.ChainStore().PutMessage(ctx, &msg.Message)
 			if err != nil {
 				return nil, err
 			}
 
 			blsMsgCids = append(blsMsgCids, c)
-		} else {
-			c, err := filec.sm.ChainStore().PutMessage(msg)
+		} else if msg.Signature.Type == crypto.SigTypeSecp256k1 {
+			c, err := filec.sm.ChainStore().PutMessage(ctx, msg)
 			if err != nil {
 				return nil, err
 			}
@@ -73,6 +74,8 @@ func (filec *FilecoinEC) CreateBlock(ctx context.Context, w api.Wallet, bt *api.
 			secpkMsgCids = append(secpkMsgCids, c)
 			secpkMessages = append(secpkMessages, msg)
 
+		} else {
+			return nil, xerrors.Errorf("unknown sig type: %d", msg.Signature.Type)
 		}
 	}
 
@@ -86,9 +89,14 @@ func (filec *FilecoinEC) CreateBlock(ctx context.Context, w api.Wallet, bt *api.
 		return nil, xerrors.Errorf("building secpk amt: %w", err)
 	}
 
+	emptyroot, err := blockadt.MakeEmptyArray(store).Root()
+	if err != nil {
+		return nil, err
+	}
 	mmcid, err := store.Put(store.Context(), &types.MsgMeta{
 		BlsMessages:   blsmsgroot,
 		SecpkMessages: secpkmsgroot,
+		CrossMessages: emptyroot,
 	})
 	if err != nil {
 		return nil, err

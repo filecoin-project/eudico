@@ -7,6 +7,7 @@ import (
 	"io"
 
 	address "github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/network"
 	bstore "github.com/filecoin-project/lotus/blockstore"
@@ -15,10 +16,15 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	init_ "github.com/filecoin-project/lotus/chain/actors/builtin/init"
-	"github.com/filecoin-project/lotus/chain/actors/builtin/reward"
+	"github.com/filecoin-project/lotus/chain/actors/builtin/market"
+	"github.com/filecoin-project/lotus/chain/actors/builtin/power"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/system"
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
+
 	"github.com/filecoin-project/lotus/chain/consensus/actors/mpower"
+
+	"github.com/filecoin-project/lotus/chain/consensus/actors/reward"
+
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/gen"
@@ -36,15 +42,15 @@ import (
 )
 
 const (
-	networkVersion = network.Version14
+	networkVersion = network.Version15
 )
 
-func WriteGenesis(netName hierarchical.SubnetID, consensus ConsensusType, miner, vreg, rem address.Address, seq uint64, w io.Writer) error {
+func WriteGenesis(netName address.SubnetID, consensus hierarchical.ConsensusType, miner, vreg, rem address.Address, checkPeriod abi.ChainEpoch, seq uint64, w io.Writer) error {
 	bs := bstore.WrapIDStore(bstore.NewMemorySync())
 
 	var b *genesis2.GenesisBootstrap
 	switch consensus {
-	case Delegated:
+	case hierarchical.Delegated:
 		if miner == address.Undef {
 			return xerrors.Errorf("no miner specified for delegated consensus")
 		}
@@ -52,19 +58,21 @@ func WriteGenesis(netName hierarchical.SubnetID, consensus ConsensusType, miner,
 		if err != nil {
 			return err
 		}
-		b, err = makeDelegatedGenesisBlock(context.TODO(), bs, *template)
+		b, err = makeDelegatedGenesisBlock(context.TODO(), bs, *template, checkPeriod)
 		if err != nil {
 			return xerrors.Errorf("error making genesis delegated block: %w", err)
 		}
-	case PoW:
+	case hierarchical.PoW:
 		template, err := powGenTemplate(netName.String(), vreg, rem, seq)
 		if err != nil {
 			return err
 		}
-		b, err = makePoWGenesisBlock(context.TODO(), bs, *template)
+		b, err = makePoWGenesisBlock(context.TODO(), bs, *template, checkPeriod)
 		if err != nil {
 			return xerrors.Errorf("error making genesis delegated block: %w", err)
 		}
+	default:
+		return xerrors.Errorf("consensus type not supported. Not writing genesis")
 
 	}
 	offl := offline.Exchange(bs)
@@ -77,7 +85,7 @@ func WriteGenesis(netName hierarchical.SubnetID, consensus ConsensusType, miner,
 	return nil
 }
 
-func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template genesis.Template) (*state.StateTree, map[address.Address]address.Address, error) {
+func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template genesis.Template, checkPeriod abi.ChainEpoch) (*state.StateTree, map[address.Address]address.Address, error) {
 	// Create empty state tree
 
 	cst := cbor.NewCborStore(bs)
@@ -111,6 +119,15 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 		return nil, nil, xerrors.Errorf("set system actor: %w", err)
 	}
 
+	// Create empty power actor
+	spact, err := SetupStoragePowerActor(ctx, bs, av)
+	if err != nil {
+		return nil, nil, xerrors.Errorf("setup storage power actor: %w", err)
+	}
+	if err := state.SetActor(power.Address, spact); err != nil {
+		return nil, nil, xerrors.Errorf("set storage power actor: %w", err)
+	}
+
 	// Create init actor
 
 	idStart, initact, keyIDs, err := genesis2.SetupInitActor(ctx, bs, template.NetworkName, template.Accounts, template.VerifregRootKey, template.RemainderAccount, av)
@@ -131,23 +148,36 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 	}
 
 	// Setup sca actor
-	scaact, err := SetupSubnetActor(ctx, bs, template.NetworkName)
+	params := &sca.ConstructorParams{
+		NetworkName:      template.NetworkName,
+		CheckpointPeriod: uint64(checkPeriod),
+	}
+	scaact, err := SetupSCAActor(ctx, bs, params)
 	if err != nil {
 		return nil, nil, err
 	}
-	err = state.SetActor(sca.SubnetCoordActorAddr, scaact)
+	err = state.SetActor(hierarchical.SubnetCoordActorAddr, scaact)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("set SCA actor: %w", err)
 	}
 
-	// Setup reward
-	// RewardActor's state is overwritten by SetupStorageMiners, but needs to exist for miner creation messages
-	rewact, err := genesis2.SetupRewardActor(ctx, bs, big.Zero(), av)
+	// Create empty market actor
+	marketact, err := SetupStorageMarketActor(ctx, bs, av)
+	if err != nil {
+		return nil, nil, xerrors.Errorf("setup storage market actor: %w", err)
+	}
+	if err := state.SetActor(market.Address, marketact); err != nil {
+		return nil, nil, xerrors.Errorf("set storage market actor: %w", err)
+	}
+	// Setup reward actor
+	// This is a modified reward actor to support the needs of hierarchical consensus
+	// protocol.
+	rewact, err := SetupRewardActor(ctx, bs, big.Zero(), av)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup reward actor: %w", err)
 	}
 
-	err = state.SetActor(reward.Address, rewact)
+	err = state.SetActor(reward.RewardActorAddr, rewact)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("set reward actor: %w", err)
 	}
@@ -236,9 +266,9 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 	return state, keyIDs, nil
 }
 
-func SetupSubnetActor(ctx context.Context, bs bstore.Blockstore, networkName string) (*types.Actor, error) {
+func SetupSCAActor(ctx context.Context, bs bstore.Blockstore, params *sca.ConstructorParams) (*types.Actor, error) {
 	cst := cbor.NewCborStore(bs)
-	st, err := sca.ConstructSCAState(adt.WrapStore(ctx, cst), hierarchical.SubnetID(networkName))
+	st, err := sca.ConstructSCAState(adt.WrapStore(ctx, cst), params)
 	if err != nil {
 		return nil, err
 	}
@@ -265,14 +295,87 @@ func SetupStoragePowerActor(ctx context.Context, bs bstore.Blockstore, av actors
 	if err != nil {
 		return nil, err
 	}
-
 	statecid, err := cst.Put(ctx, pst)
+	if err != nil {
+		return nil, err
+	}
+	act := &types.Actor{
+		Code:    actor.MpowerActorCodeID,
+		Head:    statecid,
+		Balance: big.Zero(),
+	}
+
+	return act, nil
+}
+
+func SetupRewardActor(ctx context.Context, bs bstore.Blockstore, qaPower big.Int, av actors.Version) (*types.Actor, error) {
+	cst := cbor.NewCborStore(bs)
+	rst := reward.ConstructState(qaPower)
+
+	statecid, err := cst.Put(ctx, rst)
+	if err != nil {
+		return nil, err
+	}
+
+	// NOTE: For now, everything in the reward actor is the same except the code,
+	// where we included an additional method to fund accounts. This may change
+	// in the future when we design specific reward system for subnets.
+	act := &types.Actor{
+		Code: actor.RewardActorCodeID,
+		// NOTE: This sets up the initial balance of the reward actor.
+		Balance: types.BigInt{Int: build.InitialRewardBalance},
+		Head:    statecid,
+	}
+
+	return act, nil
+}
+
+func SetupStorageMarketActor(ctx context.Context, bs bstore.Blockstore, av actors.Version) (*types.Actor, error) {
+	cst := cbor.NewCborStore(bs)
+	mst, err := market.MakeState(adt.WrapStore(ctx, cbor.NewCborStore(bs)), av)
+	if err != nil {
+		return nil, err
+	}
+
+	statecid, err := cst.Put(ctx, mst.GetState())
+	if err != nil {
+		return nil, err
+	}
+
+	actcid, err := market.GetActorCodeID(av)
 	if err != nil {
 		return nil, err
 	}
 
 	act := &types.Actor{
-		Code:    actor.MpowerActorCodeID,
+		Code:    actcid,
+		Head:    statecid,
+		Balance: big.Zero(),
+	}
+
+	return act, nil
+}
+
+func SetupStoragePowerActor(ctx context.Context, bs bstore.Blockstore, av actors.Version) (*types.Actor, error) {
+
+	cst := cbor.NewCborStore(bs)
+	pst, err := power.MakeState(adt.WrapStore(ctx, cbor.NewCborStore(bs)), av)
+	if err != nil {
+		return nil, err
+	}
+
+	statecid, err := cst.Put(ctx, pst.GetState())
+	if err != nil {
+		return nil, err
+	}
+
+	actcid, err := power.GetActorCodeID(av)
+	if err != nil {
+		return nil, err
+	}
+
+	act := &types.Actor{
+		Code:    actcid,
 		Head:    statecid,
 		Balance: big.Zero(),
 	}

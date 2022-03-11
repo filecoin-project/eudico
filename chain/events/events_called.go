@@ -488,8 +488,12 @@ func (me *messageEvents) messagesForTs(ts *types.TipSet, consume func(*types.Mes
 			seen[c] = struct{}{}
 			if i < len(msgs.BlsMessages) {
 				consume(msgs.BlsMessages[i])
-			} else {
+			} else if i < len(msgs.SecpkMessages) {
 				consume(&msgs.SecpkMessages[i-len(msgs.BlsMessages)].Message)
+			} else {
+				// NOTE: We don't listen for events in cross-shard messages
+				// at this point. We'll see if this is needed in the future.
+				continue
 			}
 		}
 	}
