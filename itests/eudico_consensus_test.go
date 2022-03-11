@@ -18,19 +18,17 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/wallet"
 	"github.com/filecoin-project/lotus/itests/kit"
+	"github.com/filecoin-project/lotus/itests/kit/docker"
 )
 
 func TestEudicoConsensus(t *testing.T) {
-	/*
-		t.Run("tspow", func(t *testing.T) {
-			runTSPoWConsensusTests(t, kit.ThroughRPC(), kit.TSPoW())
-		})
+	t.Run("tspow", func(t *testing.T) {
+		runTSPoWConsensusTests(t, kit.ThroughRPC(), kit.TSPoW())
+	})
 
-		t.Run("delegated", func(t *testing.T) {
-			runDelegatedConsensusTests(t, kit.ThroughRPC(), kit.Delegated())
-		})
-
-	*/
+	t.Run("delegated", func(t *testing.T) {
+		runDelegatedConsensusTests(t, kit.ThroughRPC(), kit.Delegated())
+	})
 
 	t.Run("tendermint", func(t *testing.T) {
 		runTendermintConsensusTests(t, kit.ThroughRPC(), kit.Tendermint())
@@ -140,13 +138,6 @@ func runTendermintConsensusTests(t *testing.T, opts ...interface{}) {
 func (ts *eudicoConsensusSuite) testTendermintMining(t *testing.T) {
 	ctx := context.Background()
 
-	// get the Tendermint validator secp256k1 key
-
-	ki, err := tendermint.GetSecp256k1TendermintKey(kit.TendermintConsensusKeyFile)
-	require.NoError(t, err)
-	k, err := wallet.NewKey(*ki)
-	require.NoError(t, err)
-
 	// start a Tendermint application
 
 	shutdown := make(chan os.Signal, 1)
@@ -163,6 +154,31 @@ func (ts *eudicoConsensusSuite) testTendermintMining(t *testing.T) {
 		serverErrors <- server.Start()
 	}()
 	defer server.Stop()
+
+	// start Tendermint validator
+
+	tm, err := docker.StartTendermintContainer()
+	if err != nil {
+		docker.StopContainer(tm.ID)
+		t.Fatalf("%s", err)
+	}
+
+	// Add recovery
+
+	defer func() {
+		if a := recover(); a != nil {
+			docker.StopContainer(tm.ID)
+			return
+		}
+		docker.StopContainer(tm.ID)
+	}()
+
+	// Get the Tendermint validator secp256k1 key
+
+	ki, err := tendermint.GetSecp256k1TendermintKey(kit.TendermintConsensusKeyFile)
+	require.NoError(t, err)
+	k, err := wallet.NewKey(*ki)
+	require.NoError(t, err)
 
 	// start a Eudico node and a Tendermint miner
 

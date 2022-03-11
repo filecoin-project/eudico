@@ -96,6 +96,8 @@ func NewConsensus(
 		log.Fatalf("unable to create a Tendermint RPC client: %s", err)
 	}
 
+	log.Infof("Tendermint RPC address: %s", NodeAddr())
+
 	valAddr, valPubKey, clientAddr, err := getValidatorsInfo(ctx, c)
 	if err != nil {
 		log.Fatalf("unable to get or handle Tendermint validators info: %s", err)

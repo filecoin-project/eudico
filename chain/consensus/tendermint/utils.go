@@ -172,15 +172,20 @@ func getValidatorsInfo(ctx context.Context, c *tmclient.HTTP) (string, []byte, a
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
+	timeout := time.After(10 * time.Second)
+
 	shouldRetry := true
 	for shouldRetry {
 		select {
+		case <-ctx.Done():
+			log.Info("getting validators info was stopped")
+			return "", nil, address.Address{}, xerrors.Errorf("time exceeded while accessing Status method")
 		case <-ticker.C:
 			resp, err = c.Status(ctx)
 			if err == nil {
 				shouldRetry = false
 			}
-		case <-time.After(10 * time.Second):
+		case <-timeout:
 			return "", nil, address.Address{}, xerrors.Errorf("unable to access Status method")
 		}
 	}
@@ -241,6 +246,8 @@ func registerNetworkViaTxSync(
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
+	timeout := time.After(60 * time.Second)
+
 	try := true
 	var resq *coretypes.ResultABCIQuery
 	for try {
@@ -271,7 +278,7 @@ func registerNetworkViaTxSync(
 			}
 
 			try = false
-		case <-time.After(60 * time.Second):
+		case <-timeout:
 			return nil, xerrors.New("time exceeded")
 		}
 	}

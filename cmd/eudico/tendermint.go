@@ -8,7 +8,7 @@ import (
 	"time"
 
 	abciserver "github.com/tendermint/tendermint/abci/server"
-	tendermintLogger "github.com/tendermint/tendermint/libs/log"
+	tmlogger "github.com/tendermint/tendermint/libs/log"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
 
@@ -35,7 +35,7 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
-func NewRootTendermintConsensus(sm *stmgr.StateManager, beacon beacon.Schedule,  r *resolver.Resolver,
+func NewRootTendermintConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
 	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
 	return tendermint.NewConsensus(sm, nil, beacon, r, verifier, genesis, netName)
 }
@@ -161,7 +161,7 @@ var tendermintApplicationCmd = &cli.Command{
 			return err
 		}
 
-		logger := tendermintLogger.MustNewDefaultLogger(tendermintLogger.LogFormatPlain, tendermintLogger.LogLevelInfo, false)
+		logger := tmlogger.MustNewDefaultLogger(tmlogger.LogFormatPlain, tmlogger.LogLevelInfo, false)
 		server := abciserver.NewSocketServer(cctx.String("addr"), app)
 		server.SetLogger(logger)
 
