@@ -22,6 +22,7 @@ var atomicExecCmds = &cli.Command{
 	Subcommands: []*cli.Command{
 		listAtomicExec,
 		lockStateCmd,
+		unlockStateCmd,
 		formatMsgCmd,
 		initExecCmd,
 		abortCmd,
@@ -146,6 +147,72 @@ var lockStateCmd = &cli.Command{
 	},
 }
 
+var unlockStateCmd = &cli.Command{
+	Name:      "unlock-state",
+	Usage:     "Unlock state for an actor",
+	ArgsUsage: "[<actor address>]",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "from",
+			Usage: "optionally specify the account to send message from",
+		},
+		&cli.StringFlag{
+			Name:  "subnet",
+			Usage: "specify the id of the subnet",
+			Value: address.RootSubnet.String(),
+		},
+		&cli.IntFlag{
+			Name:  "method",
+			Usage: "specify actor method for atomic execution",
+			Value: -1,
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+
+		if cctx.Args().Len() != 1 {
+			return lcli.ShowHelp(cctx, fmt.Errorf("expects the actor address for atomic execution as input"))
+		}
+		api, closer, err := lcli.GetFullNodeAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+
+		ctx := lcli.ReqContext(cctx)
+
+		// Try to get default address first
+		addr, _ := api.WalletDefaultAddress(ctx)
+		if from := cctx.String("from"); from != "" {
+			addr, err = address.NewFromString(from)
+			if err != nil {
+				return err
+			}
+		}
+
+		// Atomic execution requires an ancesto. Rootnet has no support for atomic exec.
+		var subnet address.SubnetID
+		if cctx.String("subnet") == address.RootSubnet.String() ||
+			cctx.String("subnet") == "" {
+			return xerrors.Errorf("only subnets with an ancestor can perform atomic executions")
+		}
+		subnet = address.SubnetID(cctx.String("subnet"))
+		actorAddr, err := address.NewFromString(cctx.Args().Get(0))
+		if err != nil {
+			return lcli.ShowHelp(cctx, fmt.Errorf("failed to parse actor address: %w", err))
+		}
+
+		if cctx.Int("method") == -1 {
+			return xerrors.Errorf("Method for atomic execution in actor nof specified")
+		}
+		method := abi.MethodNum(cctx.Int("method"))
+		err = api.UnlockState(ctx, addr, actorAddr, subnet, method)
+		if err != nil {
+			return xerrors.Errorf("Error locking state: %s", err)
+		}
+		fmt.Fprintf(cctx.App.Writer, "Successfully unlocked state")
+		return nil
+	},
+}
 var abortCmd = &cli.Command{
 	Name:      "abort-exec",
 	Usage:     "Abort atomic execution",

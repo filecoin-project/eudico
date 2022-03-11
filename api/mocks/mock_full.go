@@ -1132,10 +1132,10 @@ func (mr *MockFullNodeMockRecorder) LeaveSubnet(arg0, arg1, arg2 interface{}) *g
 }
 
 // ListAtomicExecs mocks base method.
-func (m *MockFullNode) ListAtomicExecs(arg0 context.Context, arg1 address.SubnetID, arg2 address.Address) ([]*sca.AtomicExec, error) {
+func (m *MockFullNode) ListAtomicExecs(arg0 context.Context, arg1 address.SubnetID, arg2 address.Address) ([]sca.AtomicExec, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListAtomicExecs", arg0, arg1, arg2)
-	ret0, _ := ret[0].([]*sca.AtomicExec)
+	ret0, _ := ret[0].([]sca.AtomicExec)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -3271,6 +3271,20 @@ func (m *MockFullNode) SyncValidateTipset(arg0 context.Context, arg1 types.TipSe
 func (mr *MockFullNodeMockRecorder) SyncValidateTipset(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncValidateTipset", reflect.TypeOf((*MockFullNode)(nil).SyncValidateTipset), arg0, arg1)
+}
+
+// UnlockState mocks base method.
+func (m *MockFullNode) UnlockState(arg0 context.Context, arg1, arg2 address.Address, arg3 address.SubnetID, arg4 abi.MethodNum) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UnlockState", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UnlockState indicates an expected call of UnlockState.
+func (mr *MockFullNodeMockRecorder) UnlockState(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnlockState", reflect.TypeOf((*MockFullNode)(nil).UnlockState), arg0, arg1, arg2, arg3, arg4)
 }
 
 // ValidateCheckpoint mocks base method.

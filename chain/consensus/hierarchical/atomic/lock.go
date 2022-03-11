@@ -125,7 +125,7 @@ func UnwrapMergeParams(params *MergeParams, out LockableState) error {
 func ValidateIfLocked(states ...*LockedState) error {
 	for _, s := range states {
 		if s.IsLocked() {
-			return xerrors.Errorf("abort. One of the state or more are locked")
+			return xerrors.Errorf("abort. One of the states or more are locked")
 		}
 	}
 	return nil

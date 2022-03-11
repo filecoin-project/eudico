@@ -261,7 +261,7 @@ func (v *Validator) Validate(ctx context.Context, pid peer.ID, msg *pubsub.Messa
 	// Process the resolveMsg, record error, and return gossipsub validation status.
 	sub, err := v.r.processResolveMsg(ctx, v.submgr, rmsg)
 	if err != nil {
-		log.Errorf("error processing resolve message: %s", err)
+		log.Errorf("error processing resolve message: %w", err)
 		return sub
 	}
 
@@ -367,7 +367,7 @@ func (r *Resolver) processPullLocked(submgr subnet.SubnetMgr, rmsg *ResolveMsg) 
 	// FIXME: Make this configurable
 	lstate, found, err := r.getLockedStateFromActor(context.TODO(), submgr, rmsg)
 	if err != nil {
-		return pubsub.ValidationIgnore, err
+		return pubsub.ValidationIgnore, xerrors.Errorf("error geting locked state from actor", err)
 	}
 	if !found {
 		// Reject instead of ignore. Someone may be trying to spam us with

@@ -26,6 +26,18 @@ import (
 func (s *SubnetMgr) LockState(
 	ctx context.Context, wallet address.Address, actor address.Address,
 	subnet address.SubnetID, method abi.MethodNum) (cid.Cid, error) {
+	return s.handleLock(ctx, wallet, actor, subnet, method, false)
+}
+
+func (s *SubnetMgr) UnlockState(
+	ctx context.Context, wallet address.Address, actor address.Address,
+	subnet address.SubnetID, method abi.MethodNum) error {
+	_, err := s.handleLock(ctx, wallet, actor, subnet, method, true)
+	return err
+}
+
+func (s *SubnetMgr) handleLock(ctx context.Context, wallet address.Address, actor address.Address,
+	subnet address.SubnetID, method abi.MethodNum, unlock bool) (cid.Cid, error) {
 
 	sapi, err := s.GetSubnetAPI(subnet)
 	if err != nil {
@@ -42,11 +54,15 @@ func (s *SubnetMgr) LockState(
 		return cid.Undef, xerrors.Errorf("failed serializing init actor params: %s", err)
 	}
 
+	lmethod := atomic.MethodLock
+	if unlock {
+		lmethod = atomic.MethodAbort
+	}
 	smsg, aerr := sapi.MpoolPushMessage(ctx, &types.Message{
 		To:     actor,
 		From:   wallet,
 		Value:  abi.NewTokenAmount(0),
-		Method: atomic.MethodLock,
+		Method: lmethod,
 		Params: serparams,
 	}, nil)
 	if aerr != nil {
@@ -59,13 +75,17 @@ func (s *SubnetMgr) LockState(
 		return cid.Undef, aerr
 	}
 
+	// no return if unlocking
+	if unlock {
+		return cid.Undef, nil
+	}
+
 	r := &atomic.LockedOutput{}
 	if err := r.UnmarshalCBOR(bytes.NewReader(mw.Receipt.Return)); err != nil {
 		return cid.Undef, xerrors.Errorf("error unmarshalling locked output: %s", err)
 	}
 	return r.Cid, nil
 }
-
 func (s *SubnetMgr) InitAtomicExec(
 	ctx context.Context, wallet address.Address, inputs map[string]sca.LockedState,
 	msgs []types.Message) (cid.Cid, error) {
@@ -112,7 +132,7 @@ func (s *SubnetMgr) InitAtomicExec(
 }
 
 func (s *SubnetMgr) ListAtomicExecs(
-	ctx context.Context, id address.SubnetID, addr address.Address) ([]*sca.AtomicExec, error) {
+	ctx context.Context, id address.SubnetID, addr address.Address) ([]sca.AtomicExec, error) {
 
 	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.RLock()
@@ -139,9 +159,9 @@ func (s *SubnetMgr) ListAtomicExecs(
 	if err != nil {
 		return nil, err
 	}
-	out := make([]*sca.AtomicExec, 0)
+	out := make([]sca.AtomicExec, 0)
 	for _, v := range m {
-		out = append(out, &v)
+		out = append(out, v)
 	}
 	return out, nil
 }
@@ -179,6 +199,11 @@ func (s *SubnetMgr) ComputeAndSubmitExec(ctx context.Context, wallet address.Add
 	}
 	if !found {
 		return sca.ExecUndefState, xerrors.Errorf("execution not found in subnet for cid")
+	}
+
+	// If already succeeded or aborted
+	if ae.Status != sca.ExecInitialized {
+		return sca.ExecUndefState, xerrors.Errorf("execution already in a terminated state")
 	}
 
 	// Getting locked state

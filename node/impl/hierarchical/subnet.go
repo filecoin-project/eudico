@@ -91,13 +91,20 @@ func (a *HierarchicalAPI) LockState(
 	subnet address.SubnetID, method abi.MethodNum) (cid.Cid, error) {
 	return a.Sub.LockState(ctx, wallet, actor, subnet, method)
 }
+
+func (a *HierarchicalAPI) UnlockState(
+	ctx context.Context, wallet address.Address, actor address.Address,
+	subnet address.SubnetID, method abi.MethodNum) error {
+	return a.Sub.UnlockState(ctx, wallet, actor, subnet, method)
+}
+
 func (a *HierarchicalAPI) InitAtomicExec(
 	ctx context.Context, wallet address.Address, inputs map[string]sca.LockedState,
 	msgs []types.Message) (cid.Cid, error) {
 	return a.Sub.InitAtomicExec(ctx, wallet, inputs, msgs)
 }
 
-func (a *HierarchicalAPI) ListAtomicExecs(ctx context.Context, id address.SubnetID, addr address.Address) ([]*sca.AtomicExec, error) {
+func (a *HierarchicalAPI) ListAtomicExecs(ctx context.Context, id address.SubnetID, addr address.Address) ([]sca.AtomicExec, error) {
 	return a.Sub.ListAtomicExecs(ctx, id, addr)
 }
 

@@ -585,7 +585,7 @@ type HierarchicalCnsStruct struct {
 
 		LeaveSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID) (cid.Cid, error) `perm:"write"`
 
-		ListAtomicExecs func(p0 context.Context, p1 address.SubnetID, p2 address.Address) ([]*sca.AtomicExec, error) `perm:"read"`
+		ListAtomicExecs func(p0 context.Context, p1 address.SubnetID, p2 address.Address) ([]sca.AtomicExec, error) `perm:"read"`
 
 		ListCheckpoints func(p0 context.Context, p1 address.SubnetID, p2 int) ([]*schema.Checkpoint, error) `perm:"read"`
 
@@ -596,6 +596,8 @@ type HierarchicalCnsStruct struct {
 		ReleaseFunds func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) `perm:"write"`
 
 		SyncSubnet func(p0 context.Context, p1 address.SubnetID, p2 bool) error `perm:"write"`
+
+		UnlockState func(p0 context.Context, p1 address.Address, p2 address.Address, p3 address.SubnetID, p4 abi.MethodNum) error `perm:"write"`
 
 		ValidateCheckpoint func(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) (*schema.Checkpoint, error) `perm:"read"`
 	}
@@ -3634,15 +3636,15 @@ func (s *HierarchicalCnsStub) LeaveSubnet(p0 context.Context, p1 address.Address
 	return *new(cid.Cid), ErrNotSupported
 }
 
-func (s *HierarchicalCnsStruct) ListAtomicExecs(p0 context.Context, p1 address.SubnetID, p2 address.Address) ([]*sca.AtomicExec, error) {
+func (s *HierarchicalCnsStruct) ListAtomicExecs(p0 context.Context, p1 address.SubnetID, p2 address.Address) ([]sca.AtomicExec, error) {
 	if s.Internal.ListAtomicExecs == nil {
-		return *new([]*sca.AtomicExec), ErrNotSupported
+		return *new([]sca.AtomicExec), ErrNotSupported
 	}
 	return s.Internal.ListAtomicExecs(p0, p1, p2)
 }
 
-func (s *HierarchicalCnsStub) ListAtomicExecs(p0 context.Context, p1 address.SubnetID, p2 address.Address) ([]*sca.AtomicExec, error) {
-	return *new([]*sca.AtomicExec), ErrNotSupported
+func (s *HierarchicalCnsStub) ListAtomicExecs(p0 context.Context, p1 address.SubnetID, p2 address.Address) ([]sca.AtomicExec, error) {
+	return *new([]sca.AtomicExec), ErrNotSupported
 }
 
 func (s *HierarchicalCnsStruct) ListCheckpoints(p0 context.Context, p1 address.SubnetID, p2 int) ([]*schema.Checkpoint, error) {
@@ -3697,6 +3699,17 @@ func (s *HierarchicalCnsStruct) SyncSubnet(p0 context.Context, p1 address.Subnet
 }
 
 func (s *HierarchicalCnsStub) SyncSubnet(p0 context.Context, p1 address.SubnetID, p2 bool) error {
+	return ErrNotSupported
+}
+
+func (s *HierarchicalCnsStruct) UnlockState(p0 context.Context, p1 address.Address, p2 address.Address, p3 address.SubnetID, p4 abi.MethodNum) error {
+	if s.Internal.UnlockState == nil {
+		return ErrNotSupported
+	}
+	return s.Internal.UnlockState(p0, p1, p2, p3, p4)
+}
+
+func (s *HierarchicalCnsStub) UnlockState(p0 context.Context, p1 address.Address, p2 address.Address, p3 address.SubnetID, p4 abi.MethodNum) error {
 	return ErrNotSupported
 }
 

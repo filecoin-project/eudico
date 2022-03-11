@@ -13,6 +13,7 @@ import (
 	"github.com/filecoin-project/go-state-types/cbor"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
 	"github.com/filecoin-project/specs-actors/v3/actors/util/adt"
 	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
@@ -23,6 +24,8 @@ import (
 
 // example "Replace" actor that atomically replaces the cid from one owner
 // to the other.
+
+var CidUndef, _ = abi.CidBuilder.Sum([]byte("test"))
 
 const (
 	MethodReplace = 6
@@ -156,7 +159,13 @@ func (a ReplaceActor) Replace(rt runtime.Runtime, params *ReplaceParams) *abi.Em
 		own, err := st.UnwrapOwners()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error unwrapping lockable state")
 		_, ok1 := own.M[rt.Caller().String()]
+		if !ok1 {
+			own.M[rt.Caller().String()] = CidUndef
+		}
 		_, ok2 := own.M[params.Addr.String()]
+		if !ok2 {
+			own.M[params.Addr.String()] = CidUndef
+		}
 		if !ok1 && !ok2 {
 			rt.Abortf(exitcode.ErrIllegalState, "none of the parties involved have assets")
 		}
@@ -229,9 +238,9 @@ func (a ReplaceActor) Merge(rt runtime.Runtime, params *atomic.MergeParams) *abi
 }
 
 func (a ReplaceActor) Unlock(rt runtime.Runtime, params *atomic.UnlockParams) *abi.EmptyValue {
-	// FIXME: We should check here that the only one allowed to abort an execuetion is
-	// the SubnetCoordActor through a top-down transaction.
-	rt.ValidateImmediateCallerAcceptAny()
+	// called through a top-down transaction, so only the SCA can call it
+	// through ApplyMsg
+	rt.ValidateImmediateCallerIs(hierarchical.SubnetCoordActorAddr)
 
 	var st ReplaceState
 	rt.StateTransaction(&st, func() {
@@ -259,10 +268,9 @@ func (st *ReplaceState) merge(rt runtime.Runtime, state atomic.LockableState, ou
 }
 
 func (a ReplaceActor) Abort(rt runtime.Runtime, params *atomic.LockParams) *abi.EmptyValue {
-	// FIXME: We should check here that the only one allowed to abort an execuetion is
-	// the SubnetCoordActor through a top-down transaction.
+	// abort is triggered both, by a top-down transaction, or can be called by a user
+	// that locked some state by mistake.
 	rt.ValidateImmediateCallerAcceptAny()
-
 	var st ReplaceState
 	rt.StateTransaction(&st, func() {
 		switch params.Method {
