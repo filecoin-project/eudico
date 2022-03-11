@@ -476,6 +476,7 @@ func (h *shActorHarness) constructAndVerifyZeroCheck(t *testing.T, rt *mock.Runt
 	rt.GetState(&st)
 	assert.Equal(h.t, st.CheckPeriod, sca.DefaultCheckpointPeriod)
 }
+
 func verifyEmptyMap(t testing.TB, rt *mock.Runtime, cid cid.Cid) {
 	mapChecked, err := adt.AsMap(adt.AsStore(rt), cid, builtin.DefaultHamtBitwidth)
 	assert.NoError(t, err)

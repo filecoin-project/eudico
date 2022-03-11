@@ -58,7 +58,7 @@ func (s *SubnetMgr) listenSubnetEvents(ctx context.Context, sh *Subnet) {
 	root := true
 
 	// If subnet is nil, we are listening from the root chain.
-	// TODO: Revisit this, there is probably a most elegant way to
+	// TODO: Revisit this, there is probably a more elegant way to
 	// do this.
 	if sh != nil {
 		root = false

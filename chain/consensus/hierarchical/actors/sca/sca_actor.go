@@ -10,6 +10,7 @@ import (
 	"github.com/filecoin-project/go-state-types/exitcode"
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	types "github.com/filecoin-project/lotus/chain/types"
 	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
@@ -33,7 +34,9 @@ var Methods = struct {
 	Release               abi.MethodNum
 	SendCross             abi.MethodNum
 	ApplyMessage          abi.MethodNum
-}{builtin0.MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	InitAtomicExec        abi.MethodNum
+	SubmitAtomicExec      abi.MethodNum
+}{builtin0.MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
 
 type SubnetIDParam struct {
 	ID string
@@ -53,6 +56,8 @@ func (a SubnetCoordActor) Exports() []interface{} {
 		8:                         a.Release,
 		9:                         a.SendCross,
 		10:                        a.ApplyMessage,
+		11:                        a.InitAtomicExec,
+		12:                        a.SubmitAtomicExec,
 	}
 }
 
@@ -633,4 +638,113 @@ func requireSuccessWithNoop(rt runtime.Runtime, msg types.Message, code exitcode
 		return true
 	}
 	return false
+}
+
+func (a SubnetCoordActor) InitAtomicExec(rt runtime.Runtime, params *AtomicExecParams) *atomic.LockedOutput {
+	rt.ValidateImmediateCallerType(builtin.AccountActorCodeID)
+	var (
+		st  SCAState
+		c   cid.Cid
+		err error
+	)
+	rt.StateTransaction(&st, func() {
+		c, err = params.Cid()
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "error computing cid for atomic exec params")
+		execMap, err := adt.AsMap(adt.AsStore(rt), st.AtomicExecRegistry, builtin.DefaultHamtBitwidth)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting exec map")
+		// Check if execution already exists.
+		_, found, err := getAtomicExec(execMap, c)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting exec map")
+		if found {
+			rt.Abortf(exitcode.ErrIllegalArgument, "execution with cid %s already initialized", c)
+		}
+
+		if len(params.Msgs) == 0 || len(params.Inputs) == 0 {
+			rt.Abortf(exitcode.ErrIllegalArgument, "no msgs or inputs provided for execution")
+		}
+
+		// sanity-check: verify that all messages have same method and are directed to the same actor.
+		method := params.Msgs[0].Method
+		to := params.Msgs[0].To
+		for i := 1; i < len(params.Msgs); i++ {
+			// FIXME: this requirement can probably be relaxed, but leaving it like that until
+			// the level of generalization has been tested with other actors.
+			if method != params.Msgs[i].Method || to != params.Msgs[i].To {
+				rt.Abortf(exitcode.ErrIllegalArgument, "atomic exec does not support messages to different actors and methods right now")
+			}
+		}
+		// Store new initialized execution
+		err = st.putExecWithCid(execMap, c, &AtomicExec{Params: *params, Submitted: make(map[string]cid.Cid), Status: ExecInitialized})
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error storing new atomic execution")
+	})
+
+	// Return cid that identifies the execution.
+	return &atomic.LockedOutput{Cid: c}
+}
+
+func (a SubnetCoordActor) SubmitAtomicExec(rt runtime.Runtime, params *SubmitExecParams) *SubmitOutput {
+	rt.ValidateImmediateCallerType(builtin.AccountActorCodeID)
+	var (
+		st   SCAState
+		exec *AtomicExec
+	)
+	rt.StateTransaction(&st, func() {
+		execMap, err := adt.AsMap(adt.AsStore(rt), st.AtomicExecRegistry, builtin.DefaultHamtBitwidth)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting exec map")
+		// Check if execution exists.
+		var found bool
+		execCid, err := cid.Decode(params.Cid)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "error getting exec map")
+		exec, found, err = getAtomicExec(execMap, execCid)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting exec map")
+		if !found {
+			rt.Abortf(exitcode.ErrIllegalArgument, "execution with cid %s not found", params.Cid)
+		}
+
+		// Check if the output has been aborted or succeeded.
+		if exec.Status != ExecInitialized {
+			rt.Abortf(exitcode.ErrIllegalState, "execution already aborted/succeeded. No need for additional submissions")
+		}
+		// Check if the user is involved in the execution.
+		_, ok := exec.Params.Inputs[rt.Caller().String()]
+		if !ok {
+			rt.Abortf(exitcode.ErrIllegalArgument, "caller not involved in the execution")
+		}
+		// Check if he already submitted the output.
+		_, ok = exec.Submitted[rt.Caller().String()]
+		if ok {
+			rt.Abortf(exitcode.ErrIllegalArgument, "caller already submitted an execution output")
+		}
+		// Check if this is an abort
+		if params.Abort {
+			exec.Status = ExecAborted
+			st.propagateExecResult(rt, exec, atomic.LockedState{}, params.Abort)
+			return
+		}
+		outputCid, err := params.Output.Cid()
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error computing Cid for output state")
+		// Append the output only if it matches the existing ones.
+		// NOTE: checking here the cid of the lockedState (including the lock), consider
+		// making the comparison without the lock if we face inconsistencies in the e2e protocol.
+		for _, o := range exec.Submitted {
+			// NOTE: checking one should be enough and we could make it more efficient
+			// like that, but checking all for now as a sanity-check.
+			if o != outputCid {
+				rt.Abortf(exitcode.ErrIllegalArgument, "outputs don't match")
+				// FIXME: Should we abort right-away if this happens.
+			}
+		}
+		exec.Submitted[rt.Caller().String()] = outputCid
+		err = st.putExecWithCid(execMap, execCid, exec)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error putting exec state")
+		// If it is the final output update state of the execution.
+		if len(exec.Submitted) == len(exec.Params.Inputs) {
+			exec.Status = ExecSuccess
+			st.propagateExecResult(rt, exec, params.Output, params.Abort)
+		}
+
+	})
+
+	// Return status of the execution
+	return &SubmitOutput{exec.Status}
 }

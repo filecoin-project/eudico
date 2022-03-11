@@ -19,8 +19,6 @@ var _ = cid.Undef
 var _ = math.E
 var _ = sort.Sort
 
-var lengthBufThisEpochRewardReturn = []byte{130}
-
 var lengthBufFundingParams = []byte{130}
 
 func (t *FundingParams) MarshalCBOR(w io.Writer) error {
