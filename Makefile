@@ -104,6 +104,10 @@ eudico: $(BUILD_DEPS)
 .PHONY: eudico
 BINS+=eudico
 
+eudico-test:
+	go test -count=1 -v -run TestEudicoConsensus ./itests
+.PHONY: eudico-test
+
 lotus-miner: $(BUILD_DEPS)
 	rm -f lotus-miner
 	$(GOCC) build $(GOFLAGS) -o lotus-miner ./cmd/lotus-miner

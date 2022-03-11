@@ -46,7 +46,8 @@ func runTSPoWConsensusTests(t *testing.T, opts ...interface{}) {
 }
 
 func (ts *eudicoConsensusSuite) testTSPoWMining(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	full, _, _ := kit.EudicoEnsembleMinimal(t, ts.opts...)
 
@@ -82,12 +83,12 @@ func (ts *eudicoConsensusSuite) testTSPoWMining(t *testing.T) {
 
 func runDelegatedConsensusTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoConsensusSuite{opts: opts}
-
 	t.Run("testDelegatedConsensusMining", ts.testDelegatedMining)
 }
 
 func (ts *eudicoConsensusSuite) testDelegatedMining(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	full, _, _ := kit.EudicoEnsembleMinimal(t, ts.opts...)
 	l, err := full.WalletList(ctx)
@@ -131,12 +132,12 @@ func (ts *eudicoConsensusSuite) testDelegatedMining(t *testing.T) {
 
 func runTendermintConsensusTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoConsensusSuite{opts: opts}
-
 	t.Run("testTendermintConsensusMining", ts.testTendermintMining)
 }
 
 func (ts *eudicoConsensusSuite) testTendermintMining(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// start a Tendermint application
 
@@ -158,21 +159,9 @@ func (ts *eudicoConsensusSuite) testTendermintMining(t *testing.T) {
 	// start Tendermint validator
 
 	tm, err := docker.StartTendermintContainer()
-	if err != nil {
-		docker.StopContainer(tm.ID)
-		t.Fatalf("%s", err)
-	}
-
-	// Add recovery
-
-	defer func() {
-		if a := recover(); a != nil {
-			docker.StopContainer(tm.ID)
-			return
-		}
-		docker.StopContainer(tm.ID)
-	}()
-
+	defer docker.StopContainer(tm.ID)
+	require.NoError(t, err)
+	
 	// Get the Tendermint validator secp256k1 key
 
 	ki, err := tendermint.GetSecp256k1TendermintKey(kit.TendermintConsensusKeyFile)
@@ -190,9 +179,7 @@ func (ts *eudicoConsensusSuite) testTendermintMining(t *testing.T) {
 		t.Fatal("wallet key list is empty")
 	}
 
-	go func() {
-		serverErrors <- tendermint.Mine(ctx, l[0], full)
-	}()
+	go tendermint.Mine(ctx, l[0], full)
 
 	newHeads, err := full.ChainNotify(ctx)
 	require.NoError(t, err)

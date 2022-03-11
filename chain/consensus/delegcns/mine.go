@@ -36,7 +36,8 @@ func Mine(ctx context.Context, api v1api.FullNode) error {
 
 	log.Info("starting mining on @", head.Height())
 
-	timer := time.NewTicker(time.Duration(build.BlockDelaySecs) * time.Second)
+	//timer := time.NewTicker(time.Duration(build.BlockDelaySecs) * time.Second)
+	timer := time.NewTicker(3 * time.Second)
 	for {
 		select {
 		case <-timer.C:
