@@ -562,7 +562,6 @@ func (r *Resolver) WaitLockedStateResolved(ctx context.Context, c cid.Cid, from 
 				out <- xerrors.Errorf("context timeout")
 				return
 			default:
-				// Check if crossMsg fully resolved.
 				_, resolved, err = r.ResolveLockedState(ctx, c, address.SubnetID(from), actor)
 				if err != nil {
 					out <- err
