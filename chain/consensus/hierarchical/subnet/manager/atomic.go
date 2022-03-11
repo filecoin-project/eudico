@@ -222,15 +222,13 @@ func (s *SubnetMgr) ComputeAndSubmitExec(ctx context.Context, wallet address.Add
 	// get heaviest tipset
 	ts := execApi.ChainAPI.Chain.GetHeaviestTipSet()
 
-	// FIXME: Make this state to populate configurable.
-	actSt := &replace.ReplaceState{}
-	err = exec.ComputeAtomicOutput(ctx, execApi.StateManager, ts, toActor, actSt, locked, ae.Params.Msgs)
+	output, err := exec.ComputeAtomicOutput(ctx, execApi.StateManager, ts, toActor, locked, ae.Params.Msgs)
 	if err != nil {
 		return sca.ExecUndefState, err
 	}
 
 	// FIXME: Make output state configurable
-	spm := &sca.SubmitExecParams{Cid: execID.String(), Output: *actSt.Owners}
+	spm := &sca.SubmitExecParams{Cid: execID.String(), Output: *output}
 
 	// submit output
 	serparams, err := actors.SerializeParams(spm)

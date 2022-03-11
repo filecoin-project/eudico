@@ -25,6 +25,13 @@ import (
 // example "Replace" actor that atomically replaces the cid from one owner
 // to the other.
 
+// LockableActors needs to register their lockableState so other protocols
+// can use it in a generally way. We could probably remove this if we had
+// generics.
+func init() {
+	atomic.RegisterState(ReplaceActor{}.Code(), ReplaceActor{}.StateInstance())
+}
+
 var CidUndef, _ = abi.CidBuilder.Sum([]byte("test"))
 
 const (
@@ -32,13 +39,9 @@ const (
 	MethodOwn     = 7
 )
 
-var _ runtime.VMActor = ReplaceActor{}
 var _ atomic.LockableActor = ReplaceActor{}
-var _ atomic.LockableActorState = ReplaceState{}
-
-func (st ReplaceState) LockedMapCid() cid.Cid {
-	return st.LockedMap
-}
+var _ atomic.LockableActorState = &ReplaceState{}
+var _ atomic.LockableState = &Owners{}
 
 // ReplaceState determines the actor state.
 // FIXME: We are using a non-efficient locking strategy for now
@@ -51,7 +54,13 @@ type ReplaceState struct {
 	LockedMap cid.Cid //HAMT[cid]LockedState
 }
 
-var _ atomic.LockableState = &Owners{}
+func (st *ReplaceState) LockedMapCid() cid.Cid {
+	return st.LockedMap
+}
+
+func (st *ReplaceState) Output(params *atomic.LockParams) *atomic.LockedState {
+	return st.Owners
+}
 
 type Owners struct {
 	M map[string]cid.Cid
@@ -77,6 +86,10 @@ func (a ReplaceActor) Code() cid.Cid {
 
 func (a ReplaceActor) IsSingleton() bool {
 	return false
+}
+
+func (a ReplaceActor) StateInstance() atomic.LockableActorState {
+	return &ReplaceState{}
 }
 
 func (a ReplaceActor) State() cbor.Er {

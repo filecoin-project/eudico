@@ -28,7 +28,7 @@ var log = logging.Logger("atomic-exec")
 // ComputeAtomicOutput receives as input a list of locked states from other subnets, and a list of
 // messages to execute atomically in an actor, and output the final state for the actor after the execution
 // in actorState. This output needs to be committed to the SCA in the parent chain to finalize the execution.
-func ComputeAtomicOutput(ctx context.Context, sm *stmgr.StateManager, ts *types.TipSet, to address.Address, actorState interface{}, locked []atomic.LockableState, msgs []types.Message) error {
+func ComputeAtomicOutput(ctx context.Context, sm *stmgr.StateManager, ts *types.TipSet, to address.Address, locked []atomic.LockableState, msgs []types.Message) (*atomic.LockedState, error) {
 	log.Info("triggering off-chain execution for locked state")
 	// Search back till we find a height with no fork, or we reach the beginning.
 	// for ts.Height() > 0 {
@@ -44,17 +44,17 @@ func ComputeAtomicOutput(ctx context.Context, sm *stmgr.StateManager, ts *types.
 	bstate := ts.ParentState()
 	tst, err := sm.StateTree(bstate)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	log.Debugf("Computing off-chain in height: %v", ts.Height())
 	// transplant actor state and state tree to temporary blockstore for off-chain computation
 	tmpbs, err := tmpState(ctx, sm.ChainStore().StateBlockstore(), tst, []address.Address{to})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := vm.Copy(ctx, sm.ChainStore().StateBlockstore(), tmpbs, bstate); err != nil {
-		return err
+		return nil, err
 	}
 
 	// vm init
@@ -73,26 +73,26 @@ func ComputeAtomicOutput(ctx context.Context, sm *stmgr.StateManager, ts *types.
 	}
 	vmi, err := sm.VMConstructor()(ctx, vmopt)
 	if err != nil {
-		return xerrors.Errorf("failed to set up vm: %w", err)
+		return nil, xerrors.Errorf("failed to set up vm: %w", err)
 	}
 
 	// Merge locked state to actor state.
 	for _, l := range locked {
 		mparams, err := atomic.WrapMergeParams(l)
 		if err != nil {
-			return xerrors.Errorf("error wrapping merge params: %w", err)
+			return nil, xerrors.Errorf("error wrapping merge params: %w", err)
 		}
 		log.Debugf("Merging locked state for actor: %s", to)
 		lmsg, err := mergeMsg(to, mparams)
 		if err != nil {
-			return xerrors.Errorf("error creating merge msg: %w", err)
+			return nil, xerrors.Errorf("error creating merge msg: %w", err)
 		}
 		// Ensure that we are targeting the right actor.
 		lmsg.To = to
 		log.Debugf("Computing merge message for actor: %s", lmsg.To)
 		err = computeMsg(ctx, vmi, lmsg)
 		if err != nil {
-			return xerrors.Errorf("error merging locked states: %w", err)
+			return nil, xerrors.Errorf("error merging locked states: %w", err)
 		}
 	}
 
@@ -122,27 +122,39 @@ func ComputeAtomicOutput(ctx context.Context, sm *stmgr.StateManager, ts *types.
 		m.To = to
 		err = computeMsg(ctx, vmi, &m)
 		if err != nil {
-			return xerrors.Errorf("error executing atomic msg: %w", err)
+			return nil, xerrors.Errorf("error executing atomic msg: %w", err)
 		}
 	}
 
 	// flush state to process it.
 	_, err = vmi.Flush(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// output state from actor in actorState
 	toActor, err := vmi.StateTree().GetActor(to)
 	if err != nil {
-		return xerrors.Errorf("call raw get actor: %s", err)
+		return nil, xerrors.Errorf("call raw get actor: %s", err)
 	}
 	cst := cbor.NewCborStore(tmpbs)
-	if err := cst.Get(ctx, toActor.Head, actorState); err != nil {
-		return err
+
+	st, ok := atomic.StateRegistry[toActor.Code].(atomic.LockableActorState)
+	if !ok {
+		return nil, xerrors.Errorf("state from actor not of lockable state type")
+	}
+	if err := cst.Get(ctx, toActor.Head, st); err != nil {
+		return nil, err
 	}
 
-	return nil
+	// FIXME: We are using here the method and params from the first message.
+	// This works because we are currently using a really simple LockableActor,
+	// this will need to be further generalized when we introduce new actors.
+	lparams, err := atomic.WrapSerializedParams(msgs[0].Method, msgs[0].Params)
+	if err != nil {
+		return nil, err
+	}
+	return st.Output(lparams), nil
 }
 
 func computeMsg(ctx context.Context, vmi *vm.VM, m *types.Message) error {

@@ -11,8 +11,20 @@ import (
 	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
 	"github.com/ipfs/go-cid"
+	cbg "github.com/whyrusleeping/cbor-gen"
 	xerrors "golang.org/x/xerrors"
 )
+
+// StateRegistry is a registry with LockableActor's
+// state instances. With generics this will probably not
+// be necessary.
+var StateRegistry = map[cid.Cid]interface{}{}
+
+// RegisterState appends the registry of states for each
+// LockableActor.
+func RegisterState(code cid.Cid, st interface{}) {
+	StateRegistry[code] = st
+}
 
 const (
 	MethodLock   abi.MethodNum = 2
@@ -41,13 +53,17 @@ type LockedOutput struct {
 }
 
 type LockableActorState interface {
+	cbg.CBORUnmarshaler
 	// LockedMapCid returns the cid of the root for the locked map
 	LockedMapCid() cid.Cid
+	// Output returns locked output from the state.
+	Output(*LockParams) *LockedState
 }
 
 // LockableActor defines the interface that needs to be implemented by actors
 // that want to support the atomic execution of some (or all) of their functions.
 type LockableActor interface {
+	runtime.VMActor
 	// Lock defines how to lock the state in the actor.
 	Lock(rt runtime.Runtime, params *LockParams) *LockedOutput
 	// Merge takes external locked state and merges it to the current actors state.
@@ -56,6 +72,8 @@ type LockableActor interface {
 	Unlock(rt runtime.Runtime, params *UnlockParams) *abi.EmptyValue
 	// Abort unlocks the state and aborts the atomic execution.
 	Abort(rt runtime.Runtime, params *LockParams) *abi.EmptyValue
+	// StateInstance returns an instance of the lockable actor state
+	StateInstance() LockableActorState
 }
 
 // LockParams wraps serialized params from a message with the requested methodnum.

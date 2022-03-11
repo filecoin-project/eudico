@@ -34,7 +34,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
-	atom "github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic/exec"
 	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
 	"github.com/filecoin-project/lotus/chain/state"
@@ -104,11 +104,10 @@ func TestComputeState(t *testing.T) {
 		Params: enc,
 	})
 	own1 := &replace.Owners{M: map[string]cid.Cid{target.String(): cidUndef}}
-	var st replace.ReplaceState
 	ts := cg.StateManager().ChainStore().GetHeaviestTipSet()
-	err = exec.ComputeAtomicOutput(ctx, cg.StateManager(), ts, msgs[0].To, &st, []atom.LockableState{own1}, msgs)
-	require.NoError(t, err)
-	owners, err := st.UnwrapOwners()
+	output, err := exec.ComputeAtomicOutput(ctx, cg.StateManager(), ts, msgs[0].To, []atomic.LockableState{own1}, msgs)
+	var owners replace.Owners
+	err = atomic.UnwrapLockableState(output, &owners)
 	require.NoError(t, err)
 
 	// predicting the address here... may break if other assumptions change
@@ -153,27 +152,27 @@ func TestComputeState(t *testing.T) {
 		Params: enc,
 	})
 	own1 = &replace.Owners{M: map[string]cid.Cid{taddr.String(): exp}}
-	var st2 replace.ReplaceState
 	ts = cg.StateManager().ChainStore().GetHeaviestTipSet()
-	err = exec.ComputeAtomicOutput(ctx, cg.StateManager(), ts, msgs[0].To, &st2, []atom.LockableState{own1}, msgs)
+	output2, err := exec.ComputeAtomicOutput(ctx, cg.StateManager(), ts, msgs[0].To, []atomic.LockableState{own1}, msgs)
+	require.NoError(t, err)
+	var owners2 replace.Owners
+	err = atomic.UnwrapLockableState(output2, &owners2)
 	require.NoError(t, err)
 
 	// Check that the atomic replace happened.
-	owners, err = st.UnwrapOwners()
-	require.NoError(t, err)
-	c, ok = owners.M[taddr.String()]
+	c, ok = owners2.M[taddr.String()]
 	require.True(t, ok)
 	require.Equal(t, c, cidUndef)
-	c, ok = owners.M[target.String()]
+	c, ok = owners2.M[target.String()]
 	require.True(t, ok)
 	exp, _ = abi.CidBuilder.Sum([]byte("testSeed"))
 	require.Equal(t, c, exp)
 
 	t.Log("Comparing outputs of independent off-chain execution through CID")
 	// Compare output cids.
-	oc1, err := st.Owners.Cid()
+	oc1, err := output.Cid()
 	require.NoError(t, err)
-	oc2, err := st2.Owners.Cid()
+	oc2, err := output2.Cid()
 	require.NoError(t, err)
 	require.Equal(t, oc1, oc2)
 

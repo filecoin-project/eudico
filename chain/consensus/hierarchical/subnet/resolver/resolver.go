@@ -12,7 +12,6 @@ import (
 	"github.com/filecoin-project/go-state-types/cbor"
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
-	replace "github.com/filecoin-project/lotus/chain/consensus/actors/atomic-replace"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
@@ -367,7 +366,7 @@ func (r *Resolver) processPullLocked(submgr subnet.SubnetMgr, rmsg *ResolveMsg) 
 	// FIXME: Make this configurable
 	lstate, found, err := r.getLockedStateFromActor(context.TODO(), submgr, rmsg)
 	if err != nil {
-		return pubsub.ValidationIgnore, xerrors.Errorf("error geting locked state from actor", err)
+		return pubsub.ValidationIgnore, xerrors.Errorf("error geting locked state from actor: %s", err)
 	}
 	if !found {
 		// Reject instead of ignore. Someone may be trying to spam us with
@@ -411,9 +410,12 @@ func (r *Resolver) getLockedStateFromActor(ctx context.Context, submgr subnet.Su
 	}
 	pbs := blockstore.NewAPIBlockstore(api)
 	pcst := ipldcbor.NewCborStore(pbs)
-	// FIXME: Make it configurable
-	var st replace.ReplaceState
-	if err := pcst.Get(ctx, act.Head, &st); err != nil {
+
+	st, ok := atomic.StateRegistry[act.Code].(atomic.LockableActorState)
+	if !ok {
+		return nil, false, xerrors.Errorf("state from actor not of lockable state type")
+	}
+	if err := pcst.Get(ctx, act.Head, st); err != nil {
 		return nil, false, xerrors.Errorf("getting actor state: %w", err)
 	}
 	return atomic.GetActorLockedState(adt.WrapStore(ctx, pcst), st.LockedMapCid(), rmsg.Cid)
