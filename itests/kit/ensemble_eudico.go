@@ -64,8 +64,8 @@ import (
 
 const (
 	TSPoWConsensusGenesisTestFile      = "../testdata/tspow.gen"
-	DelegatedConsensusGenesisTestFile  = "../testdata/deleg.gen"
-	TendermintConsensusGenesisTestFile = "../testdata/deleg.gen"
+	DelegatedConsensusGenesisTestFile  = "../testdata/delegcns.gen"
+	TendermintConsensusGenesisTestFile = "../testdata/tendermint.gen"
 
 	DelegatedConsensusKeyFile  = "../testdata/f1ozbo7zqwfx6d4tqb353qoq7sfp4qhycefx6ftgy.key"
 	TendermintConsensusKeyFile = "../testdata/tendermint/config/priv_validator_key.json"

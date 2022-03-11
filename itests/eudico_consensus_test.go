@@ -161,7 +161,7 @@ func (ts *eudicoConsensusSuite) testTendermintMining(t *testing.T) {
 	tm, err := docker.StartTendermintContainer()
 	defer docker.StopContainer(tm.ID)
 	require.NoError(t, err)
-	
+
 	// Get the Tendermint validator secp256k1 key
 
 	ki, err := tendermint.GetSecp256k1TendermintKey(kit.TendermintConsensusKeyFile)
