@@ -39,6 +39,7 @@ func DefaultUpgradeSchedule() stmgr.UpgradeSchedule {
 	}
 
 	for _, u := range updates {
+                // NOTE: Using default `UpgradeScheduler` for eudico instead of disabling it. This may be revisited if eudico                  ends up needing different upgrade strategies.
 		// if u.Height < 0 {
 		// 	// upgrade disabled
 		// 	continue
