@@ -54,8 +54,6 @@ const initialValueInWallet = 50
 // change this to true to alternatively send all the amount from our wallet
 var sendall = false
 
-var minersAreStrings = false
-
 // we use this bool to write the transactions locally and remove the need
 // to scan the whole blockchaain when new nodes join as this takes a long time
 // this is only for demo purpose and works only if the nodes are launch from the same machine
@@ -68,20 +66,13 @@ const checkpointFrequency = 15
 const Regtest = true
 
 // struct used to propagate detected changes.
-// if minersAreStrings
-// type diffInfo struct {
-// 	newMiners    []string
-// 	newPublicKey []byte
-// 	hash         []byte
-// 	cp           []byte
-// }
-
 type diffInfo struct {
-	newMiners    []address.Address
+	newMiners    []string
 	newPublicKey []byte
 	hash         []byte
 	cp           []byte
 }
+
 /*
 	Main file for the checkpointing module. Handle all the core logic.
 */
@@ -363,6 +354,8 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 
 		log.Infow("Height:", "height", newTs.Height().String())
 		fmt.Println("Height:", newTs.Height())
+		fmt.Println("Old address: ", oldSt.PublicKey)
+		fmt.Println("New address: ", newSt.PublicKey)
 
 		change, err := c.matchNewConfig(ctx, oldTs, newTs, oldSt, newSt, diff)
 		if err != nil {
@@ -370,10 +363,13 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 			return false, nil, err
 		}
 
-		// note: due to a bug we can't make the public key field of the
+		// note: due to a bug we can't update the public key field of the
 		// actor so the following check will never return true (the
 		// public key is never updated)
 		if !reflect.DeepEqual(oldSt.PublicKey, newSt.PublicKey) {
+			fmt.Println("Address has been updated")
+			fmt.Println("Old address: ", oldSt.PublicKey)
+			fmt.Println("New address: ", newSt.PublicKey)
 			c.newDKGComplete = true
 			c.newKey = newSt.PublicKey
 			c.keysUpdated = false
@@ -399,30 +395,16 @@ func (c *CheckpointingSub) matchNewConfig(ctx context.Context, oldTs, newTs *typ
 	/*
 		Now we compared old Power Actor State and new Power Actor State
 	*/
-	// if minersAreStrings{
-	// 	// If no changes in configuration
-	// 	if sameStringSlice(oldSt.Miners, newSt.Miners) {
-	// 		return false, nil
-	// 	}
-	// 	// only the participants in the new config need to trigger the DKG
-	// 	for _, participant := range newSt.Miners {
-	// 		if participant == c.host.ID().String() {
-	// 			diff.newMiners = newSt.Miners
-	// 			c.newParticipants = newSt.Miners
-	// 			return true, nil
-	// 		}
-	// 	}
-	// 	return false, nil
-	// }
-	if reflect.DeepEqual(oldSt.Miners, newSt.Miners) {
-		//if sameStringSlice(oldSt.Miners, newSt.Miners) {
+
+	// If no changes in configuration
+	if sameStringSlice(oldSt.Miners, newSt.Miners) {
 		return false, nil
 	}
-	//c.newParticipants = newSt.Miners
 	// only the participants in the new config need to trigger the DKG
 	for _, participant := range newSt.Miners {
-		if participant.String() == c.host.ID().String() {
+		if participant == c.host.ID().String() {
 			diff.newMiners = newSt.Miners
+			c.newParticipants = newSt.Miners
 			return true, nil
 		}
 	}
@@ -454,7 +436,7 @@ func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *ty
 			c.tweakedValue = hashTweakedValue(pubkey, merkleRoot)
 			c.pubkey = pubkeyShort
 			c.newTaprootConfig = nil
-			//c.participants = newSt.Miners // we add ourselves to the list of participants
+			c.participants = newSt.Miners // we add ourselves to the list of participants
 			c.newDKGComplete = false
 			//c.newKey =
 
@@ -463,13 +445,10 @@ func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *ty
 			var minersConfig string = hex.EncodeToString(cp) + "\n"
 			// c.orderParticipantsList() orders the miners from the taproot config --> to change
 			//for _, partyId := range c.orderParticipantsList() {
-			// if minersAreStrings
-			// for _, partyId := range newSt.Miners { // list of new miners
-			// 	minersConfig += partyId + "\n"
-			// }
 			for _, partyId := range newSt.Miners { // list of new miners
-				minersConfig += partyId.String() + "\n"
+				minersConfig += partyId + "\n"
 			}
+
 			// This creates the file that will be stored in minio (or any storage)
 			hash, err := CreateMinersConfig([]byte(minersConfig))
 			if err != nil {
@@ -495,13 +474,7 @@ func (c *CheckpointingSub) triggerChange(ctx context.Context, diff *diffInfo) (m
 	//If there is a new configuration, trigger the checkpoint
 	if len(diff.newMiners) > 0 {
 		log.Infow("Generate new aggregated key")
-		participants := make([]string, 0)
-		for _, participant := range diff.newMiners {
-			participants = append(participants, participant.String())
-		}
-		// if minersAreStrings
-		// err := c.GenerateNewKeys(ctx, diff.newMiners)
-		err := c.GenerateNewKeys(ctx, participants)
+		err := c.GenerateNewKeys(ctx, diff.newMiners)
 		if err != nil {
 			log.Errorw("error while generating new key: %v", err)
 			// If generating new key failed, checkpointing should not be possible
