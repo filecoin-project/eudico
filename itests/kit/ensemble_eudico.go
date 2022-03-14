@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"go.uber.org/fx"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -22,6 +21,7 @@ import (
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/fx"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
@@ -63,14 +63,15 @@ import (
 )
 
 const (
-	TSPoWConsensusGenesisTestFile      = "../testdata/tspow.gen"
-	DelegatedConsensusGenesisTestFile  = "../testdata/delegcns.gen"
+	TSPoWConsensusGenesisTestFile = "../testdata/tspow.gen"
+
+	DelegatedConsensusGenesisTestFile = "../testdata/delegcns.gen"
+	DelegatedConsensusKeyFile         = "../testdata/f1ozbo7zqwfx6d4tqb353qoq7sfp4qhycefx6ftgy.key"
+
 	TendermintConsensusGenesisTestFile = "../testdata/tendermint.gen"
-
-	DelegatedConsensusKeyFile  = "../testdata/f1ozbo7zqwfx6d4tqb353qoq7sfp4qhycefx6ftgy.key"
-	TendermintConsensusKeyFile = "../testdata/tendermint/config/priv_validator_key.json"
-
-	TenderminApplicationAddress = "tcp://127.0.0.1:26658"
+	TendermintConsensusTestDir         = "../testdata/tendermint-test"
+	TendermintConsensusKeyFile         = TendermintConsensusTestDir + "/config/priv_validator_key.json"
+	TendermintApplicationAddress       = "tcp://127.0.0.1:26658"
 )
 
 func init() {

@@ -309,6 +309,9 @@ func (tm *Tendermint) minerIsValid(maddr address.Address) error {
 	return xerrors.Errorf("miner address must be a key")
 }
 
+// IsEpochBeyondCurrMax is used in Filcns to detect delayed blocks.
+// We are currently using defaults here and not worrying about it.
+// We will consider potential changes of Consensus interface in https://github.com/filecoin-project/eudico/issues/143.
 func (tm *Tendermint) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
 	if tm.genesis == nil {
 		return false
@@ -316,10 +319,8 @@ func (tm *Tendermint) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
 
 	tendermintLastBlock, err := tm.client.Block(context.TODO(), nil)
 	if err != nil {
-		//TODO: Tendermint: Discuss what we should return here.
 		return false
 	}
-	//TODO: Tendermint: Discuss what we should return here.
 	return tendermintLastBlock.Block.Height+MaxHeightDrift < int64(epoch)
 }
 
@@ -328,7 +329,7 @@ func (tm *Tendermint) Type() hierarchical.ConsensusType {
 }
 
 // Weight defines weight.
-// TODO: should we adopt weight for tendermint?
+// We are just using a default weight for all subnet consensus algorithms.
 func Weight(ctx context.Context, stateBs bstore.Blockstore, ts *types.TipSet) (types.BigInt, error) {
 	if ts == nil {
 		return types.NewInt(0), nil

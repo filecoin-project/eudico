@@ -148,7 +148,7 @@ func (ts *eudicoConsensusSuite) testTendermintMining(t *testing.T) {
 	require.NoError(t, err)
 
 	logger := tmlogger.MustNewDefaultLogger(tmlogger.LogFormatPlain, tmlogger.LogLevelInfo, false)
-	server := abciserver.NewSocketServer(kit.TenderminApplicationAddress, app)
+	server := abciserver.NewSocketServer(kit.TendermintApplicationAddress, app)
 	server.SetLogger(logger)
 
 	go func() {

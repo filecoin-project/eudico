@@ -81,7 +81,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			Epoch:            base.Height() + 1,
 			Timestamp:        uint64(time.Now().Unix()),
 			WinningPoStProof: nil,
-			CrossMessages:    nil,
+			CrossMessages:    crossmsgs,
 		})
 		if err != nil {
 			log.Errorw("creating block failed", "error", err)
@@ -108,8 +108,6 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 }
 
 func (tsp *TSPoW) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.BlockTemplate) (*types.FullBlock, error) {
-	//_, err := w.WalletSign(ctx, bt.Miner, []byte{1}, lapi.MsgMeta{})
-	//panic(err)
 	b, err := common.PrepareBlockForSignature(ctx, tsp.sm, bt)
 	if err != nil {
 		return nil, err

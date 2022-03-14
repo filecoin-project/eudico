@@ -396,29 +396,8 @@ func FilterBlockMessages(
 	r *resolver.Resolver,
 	netName address.SubnetID,
 	b *types.FullBlock,
-	baseTs *types.TipSet) (*ValidatedMessages, error) {
-	/*
-		{
-			var sigCids []cid.Cid // this is what we get for people not wanting the marshalcbor method on the cid type
-			var pubks [][]byte
-
-			for _, m := range b.BlsMessages {
-				sigCids = append(sigCids, m.Cid())
-
-				pubk, err := sm.GetBlsPublicKey(ctx, m.From, baseTs)
-				if err != nil {
-					return xerrors.Errorf("failed to load bls public to validate block: %w", err)
-				}
-
-				pubks = append(pubks, pubk)
-			}
-
-			if err := consensus.VerifyBlsAggregate(ctx, b.Header.BLSAggregate, sigCids, pubks); err != nil {
-				return xerrors.Errorf("bls aggregate signature was invalid: %w", err)
-			}
-		}
-
-	*/
+	baseTs *types.TipSet,
+) (*ValidatedMessages, error) {
 	var validBlsMessages []*types.Message
 	var validSecpkMessages []*types.SignedMessage
 

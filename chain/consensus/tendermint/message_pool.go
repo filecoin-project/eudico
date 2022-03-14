@@ -3,42 +3,57 @@ package tendermint
 import (
 	"sync"
 
-	"github.com/minio/blake2b-simd"
-
 	"github.com/filecoin-project/go-state-types/abi"
 )
 
-// finalityWait is the number of epochs that we will wait
-// before being able to re-propose a msg.
+// finalityWait is the number of epochs that we will be waiting before being able to re-submit a message.
+// To be able to submit messages we clear old messages that were sent finalityWait epochs ago.
 const (
-	finalityWait = 100
+	finalityWait = 50
 )
 
+// Message pool is a simple temporal storage to store messages that have already been sent to Tendermint.
+// It is  a workaround for this bug: https://github.com/tendermint/tendermint/issues/7185.
 func newMessagePool() *msgPool {
-	return &msgPool{pool: make(map[[32]byte]abi.ChainEpoch)}
+	return &msgPool{pool: make(map[string]abi.ChainEpoch)}
 }
 
-//TODO: messages should be removed from the pool after some time
 type msgPool struct {
 	lk   sync.Mutex
-	pool map[[32]byte]abi.ChainEpoch
+	pool map[string]abi.ChainEpoch // An epoch when we submitted the message with ID last time.
 }
 
-func (p *msgPool) addMessage(tx []byte, epoch abi.ChainEpoch) {
+// addSentMessage adds a message's ID that has been successfully sent (no error was triggered) to Tendermint.
+func (p *msgPool) addSentMessage(id string, currentEpoch abi.ChainEpoch) {
 	p.lk.Lock()
 	defer p.lk.Unlock()
 
-	id := blake2b.Sum256(tx)
-
-	p.pool[id] = epoch
+	p.pool[id] = currentEpoch
 }
 
-func (p *msgPool) shouldSubmitMessage(tx []byte, currentEpoch abi.ChainEpoch) bool {
+// shouldSubmitMessage returns true if we should send the input message in the specified epoch to Tendermint.
+func (p *msgPool) shouldSendMessage(id string, currentEpoch abi.ChainEpoch) bool {
 	p.lk.Lock()
 	defer p.lk.Unlock()
 
-	id := blake2b.Sum256(tx)
-	proposedAt, proposed := p.pool[id]
+	_, sent := p.pool[id]
 
-	return !proposed || proposedAt+finalityWait < currentEpoch
+	return !sent
+}
+
+func (p *msgPool) clearSentMessages(currentEpoch abi.ChainEpoch) {
+	for k, sentAt := range p.pool {
+		if sentAt+finalityWait > currentEpoch {
+			delete(p.pool, k)
+		}
+	}
+}
+
+func (p *msgPool) deleteMessage(id string) {
+	delete(p.pool, id)
+}
+
+func (p *msgPool) getInfo(id string) (sentAt abi.ChainEpoch, sent bool) {
+	sentAt, sent = p.pool[id]
+	return
 }

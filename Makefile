@@ -108,6 +108,17 @@ eudico-test:
 	go test -count=1 -v -run TestEudicoConsensus ./itests
 .PHONY: eudico-test
 
+# Run a 4-node tendermint-testnet locally
+tm-localnet-start: tm-localnet-stop
+	@if ! [ -f testdata/tendermint-testnet/build/node0/config/genesis.json ]; then docker run --rm -v $(CURDIR)/testdata/tendermint-testnet/build:/tendermint:Z tendermint/tendermint:v0.35.1 testnet --key secp256k1 --config /tendermint/config-template.toml --o . --starting-ip-address 192.167.10.2; fi
+	docker-compose -f $(CURDIR)/testdata/tendermint-testnet/docker-compose.yml up
+.PHONY: tm-localnet-start
+
+# Stop tendermint testnet
+tm-localnet-stop:
+	docker-compose -f $(CURDIR)/testdata/tendermint-testnet/docker-compose.yml down
+.PHONY: tm-localnet-stop
+
 lotus-miner: $(BUILD_DEPS)
 	rm -f lotus-miner
 	$(GOCC) build $(GOFLAGS) -o lotus-miner ./cmd/lotus-miner

@@ -14,7 +14,6 @@ import (
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/system"
-	param "github.com/filecoin-project/lotus/chain/consensus/common/params"
 	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/genesis"
@@ -66,18 +65,13 @@ func makeTendermintGenesisBlock(ctx context.Context, bs bstore.Blockstore, templ
 
 	log.Infof("Empty Genesis root: %s", emptyroot)
 
-	wtb, err := param.GenesisWorkTarget.Bytes()
-	if err != nil {
-		return nil, err
-	}
-
-	genesisticket := &types.Ticket{
-		VRFProof: wtb,
+	genesisTicket := &types.Ticket{
+		VRFProof: []byte{},
 	}
 
 	b := &types.BlockHeader{
 		Miner:                 system.Address,
-		Ticket:                genesisticket,
+		Ticket:                genesisTicket,
 		Parents:               []cid.Cid{},
 		Height:                0,
 		ParentWeight:          types.NewInt(0),

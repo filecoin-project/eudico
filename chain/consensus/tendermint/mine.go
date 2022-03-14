@@ -66,49 +66,43 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		log.Infof("[%s] retrieved %d - msgs, %d - crossmsgs from the pool for @%s", subnetID, len(msgs), len(crossMsgs), base.Height()+1)
 
 		for _, msg := range msgs {
-			msgBytes, err := msg.Serialize()
-			if err != nil {
-				log.Error(err)
-				continue
-			}
+			id := msg.Cid().String()
 
-			// Message cache is used to store the messages that have already been sent to Tendermint.
-			// It is also a workaround for this bug: https://github.com/tendermint/tendermint/issues/7185.
-			id := blake2b.Sum256(msgBytes)
-
-			if pool.shouldSubmitMessage(msgBytes, base.Height()) {
-				tx := NewSignedMessageBytes(msgBytes, tag[:])
-				_, err := tendermintClient.BroadcastTxSync(ctx, tx)
+			if pool.shouldSendMessage(id, base.Height()) {
+				msgBytes, err := msg.Serialize()
 				if err != nil {
-					log.Error("unable to send msg to Tendermint:", err)
+					log.Error(err)
+					continue
+				}
+				tx := NewSignedMessageBytes(msgBytes, tag[:])
+				_, err = tendermintClient.BroadcastTxSync(ctx, tx)
+				if err != nil {
+					log.Error("unable to send a message to Tendermint:", err)
 					continue
 				} else {
-					pool.addMessage(msgBytes, base.Height())
-					log.Info("successfully sent msg to Tendermint:", id)
+					pool.addSentMessage(id, base.Height())
+					log.Infof("successfully sent a message with ID %s to Tendermint", id)
 				}
 			}
 		}
 
 		for _, msg := range crossMsgs {
-			msgBytes, err := msg.Serialize()
-			if err != nil {
-				log.Error(err)
-				continue
-			}
+			id := msg.Cid().String()
 
-			// Message cache is used to store the messages that have already been sent.
-			// It is also a workaround for this bug: https://github.com/tendermint/tendermint/issues/7185.
-			id := blake2b.Sum256(msgBytes)
-
-			if pool.shouldSubmitMessage(msgBytes, base.Height()) {
-				tx := NewCrossMessageBytes(msgBytes, tag[:])
-				_, err := tendermintClient.BroadcastTxSync(ctx, tx)
+			if pool.shouldSendMessage(id, base.Height()) {
+				msgBytes, err := msg.Serialize()
 				if err != nil {
-					log.Error("unable to send cross msg to Tendermint:", err)
+					log.Error(err)
+					continue
+				}
+				tx := NewCrossMessageBytes(msgBytes, tag[:])
+				_, err = tendermintClient.BroadcastTxSync(ctx, tx)
+				if err != nil {
+					log.Error("unable to send a cross message to Tendermint:", err)
 					continue
 				} else {
-					pool.addMessage(msgBytes, base.Height())
-					log.Info("successfully sent cross msg to Tendermint:", id)
+					pool.addSentMessage(id, base.Height())
+					log.Infof("successfully sent a message with ID %s to Tendermint", id)
 				}
 			}
 		}
@@ -144,6 +138,23 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		})
 		if err != nil {
 			log.Errorw("submitting block failed", "error", err)
+		}
+
+		// clear messages from message pool
+
+		for _, cid := range bh.SecpkMessages {
+			id := cid.String()
+			pool.deleteMessage(id)
+		}
+
+		for _, cid := range bh.CrossMessages {
+			id := cid.String()
+			pool.deleteMessage(id)
+		}
+
+		for _, cid := range bh.BlsMessages {
+			id := cid.String()
+			pool.deleteMessage(id)
 		}
 
 		log.Infof("[%s] Tendermint mined a block %v for epoch %d", subnetID, bh.Cid(), bh.Header.Height)
