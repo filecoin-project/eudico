@@ -16,7 +16,7 @@ git clone https://github.com/tendermint/tendermint.git
 cd tendermint
 ```
 
-We don't recommend running the code from `master` branch. Instead, use the last stable version:
+We don't recommend running the Tendermint code from `master` branch. Instead, use the last stable version:
 ```
 git checkout $(git describe --tags `git rev-list --tags --max-count=1`)
 ```
