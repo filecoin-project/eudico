@@ -3,12 +3,12 @@ package mpower_test
 import (
 	"testing"
 
-	address "github.com/filecoin-project/go-address"
+	//address "github.com/filecoin-project/go-address"
 	tutil "github.com/filecoin-project/specs-actors/v7/support/testing"
 
 	mpower "github.com/filecoin-project/lotus/chain/consensus/actors/mpower"
-	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v6/support/mock"
+	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v7/support/mock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -33,7 +33,8 @@ func TestAddMiner(t *testing.T) {
 	caller := tutil.NewIDAddr(t, 1000)
 	rt.SetCaller(caller, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerAny()
-	rt.Call(h.Actor.AddMiners, &mpower.AddMinerParams{Miners: []address.Address{caller}})
+	//rt.Call(h.Actor.AddMiners, &mpower.AddMinerParams{Miners: []address.Address{caller}})
+	rt.Call(h.Actor.AddMiners, &mpower.AddMinerParams{Miners: []string{"caller"}})
 	rt.Verify()
 
 	st := getState(rt)
