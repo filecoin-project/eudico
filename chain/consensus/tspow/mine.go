@@ -7,12 +7,13 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/big"
+	"golang.org/x/xerrors"
+
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
 	common "github.com/filecoin-project/lotus/chain/consensus/common"
 	param "github.com/filecoin-project/lotus/chain/consensus/common/params"
 	"github.com/filecoin-project/lotus/chain/types"
-	"golang.org/x/xerrors"
 )
 
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {

@@ -6,11 +6,12 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/crypto"
+	"golang.org/x/xerrors"
+
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/types"
 	"github.com/filecoin-project/lotus/lib/sigs"
-	"golang.org/x/xerrors"
 )
 
 var CheckpointMsgType = api.MsgMeta{Type: "checkpoint"}

@@ -7,15 +7,16 @@ import (
 	abi "github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
-	actors "github.com/filecoin-project/lotus/chain/consensus/actors"
-	actor "github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
-	schema "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/types"
 	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
 	"github.com/filecoin-project/specs-actors/v7/support/mock"
 	tutil "github.com/filecoin-project/specs-actors/v7/support/testing"
 	"github.com/stretchr/testify/require"
+
+	actors "github.com/filecoin-project/lotus/chain/consensus/actors"
+	actor "github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
+	schema "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/types"
 )
 
 func TestCheckpoints(t *testing.T) {

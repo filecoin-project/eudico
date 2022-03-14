@@ -7,17 +7,18 @@ import (
 	abi "github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
-	"github.com/filecoin-project/lotus/chain/actors"
-	replace "github.com/filecoin-project/lotus/chain/consensus/actors/atomic-replace"
-	actor "github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
-	atomic "github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
-	types "github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
 	"github.com/filecoin-project/specs-actors/v7/support/mock"
 	tutil "github.com/filecoin-project/specs-actors/v7/support/testing"
 	cid "github.com/ipfs/go-cid"
 	"github.com/stretchr/testify/require"
+
+	"github.com/filecoin-project/lotus/chain/actors"
+	replace "github.com/filecoin-project/lotus/chain/consensus/actors/atomic-replace"
+	actor "github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
+	atomic "github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
+	types "github.com/filecoin-project/lotus/chain/types"
 )
 
 func TestAtomicExec(t *testing.T) {

@@ -7,13 +7,14 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	tutil "github.com/filecoin-project/specs-actors/v7/support/testing"
+	"github.com/stretchr/testify/require"
+
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	checkTypes "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/types"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/utils"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/wallet"
-	tutil "github.com/filecoin-project/specs-actors/v7/support/testing"
-	"github.com/stretchr/testify/require"
 )
 
 func TestMarshalCheckpoint(t *testing.T) {

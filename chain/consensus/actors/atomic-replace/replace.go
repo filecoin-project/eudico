@@ -5,8 +5,9 @@ package replace
 // protocol.
 
 import (
-	cid "github.com/ipfs/go-cid"
 	xerrors "golang.org/x/xerrors"
+
+	cid "github.com/ipfs/go-cid"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -39,9 +40,11 @@ const (
 	MethodOwn     = 7
 )
 
-var _ atomic.LockableActor = ReplaceActor{}
-var _ atomic.LockableActorState = &ReplaceState{}
-var _ atomic.LockableState = &Owners{}
+var (
+	_ atomic.LockableActor      = ReplaceActor{}
+	_ atomic.LockableActorState = &ReplaceState{}
+	_ atomic.LockableState      = &Owners{}
+)
 
 // ReplaceState determines the actor state.
 // FIXME: We are using a non-efficient locking strategy for now
@@ -51,7 +54,7 @@ var _ atomic.LockableState = &Owners{}
 // future iterations.
 type ReplaceState struct {
 	Owners    *atomic.LockedState
-	LockedMap cid.Cid //HAMT[cid]LockedState
+	LockedMap cid.Cid // HAMT[cid]LockedState
 }
 
 func (st *ReplaceState) LockedMapCid() cid.Cid {

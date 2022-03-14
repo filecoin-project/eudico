@@ -8,10 +8,6 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/cbor"
 	"github.com/filecoin-project/go-state-types/exitcode"
-	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	types "github.com/filecoin-project/lotus/chain/types"
 	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
@@ -19,6 +15,11 @@ import (
 	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
 	cid "github.com/ipfs/go-cid"
 	xerrors "golang.org/x/xerrors"
+
+	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 )
 
 var _ runtime.VMActor = SubnetCoordActor{}

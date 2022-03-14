@@ -4,12 +4,13 @@ import (
 	"context"
 
 	"github.com/filecoin-project/go-state-types/crypto"
+	"github.com/ipfs/go-cid"
+	"golang.org/x/xerrors"
+
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/ipfs/go-cid"
-	"golang.org/x/xerrors"
 )
 
 func PrepareBlockForSignature(ctx context.Context, sm *stmgr.StateManager, bt *lapi.BlockTemplate) (*types.FullBlock, error) {

@@ -4,10 +4,11 @@ import (
 	"testing"
 
 	address "github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
-	"github.com/filecoin-project/lotus/chain/types"
 	tutil "github.com/filecoin-project/specs-actors/v7/support/testing"
 	"github.com/stretchr/testify/require"
+
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/types"
 )
 
 func TestBottomUp(t *testing.T) {

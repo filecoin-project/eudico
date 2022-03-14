@@ -7,6 +7,14 @@ import (
 	"time"
 
 	"github.com/filecoin-project/go-address"
+	"github.com/ipld/go-car"
+	"github.com/libp2p/go-libp2p-core/host"
+	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/protocol"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"go.uber.org/multierr"
+	"golang.org/x/xerrors"
+
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
@@ -23,13 +31,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/lib/peermgr"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
-	"github.com/ipld/go-car"
-	"github.com/libp2p/go-libp2p-core/host"
-	peer "github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"go.uber.org/multierr"
-	"golang.org/x/xerrors"
 )
 
 // Subnet object abstracting all subneting processes and objects.

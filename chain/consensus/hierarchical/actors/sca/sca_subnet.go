@@ -5,13 +5,14 @@ import (
 	abi "github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
-	schema "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
-	ltypes "github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
 	cid "github.com/ipfs/go-cid"
 	xerrors "golang.org/x/xerrors"
+
+	schema "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
+	ltypes "github.com/filecoin-project/lotus/chain/types"
 )
 
 type Subnet struct {

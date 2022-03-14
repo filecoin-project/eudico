@@ -8,14 +8,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/ipfs/go-cid"
-	"github.com/stretchr/testify/require"
-	xerrors "golang.org/x/xerrors"
-
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/network"
+	"github.com/filecoin-project/specs-actors/actors/builtin"
+	adt0 "github.com/filecoin-project/specs-actors/actors/util/adt"
+	proof5 "github.com/filecoin-project/specs-actors/v5/actors/runtime/proof"
+	proof7 "github.com/filecoin-project/specs-actors/v7/actors/runtime/proof"
+	"github.com/google/uuid"
+	"github.com/ipfs/go-cid"
+	cbor "github.com/ipfs/go-ipld-cbor"
+	"github.com/stretchr/testify/require"
+	xerrors "golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/lotus/blockstore"
@@ -49,11 +53,6 @@ import (
 	_ "github.com/filecoin-project/lotus/lib/sigs/bls"
 	_ "github.com/filecoin-project/lotus/lib/sigs/secp"
 	"github.com/filecoin-project/lotus/node/repo"
-	"github.com/filecoin-project/specs-actors/actors/builtin"
-	adt0 "github.com/filecoin-project/specs-actors/actors/util/adt"
-	proof5 "github.com/filecoin-project/specs-actors/v5/actors/runtime/proof"
-	proof7 "github.com/filecoin-project/specs-actors/v7/actors/runtime/proof"
-	cbor "github.com/ipfs/go-ipld-cbor"
 )
 
 var cidUndef, _ = abi.CidBuilder.Sum([]byte("test"))

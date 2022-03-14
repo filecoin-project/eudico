@@ -8,6 +8,14 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
+	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
+	"github.com/filecoin-project/specs-actors/v7/support/mock"
+	tutil "github.com/filecoin-project/specs-actors/v7/support/testing"
+	cid "github.com/ipfs/go-cid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
@@ -17,13 +25,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/utils"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/wallet"
-	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
-	"github.com/filecoin-project/specs-actors/v7/support/mock"
-	tutil "github.com/filecoin-project/specs-actors/v7/support/testing"
-	cid "github.com/ipfs/go-cid"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestExports(t *testing.T) {

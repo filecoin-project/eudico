@@ -8,6 +8,15 @@ import (
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/network"
 	bstore "github.com/filecoin-project/lotus/blockstore"
+	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
+	"github.com/ipfs/go-cid"
+	cbor "github.com/ipfs/go-ipld-cbor"
+	logging "github.com/ipfs/go-log/v2"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	cbg "github.com/whyrusleeping/cbor-gen"
+	"go.opencensus.io/stats"
+	"golang.org/x/xerrors"
+
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/consensus"
@@ -22,14 +31,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/vm"
 	"github.com/filecoin-project/lotus/lib/sigs"
 	"github.com/filecoin-project/lotus/metrics"
-	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
-	"github.com/ipfs/go-cid"
-	cbor "github.com/ipfs/go-ipld-cbor"
-	logging "github.com/ipfs/go-log/v2"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	cbg "github.com/whyrusleeping/cbor-gen"
-	"go.opencensus.io/stats"
-	"golang.org/x/xerrors"
 )
 
 var log = logging.Logger("consensus-common")
