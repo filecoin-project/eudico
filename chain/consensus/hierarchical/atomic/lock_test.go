@@ -102,7 +102,7 @@ var _ atomic.LockableState = &SampleState{}
 
 var lengthBufSampleState = []byte{129}
 
-func (t *SampleState) Merge(other atomic.LockableState) error {
+func (t *SampleState) Merge(other atomic.LockableState, output bool) error {
 	// Naïve merging with the other value.
 	// It's up to the developer to chose the best way
 	// to merge

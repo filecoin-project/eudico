@@ -27,6 +27,8 @@ func TestAtomicExec(t *testing.T) {
 	h.constructAndVerify(rt)
 	caller := tutil.NewIDAddr(t, 101)
 	other := tutil.NewIDAddr(t, 102)
+	callerSecp := tutil.NewSECP256K1Addr(h.t, caller.String())
+	otherSecp := tutil.NewSECP256K1Addr(h.t, other.String())
 
 	snAddr1 := tutil.NewIDAddr(t, 1000)
 	sn1 := h.registerSubnet(rt, address.RootSubnet, snAddr1)
@@ -34,12 +36,16 @@ func TestAtomicExec(t *testing.T) {
 	sn2 := h.registerSubnet(rt, address.RootSubnet, snAddr2)
 
 	t.Log("init new atomic execution")
-	rt.SetCaller(caller, builtin.AccountActorCodeID)
-	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
 	params := &actor.AtomicExecParams{
 		Msgs:   execMsgs(t, other),
 		Inputs: lockedStates(t, sn1, sn2, caller, other),
 	}
+	// NOTE: The order of this expectSends can potentially make this test flaky according to the order
+	// in which the map of addresses of params is read. This can be fix and is not critical.
+	rt.ExpectSend(caller, builtin.MethodsAccount.PubkeyAddress, nil, big.Zero(), &callerSecp, exitcode.Ok)
+	rt.ExpectSend(other, builtin.MethodsAccount.PubkeyAddress, nil, big.Zero(), &otherSecp, exitcode.Ok)
+	rt.SetCaller(caller, builtin.AccountActorCodeID)
+	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
 	ret := rt.Call(h.SubnetCoordActor.InitAtomicExec, params)
 	st := getState(rt)
 	execCid := ret.(*atomic.LockedOutput).Cid
@@ -66,17 +72,21 @@ func TestAtomicExec(t *testing.T) {
 		Cid:    execCid.String(),
 		Output: *output,
 	}
+	rt.ExpectSend(caller, builtin.MethodsAccount.PubkeyAddress, nil, big.Zero(), &callerSecp, exitcode.Ok)
 	ret = rt.Call(h.SubnetCoordActor.SubmitAtomicExec, oparams)
 	require.Equal(t, ret.(*actor.SubmitOutput).Status, actor.ExecInitialized)
 
 	t.Log("fail if resubmission or caller not involved")
 	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
+	rt.ExpectSend(caller, builtin.MethodsAccount.PubkeyAddress, nil, big.Zero(), &callerSecp, exitcode.Ok)
 	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
 		rt.Call(h.SubnetCoordActor.SubmitAtomicExec, oparams)
 	})
 	stranger := tutil.NewIDAddr(t, 103)
+	strangerSecp := tutil.NewSECP256K1Addr(h.t, stranger.String())
 	rt.SetCaller(stranger, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
+	rt.ExpectSend(stranger, builtin.MethodsAccount.PubkeyAddress, nil, big.Zero(), &strangerSecp, exitcode.Ok)
 	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
 		rt.Call(h.SubnetCoordActor.SubmitAtomicExec, oparams)
 	})
@@ -84,6 +94,7 @@ func TestAtomicExec(t *testing.T) {
 	t.Log("submitting the wrong output fails")
 	rt.SetCaller(other, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
+	rt.ExpectSend(other, builtin.MethodsAccount.PubkeyAddress, nil, big.Zero(), &otherSecp, exitcode.Ok)
 	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
 		c, _ := abi.CidBuilder.Sum([]byte("test1"))
 		output, err := atomic.WrapLockableState(&replace.Owners{M: map[string]cid.Cid{other.String(): c}})
@@ -97,12 +108,19 @@ func TestAtomicExec(t *testing.T) {
 
 	t.Log("execution succeeds and no new submissions accepted")
 	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
+	rt.ExpectSend(other, builtin.MethodsAccount.PubkeyAddress, nil, big.Zero(), &otherSecp, exitcode.Ok)
 	ret = rt.Call(h.SubnetCoordActor.SubmitAtomicExec, oparams)
 	require.Equal(t, ret.(*actor.SubmitOutput).Status, actor.ExecSuccess)
 	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
+	rt.ExpectSend(other, builtin.MethodsAccount.PubkeyAddress, nil, big.Zero(), &otherSecp, exitcode.Ok)
 	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
 		rt.Call(h.SubnetCoordActor.SubmitAtomicExec, oparams)
 	})
+	st = getState(rt)
+	exec, found, err = st.GetAtomicExec(adt.AsStore(rt), execCid)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, exec.Status, actor.ExecSuccess)
 
 	t.Log("check propagation messages in top-down message")
 	sh, found := h.getSubnet(rt, sn1)
@@ -113,7 +131,7 @@ func TestAtomicExec(t *testing.T) {
 	exp, err := address.NewHAddress(address.RootSubnet, builtin.SystemActorAddr)
 	require.NoError(t, err)
 	require.Equal(h.t, msg.From, exp)
-	exp, err = address.NewHAddress(sn1, other)
+	exp, err = address.NewHAddress(sn1, act1(t))
 	require.NoError(t, err)
 	require.Equal(h.t, msg.To, exp)
 	require.Equal(h.t, msg.Method, atomic.MethodUnlock)
@@ -126,7 +144,7 @@ func TestAtomicExec(t *testing.T) {
 	exp, err = address.NewHAddress(address.RootSubnet, builtin.SystemActorAddr)
 	require.NoError(t, err)
 	require.Equal(h.t, msg.From, exp)
-	exp, err = address.NewHAddress(sn2, other)
+	exp, err = address.NewHAddress(sn2, act2(t))
 	require.NoError(t, err)
 	require.Equal(h.t, msg.To, exp)
 	require.Equal(h.t, msg.Method, atomic.MethodUnlock)
@@ -140,6 +158,38 @@ func TestAtomicExec(t *testing.T) {
 	enc, err := actors.SerializeParams(uparams)
 	require.NoError(t, err)
 	require.Equal(t, enc, msg.Params)
+
+	t.Log("Init new execution and list atomic executions for caller")
+	params2 := &actor.AtomicExecParams{
+		Msgs:   execMsgs(t, stranger),
+		Inputs: lockedStates(t, sn1, sn2, caller, stranger),
+	}
+	// NOTE: The order of this expectSends can potentially make this test flaky according to the order
+	// in which the map of addresses of params is read. This can be fix and is not critical.
+	rt.ExpectSend(caller, builtin.MethodsAccount.PubkeyAddress, nil, big.Zero(), &callerSecp, exitcode.Ok)
+	rt.ExpectSend(stranger, builtin.MethodsAccount.PubkeyAddress, nil, big.Zero(), &strangerSecp, exitcode.Ok)
+	rt.SetCaller(caller, builtin.AccountActorCodeID)
+	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
+	ret = rt.Call(h.SubnetCoordActor.InitAtomicExec, params2)
+	st = getState(rt)
+	execCid2 := ret.(*atomic.LockedOutput).Cid
+	exec, found, err = st.GetAtomicExec(adt.AsStore(rt), execCid)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, &exec.Params, params)
+	require.Equal(t, exec.Status, actor.ExecSuccess)
+	exec2, found, err := st.GetAtomicExec(adt.AsStore(rt), execCid2)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, &exec2.Params, params2)
+	require.Equal(t, exec2.Status, actor.ExecInitialized)
+
+	m, err := st.ListExecs(rt.AdtStore(), callerSecp)
+	require.NoError(t, err)
+	require.Equal(t, len(m), 2)
+	require.Equal(t, m[execCid].Params, exec.Params)
+	require.Equal(t, m[execCid2].Params, exec2.Params)
+
 }
 
 func TestAbort(t *testing.T) {
@@ -149,6 +199,8 @@ func TestAbort(t *testing.T) {
 	h.constructAndVerify(rt)
 	caller := tutil.NewIDAddr(t, 101)
 	other := tutil.NewIDAddr(t, 102)
+	callerSecp := tutil.NewSECP256K1Addr(h.t, caller.String())
+	otherSecp := tutil.NewSECP256K1Addr(h.t, other.String())
 
 	snAddr1 := tutil.NewIDAddr(t, 1000)
 	sn1 := h.registerSubnet(rt, address.RootSubnet, snAddr1)
@@ -162,6 +214,8 @@ func TestAbort(t *testing.T) {
 		Msgs:   execMsgs(t, other),
 		Inputs: lockedStates(t, sn1, sn2, caller, other),
 	}
+	rt.ExpectSend(caller, builtin.MethodsAccount.PubkeyAddress, nil, big.Zero(), &callerSecp, exitcode.Ok)
+	rt.ExpectSend(other, builtin.MethodsAccount.PubkeyAddress, nil, big.Zero(), &otherSecp, exitcode.Ok)
 	ret := rt.Call(h.SubnetCoordActor.InitAtomicExec, params)
 	st := getState(rt)
 	execCid := ret.(*atomic.LockedOutput).Cid
@@ -178,8 +232,15 @@ func TestAbort(t *testing.T) {
 		Cid:   execCid.String(),
 		Abort: true,
 	}
+	rt.ExpectSend(caller, builtin.MethodsAccount.PubkeyAddress, nil, big.Zero(), &callerSecp, exitcode.Ok)
 	ret = rt.Call(h.SubnetCoordActor.SubmitAtomicExec, oparams)
+	st = getState(rt)
 	require.Equal(t, ret.(*actor.SubmitOutput).Status, actor.ExecAborted)
+	exec, found, err = st.GetAtomicExec(adt.AsStore(rt), execCid)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, &exec.Params, params)
+	require.Equal(t, exec.Status, actor.ExecAborted)
 
 	t.Log("check propagation messages in top-down message")
 	sh, found := h.getSubnet(rt, sn1)
@@ -190,7 +251,7 @@ func TestAbort(t *testing.T) {
 	exp, err := address.NewHAddress(address.RootSubnet, builtin.SystemActorAddr)
 	require.NoError(t, err)
 	require.Equal(h.t, msg.From, exp)
-	exp, err = address.NewHAddress(sn1, other)
+	exp, err = address.NewHAddress(sn1, act1(t))
 	require.NoError(t, err)
 	require.Equal(h.t, msg.To, exp)
 	require.Equal(h.t, msg.Method, atomic.MethodAbort)
@@ -203,7 +264,7 @@ func TestAbort(t *testing.T) {
 	exp, err = address.NewHAddress(address.RootSubnet, builtin.SystemActorAddr)
 	require.NoError(t, err)
 	require.Equal(h.t, msg.From, exp)
-	exp, err = address.NewHAddress(sn2, other)
+	exp, err = address.NewHAddress(sn2, act2(t))
 	require.NoError(t, err)
 
 	require.Equal(h.t, msg.To, exp)
@@ -235,11 +296,23 @@ func execMsgs(t *testing.T, addr address.Address) []types.Message {
 	}
 }
 
+func act1(t *testing.T) address.Address {
+	return tutil.NewIDAddr(t, 900)
+}
+
+func act2(t *testing.T) address.Address {
+	return tutil.NewIDAddr(t, 901)
+}
+
 func lockedStates(t *testing.T, sn1, sn2 address.SubnetID, caller, other address.Address) map[string]actor.LockedState {
 	c1, _ := abi.CidBuilder.Sum([]byte("test1"))
 	c2, _ := abi.CidBuilder.Sum([]byte("test2"))
+	addr1, err := address.NewHAddress(sn1, caller)
+	require.NoError(t, err)
+	addr2, err := address.NewHAddress(sn2, other)
+	require.NoError(t, err)
 	return map[string]actor.LockedState{
-		caller.String(): {From: sn1, Cid: c1.String()},
-		other.String():  {From: sn2, Cid: c2.String()},
+		addr1.String(): {Cid: c1.String(), Actor: act1(t)},
+		addr2.String(): {Cid: c2.String(), Actor: act2(t)},
 	}
 }

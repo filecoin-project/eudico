@@ -7,10 +7,24 @@ import (
 
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/cbor"
+	"github.com/filecoin-project/specs-actors/v3/actors/util/adt"
+	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
 	"github.com/ipfs/go-cid"
+	cbg "github.com/whyrusleeping/cbor-gen"
 	xerrors "golang.org/x/xerrors"
 )
+
+// StateRegistry is a registry with LockableActor's
+// state instances. With generics this will probably not
+// be necessary.
+var StateRegistry = map[cid.Cid]interface{}{}
+
+// RegisterState appends the registry of states for each
+// LockableActor.
+func RegisterState(code cid.Cid, st interface{}) {
+	StateRegistry[code] = st
+}
 
 const (
 	MethodLock   abi.MethodNum = 2
@@ -28,16 +42,28 @@ type Marshalable interface {
 // that needs to be lockable.
 type LockableState interface {
 	Marshalable
-	Merge(other LockableState) error
+	// Merge implements the merging strategy for LockableState according
+	// when merging locked state from other subnets and the output
+	// (we may want to implement different strategies)
+	Merge(other LockableState, output bool) error
 }
 
 type LockedOutput struct {
 	Cid cid.Cid
 }
 
+type LockableActorState interface {
+	cbg.CBORUnmarshaler
+	// LockedMapCid returns the cid of the root for the locked map
+	LockedMapCid() cid.Cid
+	// Output returns locked output from the state.
+	Output(*LockParams) *LockedState
+}
+
 // LockableActor defines the interface that needs to be implemented by actors
 // that want to support the atomic execution of some (or all) of their functions.
 type LockableActor interface {
+	runtime.VMActor
 	// Lock defines how to lock the state in the actor.
 	Lock(rt runtime.Runtime, params *LockParams) *LockedOutput
 	// Merge takes external locked state and merges it to the current actors state.
@@ -46,6 +72,8 @@ type LockableActor interface {
 	Unlock(rt runtime.Runtime, params *UnlockParams) *abi.EmptyValue
 	// Abort unlocks the state and aborts the atomic execution.
 	Abort(rt runtime.Runtime, params *LockParams) *abi.EmptyValue
+	// StateInstance returns an instance of the lockable actor state
+	StateInstance() LockableActorState
 }
 
 // LockParams wraps serialized params from a message with the requested methodnum.
@@ -115,7 +143,7 @@ func UnwrapMergeParams(params *MergeParams, out LockableState) error {
 func ValidateIfLocked(states ...*LockedState) error {
 	for _, s := range states {
 		if s.IsLocked() {
-			return xerrors.Errorf("abort. One of the state or more are locked")
+			return xerrors.Errorf("abort. One of the states or more are locked")
 		}
 	}
 	return nil
@@ -178,6 +206,26 @@ func UnwrapLockableState(s *LockedState, out LockableState) error {
 
 func (s *LockedState) IsLocked() bool {
 	return s.Lock
+}
+
+func GetActorLockedState(s adt.Store, mapRoot cid.Cid, lcid cid.Cid) (*LockedState, bool, error) {
+	lmap, err := adt.AsMap(s, mapRoot, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return nil, false, xerrors.Errorf("failed to load : %w", err)
+	}
+	return getLockedState(lmap, lcid)
+}
+
+func getLockedState(execMap *adt.Map, c cid.Cid) (*LockedState, bool, error) {
+	var out LockedState
+	found, err := execMap.Get(abi.CidKey(c), &out)
+	if err != nil {
+		return nil, false, xerrors.Errorf("failed to get for cid %v: %w", c, err)
+	}
+	if !found {
+		return nil, false, nil
+	}
+	return &out, true, nil
 }
 
 func CidFromOutput(s LockableState) (cid.Cid, error) {

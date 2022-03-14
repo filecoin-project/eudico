@@ -23,6 +23,7 @@ func main() {
 		actor.SubmitExecParams{},
 		actor.SubmitOutput{},
 		actor.LockedState{},
+		actor.OutputCid{},
 	); err != nil {
 		panic(err)
 	}

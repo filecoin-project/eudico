@@ -9,6 +9,7 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	big "github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/lotus/blockstore"
+	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
@@ -16,6 +17,9 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
+	spec_builtin "github.com/filecoin-project/specs-actors/actors/builtin"
+	init_ "github.com/filecoin-project/specs-actors/actors/builtin/init"
+	"github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
 	"github.com/urfave/cli/v2"
 	cbg "github.com/whyrusleeping/cbor-gen"
@@ -34,9 +38,12 @@ var subnetCmds = &cli.Command{
 		leaveCmd,
 		killCmd,
 		checkpointCmds,
+		atomicExecCmds,
 		fundCmd,
 		releaseCmd,
 		sendCmd,
+		deployActorCmd,
+		hAddrCmd,
 	},
 }
 
@@ -501,6 +508,34 @@ var releaseCmd = &cli.Command{
 	},
 }
 
+var hAddrCmd = &cli.Command{
+	Name:      "hierarchical-addr",
+	Usage:     "Returns a formatted hierarchical address",
+	ArgsUsage: "[<raw address>]",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "subnet",
+			Usage: "specify the id of the subnet",
+			Value: address.RootSubnet.String(),
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+
+		if cctx.Args().Len() != 1 {
+			return lcli.ShowHelp(cctx, fmt.Errorf("'fund' expects the amount of FILs to inject to subnet, and a set of flags"))
+		}
+		addr, err := address.NewFromString(cctx.Args().Get(0))
+		if err != nil {
+			return err
+		}
+		out, err := address.NewHAddress(address.SubnetID(cctx.String("subnet")), addr)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(cctx.App.Writer, "%s\n", out)
+		return nil
+	},
+}
 var fundCmd = &cli.Command{
 	Name:      "fund",
 	Usage:     "Inject new funds to your address in a subnet",
@@ -641,7 +676,6 @@ var sendCmd = &cli.Command{
 			return lcli.ShowHelp(cctx, fmt.Errorf("failed to parse amount: %w", err))
 		}
 		params.Val = abi.TokenAmount(val)
-
 		if from := cctx.String("from"); from != "" {
 			addr, err := address.NewFromString(from)
 			if err != nil {
@@ -728,6 +762,171 @@ var sendCmd = &cli.Command{
 
 		fmt.Fprintf(cctx.App.Writer, "Successfully send cross-message with cid: %s\n", smsg.Cid())
 		fmt.Fprintf(cctx.App.Writer, "Cross-message should be propagated shortly to the right subnet: %s\n", subnet)
+		return nil
+	},
+}
+
+var deployActorCmd = &cli.Command{
+	Name:      "deploy-actor",
+	Usage:     "Deploy and actor in a subnet. Select right subnet with --subnet-api flag",
+	ArgsUsage: "[actor CodeCid]",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "from",
+			Usage: "optionally specify the account to send funds from",
+		},
+		&cli.StringFlag{
+			Name:  "gas-premium",
+			Usage: "specify gas price to use in AttoFIL",
+			Value: "0",
+		},
+		&cli.StringFlag{
+			Name:  "gas-feecap",
+			Usage: "specify gas fee cap to use in AttoFIL",
+			Value: "0",
+		},
+		&cli.Int64Flag{
+			Name:  "gas-limit",
+			Usage: "specify gas limit",
+			Value: 0,
+		},
+		&cli.Uint64Flag{
+			Name:  "nonce",
+			Usage: "specify the nonce to use",
+			Value: 0,
+		},
+		&cli.StringFlag{
+			Name:  "params-json",
+			Usage: "specify invocation parameters in json",
+		},
+		&cli.StringFlag{
+			Name:  "params-hex",
+			Usage: "specify invocation parameters in hex",
+		},
+		&cli.BoolFlag{
+			Name:  "force",
+			Usage: "Deprecated: use global 'force-send'",
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+
+		if cctx.Args().Len() != 1 {
+			return lcli.ShowHelp(cctx, fmt.Errorf("'send' expects the codeCid as first parameter"))
+		}
+		api, closer, err := lcli.GetFullNodeAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+
+		srv, err := lcli.GetFullNodeServices(cctx)
+		if err != nil {
+			return err
+		}
+		defer srv.Close() //nolint:errcheck
+
+		ctx := lcli.ReqContext(cctx)
+		var params lcli.SendParams
+
+		params.From, _ = api.WalletDefaultAddress(ctx)
+		if from := cctx.String("from"); from != "" {
+			addr, err := address.NewFromString(from)
+			if err != nil {
+				return err
+			}
+
+			params.From = addr
+		}
+
+		zero := big.Zero()
+		params.GasPremium = &zero
+		if cctx.IsSet("gas-premium") {
+			gp, err := types.BigFromString(cctx.String("gas-premium"))
+			if err != nil {
+				return err
+			}
+			params.GasPremium = &gp
+		}
+
+		params.GasFeeCap = &zero
+		if cctx.IsSet("gas-feecap") {
+			gfc, err := types.BigFromString(cctx.String("gas-feecap"))
+			if err != nil {
+				return err
+			}
+			params.GasFeeCap = &gfc
+		}
+
+		var limit int64 = 0
+		params.GasLimit = &limit
+		if cctx.IsSet("gas-limit") {
+			limit := cctx.Int64("gas-limit")
+			params.GasLimit = &limit
+		}
+
+		if cctx.IsSet("params-json") {
+			decparams, err := srv.DecodeTypedParamsFromJSON(ctx, params.To, params.Method, cctx.String("params-json"))
+			if err != nil {
+				return fmt.Errorf("failed to decode json params: %w", err)
+			}
+			params.Params = decparams
+		}
+		if cctx.IsSet("params-hex") {
+			if params.Params != nil {
+				return fmt.Errorf("can only specify one of 'params-json' and 'params-hex'")
+			}
+			decparams, err := hex.DecodeString(cctx.String("params-hex"))
+			if err != nil {
+				return fmt.Errorf("failed to decode hex params: %w", err)
+			}
+			params.Params = decparams
+		}
+
+		if cctx.IsSet("nonce") {
+			n := cctx.Uint64("nonce")
+			params.Nonce = &n
+		}
+
+		codeCid, err := cid.Decode(cctx.Args().Get(0))
+		if err != nil {
+			return xerrors.Errorf("error parsing codeCid for actor")
+		}
+
+		initParams := &init_.ExecParams{
+			CodeCID:           codeCid,
+			ConstructorParams: params.Params,
+		}
+		serparams, err := actors.SerializeParams(initParams)
+		if err != nil {
+			return xerrors.Errorf("failed serializing init actor params: %s", err)
+		}
+
+		// Init actor is responsible for the deployment of new actors.
+		smsg, aerr := api.MpoolPushMessage(ctx, &types.Message{
+			To:         spec_builtin.InitActorAddr,
+			From:       params.From,
+			Value:      big.Zero(),
+			Method:     spec_builtin.MethodsInit.Exec,
+			Params:     serparams,
+			GasLimit:   *params.GasLimit,
+			GasFeeCap:  *params.GasFeeCap,
+			GasPremium: *params.GasPremium,
+		}, nil)
+		if aerr != nil {
+			return xerrors.Errorf("Error sending message: %s", aerr)
+		}
+
+		msg := smsg.Cid()
+		mw, aerr := api.StateWaitMsg(ctx, msg, build.MessageConfidence)
+		if aerr != nil {
+			return xerrors.Errorf("Error waiting msg: %s", aerr)
+		}
+
+		r := &init_.ExecReturn{}
+		if err := r.UnmarshalCBOR(bytes.NewReader(mw.Receipt.Return)); err != nil {
+			return err
+		}
+		fmt.Fprintf(cctx.App.Writer, "Successfully deployed actor with address: %s\n", r.IDAddress)
 		return nil
 	},
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
 	ltypes "github.com/filecoin-project/lotus/chain/types"
 	tutil "github.com/filecoin-project/specs-actors/v7/support/testing"
 	"github.com/ipfs/go-datastore"
@@ -36,20 +37,27 @@ func TestGetSet(t *testing.T) {
 	}
 	out := &sca.CrossMsgs{Msgs: []ltypes.Message{msg}}
 	r := NewResolver(h.ID(), ds, ps, address.RootSubnet)
-	out1, found, err := r.getLocal(ctx, msg.Cid())
+	out1 := &sca.CrossMsgs{}
+	found, err := r.getLocal(ctx, msg.Cid(), out)
 	require.NoError(t, err)
 	require.False(t, found)
-	require.Nil(t, out1)
+	require.Nil(t, out1.Msgs)
+	require.Nil(t, out1.Metas)
 	require.NoError(t, err)
 	err = r.setLocal(ctx, msg.Cid(), out)
 	require.NoError(t, err)
-	out2, found, err := r.getLocal(ctx, msg.Cid())
+	out2 := &sca.CrossMsgs{}
+	found, err = r.getLocal(ctx, msg.Cid(), out2)
 	require.NoError(t, err)
 	require.True(t, found)
 	require.Equal(t, out, out2)
 }
 
-func TestResolve(t *testing.T) {
+func TestSerializeResolveMsg(t *testing.T) {
+	// TODO:
+}
+
+func TestResolveCross(t *testing.T) {
 	ctx := context.Background()
 	ds := datastore.NewMapDatastore()
 	h, err := libp2p.New()
@@ -83,7 +91,7 @@ func TestResolve(t *testing.T) {
 	// TODO: Test recursive resolve with Metas.
 }
 
-func TestWaitResolve(t *testing.T) {
+func TestWaitResolveCross(t *testing.T) {
 	ctx := context.Background()
 	ds := datastore.NewMapDatastore()
 	h, err := libp2p.New()
@@ -107,6 +115,53 @@ func TestWaitResolve(t *testing.T) {
 
 	// Wait for resolution.
 	found := r.WaitCrossMsgsResolved(context.TODO(), c, address.RootSubnet)
+	go func() {
+		// Wait one second, and store cross-msgs locally
+		time.Sleep(1 * time.Second)
+		err = r.setLocal(ctx, c, out)
+		require.NoError(t, err)
+	}()
+
+	err = <-found
+	require.NoError(t, err)
+}
+
+func TestResolveLocked(t *testing.T) {
+	ctx := context.Background()
+	ds := datastore.NewMapDatastore()
+	h, err := libp2p.New()
+	require.NoError(t, err)
+	ps, err := pubsub.NewGossipSub(context.TODO(), h)
+	require.NoError(t, err)
+	out := &atomic.LockedState{S: []byte("test")}
+	r := NewResolver(h.ID(), ds, ps, address.RootSubnet)
+	c, _ := out.Cid()
+	addr := tutil.NewIDAddr(t, 101)
+	_, found, err := r.ResolveLockedState(ctx, c, address.RootSubnet, addr)
+	require.NoError(t, err)
+	require.False(t, found)
+	err = r.setLocal(ctx, c, out)
+	require.NoError(t, err)
+	pulled, found, err := r.ResolveLockedState(ctx, c, address.RootSubnet, addr)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, pulled, out)
+}
+
+func TestWaitResolveLocked(t *testing.T) {
+	ctx := context.Background()
+	ds := datastore.NewMapDatastore()
+	h, err := libp2p.New()
+	require.NoError(t, err)
+	ps, err := pubsub.NewGossipSub(context.TODO(), h)
+	require.NoError(t, err)
+	out := &atomic.LockedState{S: []byte("test")}
+	r := NewResolver(h.ID(), ds, ps, address.RootSubnet)
+	c, _ := out.Cid()
+
+	// Wait for resolution.
+	addr := tutil.NewIDAddr(t, 101)
+	found := r.WaitLockedStateResolved(context.TODO(), c, address.RootSubnet, addr)
 	go func() {
 		// Wait one second, and store cross-msgs locally
 		time.Sleep(1 * time.Second)

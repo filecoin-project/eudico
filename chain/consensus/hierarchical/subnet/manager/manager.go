@@ -655,7 +655,7 @@ func (s *SubnetMgr) isRoot(id address.SubnetID) bool {
 }
 
 func (s *SubnetMgr) getAPI(id address.SubnetID) *API {
-	if s.isRoot(id) {
+	if s.isRoot(id) || id == address.RootSubnet {
 		return s.api
 	}
 	sh, ok := s.subnets[id]

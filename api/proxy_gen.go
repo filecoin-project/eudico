@@ -22,6 +22,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/paych"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/extern/sector-storage/fsutil"
@@ -564,7 +565,11 @@ type GatewayStub struct {
 
 type HierarchicalCnsStruct struct {
 	Internal struct {
+		AbortAtomicExec func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 cid.Cid) (sca.ExecStatus, error) `perm:"write"`
+
 		AddSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 address.Address) (address.Address, error) `perm:"write"`
+
+		ComputeAndSubmitExec func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 cid.Cid) (sca.ExecStatus, error) `perm:"write"`
 
 		CrossMsgResolve func(p0 context.Context, p1 address.SubnetID, p2 cid.Cid, p3 address.SubnetID) ([]types.Message, error) `perm:"read"`
 
@@ -572,19 +577,27 @@ type HierarchicalCnsStruct struct {
 
 		GetCrossMsgsPool func(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) ([]*types.Message, error) `perm:"read"`
 
+		InitAtomicExec func(p0 context.Context, p1 address.Address, p2 map[string]sca.LockedState, p3 []types.Message) (cid.Cid, error) `perm:"write"`
+
 		JoinSubnet func(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 address.SubnetID) (cid.Cid, error) `perm:"write"`
 
 		KillSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID) (cid.Cid, error) `perm:"write"`
 
 		LeaveSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID) (cid.Cid, error) `perm:"write"`
 
+		ListAtomicExecs func(p0 context.Context, p1 address.SubnetID, p2 address.Address) ([]sca.AtomicExec, error) `perm:"read"`
+
 		ListCheckpoints func(p0 context.Context, p1 address.SubnetID, p2 int) ([]*schema.Checkpoint, error) `perm:"read"`
+
+		LockState func(p0 context.Context, p1 address.Address, p2 address.Address, p3 address.SubnetID, p4 abi.MethodNum) (cid.Cid, error) `perm:"write"`
 
 		MineSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 bool) error `perm:"read"`
 
 		ReleaseFunds func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) `perm:"write"`
 
 		SyncSubnet func(p0 context.Context, p1 address.SubnetID, p2 bool) error `perm:"write"`
+
+		UnlockState func(p0 context.Context, p1 address.Address, p2 address.Address, p3 address.SubnetID, p4 abi.MethodNum) error `perm:"write"`
 
 		ValidateCheckpoint func(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) (*schema.Checkpoint, error) `perm:"read"`
 	}
@@ -3513,6 +3526,17 @@ func (s *GatewayStub) WalletBalance(p0 context.Context, p1 address.Address) (typ
 	return *new(types.BigInt), ErrNotSupported
 }
 
+func (s *HierarchicalCnsStruct) AbortAtomicExec(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 cid.Cid) (sca.ExecStatus, error) {
+	if s.Internal.AbortAtomicExec == nil {
+		return *new(sca.ExecStatus), ErrNotSupported
+	}
+	return s.Internal.AbortAtomicExec(p0, p1, p2, p3)
+}
+
+func (s *HierarchicalCnsStub) AbortAtomicExec(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 cid.Cid) (sca.ExecStatus, error) {
+	return *new(sca.ExecStatus), ErrNotSupported
+}
+
 func (s *HierarchicalCnsStruct) AddSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 address.Address) (address.Address, error) {
 	if s.Internal.AddSubnet == nil {
 		return *new(address.Address), ErrNotSupported
@@ -3522,6 +3546,17 @@ func (s *HierarchicalCnsStruct) AddSubnet(p0 context.Context, p1 address.Address
 
 func (s *HierarchicalCnsStub) AddSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 address.Address) (address.Address, error) {
 	return *new(address.Address), ErrNotSupported
+}
+
+func (s *HierarchicalCnsStruct) ComputeAndSubmitExec(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 cid.Cid) (sca.ExecStatus, error) {
+	if s.Internal.ComputeAndSubmitExec == nil {
+		return *new(sca.ExecStatus), ErrNotSupported
+	}
+	return s.Internal.ComputeAndSubmitExec(p0, p1, p2, p3)
+}
+
+func (s *HierarchicalCnsStub) ComputeAndSubmitExec(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 cid.Cid) (sca.ExecStatus, error) {
+	return *new(sca.ExecStatus), ErrNotSupported
 }
 
 func (s *HierarchicalCnsStruct) CrossMsgResolve(p0 context.Context, p1 address.SubnetID, p2 cid.Cid, p3 address.SubnetID) ([]types.Message, error) {
@@ -3557,6 +3592,17 @@ func (s *HierarchicalCnsStub) GetCrossMsgsPool(p0 context.Context, p1 address.Su
 	return *new([]*types.Message), ErrNotSupported
 }
 
+func (s *HierarchicalCnsStruct) InitAtomicExec(p0 context.Context, p1 address.Address, p2 map[string]sca.LockedState, p3 []types.Message) (cid.Cid, error) {
+	if s.Internal.InitAtomicExec == nil {
+		return *new(cid.Cid), ErrNotSupported
+	}
+	return s.Internal.InitAtomicExec(p0, p1, p2, p3)
+}
+
+func (s *HierarchicalCnsStub) InitAtomicExec(p0 context.Context, p1 address.Address, p2 map[string]sca.LockedState, p3 []types.Message) (cid.Cid, error) {
+	return *new(cid.Cid), ErrNotSupported
+}
+
 func (s *HierarchicalCnsStruct) JoinSubnet(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 address.SubnetID) (cid.Cid, error) {
 	if s.Internal.JoinSubnet == nil {
 		return *new(cid.Cid), ErrNotSupported
@@ -3590,6 +3636,17 @@ func (s *HierarchicalCnsStub) LeaveSubnet(p0 context.Context, p1 address.Address
 	return *new(cid.Cid), ErrNotSupported
 }
 
+func (s *HierarchicalCnsStruct) ListAtomicExecs(p0 context.Context, p1 address.SubnetID, p2 address.Address) ([]sca.AtomicExec, error) {
+	if s.Internal.ListAtomicExecs == nil {
+		return *new([]sca.AtomicExec), ErrNotSupported
+	}
+	return s.Internal.ListAtomicExecs(p0, p1, p2)
+}
+
+func (s *HierarchicalCnsStub) ListAtomicExecs(p0 context.Context, p1 address.SubnetID, p2 address.Address) ([]sca.AtomicExec, error) {
+	return *new([]sca.AtomicExec), ErrNotSupported
+}
+
 func (s *HierarchicalCnsStruct) ListCheckpoints(p0 context.Context, p1 address.SubnetID, p2 int) ([]*schema.Checkpoint, error) {
 	if s.Internal.ListCheckpoints == nil {
 		return *new([]*schema.Checkpoint), ErrNotSupported
@@ -3599,6 +3656,17 @@ func (s *HierarchicalCnsStruct) ListCheckpoints(p0 context.Context, p1 address.S
 
 func (s *HierarchicalCnsStub) ListCheckpoints(p0 context.Context, p1 address.SubnetID, p2 int) ([]*schema.Checkpoint, error) {
 	return *new([]*schema.Checkpoint), ErrNotSupported
+}
+
+func (s *HierarchicalCnsStruct) LockState(p0 context.Context, p1 address.Address, p2 address.Address, p3 address.SubnetID, p4 abi.MethodNum) (cid.Cid, error) {
+	if s.Internal.LockState == nil {
+		return *new(cid.Cid), ErrNotSupported
+	}
+	return s.Internal.LockState(p0, p1, p2, p3, p4)
+}
+
+func (s *HierarchicalCnsStub) LockState(p0 context.Context, p1 address.Address, p2 address.Address, p3 address.SubnetID, p4 abi.MethodNum) (cid.Cid, error) {
+	return *new(cid.Cid), ErrNotSupported
 }
 
 func (s *HierarchicalCnsStruct) MineSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 bool) error {
@@ -3631,6 +3699,17 @@ func (s *HierarchicalCnsStruct) SyncSubnet(p0 context.Context, p1 address.Subnet
 }
 
 func (s *HierarchicalCnsStub) SyncSubnet(p0 context.Context, p1 address.SubnetID, p2 bool) error {
+	return ErrNotSupported
+}
+
+func (s *HierarchicalCnsStruct) UnlockState(p0 context.Context, p1 address.Address, p2 address.Address, p3 address.SubnetID, p4 abi.MethodNum) error {
+	if s.Internal.UnlockState == nil {
+		return ErrNotSupported
+	}
+	return s.Internal.UnlockState(p0, p1, p2, p3, p4)
+}
+
+func (s *HierarchicalCnsStub) UnlockState(p0 context.Context, p1 address.Address, p2 address.Address, p3 address.SubnetID, p4 abi.MethodNum) error {
 	return ErrNotSupported
 }
 

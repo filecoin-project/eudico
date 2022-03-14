@@ -23,6 +23,7 @@ import (
 	apitypes "github.com/filecoin-project/lotus/api/types"
 	v0api "github.com/filecoin-project/lotus/api/v0api"
 	miner "github.com/filecoin-project/lotus/chain/actors/builtin/miner"
+	sca "github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	schema "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	types "github.com/filecoin-project/lotus/chain/types"
 	alerting "github.com/filecoin-project/lotus/journal/alerting"
@@ -61,6 +62,21 @@ func NewMockFullNode(ctrl *gomock.Controller) *MockFullNode {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockFullNode) EXPECT() *MockFullNodeMockRecorder {
 	return m.recorder
+}
+
+// AbortAtomicExec mocks base method.
+func (m *MockFullNode) AbortAtomicExec(arg0 context.Context, arg1 address.Address, arg2 address.SubnetID, arg3 cid.Cid) (sca.ExecStatus, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AbortAtomicExec", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(sca.ExecStatus)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AbortAtomicExec indicates an expected call of AbortAtomicExec.
+func (mr *MockFullNodeMockRecorder) AbortAtomicExec(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AbortAtomicExec", reflect.TypeOf((*MockFullNode)(nil).AbortAtomicExec), arg0, arg1, arg2, arg3)
 }
 
 // AddSubnet mocks base method.
@@ -864,6 +880,21 @@ func (mr *MockFullNodeMockRecorder) Closing(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Closing", reflect.TypeOf((*MockFullNode)(nil).Closing), arg0)
 }
 
+// ComputeAndSubmitExec mocks base method.
+func (m *MockFullNode) ComputeAndSubmitExec(arg0 context.Context, arg1 address.Address, arg2 address.SubnetID, arg3 cid.Cid) (sca.ExecStatus, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ComputeAndSubmitExec", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(sca.ExecStatus)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ComputeAndSubmitExec indicates an expected call of ComputeAndSubmitExec.
+func (mr *MockFullNodeMockRecorder) ComputeAndSubmitExec(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ComputeAndSubmitExec", reflect.TypeOf((*MockFullNode)(nil).ComputeAndSubmitExec), arg0, arg1, arg2, arg3)
+}
+
 // CreateBackup mocks base method.
 func (m *MockFullNode) CreateBackup(arg0 context.Context, arg1 string) error {
 	m.ctrl.T.Helper()
@@ -1013,6 +1044,21 @@ func (mr *MockFullNodeMockRecorder) ID(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ID", reflect.TypeOf((*MockFullNode)(nil).ID), arg0)
 }
 
+// InitAtomicExec mocks base method.
+func (m *MockFullNode) InitAtomicExec(arg0 context.Context, arg1 address.Address, arg2 map[string]sca.LockedState, arg3 []types.Message) (cid.Cid, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InitAtomicExec", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(cid.Cid)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// InitAtomicExec indicates an expected call of InitAtomicExec.
+func (mr *MockFullNodeMockRecorder) InitAtomicExec(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InitAtomicExec", reflect.TypeOf((*MockFullNode)(nil).InitAtomicExec), arg0, arg1, arg2, arg3)
+}
+
 // JoinSubnet mocks base method.
 func (m *MockFullNode) JoinSubnet(arg0 context.Context, arg1 address.Address, arg2 big.Int, arg3 address.SubnetID) (cid.Cid, error) {
 	m.ctrl.T.Helper()
@@ -1058,6 +1104,21 @@ func (mr *MockFullNodeMockRecorder) LeaveSubnet(arg0, arg1, arg2 interface{}) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LeaveSubnet", reflect.TypeOf((*MockFullNode)(nil).LeaveSubnet), arg0, arg1, arg2)
 }
 
+// ListAtomicExecs mocks base method.
+func (m *MockFullNode) ListAtomicExecs(arg0 context.Context, arg1 address.SubnetID, arg2 address.Address) ([]sca.AtomicExec, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListAtomicExecs", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]sca.AtomicExec)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListAtomicExecs indicates an expected call of ListAtomicExecs.
+func (mr *MockFullNodeMockRecorder) ListAtomicExecs(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAtomicExecs", reflect.TypeOf((*MockFullNode)(nil).ListAtomicExecs), arg0, arg1, arg2)
+}
+
 // ListCheckpoints mocks base method.
 func (m *MockFullNode) ListCheckpoints(arg0 context.Context, arg1 address.SubnetID, arg2 int) ([]*schema.Checkpoint, error) {
 	m.ctrl.T.Helper()
@@ -1071,6 +1132,21 @@ func (m *MockFullNode) ListCheckpoints(arg0 context.Context, arg1 address.Subnet
 func (mr *MockFullNodeMockRecorder) ListCheckpoints(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListCheckpoints", reflect.TypeOf((*MockFullNode)(nil).ListCheckpoints), arg0, arg1, arg2)
+}
+
+// LockState mocks base method.
+func (m *MockFullNode) LockState(arg0 context.Context, arg1, arg2 address.Address, arg3 address.SubnetID, arg4 abi.MethodNum) (cid.Cid, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LockState", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(cid.Cid)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LockState indicates an expected call of LockState.
+func (mr *MockFullNodeMockRecorder) LockState(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockState", reflect.TypeOf((*MockFullNode)(nil).LockState), arg0, arg1, arg2, arg3, arg4)
 }
 
 // LogAlerts mocks base method.
@@ -3123,6 +3199,20 @@ func (m *MockFullNode) SyncValidateTipset(arg0 context.Context, arg1 types.TipSe
 func (mr *MockFullNodeMockRecorder) SyncValidateTipset(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncValidateTipset", reflect.TypeOf((*MockFullNode)(nil).SyncValidateTipset), arg0, arg1)
+}
+
+// UnlockState mocks base method.
+func (m *MockFullNode) UnlockState(arg0 context.Context, arg1, arg2 address.Address, arg3 address.SubnetID, arg4 abi.MethodNum) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UnlockState", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UnlockState indicates an expected call of UnlockState.
+func (mr *MockFullNodeMockRecorder) UnlockState(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnlockState", reflect.TypeOf((*MockFullNode)(nil).UnlockState), arg0, arg1, arg2, arg3, arg4)
 }
 
 // ValidateCheckpoint mocks base method.

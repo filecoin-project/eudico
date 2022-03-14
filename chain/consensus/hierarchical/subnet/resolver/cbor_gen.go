@@ -19,7 +19,7 @@ var _ = cid.Undef
 var _ = math.E
 var _ = sort.Sort
 
-var lengthBufResolveMsg = []byte{132}
+var lengthBufResolveMsg = []byte{134}
 
 func (t *ResolveMsg) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -60,6 +60,23 @@ func (t *ResolveMsg) MarshalCBOR(w io.Writer) error {
 	if err := t.CrossMsgs.MarshalCBOR(w); err != nil {
 		return err
 	}
+
+	// t.Locked (atomic.LockedState) (struct)
+	if err := t.Locked.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.Actor (string) (string)
+	if len(t.Actor) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.Actor was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Actor))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.Actor)); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -77,7 +94,7 @@ func (t *ResolveMsg) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 4 {
+	if extra != 6 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -125,6 +142,25 @@ func (t *ResolveMsg) UnmarshalCBOR(r io.Reader) error {
 			return xerrors.Errorf("unmarshaling t.CrossMsgs: %w", err)
 		}
 
+	}
+	// t.Locked (atomic.LockedState) (struct)
+
+	{
+
+		if err := t.Locked.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Locked: %w", err)
+		}
+
+	}
+	// t.Actor (string) (string)
+
+	{
+		sval, err := cbg.ReadStringBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+
+		t.Actor = string(sval)
 	}
 	return nil
 }
