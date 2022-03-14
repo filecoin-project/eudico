@@ -4,11 +4,12 @@ import (
 	"bytes"
 
 	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/types"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	"github.com/ipld/go-ipld-prime/node/bindnode"
 	"github.com/ipld/go-ipld-prime/schema"
 	"golang.org/x/xerrors"
+
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/types"
 )
 
 type SigEnvelope interface {

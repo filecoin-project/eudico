@@ -7,6 +7,9 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/big"
+	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
+	"golang.org/x/xerrors"
+
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
@@ -17,8 +20,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/vm"
-	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
-	"golang.org/x/xerrors"
 )
 
 const crossMsgResolutionTimeout = 30 * time.Second

@@ -7,14 +7,15 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
-	ltypes "github.com/filecoin-project/lotus/chain/types"
 	tutil "github.com/filecoin-project/specs-actors/v7/support/testing"
 	"github.com/ipfs/go-datastore"
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/stretchr/testify/require"
+
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
+	ltypes "github.com/filecoin-project/lotus/chain/types"
 )
 
 func TestGetSet(t *testing.T) {

@@ -5,11 +5,12 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/cbor"
-	"github.com/filecoin-project/lotus/chain/actors/builtin"
-	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
 	builtin6 "github.com/filecoin-project/specs-actors/v7/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
 	cid "github.com/ipfs/go-cid"
+
+	"github.com/filecoin-project/lotus/chain/actors/builtin"
+	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
 )
 
 // example "Split" actor, sending it's balance split to beneficiaries

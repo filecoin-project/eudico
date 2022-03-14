@@ -5,11 +5,12 @@ import (
 	"sort"
 
 	"github.com/filecoin-project/go-address"
+	"golang.org/x/xerrors"
+
 	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/types"
-	"golang.org/x/xerrors"
 )
 
 type MessageArray []*types.Message

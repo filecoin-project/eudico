@@ -6,13 +6,14 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	tutil "github.com/filecoin-project/specs-actors/v7/support/testing"
+	"github.com/stretchr/testify/require"
+
 	checkpoint "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/utils"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/wallet"
-	tutil "github.com/filecoin-project/specs-actors/v7/support/testing"
-	"github.com/stretchr/testify/require"
 )
 
 var cb = schema.Linkproto

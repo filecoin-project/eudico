@@ -4,10 +4,6 @@ import (
 	"testing"
 
 	"github.com/filecoin-project/go-state-types/exitcode"
-	actors "github.com/filecoin-project/lotus/chain/consensus/actors"
-	replace "github.com/filecoin-project/lotus/chain/consensus/actors/atomic-replace"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
-	atomic "github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
 	"github.com/filecoin-project/specs-actors/v3/actors/util/adt"
 	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v7/support/mock"
@@ -15,6 +11,11 @@ import (
 	cid "github.com/ipfs/go-cid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	actors "github.com/filecoin-project/lotus/chain/consensus/actors"
+	replace "github.com/filecoin-project/lotus/chain/consensus/actors/atomic-replace"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	atomic "github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
 )
 
 func TestExports(t *testing.T) {

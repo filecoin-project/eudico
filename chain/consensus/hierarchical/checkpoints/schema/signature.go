@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"encoding"
 
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/types"
 	"github.com/multiformats/go-varint"
+
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/types"
 )
 
 type Signature struct {

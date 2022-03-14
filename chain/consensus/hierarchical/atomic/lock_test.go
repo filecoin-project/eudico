@@ -7,10 +7,11 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
 	"github.com/stretchr/testify/require"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	xerrors "golang.org/x/xerrors"
+
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
 )
 
 func TestMarshal(t *testing.T) {

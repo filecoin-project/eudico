@@ -8,12 +8,11 @@ import (
 	"github.com/ipfs/go-cid"
 
 	// logging "github.com/ipfs/go-log/v2"
+	ffi "github.com/filecoin-project/filecoin-ffi"
+	"github.com/filecoin-project/go-state-types/crypto"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"go.opencensus.io/trace"
 	"golang.org/x/xerrors"
-
-	ffi "github.com/filecoin-project/filecoin-ffi"
-	"github.com/filecoin-project/go-state-types/crypto"
 )
 
 // var log = logging.Logger("consensus")

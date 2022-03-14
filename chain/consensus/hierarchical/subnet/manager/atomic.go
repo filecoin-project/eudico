@@ -7,6 +7,11 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/specs-actors/actors/util/adt"
+	"github.com/ipfs/go-cid"
+	cbor "github.com/ipfs/go-ipld-cbor"
+	"golang.org/x/xerrors"
+
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
@@ -17,10 +22,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic/exec"
 	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/filecoin-project/specs-actors/actors/util/adt"
-	"github.com/ipfs/go-cid"
-	cbor "github.com/ipfs/go-ipld-cbor"
-	"golang.org/x/xerrors"
 )
 
 func (s *SubnetMgr) LockState(
@@ -148,9 +149,9 @@ func (s *SubnetMgr) ListAtomicExecs(
 		return nil, err
 	}
 
-	var st sca.SCAState
 	pbs := blockstore.NewAPIBlockstore(api)
 	pcst := cbor.NewCborStore(pbs)
+	var st sca.SCAState
 	if err := pcst.Get(ctx, scaAct.Head, &st); err != nil {
 		return nil, err
 	}
@@ -167,13 +168,13 @@ func (s *SubnetMgr) ListAtomicExecs(
 }
 
 func getAtomicExec(ctx context.Context, api *API, c cid.Cid) (*sca.AtomicExec, bool, error) {
-	var st sca.SCAState
 	scaAct, err := api.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, types.EmptyTSK)
 	if err != nil {
 		return nil, false, err
 	}
 	pbs := blockstore.NewAPIBlockstore(api)
 	pcst := cbor.NewCborStore(pbs)
+	var st sca.SCAState
 	if err := pcst.Get(ctx, scaAct.Head, &st); err != nil {
 		return nil, false, err
 	}

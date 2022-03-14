@@ -4,9 +4,8 @@ import (
 	"context"
 	"time"
 
-	"golang.org/x/xerrors"
-
 	"github.com/filecoin-project/go-address"
+	"golang.org/x/xerrors"
 
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"

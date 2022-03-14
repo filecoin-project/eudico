@@ -10,15 +10,6 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/cbor"
-	"github.com/filecoin-project/lotus/blockstore"
-	"github.com/filecoin-project/lotus/chain/actors/adt"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
-	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/filecoin-project/lotus/node/modules/dtypes"
-	"github.com/filecoin-project/lotus/node/modules/helpers"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
@@ -29,6 +20,16 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"go.uber.org/fx"
 	xerrors "golang.org/x/xerrors"
+
+	"github.com/filecoin-project/lotus/blockstore"
+	"github.com/filecoin-project/lotus/chain/actors/adt"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
+	"github.com/filecoin-project/lotus/chain/types"
+	"github.com/filecoin-project/lotus/node/modules/dtypes"
+	"github.com/filecoin-project/lotus/node/modules/helpers"
 )
 
 const retryTimeout = 10 * time.Second
@@ -309,8 +310,8 @@ func (r *Resolver) processResolveMsg(ctx context.Context, submgr subnet.SubnetMg
 
 func (r *Resolver) processPush(ctx context.Context, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
 	// Check if we are already storing the CrossMsgs CID locally.
-	out := &sca.CrossMsgs{}
-	found, err := r.getLocal(ctx, rmsg.Cid, out)
+	out := sca.CrossMsgs{}
+	found, err := r.getLocal(ctx, rmsg.Cid, &out)
 	if err != nil {
 		return pubsub.ValidationIgnore, xerrors.Errorf("Error getting cross-msg locally: %w", err)
 	}
@@ -386,13 +387,13 @@ func (r *Resolver) publishLockedResponse(lstate atomic.LockedState, to address.S
 	if err != nil {
 		return err
 	}
-	m := &ResolveMsg{
+	m := ResolveMsg{
 		Type:   ResponseLocked,
 		From:   r.netName,
 		Cid:    c,
 		Locked: lstate,
 	}
-	return r.publishMsg(m, to)
+	return r.publishMsg(&m, to)
 }
 
 func (r *Resolver) getLockedStateFromActor(ctx context.Context, submgr subnet.SubnetMgr, rmsg *ResolveMsg) (*atomic.LockedState, bool, error) {
@@ -423,8 +424,8 @@ func (r *Resolver) getLockedStateFromActor(ctx context.Context, submgr subnet.Su
 
 func (r *Resolver) processResponseLocked(ctx context.Context, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
 	// Check if we are already storing the CrossMsgs CID locally.
-	out := &atomic.LockedState{}
-	found, err := r.getLocal(ctx, rmsg.Cid, out)
+	out := atomic.LockedState{}
+	found, err := r.getLocal(ctx, rmsg.Cid, &out)
 	if err != nil {
 		return pubsub.ValidationIgnore, xerrors.Errorf("Error getting locked state locally: %w", err)
 	}
@@ -475,7 +476,7 @@ func (r *Resolver) publishMsg(m *ResolveMsg, id address.SubnetID) error {
 
 // WaitCrossMsgsResolved waits until crossMsgs for meta have been fully resolved
 func (r *Resolver) WaitCrossMsgsResolved(ctx context.Context, c cid.Cid, from address.SubnetID) chan error {
-	out := make(chan error)
+	out := make(chan error, 1)
 	resolved := false
 	go func() {
 		var err error
@@ -552,7 +553,7 @@ func (r *Resolver) ResolveCrossMsgs(ctx context.Context, c cid.Cid, from address
 }
 
 func (r *Resolver) WaitLockedStateResolved(ctx context.Context, c cid.Cid, from address.SubnetID, actor address.Address) chan error {
-	out := make(chan error)
+	out := make(chan error, 1)
 	resolved := false
 	go func() {
 		var err error
@@ -606,7 +607,7 @@ func (r *Resolver) PushCrossMsgs(msgs sca.CrossMsgs, id address.SubnetID, isResp
 	if err != nil {
 		return err
 	}
-	m := &ResolveMsg{
+	m := ResolveMsg{
 		Type:      PushMeta,
 		From:      r.netName,
 		Cid:       c,
@@ -615,7 +616,7 @@ func (r *Resolver) PushCrossMsgs(msgs sca.CrossMsgs, id address.SubnetID, isResp
 	if isResponse {
 		m.Type = ResponseMeta
 	}
-	return r.publishMsg(m, id)
+	return r.publishMsg(&m, id)
 }
 
 func (r *Resolver) PushMsgFromCheckpoint(ch *schema.Checkpoint, st *sca.SCAState, store adt.Store) error {
@@ -642,20 +643,20 @@ func (r *Resolver) PushMsgFromCheckpoint(ch *schema.Checkpoint, st *sca.SCAState
 }
 
 func (r *Resolver) PullCrossMsgs(c cid.Cid, id address.SubnetID) error {
-	m := &ResolveMsg{
+	m := ResolveMsg{
 		Type: PullMeta,
 		From: r.netName,
 		Cid:  c,
 	}
-	return r.publishMsg(m, id)
+	return r.publishMsg(&m, id)
 }
 
 func (r *Resolver) PullLockedState(c cid.Cid, id address.SubnetID, actor address.Address) error {
-	m := &ResolveMsg{
+	m := ResolveMsg{
 		Type:  PullLocked,
 		From:  r.netName,
 		Cid:   c,
 		Actor: actor.String(),
 	}
-	return r.publishMsg(m, id)
+	return r.publishMsg(&m, id)
 }
