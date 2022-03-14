@@ -5,7 +5,7 @@ Eudico has several implementations of different BFT-type and Nakamoto-type conse
 
 ## How to Add a New Consensus Protocol to Eudico
 1. Register a consensus type constant in `chain/consensus/hierarchical/types.go`
-2. Instantiate a consensus and the corresponding miner for a subnet via `New()`, `Wight()`, and `Mine()` functions of `chain/consensus/hierarchical/subnet/consensus/consensus.go`
+2. Instantiate a consensus and the corresponding miner for a subnet via `New()`, `Weight()`, and `Mine()` functions of `chain/consensus/hierarchical/subnet/consensus/consensus.go`
 3. Create a new file with implementations of genesis block functions in `chain/consensus/hierarchical/actors/subnet/`
 4. Implement the `Consensus` interface defined in `chain/consensus/iface.go` for the target consensus protocol
 5. Add the corresponding CLI commands in `cmd/eudico/$CONSENSUS.go`
