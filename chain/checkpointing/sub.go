@@ -8,7 +8,7 @@ import (
 	//"encoding/json"
 	"fmt"
 	"os"
-	//"reflect"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -21,10 +21,10 @@ import (
 	"github.com/Zondax/multi-party-sig/pkg/taproot"
 	"github.com/Zondax/multi-party-sig/protocols/frost"
 	"github.com/Zondax/multi-party-sig/protocols/frost/keygen"
-	//address "github.com/filecoin-project/go-address"
+	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/blockstore"
-	//"github.com/filecoin-project/lotus/chain/actors"
+	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/consensus/actors/mpower"
 	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -364,12 +364,12 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 		// note: due to a bug we can't make the public key field of the
 		// actor so the following check will never return true (the
 		// public key is never updated)
-		// if !reflect.DeepEqual(oldSt.PublicKey, newSt.PublicKey) {
-		// 	c.newDKGComplete = true
-		// 	c.newKey = newSt.PublicKey
-		// 	c.keysUpdated = false
+		if !reflect.DeepEqual(oldSt.PublicKey, newSt.PublicKey) {
+			c.newDKGComplete = true
+			c.newKey = newSt.PublicKey
+			c.keysUpdated = false
 
-		// }
+		}
 
 		change2, err := c.matchCheckpoint(ctx, oldTs, newTs, oldSt, newSt, diff)
 
@@ -584,43 +584,43 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	// for now only alice sends the transaction (will need to be changed TODO)
 	//
 
-	// if c.host.ID().String() == "12D3KooWMBbLLKTM9Voo89TXLd98w4MjkJUych6QvECptousGtR4" {
-	// 	addp := &mpower.NewTaprootAddressParam{
-	// 		PublicKey: []byte(c.newTaprootConfig.PublicKey), // new public key that was just generated
-	// 	}
+	if c.host.ID().String() == "12D3KooWMBbLLKTM9Voo89TXLd98w4MjkJUych6QvECptousGtR4" {
+		addp := &mpower.NewTaprootAddressParam{
+			PublicKey: []byte(c.newTaprootConfig.PublicKey), // new public key that was just generated
+		}
 
-	// 	seraddp, err1 := actors.SerializeParams(addp)
-	// 	if err1 != nil {
-	// 		return err1
-	// 	}
+		seraddp, err1 := actors.SerializeParams(addp)
+		if err1 != nil {
+			return err1
+		}
 
-	// 	a, err2 := address.NewIDAddress(65)
-	// 	if err2 != nil {
-	// 		return xerrors.Errorf("mocked actor address not working")
-	// 	}
+		a, err2 := address.NewIDAddress(65)
+		if err2 != nil {
+			return xerrors.Errorf("mocked actor address not working")
+		}
 
-	// 	//TODO: change this, import the wallet automatically
-	// 	// right now we are just copying Alice's address manually (short-term solution)
-	// 	aliceaddr, err3 := address.NewFromString("t1d2xrzcslx7xlbbylc5c3d5lvandqw4iwl6epxba")
-	// 	if err3 != nil {
-	// 		return xerrors.Errorf("alice address not working")
-	// 	}
+		//TODO: change this, import the wallet automatically
+		// right now we are just copying Alice's address manually (short-term solution)
+		aliceaddr, err3 := address.NewFromString("t1d2xrzcslx7xlbbylc5c3d5lvandqw4iwl6epxba")
+		if err3 != nil {
+			return xerrors.Errorf("alice address not working")
+		}
 
-	// 	_, aerr := c.api.MpoolPushMessage(ctx, &types.Message{
-	// 		To:     a,         //this is the mocked actor address
-	// 		From:   aliceaddr, // this is alice address, will need to be changed at some point
-	// 		Value:  abi.NewTokenAmount(0),
-	// 		Method: 4,
-	// 		//Params: []byte(c.newTaprootConfig.PublicKey),
-	// 		Params: seraddp,
-	// 	}, nil)
+		_, aerr := c.api.MpoolPushMessage(ctx, &types.Message{
+			To:     a,         //this is the mocked actor address
+			From:   aliceaddr, // this is alice address, will need to be changed at some point
+			Value:  abi.NewTokenAmount(0),
+			Method: 4,
+			//Params: []byte(c.newTaprootConfig.PublicKey),
+			Params: seraddp,
+		}, nil)
 
-	// 	if aerr != nil {
-	// 		return aerr
-	// 	}
+		if aerr != nil {
+			return aerr
+		}
 
-	// 	fmt.Println("message sent")
-	// }
+		fmt.Println("message sent")
+	}
 	// 	}
 	// }
 	return nil

@@ -36,7 +36,7 @@ func (a Actor) Exports() []interface{} {
 		builtin.MethodConstructor: a.Constructor, // Initialiazed the actor; always required
 		2:                         a.AddMiners,    // Add a miner to the list (specificaly crafted for checkpointing)
 		3:						   a.RemoveMiners, // Remove miners from the list
-		//4: 						   a.UpdateTaprootAddress, // Update the taproot address
+		4: 						   a.UpdateTaprootAddress, // Update the taproot address
 	}
 }
 
@@ -111,20 +111,20 @@ func (a Actor) RemoveMiners(rt Runtime, params *AddMinerParams) *abi.EmptyValue 
 }
 
 
-// type NewTaprootAddressParam struct {
-// 	PublicKey []byte
-// }
+type NewTaprootAddressParam struct {
+	PublicKey []byte
+}
 
-// func (a Actor) UpdateTaprootAddress(rt Runtime, addr *NewTaprootAddressParam) *abi.EmptyValue {
-// 	rt.ValidateImmediateCallerAcceptAny()
-// 	var st State
-// 	rt.StateTransaction(&st, func() {
-// 		// Miners list is replaced with the one passed as parameters
-// 		st.PublicKey = addr.PublicKey
-// 		fmt.Println("address updated",st.PublicKey)
-// 	})
-// 	return nil
-// }
+func (a Actor) UpdateTaprootAddress(rt Runtime, addr *NewTaprootAddressParam) *abi.EmptyValue {
+	rt.ValidateImmediateCallerAcceptAny()
+	var st State
+	rt.StateTransaction(&st, func() {
+		// Miners list is replaced with the one passed as parameters
+		st.PublicKey = addr.PublicKey
+		fmt.Println("address updated",st.PublicKey)
+	})
+	return nil
+}
 
 func unique(strSlice []string) []string {
     keys := make(map[string]bool)
