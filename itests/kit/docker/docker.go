@@ -49,7 +49,7 @@ func StartTendermintContainer() (*Container, error) {
 	cmd = exec.Command(
 		"docker", "run", "-d", "--rm", "-p",
 		"0.0.0.0:26657:26657/tcp",
-		"-v", dir+"/../testdata/tendermint-test:/tendermint",
+		"-v", dir+"/"+kit.TendermintConsensusTestDir+":/tendermint",
 		"--entrypoint", "/usr/bin/tendermint",
 		"tendermint/tendermint:v0.35.1", "start",
 		"--rpc.laddr", "tcp://0.0.0.0:26657",

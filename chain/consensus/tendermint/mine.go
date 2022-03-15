@@ -20,7 +20,7 @@ const (
 	tendermintConsensusBlockDelay = 1000
 )
 
-var pool = newMessagePool()
+var cache = newMessageCache()
 
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {
 	log.Info("starting miner: ", miner.String())
@@ -68,7 +68,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		for _, msg := range msgs {
 			id := msg.Cid().String()
 
-			if pool.shouldSendMessage(id, base.Height()) {
+			if cache.shouldSendMessage(id) {
 				msgBytes, err := msg.Serialize()
 				if err != nil {
 					log.Error(err)
@@ -80,7 +80,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 					log.Error("unable to send a message to Tendermint:", err)
 					continue
 				} else {
-					pool.addSentMessage(id, base.Height())
+					cache.addSentMessage(id, base.Height())
 					log.Infof("successfully sent a message with ID %s to Tendermint", id)
 				}
 			}
@@ -89,7 +89,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		for _, msg := range crossMsgs {
 			id := msg.Cid().String()
 
-			if pool.shouldSendMessage(id, base.Height()) {
+			if cache.shouldSendMessage(id) {
 				msgBytes, err := msg.Serialize()
 				if err != nil {
 					log.Error(err)
@@ -101,7 +101,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 					log.Error("unable to send a cross message to Tendermint:", err)
 					continue
 				} else {
-					pool.addSentMessage(id, base.Height())
+					cache.addSentMessage(id, base.Height())
 					log.Infof("successfully sent a message with ID %s to Tendermint", id)
 				}
 			}
@@ -140,22 +140,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			log.Errorw("submitting block failed", "error", err)
 		}
 
-		// clear messages from message pool
-
-		for _, cid := range bh.SecpkMessages {
-			id := cid.String()
-			pool.deleteMessage(id)
-		}
-
-		for _, cid := range bh.CrossMessages {
-			id := cid.String()
-			pool.deleteMessage(id)
-		}
-
-		for _, cid := range bh.BlsMessages {
-			id := cid.String()
-			pool.deleteMessage(id)
-		}
+		cache.clearSentMessages(base.Height())
 
 		log.Infof("[%s] Tendermint mined a block %v for epoch %d", subnetID, bh.Cid(), bh.Header.Height)
 	}

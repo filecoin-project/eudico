@@ -11,4 +11,5 @@ Eudico has several implementations of different BFT-type and Nakamoto-type conse
 5. Add the corresponding CLI commands in `cmd/eudico/$CONSENSUS.go`
 6. Adapt [bad blocks cache](https://github.com/filecoin-project/eudico/blob/0306742e553f6bd6260332b501bb65a5bfc16a76/chain/sync.go#L725) for the consensus protocol if needed.
    For example, it may be necessary to not process blocks if consensus RPCs are unreachable.
+7. Add a new consensus code to the consensus usage message in `cmd/eudico/subnet.go`.
 

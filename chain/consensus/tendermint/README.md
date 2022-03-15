@@ -11,12 +11,14 @@ The most important one is Go1.17+.
 
 ### Tendermint
 
+This section describes how to work with Tendermint using the github repo.
 ```
 git clone https://github.com/tendermint/tendermint.git
 cd tendermint
 ```
 
-We don't recommend running the Tendermint code from `master` branch. Instead, use the last stable version:
+We don't recommend running the Tendermint code from `master` branch.
+Instead, use the last stable version (at the moment of writing, we recommend version `0.35.1`):
 ```
 git checkout $(git describe --tags `git rev-list --tags --max-count=1`)
 ```
@@ -28,6 +30,20 @@ tendermint version
 ```
 
 See the Tendermint [install instructions](https://github.com/tendermint/tendermint/blob/master/docs/introduction/install.md) for more information.
+
+### Tendermint in Docker
+
+To start a docker container with a Tendermint validator suitable for Eudico, run the following commands:
+
+```
+docker run -d -P -v /tmp:/tendermint --entrypoint /usr/bin/tendermint tendermint/tendermint:v0.35.1 init --key secp256k1 validator
+docker run -d -P -v /tmp:/tendermint --entrypoint /usr/bin/tendermint tendermint/tendermint:v0.35.1 start
+```
+
+To start the Eudico application:
+```
+./eudico tendermint application
+```
 
 ### Eudico
 ```
@@ -52,7 +68,6 @@ Please make sure that Tendermint uses secp256k1 keys.
 tendermint init validator --key=secp256k1
 tendermint start
 ```
-
 
 ### Tendermint Local Testnet
 
@@ -92,7 +107,7 @@ The following commands can be used in Eudico-Tendermint setup for testing and de
 
 ```
 
-### Tendermint
+###  Tendermint
 ```
 ./eudico tendermint application
 tendermint init validator --key=secp256k1
@@ -108,7 +123,7 @@ curl -s 'http://localhost:26657/broadcast_tx_sync?tx=0x828a0055017642efe6162dfc3
 
 ```
 
-### Root Subnet PoW
+### Root Subnet with PoW
 ```
 ./eudico tspow miner --default-key
 
@@ -123,24 +138,33 @@ tmux kill-session -t tendermint
 
 All other Tmux commands can be found in the [Tmux Cheat Sheet](https://tmuxcheatsheet.com/).
 
-### Subnet Demo
+### Tendermint Consensus in Subnet
+
+To create a deployment run the following script:
+```
+./scripts/eud-tendermint-testnet-subnet.sh
+```
+
+Then run the following commands:
 ```
  ./eudico subnet add --consensus 2 --name tendermint
  ./eudico subnet join --subnet=/root/t01001 10
  ./eudico subnet mine  --subnet=/root/t01001
- ./eudico subnet fund --from=X --subnet=/root/t01001 11
  ./eudico --subnet-api=/root/t01001 wallet list
+ ./eudico subnet fund --from=X --subnet=/root/t01001 11
  ./eudico subnet list-subnets
 ```
 
-### Fault Injection Demo
+`t01001` name is just an example, in your setup the real name can be different.
 
-To run a deployment:
+### Tendermint Consensus with Fault Injection
+
+To run a deployment run the following script:
 ```
 ./scripts/eud-tendermint-testnet.sh
 ```
 
-Run the following commands in terminal 4 (bottom-right terminal):
+Run the following commands in terminal 4 (that will be the bottom-right terminal):
 ```
 connect-node0
 
@@ -149,5 +173,4 @@ stop-app1
 
 start-app1
 start-node1
-
 ```
