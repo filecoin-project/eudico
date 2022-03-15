@@ -155,7 +155,7 @@ Then run the following commands:
  ./eudico subnet list-subnets
 ```
 
-`t01001` name is just an example, in your setup the real name can be different.
+`t01001` name is just an example, in your setup the real subnet name may be different.
 
 ### Tendermint Consensus with Fault Injection
 

@@ -86,7 +86,8 @@ tmux new-session -d -s "tendermint" \; \
         export EUDICO_PATH=$NODE_0_PATH
         sleep 14
         ./eudico wait-api;
-        ./eudico net listen | grep '/ip6/::1/' > $NODE_0_NETADDR
+        ./eudico net listen | grep '/ip6/::1/' > $NODE_0_NETADDR; sleep 2;
+        ./eudico net connect \$(cat $NODE_2_NETADDR);
         ./eudico wallet import-tendermint-key --as-default -path=$NODE_0_KEY; sleep 2;
         ./eudico tendermint miner --default-key 2>&1 | tee $NODE_0_MINER_LOG" Enter \; \
   send-keys -t "tendermint:0.3" "
@@ -98,12 +99,12 @@ tmux new-session -d -s "tendermint" \; \
         alias stop-node1='(cd \"${TENDERMINT_PATH}\" && docker-compose stop node1)';\
         alias start-node1='(cd \"${TENDERMINT_PATH}\" && docker-compose start node1)';\
         alias start-app1='./eudico tendermint application -addr=$ABCI_1 > /dev/null 2>&1 & EUDICO_APP_PID=\$! ';\
-        alias stop-app1='kill -9 \$EUDICO_APP_PID';\
-        alias connect-nodes='./eudico net connect \$(cat $NODE_0_NETADDR)'" Enter \; \
+        alias stop-app1='kill -9 \$EUDICO_APP_PID'" Enter \; \
   send-keys -t "tendermint:0.4" "
         export EUDICO_TENDERMINT_RPC=http://$NODE_1; export EUDICO_PATH=$NODE_1_PATH;\
         sleep 14; ./eudico wait-api;\
-        ./eudico net listen | grep '/ip6/::1/' > $NODE_1_NETADDR; \
+        ./eudico net listen | grep '/ip6/::1/' > $NODE_1_NETADDR; sleep 2;
+        ./eudico net connect \$(cat $NODE_0_NETADDR);\
         ./eudico wallet import-tendermint-key --as-default -path=$NODE_1_KEY; \
         ./eudico tendermint miner --default-key 2>&1 | tee $NODE_1_MINER_LOG" Enter \; \
   \
@@ -117,7 +118,8 @@ tmux new-session -d -s "tendermint" \; \
           export EUDICO_PATH=$NODE_2_PATH
           sleep 14
           ./eudico wait-api;
-          ./eudico net listen | grep '/ip6/::1/' > $NODE_2_NETADDR
+          ./eudico net listen | grep '/ip6/::1/' > $NODE_2_NETADDR; sleep 2;
+          ./eudico net connect \$(cat $NODE_0_NETADDR);
           ./eudico wallet import-tendermint-key --as-default -path=$NODE_2_KEY; sleep 2;
           ./eudico tendermint miner --default-key 2>&1 | tee $NODE_2_MINER_LOG" Enter \; \
     send-keys -t "tendermint:1.2" "
@@ -128,7 +130,8 @@ tmux new-session -d -s "tendermint" \; \
     send-keys -t "tendermint:1.3" "
           export EUDICO_TENDERMINT_RPC=http://$NODE_3; export EUDICO_PATH=$NODE_3_PATH
           sleep 14; ./eudico wait-api;
-          ./eudico net listen | grep '/ip6/::1/' > $NODE_3_NETADDR
+          ./eudico net listen | grep '/ip6/::1/' > $NODE_3_NETADDR; sleep 2;
+          ./eudico net connect \$(cat $NODE_2_NETADDR);
           ./eudico wallet import-tendermint-key --as-default -path=$NODE_3_KEY
           ./eudico tendermint miner --default-key 2>&1  | tee $NODE_3_MINER_LOG" Enter \; \
   attach-session -t "tendermint:0.4"

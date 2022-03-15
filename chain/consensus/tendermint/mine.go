@@ -19,11 +19,11 @@ const (
 	tendermintConsensusBlockDelay = 1000
 )
 
-var cache = newMessageCache()
-
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {
 	log.Info("starting miner: ", miner.String())
 	defer log.Info("shutdown miner")
+
+	var cache = newMessageCache()
 
 	tendermintClient, err := tmclient.New(NodeAddr())
 	if err != nil {
@@ -161,12 +161,12 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 	for try {
 		select {
 		case <-ctx.Done():
-			log.Info("create block was stopped")
+			log.Info("create block function was canceled")
 			return nil, nil
 		case <-ticker.C:
 			next, err = tm.client.Block(ctx, &height)
 			if err != nil {
-				log.Infof("unable to get the Tendermint block @%d: %s", height, err)
+				log.Infof("unable to get Tendermint block @%d: %s", height, err)
 				continue
 			}
 			try = false

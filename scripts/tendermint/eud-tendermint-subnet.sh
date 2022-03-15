@@ -87,7 +87,7 @@ tmux new-session -d -s "tendermint" \; \
         ./eudico wait-api;
         ./eudico net listen | grep '/ip6/::1/' > $NODE_0_NETADDR; sleep 2;
         ./eudico net connect \$(cat $NODE_2_NETADDR);
-        ./eudico wallet import-tendermint-key --as-default -path=$NODE_0_KEY; sleep 30;
+        ./eudico wallet import-tendermint-key --as-default -path=$NODE_0_KEY;
         ./eudico tspow miner --default-key 2>&1 | tee $NODE_0_MINER_LOG" Enter \; \
   send-keys -t "tendermint:0.3" "
           export EUDICO_TENDERMINT_RPC=http://$NODE_1
@@ -99,7 +99,7 @@ tmux new-session -d -s "tendermint" \; \
         ./eudico wait-api;\
         ./eudico net listen | grep '/ip6/::1/' > $NODE_1_NETADDR; sleep 2; \
         ./eudico net connect \$(cat $NODE_0_NETADDR);
-        ./eudico wallet import-tendermint-key --as-default -path=$NODE_1_KEY; sleep 30; \
+        ./eudico wallet import-tendermint-key --as-default -path=$NODE_1_KEY; \
         ./eudico tspow miner --default-key 2>&1 | tee $NODE_1_MINER_LOG" Enter \; \
   \
   send-keys -t "tendermint:1.0" "
@@ -113,7 +113,7 @@ tmux new-session -d -s "tendermint" \; \
           ./eudico wait-api;
           ./eudico net listen | grep '/ip6/::1/' > $NODE_2_NETADDR; sleep 2;
           ./eudico net connect \$(cat $NODE_0_NETADDR);
-          ./eudico wallet import-tendermint-key --as-default -path=$NODE_2_KEY; sleep 30;
+          ./eudico wallet import-tendermint-key --as-default -path=$NODE_2_KEY;
           ./eudico tspow miner --default-key --default-key 2>&1 | tee $NODE_2_MINER_LOG" Enter \; \
     send-keys -t "tendermint:1.2" "
             export EUDICO_TENDERMINT_RPC=http://$NODE_3
@@ -125,6 +125,6 @@ tmux new-session -d -s "tendermint" \; \
           ./eudico wait-api;
           ./eudico net listen | grep '/ip6/::1/' > $NODE_3_NETADDR; sleep 2;
           ./eudico net connect \$(cat $NODE_2_NETADDR);
-          ./eudico wallet import-tendermint-key --as-default -path=$NODE_3_KEY; sleep 30;
+          ./eudico wallet import-tendermint-key --as-default -path=$NODE_3_KEY;
           ./eudico tspow miner --default-key --default-key 2>&1  | tee $NODE_3_MINER_LOG" Enter \; \
   attach-session -t "tendermint:0.4"
