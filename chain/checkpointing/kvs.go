@@ -20,6 +20,7 @@ import (
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
 	nsds "github.com/ipfs/go-datastore/namespace"
+
 	//logging "github.com/ipfs/go-log/v2"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -44,9 +45,9 @@ const retryTimeout = 10 * time.Second
 
 type Resolver struct {
 	//netName address.SubnetID
-	self    peer.ID
-	ds      datastore.Datastore
-	pubsub  *pubsub.PubSub
+	self   peer.ID
+	ds     datastore.Datastore
+	pubsub *pubsub.PubSub
 
 	// Caches to track duplicate and frequent msgs
 	pushCache *msgReceiptCache
@@ -78,6 +79,8 @@ const (
 	// PullCheck
 )
 
+type MsgData []byte
+
 type ResolveMsg struct {
 	// From subnet -> not needed for checkpointing
 	//From address.SubnetID
@@ -86,12 +89,12 @@ type ResolveMsg struct {
 	// Cid of the content
 	Cid cid.Cid
 	// MsgMeta being propagated (if any)-> change this to be string?
-	CrossMsgs sca.CrossMsgs
+	//CrossMsgs sca.CrossMsgs
 	// Checkpoint being propagated (if any)
 	// Checkpoint schema.Checkpoint
 
-	//for checkpointing, we use []byte 
-	//CrossMsgs []byte
+	//for checkpointing, we use []byte
+	CrossMsgs MsgData
 }
 
 type msgReceiptCache struct {
@@ -231,7 +234,7 @@ func (v *Validator) Validate(ctx context.Context, pid peer.ID, msg *pubsub.Messa
 	// Check the CID and messages sent are correct for push messages
 	if rmsg.Type == Push {
 		msgs := rmsg.CrossMsgs
-		c, err := msgs.Cid()
+		c, err := msgs.Cid() //
 		if err != nil {
 			log.Errorf("error computing cross-msgs cid: %s", err)
 			return pubsub.ValidationIgnore
@@ -264,6 +267,11 @@ func (v *Validator) Validate(ctx context.Context, pid peer.ID, msg *pubsub.Messa
 	// msg.ValidatorData = rmsg
 
 	return pubsub.ValidationAccept
+}
+
+func (cm *[]byte) Cid() (cid.Cid, error) {
+	// to do
+
 }
 
 func (r *Resolver) HandleIncomingResolveMsg(ctx context.Context, sub *pubsub.Subscription) {
@@ -366,7 +374,7 @@ func (r *Resolver) getLocal(ctx context.Context, c cid.Cid) (*sca.CrossMsgs, boo
 	return out, true, nil
 }
 
-func (r *Resolver) setLocal(ctx context.Context, c cid.Cid, msgs *sca.CrossMsgs) error {
+func (r *Resolver) setLocal(ctx context.Context, c cid.Cid, msgs *[]byte) error {
 	w := new(bytes.Buffer)
 	if err := msgs.MarshalCBOR(w); err != nil {
 		return err
@@ -459,7 +467,7 @@ func (r *Resolver) ResolveCrossMsgs(ctx context.Context, c cid.Cid, from address
 
 }
 
-func (r *Resolver) PushCrossMsgs(msgs sca.CrossMsgs, id address.SubnetID, isResponse bool) error {
+func (r *Resolver) PushCrossMsgs(msgs []byte, id address.SubnetID, isResponse bool) error {
 	c, err := msgs.Cid()
 	if err != nil {
 		return err
