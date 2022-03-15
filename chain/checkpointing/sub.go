@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/BurntSushi/toml"
 	"github.com/Zondax/multi-party-sig/pkg/math/curve"
 	"github.com/Zondax/multi-party-sig/pkg/party"
@@ -132,7 +133,9 @@ type CheckpointingSub struct {
 	// height verified! (the height of the latest checkpoint)
 	height abi.ChainEpoch
 
-	// add intitial taproot address here
+	// KVS
+	r *Resolver
+	ds  dtypes.MetadataDS
 }
 
 /*
@@ -147,8 +150,7 @@ func NewCheckpointSub(
 	host host.Host,
 	pubsub *pubsub.PubSub,
 	api impl.FullNodeAPI,
-	// add init taproot address and define it somewhere here
-) (*CheckpointingSub, error) {
+	ds dtypes.MetadataDS) (*CheckpointingSub, error) {
 
 	ctx := helpers.LifecycleCtx(mctx, lc)
 	// Starting checkpoint listener
@@ -245,9 +247,14 @@ func NewCheckpointSub(
 		Creds:  credentials.NewStaticV4(cpconfig.MinioAccessKeyID, cpconfig.MinioSecretAccessKey, ""),
 		Secure: false,
 	})
+
 	if err != nil {
 		return nil, err
 	}
+
+
+	//create kvs store
+	r := NewResolver(host.ID(), ds, pubsub)
 
 	return &CheckpointingSub{
 		pubsub:           pubsub,
@@ -266,6 +273,8 @@ func NewCheckpointSub(
 		cpconfig:         &cpconfig,
 		minioClient:      minioClient,
 		synced:           synced,
+		r:				  r,
+		ds: 			  ds,
 	}, nil
 }
 
@@ -468,6 +477,15 @@ func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *ty
 				log.Errorf("could not push miners config: %v", err)
 				return false, err
 			}
+
+			msgs := &MsgData{content: hash}
+			//push config to kvs
+			cid_str, err := msgs.Cid()
+			err = c.r.setLocal(ctx, cid_str, msgs)
+			if err != nil {
+				log.Errorf("could not push miners config to kvs: %v", err)
+				return false, err
+			}
 		}
 
 		return true, nil
@@ -522,6 +540,7 @@ func (c *CheckpointingSub) Start(ctx context.Context) error {
 		return err
 	}
 	c.sub = sub
+
 
 	c.listenCheckpointEvents(ctx)
 
@@ -957,6 +976,9 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 	// Get the config in minio using the last checkpoint found through Bitcoin.
 	// NOTE: We should be able to get the config regarless of storage (minio, IPFS, KVS,....)
 	cp, err := GetMinersConfig(ctx, c.minioClient, c.cpconfig.MinioBucketName, btccp.cid)
+
+
+	// get the config in the KVS
 
 	if cp != "" {
 		// Decode hex checkpoint to bytes
