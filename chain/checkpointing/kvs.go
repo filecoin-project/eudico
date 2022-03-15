@@ -7,13 +7,15 @@ import (
 	"context"
 	"sync"
 	"time"
+	"crypto/sha256"
+	"errors"
 
-	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/lotus/chain/actors/adt"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
+	// "github.com/filecoin-project/go-address"
+	// "github.com/filecoin-project/lotus/chain/actors/adt"
+	// "github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
+	// "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
-	"github.com/filecoin-project/lotus/chain/types"
+	//"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/modules/helpers"
 	lru "github.com/hashicorp/golang-lru"
@@ -59,7 +61,7 @@ type Resolver struct {
 	// responseCache *msgReceiptCache
 
 	lk          sync.Mutex
-	ongoingPull map[cid.Cid]time.Time
+	ongoingPull map[string]time.Time
 }
 
 type MsgType uint64
@@ -79,7 +81,9 @@ const (
 	// PullCheck
 )
 
-type MsgData []byte
+type MsgData struct{
+	content []byte
+}
 
 type ResolveMsg struct {
 	// From subnet -> not needed for checkpointing
@@ -87,14 +91,14 @@ type ResolveMsg struct {
 	// Message type being propagated
 	Type MsgType
 	// Cid of the content
-	Cid cid.Cid
+	Cid string
 	// MsgMeta being propagated (if any)-> change this to be string?
 	//CrossMsgs sca.CrossMsgs
 	// Checkpoint being propagated (if any)
 	// Checkpoint schema.Checkpoint
 
 	//for checkpointing, we use []byte
-	CrossMsgs MsgData
+	Content MsgData
 }
 
 type msgReceiptCache struct {
@@ -144,7 +148,7 @@ func NewResolver(self peer.ID, ds dtypes.MetadataDS, pubsub *pubsub.PubSub) *Res
 		pubsub:      pubsub,
 		pushCache:   newMsgReceiptCache(),
 		pullCache:   newMsgReceiptCache(),
-		ongoingPull: make(map[cid.Cid]time.Time),
+		ongoingPull: make(map[string]time.Time),
 	}
 }
 
@@ -157,10 +161,10 @@ func HandleMsgs(mctx helpers.MetricsCtx, lc fx.Lifecycle, r *Resolver, submgr su
 
 func (r *Resolver) HandleMsgs(ctx context.Context, submgr subnet.SubnetMgr) error {
 	// Register new message validator for resolver msgs.
-	v := NewValidator(submgr, r)
-	if err := r.pubsub.RegisterTopicValidator("pikachu", v.Validate); err != nil {
-		return err
-	}
+	// v := NewValidator(submgr, r)
+	// if err := r.pubsub.RegisterTopicValidator("pikachu", v.Validate); err != nil {
+	// 	return err
+	// }
 
 	log.Infof("subscribing to content resolver topic pikachu")
 
@@ -180,7 +184,7 @@ func (r *Resolver) Close() error {
 	// initializing it again registering the validator will fail.
 	return r.pubsub.UnregisterTopicValidator("pikachu")
 }
-func (r *Resolver) shouldPull(c cid.Cid) bool {
+func (r *Resolver) shouldPull(c string) bool {
 	r.lk.Lock()
 	defer r.lk.Unlock()
 	if time.Since(r.ongoingPull[c]) > retryTimeout {
@@ -190,7 +194,7 @@ func (r *Resolver) shouldPull(c cid.Cid) bool {
 	return false
 }
 
-func (r *Resolver) pullSuccess(c cid.Cid) {
+func (r *Resolver) pullSuccess(c string) {
 	r.lk.Lock()
 	defer r.lk.Unlock()
 	delete(r.ongoingPull, c)
@@ -213,64 +217,70 @@ func EncodeResolveMsg(m *ResolveMsg) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-type Validator struct {
-	r      *Resolver
-	submgr subnet.SubnetMgr
-}
+// type Validator struct {
+// 	r      *Resolver
+// 	submgr subnet.SubnetMgr
+// }
 
-func NewValidator(submgr subnet.SubnetMgr, r *Resolver) *Validator {
-	return &Validator{r, submgr}
-}
+// func NewValidator(submgr subnet.SubnetMgr, r *Resolver) *Validator {
+// 	return &Validator{r, submgr}
+// }
 
-func (v *Validator) Validate(ctx context.Context, pid peer.ID, msg *pubsub.Message) (res pubsub.ValidationResult) {
-	// Decode resolve msg
-	rmsg, err := DecodeResolveMsg(msg.GetData())
-	if err != nil {
-		log.Errorf("error decoding resolve msg cid: %s", err)
-		return pubsub.ValidationReject
-	}
+// func (v *Validator) Validate(ctx context.Context, pid peer.ID, msg *pubsub.Message) (res pubsub.ValidationResult) {
+// 	// Decode resolve msg
+// 	rmsg, err := DecodeResolveMsg(msg.GetData())
+// 	if err != nil {
+// 		log.Errorf("error decoding resolve msg cid: %s", err)
+// 		return pubsub.ValidationReject
+// 	}
 
-	log.Infof("Received cross-msg resolution message of type: %v ", rmsg.Type)
-	// Check the CID and messages sent are correct for push messages
-	if rmsg.Type == Push {
-		msgs := rmsg.CrossMsgs
-		c, err := msgs.Cid() //
-		if err != nil {
-			log.Errorf("error computing cross-msgs cid: %s", err)
-			return pubsub.ValidationIgnore
-		}
-		if rmsg.Cid != c {
-			log.Errorf("cid computed for crossMsgs not equal to the one requested: %s", err)
-			return pubsub.ValidationReject
-		}
-	}
+// 	log.Infof("Received cross-msg resolution message of type: %v ", rmsg.Type)
+// 	// Check the CID and messages sent are correct for push messages
+// 	if rmsg.Type == Push {
+// 		msgs := rmsg.CrossMsgs
+// 		c, err := msgs.Cid() //
+// 		if err != nil {
+// 			log.Errorf("error computing cross-msgs cid: %s", err)
+// 			return pubsub.ValidationIgnore
+// 		}
+// 		if rmsg.Cid != c {
+// 			log.Errorf("cid computed for crossMsgs not equal to the one requested: %s", err)
+// 			return pubsub.ValidationReject
+// 		}
+// 	}
 
-	// it's a correct message! make sure we've only seen it once
-	if count := v.r.addMsgReceipt(rmsg.Type, rmsg.Cid, msg.GetFrom()); count > 0 {
-		if pid == v.r.self {
-			log.Warnf("local block has been seen %d times; ignoring", count)
-		}
+// 	// it's a correct message! make sure we've only seen it once
+// 	if count := v.r.addMsgReceipt(rmsg.Type, rmsg.Cid, msg.GetFrom()); count > 0 {
+// 		if pid == v.r.self {
+// 			log.Warnf("local block has been seen %d times; ignoring", count)
+// 		}
 
-		return pubsub.ValidationIgnore
-	}
+// 		return pubsub.ValidationIgnore
+// 	}
 
-	// Process the resolveMsg, record error, and return gossipsub validation status.
-	sub, err := v.r.processResolveMsg(ctx, v.submgr, rmsg)
-	if err != nil {
-		log.Errorf("error processing resolve message: %s", err)
-		return sub
-	}
+// 	// Process the resolveMsg, record error, and return gossipsub validation status.
+// 	sub, err := v.r.processResolveMsg(ctx, v.submgr, rmsg)
+// 	if err != nil {
+// 		log.Errorf("error processing resolve message: %s", err)
+// 		return sub
+// 	}
 
-	// TODO: Any additional check?
+// 	// TODO: Any additional check?
 
-	// Pass validated request.
-	// msg.ValidatorData = rmsg
+// 	// Pass validated request.
+// 	// msg.ValidatorData = rmsg
 
-	return pubsub.ValidationAccept
-}
+// 	return pubsub.ValidationAccept
+// }
 
-func (cm *[]byte) Cid() (cid.Cid, error) {
+func (cm *MsgData) Cid() (string, error) {
 	// to do
+	if len((*cm).content) == 0 {
+		return "", errors.New("Message data is empty.")
+	}
+	sha256 := sha256.Sum256([]byte((*cm).content))
+
+	return string(sha256[:]), nil
 
 }
 
@@ -316,7 +326,7 @@ func (r *Resolver) processPush(ctx context.Context, rmsg *ResolveMsg) (pubsub.Va
 		return pubsub.ValidationIgnore, nil
 	}
 	// If not stored locally, store it in the datastore for future access.
-	if err := r.setLocal(ctx, rmsg.Cid, &rmsg.CrossMsgs); err != nil {
+	if err := r.setLocal(ctx, rmsg.Cid, &rmsg.Content); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
 
@@ -327,25 +337,42 @@ func (r *Resolver) processPush(ctx context.Context, rmsg *ResolveMsg) (pubsub.Va
 
 // func (r *Resolver) processPull(submgr subnet.SubnetMgr, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
 // 	// Inspect the state of the SCA to get crossMsgs behind the CID.
-// 	st, store, err := submgr.GetSCAState(context.TODO(), r.netName)
-// 	if err != nil {
-// 		return pubsub.ValidationIgnore, err
-// 	}
+// 	// st, store, err := submgr.GetSCAState(context.TODO(), r.netName)
+// 	// if err != nil {
+// 	// 	return pubsub.ValidationIgnore, err
+// 	// }
 // 	msgs, found, err := st.GetCrossMsgs(store, rmsg.Cid)
-// 	if err != nil {
-// 		return pubsub.ValidationIgnore, err
-// 	}
-// 	if !found {
-// 		// Reject instead of ignore. Someone may be trying to spam us with
-// 		// random unvalid CIDs.
-// 		return pubsub.ValidationReject, xerrors.Errorf("couldn't find crossmsgs for msgMeta with cid: %s", rmsg.Cid)
-// 	}
+// 	// if err != nil {
+// 	// 	return pubsub.ValidationIgnore, err
+// 	// }
+// 	// if !found {
+// 	// 	// Reject instead of ignore. Someone may be trying to spam us with
+// 	// 	// random unvalid CIDs.
+// 	// 	return pubsub.ValidationReject, xerrors.Errorf("couldn't find crossmsgs for msgMeta with cid: %s", rmsg.Cid)
+// 	// }
 // 	// Send response
-// 	if err := r.PushCrossMsgs(*msgs, rmsg.From, true); err != nil {
+// 	if err := r.PushCrossMsgs(*msgs,  true); err != nil {
 // 		return pubsub.ValidationIgnore, err
 // 	}
 // 	// Publish a Response message to the source subnet if the CID is found.
 // 	return pubsub.ValidationAccept, nil
+// }
+
+// GetCrossMsgs returns the crossmsgs from a CID in the registry.
+// func (st *SCAState) GetCrossMsgs(store adt.Store, c string) (*MsgData, bool, error) {
+// 	msgMetas, err := adt.AsMap(store, st.CheckMsgsRegistry, builtin.DefaultHamtBitwidth)
+// 	if err != nil {
+// 		return nil, false, err
+// 	}
+// 	var out CrossMsgs
+// 	found, err := msgMetas.Get(abi.CidKey(c), &out)
+// 	if err != nil {
+// 		return nil, false, xerrors.Errorf("failed to get crossMsgMeta from registry with cid %v: %w", c, err)
+// 	}
+// 	if !found {
+// 		return nil, false, nil
+// 	}
+// 	return &out, true, nil
 // }
 
 func (r *Resolver) processResponse(ctx context.Context, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
@@ -359,30 +386,30 @@ func (r *Resolver) processResponse(ctx context.Context, rmsg *ResolveMsg) (pubsu
 	return pubsub.ValidationAccept, nil
 }
 
-func (r *Resolver) getLocal(ctx context.Context, c cid.Cid) (*sca.CrossMsgs, bool, error) {
-	b, err := r.ds.Get(ctx, datastore.NewKey(c.String()))
+func (r *Resolver) getLocal(ctx context.Context, c string) (*MsgData, bool, error) {
+	b, err := r.ds.Get(ctx, datastore.NewKey(c))
 	if err != nil {
 		if err == datastore.ErrNotFound {
 			return nil, false, nil
 		}
 		return nil, false, err
 	}
-	out := &sca.CrossMsgs{}
+	out := &MsgData{}
 	if err := out.UnmarshalCBOR(bytes.NewReader(b)); err != nil {
 		return nil, false, err
 	}
 	return out, true, nil
 }
 
-func (r *Resolver) setLocal(ctx context.Context, c cid.Cid, msgs *[]byte) error {
+func (r *Resolver) setLocal(ctx context.Context, c string, msgs *MsgData) error {
 	w := new(bytes.Buffer)
 	if err := msgs.MarshalCBOR(w); err != nil {
 		return err
 	}
-	return r.ds.Put(ctx, datastore.NewKey(c.String()), w.Bytes())
+	return r.ds.Put(ctx, datastore.NewKey(c), w.Bytes())
 }
 
-func (r *Resolver) publishMsg(m *ResolveMsg, id address.SubnetID) error {
+func (r *Resolver) publishMsg(m *ResolveMsg) error {
 	b, err := EncodeResolveMsg(m)
 	if err != nil {
 		return xerrors.Errorf("error serializing resolveMsg: %v", err)
@@ -391,83 +418,83 @@ func (r *Resolver) publishMsg(m *ResolveMsg, id address.SubnetID) error {
 }
 
 // WaitCrossMsgsResolved waits until crossMsgs for meta have been fully resolved
-func (r *Resolver) WaitCrossMsgsResolved(ctx context.Context, c cid.Cid, from address.SubnetID) chan error {
-	out := make(chan error)
-	resolved := false
-	go func() {
-		var err error
-		for !resolved {
-			select {
-			case <-ctx.Done():
-				out <- xerrors.Errorf("context timeout")
-				return
-			default:
-				// Check if crossMsg fully resolved.
-				_, resolved, err = r.ResolveCrossMsgs(ctx, c, address.SubnetID(from))
-				if err != nil {
-					out <- err
-				}
-				// If not resolved wait two seconds to poll again and see if it has been resolved
-				// FIXME: This is not the best approach, but good enough for now.
-				if !resolved {
-					time.Sleep(2 * time.Second)
-				}
-			}
-		}
-		close(out)
-	}()
-	return out
-}
+// func (r *Resolver) WaitCrossMsgsResolved(ctx context.Context, c cid.Cid, from address.SubnetID) chan error {
+// 	out := make(chan error)
+// 	resolved := false
+// 	go func() {
+// 		var err error
+// 		for !resolved {
+// 			select {
+// 			case <-ctx.Done():
+// 				out <- xerrors.Errorf("context timeout")
+// 				return
+// 			default:
+// 				// Check if crossMsg fully resolved.
+// 				_, resolved, err = r.ResolveCrossMsgs(ctx, c, address.SubnetID(from))
+// 				if err != nil {
+// 					out <- err
+// 				}
+// 				// If not resolved wait two seconds to poll again and see if it has been resolved
+// 				// FIXME: This is not the best approach, but good enough for now.
+// 				if !resolved {
+// 					time.Sleep(2 * time.Second)
+// 				}
+// 			}
+// 		}
+// 		close(out)
+// 	}()
+// 	return out
+// }
 
-func (r *Resolver) ResolveCrossMsgs(ctx context.Context, c cid.Cid, from address.SubnetID) ([]types.Message, bool, error) {
-	// FIXME: This function should keep track of the retries that have been done,
-	// and fallback to a 1:1 exchange if this fails.
-	cross, found, err := r.getLocal(ctx, c)
-	if err != nil {
-		return []types.Message{}, false, err
-	}
-	// If found, inspect messages and keep resolving metas
-	if found {
-		msgs := cross.Msgs
-		foundAll := true
-		// If there is some msgMeta to resolve, resolve it
-		for _, mt := range cross.Metas {
-			c, err := mt.Cid()
-			if err != nil {
-				return []types.Message{}, false, nil
-			}
-			// Recursively resolve crossMsg for meta
-			cross, found, err := r.ResolveCrossMsgs(ctx, c, address.SubnetID(mt.From))
-			if err != nil {
-				return []types.Message{}, false, nil
-			}
-			// Append messages found
-			msgs = append(msgs, cross...)
-			foundAll = foundAll && found
-		}
-		if foundAll {
-			// Hurray! We resolved everything, ready to return.
-			return msgs, true, nil
-		}
+// func (r *Resolver) ResolveCrossMsgs(ctx context.Context, c cid.Cid, from address.SubnetID) ([]types.Message, bool, error) {
+// 	// FIXME: This function should keep track of the retries that have been done,
+// 	// and fallback to a 1:1 exchange if this fails.
+// 	cross, found, err := r.getLocal(ctx, c)
+// 	if err != nil {
+// 		return []types.Message{}, false, err
+// 	}
+// 	// If found, inspect messages and keep resolving metas
+// 	if found {
+// 		msgs := cross.Msgs
+// 		foundAll := true
+// 		// If there is some msgMeta to resolve, resolve it
+// 		for _, mt := range cross.Metas {
+// 			c, err := mt.Cid()
+// 			if err != nil {
+// 				return []types.Message{}, false, nil
+// 			}
+// 			// Recursively resolve crossMsg for meta
+// 			cross, found, err := r.ResolveCrossMsgs(ctx, c, address.SubnetID(mt.From))
+// 			if err != nil {
+// 				return []types.Message{}, false, nil
+// 			}
+// 			// Append messages found
+// 			msgs = append(msgs, cross...)
+// 			foundAll = foundAll && found
+// 		}
+// 		if foundAll {
+// 			// Hurray! We resolved everything, ready to return.
+// 			return msgs, true, nil
+// 		}
 
-		// We haven't resolved everything, wait for the next round to finish
-		// pulling everything.
-		// NOTE: We could consider still sending partial results here.
-		return []types.Message{}, true, nil
-	}
+// 		// We haven't resolved everything, wait for the next round to finish
+// 		// pulling everything.
+// 		// NOTE: We could consider still sending partial results here.
+// 		return []types.Message{}, true, nil
+// 	}
 
-	// If not try to pull message
-	if r.shouldPull(c) {
-		return []types.Message{}, false, r.PullCrossMsgs(c, from)
-	}
+// 	// If not try to pull message
+// 	if r.shouldPull(c) {
+// 		return []types.Message{}, false, r.PullCrossMsgs(c, from)
+// 	}
 
-	// If we shouldn't pull yet because we pulled recently
-	// do nothing for now, and notify that is wasn't resolved yet.
-	return []types.Message{}, false, nil
+// 	// If we shouldn't pull yet because we pulled recently
+// 	// do nothing for now, and notify that is wasn't resolved yet.
+// 	return []types.Message{}, false, nil
 
-}
+// }
 
-func (r *Resolver) PushCrossMsgs(msgs []byte, id address.SubnetID, isResponse bool) error {
+func (r *Resolver) PushCrossMsgs(msgs MsgData, isResponse bool) error {
 	c, err := msgs.Cid()
 	if err != nil {
 		return err
@@ -475,41 +502,41 @@ func (r *Resolver) PushCrossMsgs(msgs []byte, id address.SubnetID, isResponse bo
 	m := &ResolveMsg{
 		Type:      Push,
 		Cid:       c,
-		CrossMsgs: msgs,
+		Content: msgs,
 	}
 	if isResponse {
 		m.Type = Response
 	}
-	return r.publishMsg(m, id)
+	return r.publishMsg(m)
 }
 
-func (r *Resolver) PushMsgFromCheckpoint(ch *schema.Checkpoint, st *sca.SCAState, store adt.Store) error {
-	// For each crossMsgMeta
-	for _, meta := range ch.CrossMsgs() {
-		// Get the crossMsgs behind Cid from SCA state and push it.
-		c, err := meta.Cid()
-		if err != nil {
-			return err
-		}
-		msgs, found, err := st.GetCrossMsgs(store, c)
-		if err != nil {
-			return err
-		}
-		if !found {
-			return xerrors.Errorf("couldn't found crossmsgs for msgMeta with cid: %s", c)
-		}
-		// Push cross-msgs to subnet
-		if err = r.PushCrossMsgs(*msgs, address.SubnetID(meta.To), false); err != nil {
-			return err
-		}
-	}
-	return nil
-}
+// func (r *Resolver) PushMsgFromCheckpoint(ch *schema.Checkpoint, st *sca.SCAState, store adt.Store) error {
+// 	// For each crossMsgMeta
+// 	for _, meta := range ch.CrossMsgs() {
+// 		// Get the crossMsgs behind Cid from SCA state and push it.
+// 		c, err := meta.Cid()
+// 		if err != nil {
+// 			return err
+// 		}
+// 		msgs, found, err := st.GetCrossMsgs(store, c)
+// 		if err != nil {
+// 			return err
+// 		}
+// 		if !found {
+// 			return xerrors.Errorf("couldn't found crossmsgs for msgMeta with cid: %s", c)
+// 		}
+// 		// Push cross-msgs to subnet
+// 		if err = r.PushCrossMsgs(*msgs, false); err != nil {
+// 			return err
+// 		}
+// 	}
+// 	return nil
+// }
 
-func (r *Resolver) PullCrossMsgs(c cid.Cid, id address.SubnetID) error {
+func (r *Resolver) PullCrossMsgs(c string) error {
 	m := &ResolveMsg{
 		Type: PullMeta,
 		Cid:  c,
 	}
-	return r.publishMsg(m, id)
+	return r.publishMsg(m)
 }
