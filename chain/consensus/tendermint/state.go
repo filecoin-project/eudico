@@ -60,6 +60,14 @@ func (s *State) GetSubnetOffset(subnetName []byte) (int64, bool) {
 	return h, ok
 }
 
+// IsSubnetSet returns true if a subnet has already been set.
+func (s *State) IsSubnetSet() bool {
+	s.m.Lock()
+	defer s.m.Unlock()
+
+	return len(s.subnets) == 1
+}
+
 // AddBlock adds a block into the map, if the same block has not been already added.
 func (s *State) AddBlock(block []byte) error {
 	s.m.Lock()

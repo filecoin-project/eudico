@@ -113,6 +113,15 @@ func (a *Application) DeliverTx(req abci.RequestDeliverTx) (resp abci.ResponseDe
 
 	switch subnet := msg.(type) {
 	case *RegistrationMessageRequest:
+		// We support only one subnet per Tendermint blockchain.
+		_, existedSubnet := a.consensus.GetSubnetOffset(subnet.Name)
+		if a.consensus.IsSubnetSet() && !existedSubnet {
+			return abci.ResponseDeliverTx{
+				Code: codeStateFailure,
+				Log:  "only one subnet can be registered",
+			}
+		}
+
 		height := a.consensus.SetOrGetSubnetOffset(subnet.Name)
 		regResp := RegistrationMessageResponse{
 			Name:   subnet.Name,
