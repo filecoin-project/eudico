@@ -125,7 +125,6 @@ func (a *Application) DeliverTx(req abci.RequestDeliverTx) (resp abci.ResponseDe
 		height := a.consensus.SetOrGetSubnetOffset(subnet.Name)
 		regResp := RegistrationMessageResponse{
 			Name:   subnet.Name,
-			Tag:    subnet.Tag,
 			Offset: height,
 		}
 

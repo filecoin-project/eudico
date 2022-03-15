@@ -9,7 +9,6 @@ import (
 	"github.com/hashicorp/go-multierror"
 	logging "github.com/ipfs/go-log/v2"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/minio/blake2b-simd"
 	tmclient "github.com/tendermint/tendermint/rpc/client/http"
 	"go.opencensus.io/stats"
 	"golang.org/x/xerrors"
@@ -38,9 +37,6 @@ const (
 	tendermintRPCAddressEnv     = "EUDICO_TENDERMINT_RPC"
 	defaultTendermintRPCAddress = "http://127.0.0.1:26657"
 
-	// Subnet tag is fixed length subnet ID added to messages sent to Tendermint
-	tagLength = 8
-
 	// MaxHeightDrift TODO: is that correct or should be adapted?
 	MaxHeightDrift = 5
 )
@@ -64,8 +60,6 @@ type Tendermint struct {
 	client *tmclient.HTTP
 	// Offset in Tendermint blockchain
 	offset int64
-	// Subnet tag
-	tag []byte
 	// Tendermint validator secp256k1 address
 	tendermintValidatorAddress string
 	// Eudico client secp256k1 address
@@ -89,7 +83,6 @@ func NewConsensus(
 
 	subnetID := address.SubnetID(netName)
 	log.Infof("New Tendermint consensus for %s subnet", subnetID)
-	tag := blake2b.Sum256([]byte(subnetID))
 
 	c, err := tmclient.New(NodeAddr())
 	if err != nil {
@@ -103,10 +96,10 @@ func NewConsensus(
 		log.Fatalf("unable to get or handle Tendermint validators info: %s", err)
 	}
 	log.Info("Tendermint validator addr:", valAddr)
-	log.Info("Tendermint validator pub key:", valPubKey)
+	log.Infof("Tendermint validator pub key: %x", valPubKey)
 	log.Info("Eudico client addr: ", clientAddr)
 
-	regSubnet, err := registerNetworkViaTxSync(ctx, c, subnetID, tag[:tagLength])
+	regSubnet, err := registerNetworkViaTxSync(ctx, c, subnetID)
 	if err != nil {
 		log.Fatalf("unable to registrate network: %s", err)
 	}
@@ -123,7 +116,6 @@ func NewConsensus(
 		netName:                    subnetID,
 		client:                     c,
 		offset:                     regSubnet.Offset,
-		tag:                        tag[:tagLength],
 		tendermintValidatorAddress: valAddr,
 		eudicoClientAddress:        clientAddr,
 		eudicoClientPubKey:         valPubKey,

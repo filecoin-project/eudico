@@ -14,13 +14,11 @@ const (
 
 type RegistrationMessageRequest struct {
 	Name  []byte
-	Tag   []byte
 	Nonce []byte
 }
 
 type RegistrationMessageResponse struct {
 	Name   []byte
-	Tag    []byte
 	Offset int64
 	Nonce  []byte
 }
@@ -61,10 +59,9 @@ func (msg *RegistrationMessageResponse) Serialize() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func NewRegistrationMessageBytes(name address.SubnetID, tag, nonce []byte) ([]byte, error) {
+func NewRegistrationMessageBytes(name address.SubnetID, nonce []byte) ([]byte, error) {
 	msg := RegistrationMessageRequest{
 		Name:  []byte(name.String()),
-		Tag:   tag,
 		Nonce: nonce,
 	}
 	b, err := msg.Serialize()
@@ -75,16 +72,14 @@ func NewRegistrationMessageBytes(name address.SubnetID, tag, nonce []byte) ([]by
 	return b, nil
 }
 
-func NewSignedMessageBytes(msg, tag []byte) []byte {
+func NewSignedMessageBytes(msg []byte) []byte {
 	var payload []byte
-	payload = append(msg, tag[:tagLength]...)
-	payload = append(payload, SignedMessageType)
+	payload = append(msg, SignedMessageType)
 	return payload
 }
 
-func NewCrossMessageBytes(msg, tag []byte) []byte {
+func NewCrossMessageBytes(msg []byte) []byte {
 	var payload []byte
-	payload = append(msg, tag[:tagLength]...)
-	payload = append(payload, CrossMessageType)
+	payload = append(msg, CrossMessageType)
 	return payload
 }

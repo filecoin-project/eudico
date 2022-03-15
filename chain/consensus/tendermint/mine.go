@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/minio/blake2b-simd"
 	tmclient "github.com/tendermint/tendermint/rpc/client/http"
 	"github.com/tendermint/tendermint/rpc/coretypes"
 	"golang.org/x/xerrors"
@@ -36,8 +35,8 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		return err
 	}
 	subnetID := address.SubnetID(nn)
-	tag := blake2b.Sum256([]byte(subnetID))
-	log.Infof("miner params: network:%s, subnet ID: %s, subnet tag: %x", nn, subnetID, tag[:tagLength])
+
+	log.Infof("miner params: network:%s, subnet ID: %s", nn, subnetID)
 
 	for {
 		select {
@@ -74,7 +73,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 					log.Error(err)
 					continue
 				}
-				tx := NewSignedMessageBytes(msgBytes, tag[:])
+				tx := NewSignedMessageBytes(msgBytes)
 				_, err = tendermintClient.BroadcastTxSync(ctx, tx)
 				if err != nil {
 					log.Error("unable to send a message to Tendermint:", err)
@@ -95,7 +94,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 					log.Error(err)
 					continue
 				}
-				tx := NewCrossMessageBytes(msgBytes, tag[:])
+				tx := NewCrossMessageBytes(msgBytes)
 				_, err = tendermintClient.BroadcastTxSync(ctx, tx)
 				if err != nil {
 					log.Error("unable to send a cross message to Tendermint:", err)
@@ -174,7 +173,7 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 		}
 	}
 
-	msgs, crossMsgs := getEudicoMessagesFromTendermintBlock(next.Block, tm.tag)
+	msgs, crossMsgs := getEudicoMessagesFromTendermintBlock(next.Block)
 	bt.Messages = msgs
 	bt.CrossMessages = crossMsgs
 	bt.Timestamp = uint64(next.Block.Time.Unix())

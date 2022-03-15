@@ -40,7 +40,7 @@ func NodeAddr() string {
 	return addr
 }
 
-func getEudicoMessagesFromTendermintBlock(b *tmtypes.Block, tag []byte) ([]*types.SignedMessage, []*types.Message) {
+func getEudicoMessagesFromTendermintBlock(b *tmtypes.Block) ([]*types.SignedMessage, []*types.Message) {
 	var msgs []*types.SignedMessage
 	var crossMsgs []*types.Message
 
@@ -54,17 +54,12 @@ func getEudicoMessagesFromTendermintBlock(b *tmtypes.Block, tag []byte) ([]*type
 			log.Error("unable to decode Tendermint tx:", err)
 			continue
 		}
-		// data = {msg...|8 byte tag| type}
-		inputTag := txoData[len(txoData)-(tagLength+1) : len(txoData)-1]
-		if !bytes.Equal(inputTag, tag) {
-			continue
-		}
+		// data = {msg... type}
 		msg, _, err := parseTx(txoData)
 		if err != nil {
 			log.Error("unable to decode a message from Tendermint block:", err)
 			continue
 		}
-		log.Info("received Tx:", msg)
 
 		switch m := msg.(type) {
 		case *types.SignedMessage:
@@ -74,7 +69,7 @@ func getEudicoMessagesFromTendermintBlock(b *tmtypes.Block, tag []byte) ([]*type
 			log.Infof("found cross message from %s to %s with %s tokens", m.From.String(), m.To.String(), m.Value)
 			crossMsgs = append(crossMsgs, m)
 		default:
-			log.Info("unknown message type")
+			log.Info("filtered a message with unknown type:", m)
 		}
 	}
 	return msgs, crossMsgs
@@ -85,8 +80,8 @@ func getMessageMapFromTendermintBlock(tb *tmtypes.Block) (map[[32]byte]bool, err
 	for _, msg := range tb.Txs {
 		tx := msg.String()
 		// Transactions from Tendermint are in the Tx{} format. So we have to remove T,x, { and } characters.
-		// Then we have to remove last two fields that are message type and tag.
-		txo := tx[3 : len(tx)-1-2-2*tagLength]
+		// Then we have to remove message type.
+		txo := tx[3 : len(tx)-1-2]
 		txoData, err := hex.DecodeString(txo)
 		if err != nil {
 			return nil, err
@@ -108,11 +103,12 @@ func parseTx(tx []byte) (interface{}, uint32, error) {
 	var msg interface{}
 
 	lastByte := tx[ln-1]
+	log.Info("last byte:", lastByte)
 	switch lastByte {
 	case SignedMessageType:
-		msg, err = types.DecodeSignedMessage(tx[:ln-tagLength-1])
+		msg, err = types.DecodeSignedMessage(tx[:ln-1])
 	case CrossMessageType:
-		msg, err = types.DecodeMessage(tx[:ln-tagLength-1])
+		msg, err = types.DecodeMessage(tx[:ln-1])
 	case RegistrationMessageType:
 		msg, err = DecodeRegistrationMessageRequest(tx[:ln-1])
 	default:
@@ -239,7 +235,6 @@ func registerNetworkViaTxSync(
 	ctx context.Context,
 	c *tmclient.HTTP,
 	subnetID address.SubnetID,
-	tag []byte,
 ) (*RegistrationMessageResponse, error) {
 	var err error
 
@@ -256,7 +251,7 @@ func registerNetworkViaTxSync(
 			log.Info("registering network was stopped")
 			return nil, nil
 		case <-ticker.C:
-			regMsg, derr := NewRegistrationMessageBytes(subnetID, tag[:tagLength], rand.Bytes(randBytesLen))
+			regMsg, derr := NewRegistrationMessageBytes(subnetID, rand.Bytes(randBytesLen))
 			if derr != nil {
 				return nil, xerrors.Errorf("unable to create a registration message: %s", err)
 			}
