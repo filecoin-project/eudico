@@ -1,7 +1,7 @@
 # Eudico with Tendermint Consensus
 
 This is an experimental code for internal research purposes. It shouldn't be used in production.
-The design document is located [here](https://hackmd.io/@TqudR0GXRiedtuNRKE_EVA/HJ-e2ZQaY).
+The design document can be found [here](https://hackmd.io/@consensuslab/SJg-BGBeq).
 
 ## Requirements
 Eudico and Tendermint requirements must be satisfied.
