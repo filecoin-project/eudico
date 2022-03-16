@@ -107,6 +107,14 @@ The following commands can be used in Eudico-Tendermint setup for testing and de
 
 ```
 
+#### Benchmarking
+
+To perform simple benchmarking for a working deployment run the following:
+```
+./eudico tendermint benchmark
+```
+
+
 ###  Tendermint
 ```
 ./eudico tendermint application
