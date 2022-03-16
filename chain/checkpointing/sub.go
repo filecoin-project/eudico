@@ -252,10 +252,7 @@ func NewCheckpointSub(
 		return nil, err
 	}
 
-	ds := datastore.NewMapDatastore()
 
-	//create kvs store
-	r := NewResolver(host.ID(), ds, pubsub)
 
 	return &CheckpointingSub{
 		pubsub:           pubsub,
@@ -274,8 +271,8 @@ func NewCheckpointSub(
 		cpconfig:         &cpconfig,
 		minioClient:      minioClient,
 		synced:           synced,
-		r:				  r,
-		ds: 			  ds,
+		// r:				  r,
+		// ds: 			  ds,
 	}, nil
 }
 
@@ -547,6 +544,15 @@ func (c *CheckpointingSub) Start(ctx context.Context) error {
 		return err
 	}
 	c.sub = sub
+
+	ds := datastore.NewMapDatastore()
+
+	c.ds = ds
+
+	//create kvs store
+	r := NewResolver(c.host.ID(), c.ds, c.pubsub)
+
+	c.r = r
 
 
 	c.listenCheckpointEvents(ctx)
