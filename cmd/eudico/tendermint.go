@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/filecoin-project/lotus/chain/consensus/benchmark"
 	"os"
 	"os/signal"
 	"syscall"
@@ -17,6 +16,7 @@ import (
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/beacon"
 	"github.com/filecoin-project/lotus/chain/consensus"
+	"github.com/filecoin-project/lotus/chain/consensus/benchmark"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
