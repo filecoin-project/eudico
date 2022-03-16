@@ -992,8 +992,9 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 	// get the config in the KVS
 
 	// do pull here 
-	err1 := c.r.PullCrossMsgs(btccp.cid)
-	fmt.Println("data from kvs", err1)
+	cp1, found, err1 := c.r.ResolveCrossMsgs(ctx, btccp.cid)
+	//err1 := c.r.PullCrossMsgs(btccp.cid)
+	fmt.Println("data from kvs", cp1, found, err1)
 
 	if cp != "" {
 		// Decode hex checkpoint to bytes
