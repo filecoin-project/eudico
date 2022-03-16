@@ -983,7 +983,7 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 	fmt.Println("last cid from bitcoin: ", btccp.cid)
 	// get the config in the KVS
 
-	cp1, found, err := c.r.getLocal(ctx, btccp.cid)
+	cp1, found, err := c.r.ResolveCrossMsgs(ctx, btccp.cid)
 	fmt.Println("data from kvs", cp1, found,err)
 
 	if cp != "" {

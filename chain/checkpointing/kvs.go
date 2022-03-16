@@ -448,53 +448,27 @@ func (r *Resolver) publishMsg(m *ResolveMsg) error {
 // 	return out
 // }
 
-// func (r *Resolver) ResolveCrossMsgs(ctx context.Context, c cid.Cid, from address.SubnetID) ([]types.Message, bool, error) {
-// 	// FIXME: This function should keep track of the retries that have been done,
-// 	// and fallback to a 1:1 exchange if this fails.
-// 	cross, found, err := r.getLocal(ctx, c)
-// 	if err != nil {
-// 		return []types.Message{}, false, err
-// 	}
-// 	// If found, inspect messages and keep resolving metas
-// 	if found {
-// 		msgs := cross.Msgs
-// 		foundAll := true
-// 		// If there is some msgMeta to resolve, resolve it
-// 		for _, mt := range cross.Metas {
-// 			c, err := mt.Cid()
-// 			if err != nil {
-// 				return []types.Message{}, false, nil
-// 			}
-// 			// Recursively resolve crossMsg for meta
-// 			cross, found, err := r.ResolveCrossMsgs(ctx, c, address.SubnetID(mt.From))
-// 			if err != nil {
-// 				return []types.Message{}, false, nil
-// 			}
-// 			// Append messages found
-// 			msgs = append(msgs, cross...)
-// 			foundAll = foundAll && found
-// 		}
-// 		if foundAll {
-// 			// Hurray! We resolved everything, ready to return.
-// 			return msgs, true, nil
-// 		}
+func (r *Resolver) ResolveCrossMsgs(ctx context.Context, c string) ([]byte, bool, error) {
+	// FIXME: This function should keep track of the retries that have been done,
+	// and fallback to a 1:1 exchange if this fails.
+	cross, found, err := r.getLocal(ctx, c)
+	if err != nil {
+		return []byte{}, false, err
+	}
+	if found {
+		// Hurray! We resolved everything, ready to return.
+		return cross.content, true, nil
+	}
+	// If not try to pull message
+	if r.shouldPull(c) {
+		return []byte{}, false, r.PullCrossMsgs(c)
+	}
 
-// 		// We haven't resolved everything, wait for the next round to finish
-// 		// pulling everything.
-// 		// NOTE: We could consider still sending partial results here.
-// 		return []types.Message{}, true, nil
-// 	}
+	// If we shouldn't pull yet because we pulled recently
+	// do nothing for now, and notify that is wasn't resolved yet.
+	return []byte{}, false, nil
 
-// 	// If not try to pull message
-// 	if r.shouldPull(c) {
-// 		return []types.Message{}, false, r.PullCrossMsgs(c, from)
-// 	}
-
-// 	// If we shouldn't pull yet because we pulled recently
-// 	// do nothing for now, and notify that is wasn't resolved yet.
-// 	return []types.Message{}, false, nil
-
-// }
+}
 
 func (r *Resolver) PushCrossMsgs(msgs MsgData, isResponse bool) error {
 	c, err := msgs.Cid()
