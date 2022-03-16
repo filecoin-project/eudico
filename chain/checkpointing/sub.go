@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 
+	datastore "github.com/ipfs/go-datastore"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/BurntSushi/toml"
 	"github.com/Zondax/multi-party-sig/pkg/math/curve"
@@ -149,8 +150,7 @@ func NewCheckpointSub(
 	lc fx.Lifecycle,
 	host host.Host,
 	pubsub *pubsub.PubSub,
-	api impl.FullNodeAPI,
-	ds dtypes.MetadataDS) (*CheckpointingSub, error) {
+	api impl.FullNodeAPI) (*CheckpointingSub, error) {
 
 	ctx := helpers.LifecycleCtx(mctx, lc)
 	// Starting checkpoint listener
@@ -252,6 +252,7 @@ func NewCheckpointSub(
 		return nil, err
 	}
 
+	ds := datastore.NewMapDatastore()
 
 	//create kvs store
 	r := NewResolver(host.ID(), ds, pubsub)

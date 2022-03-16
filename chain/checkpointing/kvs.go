@@ -15,14 +15,14 @@ import (
 	// "github.com/filecoin-project/lotus/chain/actors/adt"
 	// "github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	// "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
+	//"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	//"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/modules/helpers"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/ipfs/go-cid"
+	//"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
-	nsds "github.com/ipfs/go-datastore/namespace"
+	//nsds "github.com/ipfs/go-datastore/namespace"
 
 	//logging "github.com/ipfs/go-log/v2"
 	peer "github.com/libp2p/go-libp2p-core/peer"
@@ -125,27 +125,28 @@ func (mrc *msgReceiptCache) add(bcid string) int {
 	return val.(int)
 }
 
-func (r *Resolver) addMsgReceipt(t MsgType, bcid cid.Cid, from peer.ID) int {
+func (r *Resolver) addMsgReceipt(t MsgType, bcid string, from peer.ID) int {
 	if t == Push {
 		// All push messages are considered equal independent of
 		// the source.
-		return r.pushCache.add(bcid.String())
+		return r.pushCache.add(bcid)
 	}
 	// We allow each peer.ID in a subnet to send a pull request
 	// for each CID without being rejected.
 	// FIXME: Additional checks may be required to prevent malicious
 	// peers from spamming the topic with infinite requests.
 	// Deferring the design of a smarter logic here.
-	return r.pullCache.add(bcid.String() + from.String())
+	return r.pullCache.add(bcid + from.String())
 }
 
 func NewRootResolver(self peer.ID, ds dtypes.MetadataDS, pubsub *pubsub.PubSub) *Resolver {
 	return NewResolver(self, ds, pubsub)
 }
-func NewResolver(self peer.ID, ds dtypes.MetadataDS, pubsub *pubsub.PubSub) *Resolver {
+func NewResolver(self peer.ID, ds datastore.Datastore, pubsub *pubsub.PubSub) *Resolver {
 	return &Resolver{
 		self:        self,
-		ds:          nsds.Wrap(ds, datastore.NewKey("pikachu")),
+		//ds:          nsds.Wrap(ds, datastore.NewKey("pikachu")),
+		ds: 		 ds,
 		pubsub:      pubsub,
 		pushCache:   newMsgReceiptCache(),
 		pullCache:   newMsgReceiptCache(),
@@ -162,10 +163,10 @@ func HandleMsgs(mctx helpers.MetricsCtx, lc fx.Lifecycle, r *Resolver) {
 
 func (r *Resolver) HandleMsgs(ctx context.Context) error {
 	// Register new message validator for resolver msgs.
-	// v := NewValidator(submgr, r)
-	// if err := r.pubsub.RegisterTopicValidator("pikachu", v.Validate); err != nil {
-	// 	return err
-	// }
+	v := NewValidator(r)
+	if err := r.pubsub.RegisterTopicValidator("pikachu", v.Validate); err != nil {
+		return err
+	}
 
 	log.Infof("subscribing to content resolver topic pikachu")
 
@@ -218,61 +219,60 @@ func EncodeResolveMsg(m *ResolveMsg) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-// type Validator struct {
-// 	r      *Resolver
-// 	submgr subnet.SubnetMgr
-// }
+type Validator struct {
+	r      *Resolver
+}
 
-// func NewValidator(submgr subnet.SubnetMgr, r *Resolver) *Validator {
-// 	return &Validator{r, submgr}
-// }
+func NewValidator( r *Resolver) *Validator {
+	return &Validator{r}
+}
 
-// func (v *Validator) Validate(ctx context.Context, pid peer.ID, msg *pubsub.Message) (res pubsub.ValidationResult) {
-// 	// Decode resolve msg
-// 	rmsg, err := DecodeResolveMsg(msg.GetData())
-// 	if err != nil {
-// 		log.Errorf("error decoding resolve msg cid: %s", err)
-// 		return pubsub.ValidationReject
-// 	}
+func (v *Validator) Validate(ctx context.Context, pid peer.ID, msg *pubsub.Message) (res pubsub.ValidationResult) {
+	// Decode resolve msg
+	rmsg, err := DecodeResolveMsg(msg.GetData())
+	if err != nil {
+		log.Errorf("error decoding resolve msg cid: %s", err)
+		return pubsub.ValidationReject
+	}
 
-// 	log.Infof("Received cross-msg resolution message of type: %v ", rmsg.Type)
-// 	// Check the CID and messages sent are correct for push messages
-// 	if rmsg.Type == Push {
-// 		msgs := rmsg.CrossMsgs
-// 		c, err := msgs.Cid() //
-// 		if err != nil {
-// 			log.Errorf("error computing cross-msgs cid: %s", err)
-// 			return pubsub.ValidationIgnore
-// 		}
-// 		if rmsg.Cid != c {
-// 			log.Errorf("cid computed for crossMsgs not equal to the one requested: %s", err)
-// 			return pubsub.ValidationReject
-// 		}
-// 	}
+	log.Infof("Received cross-msg resolution message of type: %v ", rmsg.Type)
+	// Check the CID and messages sent are correct for push messages
+	if rmsg.Type == Push {
+		msgs := rmsg.Content
+		c, err := msgs.Cid() //
+		if err != nil {
+			log.Errorf("error computing msgs cid: %s", err)
+			return pubsub.ValidationIgnore
+		}
+		if rmsg.Cid != c {
+			log.Errorf("cid computed for crossMsgs not equal to the one requested: %s", err)
+			return pubsub.ValidationReject
+		}
+	}
 
-// 	// it's a correct message! make sure we've only seen it once
-// 	if count := v.r.addMsgReceipt(rmsg.Type, rmsg.Cid, msg.GetFrom()); count > 0 {
-// 		if pid == v.r.self {
-// 			log.Warnf("local block has been seen %d times; ignoring", count)
-// 		}
+	// it's a correct message! make sure we've only seen it once
+	if count := v.r.addMsgReceipt(rmsg.Type, rmsg.Cid, msg.GetFrom()); count > 0 {
+		if pid == v.r.self {
+			log.Warnf("local block has been seen %d times; ignoring", count)
+		}
 
-// 		return pubsub.ValidationIgnore
-// 	}
+		return pubsub.ValidationIgnore
+	}
 
-// 	// Process the resolveMsg, record error, and return gossipsub validation status.
-// 	sub, err := v.r.processResolveMsg(ctx, v.submgr, rmsg)
-// 	if err != nil {
-// 		log.Errorf("error processing resolve message: %s", err)
-// 		return sub
-// 	}
+	// Process the resolveMsg, record error, and return gossipsub validation status.
+	sub, err := v.r.processResolveMsg(ctx, rmsg)
+	if err != nil {
+		log.Errorf("error processing resolve message: %s", err)
+		return sub
+	}
 
-// 	// TODO: Any additional check?
+	// TODO: Any additional check?
 
-// 	// Pass validated request.
-// 	// msg.ValidatorData = rmsg
+	// Pass validated request.
+	// msg.ValidatorData = rmsg
 
-// 	return pubsub.ValidationAccept
-// }
+	return pubsub.ValidationAccept
+}
 
 func (cm *MsgData) Cid() (string, error) {
 	// to do
@@ -304,12 +304,12 @@ func (r *Resolver) HandleIncomingResolveMsg(ctx context.Context, sub *pubsub.Sub
 	}
 }
 
-func (r *Resolver) processResolveMsg(ctx context.Context, submgr subnet.SubnetMgr, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
+func (r *Resolver) processResolveMsg(ctx context.Context, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
 	switch rmsg.Type {
 	case Push:
 		return r.processPush(ctx, rmsg)
-	// case PullMeta:
-	// 	return r.processPull(submgr, rmsg)
+	case PullMeta:
+		return r.processPull( rmsg)
 	case Response:
 		return r.processResponse(ctx, rmsg)
 	}
@@ -337,28 +337,28 @@ func (r *Resolver) processPush(ctx context.Context, rmsg *ResolveMsg) (pubsub.Va
 	return pubsub.ValidationAccept, nil
 }
 
-// func (r *Resolver) processPull(submgr subnet.SubnetMgr, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
-// 	// Inspect the state of the SCA to get crossMsgs behind the CID.
-// 	// st, store, err := submgr.GetSCAState(context.TODO(), r.netName)
-// 	// if err != nil {
-// 	// 	return pubsub.ValidationIgnore, err
-// 	// }
-// 	msgs, found, err := st.GetCrossMsgs(store, rmsg.Cid)
-// 	// if err != nil {
-// 	// 	return pubsub.ValidationIgnore, err
-// 	// }
-// 	// if !found {
-// 	// 	// Reject instead of ignore. Someone may be trying to spam us with
-// 	// 	// random unvalid CIDs.
-// 	// 	return pubsub.ValidationReject, xerrors.Errorf("couldn't find crossmsgs for msgMeta with cid: %s", rmsg.Cid)
-// 	// }
-// 	// Send response
-// 	if err := r.PushCrossMsgs(*msgs,  true); err != nil {
-// 		return pubsub.ValidationIgnore, err
-// 	}
-// 	// Publish a Response message to the source subnet if the CID is found.
-// 	return pubsub.ValidationAccept, nil
-// }
+func (r *Resolver) processPull(rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
+	// Inspect the state of the SCA to get crossMsgs behind the CID.
+	// st, store, err := submgr.GetSCAState(context.TODO(), r.netName)
+	// if err != nil {
+	// 	return pubsub.ValidationIgnore, err
+	// }
+	//msgs, found, err := st.GetCrossMsgs(store, rmsg.Cid)
+	// if err != nil {
+	// 	return pubsub.ValidationIgnore, err
+	// }
+	// if !found {
+	// 	// Reject instead of ignore. Someone may be trying to spam us with
+	// 	// random unvalid CIDs.
+	// 	return pubsub.ValidationReject, xerrors.Errorf("couldn't find crossmsgs for msgMeta with cid: %s", rmsg.Cid)
+	// }
+	// Send response
+	if err := r.PushCrossMsgs((*rmsg).Content,  true); err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+	// Publish a Response message to the source subnet if the CID is found.
+	return pubsub.ValidationAccept, nil
+}
 
 // GetCrossMsgs returns the crossmsgs from a CID in the registry.
 // func (st *SCAState) GetCrossMsgs(store adt.Store, c string) (*MsgData, bool, error) {
