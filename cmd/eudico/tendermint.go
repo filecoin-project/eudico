@@ -13,6 +13,7 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
+	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/beacon"
 	"github.com/filecoin-project/lotus/chain/consensus"
@@ -47,6 +48,7 @@ var tendermintCmd = &cli.Command{
 		tendermintGenesisCmd,
 		tendermintMinerCmd,
 		tendermintApplicationCmd,
+		tendermintBenchCmd,
 
 		daemonCmd(node.Options(
 			node.Override(new(consensus.Consensus), NewRootTendermintConsensus),
@@ -107,7 +109,7 @@ var tendermintGenesisCmd = &cli.Command{
 
 var tendermintMinerCmd = &cli.Command{
 	Name:  "miner",
-	Usage: "run tendermint consensus miner",
+	Usage: "run Tendermint consensus miner",
 	Flags: []cli.Flag{
 		&cli.BoolFlag{
 			Name:  "default-key",
@@ -142,6 +144,90 @@ var tendermintMinerCmd = &cli.Command{
 
 		log.Infow("Starting mining with miner", "miner", miner)
 		return tendermint.Mine(ctx, miner, api)
+	},
+}
+
+var tendermintBenchCmd = &cli.Command{
+	Name:  "benchmark",
+	Usage: "run Tendermint consensus benchmark",
+	Flags: []cli.Flag{
+		&cli.IntFlag{
+			Name:  "length",
+			Value: 10,
+			Usage: "benchmark length",
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+
+		log.Info("Starting Tendermint benchmarking")
+		defer log.Info("Stopping Tendermint benchmarking")
+
+		api, closer, err := lcli.GetFullNodeAPIV1(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+		ctx := cliutil.ReqContext(cctx)
+
+		chain, err := api.ChainNotify(ctx)
+		if err != nil {
+			return err
+		}
+		startAt := time.Now()
+		h := 0
+		benchmarkLength := cctx.Int("length")
+
+		var blockTimes []time.Time
+		var changes []*lapi.HeadChange
+
+		var crossMsgsNum, blsMsgsNum, secpkMsgsNum int
+
+		calculateMessagesNum := func(changes []*lapi.HeadChange) error {
+			for _, change := range changes {
+				for _, block := range change.Val.Blocks() {
+					msgs, err := api.ChainGetBlockMessages(ctx, block.Cid())
+					if err != nil {
+						return err
+					}
+					crossMsgsNum += len(msgs.CrossMessages)
+					blsMsgsNum += len(msgs.BlsMessages)
+					secpkMsgsNum += len(msgs.SecpkMessages)
+				}
+			}
+			return nil
+		}
+
+		for h < benchmarkLength {
+			select {
+			case <-ctx.Done():
+				return nil
+			case change := <-chain:
+				blockTimes = append(blockTimes, time.Now())
+				changes = append(changes, change...)
+				h++
+			}
+		}
+
+		err = calculateMessagesNum(changes)
+		if err != nil {
+			return err
+		}
+
+		dur := time.Since(startAt)
+
+		timeIntervals := tendermint.SplitIntoBlockIntervals(blockTimes)
+		testnetStats := tendermint.ExtractTestnetStats(timeIntervals)
+
+		testnetStats.TotalTime = dur
+		testnetStats.BenchmarkLength = benchmarkLength
+		testnetStats.StartHeight = int64(changes[0].Val.Height())
+		testnetStats.EndHeight = int64(changes[len(changes)-1].Val.Height())
+
+		testnetStats.PopulateMessages(blsMsgsNum, crossMsgsNum, secpkMsgsNum)
+		testnetStats.ComputeThroughput()
+		log.Info(testnetStats.String())
+
+		return nil
 	},
 }
 

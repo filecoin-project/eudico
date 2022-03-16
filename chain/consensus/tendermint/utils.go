@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"time"
 
@@ -327,4 +328,116 @@ func GetSecp256k1TendermintKey(keyFilePath string) (*types.KeyInfo, error) {
 	}
 
 	return &ki, nil
+}
+
+type TestnetStats struct {
+	StartHeight int64
+	EndHeight   int64
+
+	BenchmarkLength  int
+	BlsMessagesNum   int
+	CrossMessagesNum int
+	SecpkMessagesNum int
+	TotalTime        time.Duration
+	// average time to produce a block
+	Mean time.Duration
+	// standard deviation of block production
+	Std float64
+	// longest time to produce a block
+	Max time.Duration
+	// shortest time to produce a block
+	Min time.Duration
+	// Block Throughput
+	BTpt float64
+	// Message Throughput
+	MTpt float64
+}
+
+func (t *TestnetStats) PopulateMessages(b, c, s int) {
+	t.BlsMessagesNum = b
+	t.CrossMessagesNum = c
+	t.SecpkMessagesNum = s
+}
+
+func (t *TestnetStats) ComputeThroughput() {
+	t.BTpt = float64(t.BenchmarkLength) / t.TotalTime.Seconds()
+	t.MTpt = float64(t.SecpkMessagesNum+t.BlsMessagesNum+t.CrossMessagesNum) / t.TotalTime.Seconds()
+}
+
+func (t *TestnetStats) String() string {
+	return fmt.Sprintf(`Benchmarked from height %v to %v
+	Mean Block Interval: %v
+	Standard Deviation: %f
+	Max Block Interval: %v
+	Min Block Interval: %v
+	Duration: %v
+	BLS Message number: %v,
+	Cross Messages number: %v,
+	Secpk Messages number: %v,
+	Block throughput: %v bps,
+	Message throughput: %v tps,
+	`,
+		t.StartHeight,
+		t.EndHeight,
+		t.Mean,
+		t.Std,
+		t.Max,
+		t.Min,
+		t.TotalTime,
+		t.BlsMessagesNum,
+		t.CrossMessagesNum,
+		t.SecpkMessagesNum,
+		t.BTpt,
+		t.MTpt,
+	)
+}
+
+func ExtractTestnetStats(intervals []time.Duration) TestnetStats {
+	var (
+		sum, mean time.Duration
+		std       float64
+		max       = intervals[0]
+		min       = intervals[0]
+	)
+
+	for _, interval := range intervals {
+		sum += interval
+
+		if interval > max {
+			max = interval
+		}
+
+		if interval < min {
+			min = interval
+		}
+	}
+	mean = sum / time.Duration(len(intervals))
+
+	for _, interval := range intervals {
+		diff := (interval - mean).Seconds()
+		std += math.Pow(diff, 2)
+	}
+	std = math.Sqrt(std / float64(len(intervals)))
+
+	return TestnetStats{
+		Mean: mean,
+		Std:  std,
+		Max:  max,
+		Min:  min,
+	}
+}
+
+func SplitIntoBlockIntervals(blockTimes []time.Time) []time.Duration {
+	intervals := make([]time.Duration, len(blockTimes)-1)
+	lastTime := blockTimes[0]
+	for i, t := range blockTimes {
+		// skip the first block
+		if i == 0 {
+			continue
+		}
+
+		intervals[i-1] = t.Sub(lastTime)
+		lastTime = t
+	}
+	return intervals
 }
