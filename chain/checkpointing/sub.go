@@ -478,7 +478,7 @@ func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *ty
 				return false, err
 			}
 
-			msgs := &MsgData{content: []byte(minersConfig)}
+			msgs := &MsgData{Content: []byte(minersConfig)}
 			//push config to kvs
 			cid_str, err := msgs.Cid() //this need to be hex.encodetostring(hash)
 			err = c.r.setLocal(ctx, cid_str, msgs)
@@ -488,7 +488,7 @@ func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *ty
 			} else{
 				fmt.Println("Pushed to KVS: ",msgs, cid_str)
 				//fmt.Println("Pushed to KVS in ecodetostring: ", hex.EncodeToString(msgs.content))
-				fmt.Println("Pushed to KVS in string(): ", string(msgs.content))
+				fmt.Println("Pushed to KVS in string(): ", string(msgs.Content))
 			}
 		}
 

@@ -83,7 +83,7 @@ const (
 )
 
 type MsgData struct{
-	content []byte
+	Content []byte
 }
 
 type ResolveMsg struct {
@@ -276,10 +276,10 @@ func EncodeResolveMsg(m *ResolveMsg) ([]byte, error) {
 
 func (cm *MsgData) Cid() (string, error) {
 	// to do
-	if len((*cm).content) == 0 {
+	if len((*cm).Content) == 0 {
 		return "", errors.New("Message data is empty.")
 	}
-	sha256 := sha256.Sum256((*cm).content)
+	sha256 := sha256.Sum256((*cm).Content)
 
 	return hex.EncodeToString(sha256[:]), nil
 	//return hex.EncodeToString((*cm).content), nil
@@ -457,7 +457,7 @@ func (r *Resolver) ResolveCrossMsgs(ctx context.Context, c string) ([]byte, bool
 	}
 	if found {
 		// Hurray! We resolved everything, ready to return.
-		return cross.content, true, nil
+		return cross.Content, true, nil
 	}
 	// If not try to pull message
 	if r.shouldPull(c) {
