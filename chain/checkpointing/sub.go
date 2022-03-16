@@ -490,6 +490,8 @@ func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *ty
 				//fmt.Println("Pushed to KVS in ecodetostring: ", hex.EncodeToString(msgs.content))
 				fmt.Println("Pushed to KVS in string(): ", string(msgs.Content))
 			}
+
+			c.r.processPush(ctx, &ResolveMsg{Type: Push, Cid: cid_str ,Content:*msgs})
 		}
 
 		return true, nil
@@ -547,6 +549,11 @@ func (c *CheckpointingSub) Start(ctx context.Context) error {
 
 
 	c.listenCheckpointEvents(ctx)
+
+	err = c.r.HandleMsgs(ctx)
+	if err != nil {
+		return xerrors.Errorf("error initializing cross-msg resolver: %s", err)
+	}
 
 	return nil
 }

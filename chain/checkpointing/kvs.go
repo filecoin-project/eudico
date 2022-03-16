@@ -153,14 +153,14 @@ func NewResolver(self peer.ID, ds dtypes.MetadataDS, pubsub *pubsub.PubSub) *Res
 	}
 }
 
-func HandleMsgs(mctx helpers.MetricsCtx, lc fx.Lifecycle, r *Resolver, submgr subnet.SubnetMgr) {
+func HandleMsgs(mctx helpers.MetricsCtx, lc fx.Lifecycle, r *Resolver) {
 	ctx := helpers.LifecycleCtx(mctx, lc)
-	if err := r.HandleMsgs(ctx, submgr); err != nil {
+	if err := r.HandleMsgs(ctx); err != nil {
 		panic(err)
 	}
 }
 
-func (r *Resolver) HandleMsgs(ctx context.Context, submgr subnet.SubnetMgr) error {
+func (r *Resolver) HandleMsgs(ctx context.Context) error {
 	// Register new message validator for resolver msgs.
 	// v := NewValidator(submgr, r)
 	// if err := r.pubsub.RegisterTopicValidator("pikachu", v.Validate); err != nil {
