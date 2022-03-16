@@ -545,22 +545,10 @@ func (c *CheckpointingSub) Start(ctx context.Context) error {
 	}
 	c.sub = sub
 
-	ds := datastore.NewMapDatastore()
-
-	c.ds = ds
-
-	//create kvs store
-	r := NewResolver(c.host.ID(), c.ds, c.pubsub)
-
-	c.r = r
-
 
 	c.listenCheckpointEvents(ctx)
 
-	err = c.r.HandleMsgs(ctx)
-	if err != nil {
-		return xerrors.Errorf("error initializing cross-msg resolver: %s", err)
-	}
+
 
 	return nil
 }
@@ -996,6 +984,21 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 
 	fmt.Println("last cid from bitcoin: ", btccp.cid)
 	// get the config in the KVS
+
+	ds := datastore.NewMapDatastore()
+
+	c.ds = ds
+
+	//create kvs store
+	r := NewResolver(c.host.ID(), c.ds, c.pubsub)
+
+	c.r = r
+
+	err = c.r.HandleMsgs(ctx)
+	if err != nil {
+		log.Errorf("error initializing cross-msg resolver: %s", err)
+		return
+	}
 
 	// do pull here 
 	cp1, found, err1 := c.r.ResolveCrossMsgs(ctx, btccp.cid)
