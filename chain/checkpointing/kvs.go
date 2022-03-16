@@ -36,7 +36,7 @@ const retryTimeout = 10 * time.Second
 //var log = logging.Logger("checkpointing-kvs")
 
 // in the checkpointing case we always use the same topic
-// we will use "checkpoint"
+// we will use "pikachu"
 // func SubnetResolverTopic(id address.SubnetID) string {
 // 	return "/fil/subnet/resolver" + id.String()
 // }
@@ -416,7 +416,7 @@ func (r *Resolver) publishMsg(m *ResolveMsg) error {
 	if err != nil {
 		return xerrors.Errorf("error serializing resolveMsg: %v", err)
 	}
-	return r.pubsub.Publish("checkpoint", b)
+	return r.pubsub.Publish("pikachu", b)
 }
 
 // WaitCrossMsgsResolved waits until crossMsgs for meta have been fully resolved
