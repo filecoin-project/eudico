@@ -9,6 +9,7 @@ import (
 	"time"
 	"crypto/sha256"
 	"errors"
+	"encoding/hex"
 
 	// "github.com/filecoin-project/go-address"
 	// "github.com/filecoin-project/lotus/chain/actors/adt"
@@ -278,9 +279,10 @@ func (cm *MsgData) Cid() (string, error) {
 	if len((*cm).content) == 0 {
 		return "", errors.New("Message data is empty.")
 	}
-	sha256 := sha256.Sum256([]byte((*cm).content))
+	sha256 := sha256.Sum256((*cm).content)
 
-	return string(sha256[:]), nil
+	return hex.EncodeToString(sha256[:]), nil
+	//return hex.EncodeToString((*cm).content), nil
 
 }
 

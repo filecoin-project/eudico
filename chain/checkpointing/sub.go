@@ -363,8 +363,8 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 
 		log.Infow("Height:", "height", newTs.Height().String())
 		fmt.Println("Height:", newTs.Height())
-		fmt.Println("Old address: ", oldSt.PublicKey)
-		fmt.Println("New address: ", newSt.PublicKey)
+		// fmt.Println("Old address: ", oldSt.PublicKey)
+		// fmt.Println("New address: ", newSt.PublicKey)
 
 
 		change, err := c.matchNewConfig(ctx, oldTs, newTs, oldSt, newSt, diff)
@@ -393,8 +393,8 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 func (c *CheckpointingSub) matchNewPublicKey(ctx context.Context, oldTs, newTs *types.TipSet, oldSt, newSt mpower.State, diff *diffInfo) (bool, error) {
 	if !reflect.DeepEqual(oldSt.PublicKey, newSt.PublicKey) {
 		fmt.Println("Address has been updated")
-		fmt.Println("Old address: ", oldSt.PublicKey)
-		fmt.Println("New address: ", newSt.PublicKey)
+		// fmt.Println("Old address: ", oldSt.PublicKey)
+		// fmt.Println("New address: ", newSt.PublicKey)
 		c.newDKGComplete = true
 		c.newKey = newSt.PublicKey
 		c.keysUpdated = false
@@ -478,13 +478,17 @@ func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *ty
 				return false, err
 			}
 
-			msgs := &MsgData{content: hash}
+			msgs := &MsgData{content: []byte(minersConfig)}
 			//push config to kvs
-			cid_str, err := msgs.Cid()
+			cid_str, err := msgs.Cid() //this need to be hex.encodetostring(hash)
 			err = c.r.setLocal(ctx, cid_str, msgs)
 			if err != nil {
 				log.Errorf("could not push miners config to kvs: %v", err)
 				return false, err
+			} else{
+				fmt.Println("Pushed to KVS: ",msgs, cid_str)
+				//fmt.Println("Pushed to KVS in ecodetostring: ", hex.EncodeToString(msgs.content))
+				fmt.Println("Pushed to KVS in string(): ", string(msgs.content))
 			}
 		}
 
@@ -660,8 +664,8 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 	// check if self is included in the set of participants (e.g., a new miner that
 	// wasn't part of the last DKG, does not sign because they don't have a share of the private key)
 
-	fmt.Println("Checkpoint participants: ", participants)
-	fmt.Println("Myself: ", c.host.ID().String())
+	//fmt.Println("Checkpoint participants: ", participants)
+	//fmt.Println("Myself: ", c.host.ID().String())
 	// for _, participant := range(participants){
 	// 	if participant == c.host.ID().String(){
 	fmt.Println("I'm a checkpointer")
@@ -677,7 +681,6 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 	if c.newDKGComplete {
 		//pubkey = c.newTaprootConfig.PublicKey // change this to update from the actor
 		pubkey = taproot.PublicKey(c.newKey)
-		fmt.Println("Keys from DKG: ", c.newTaprootConfig.PublicKey, pubkey)
 	}
 	// change this to use the new actor
 
@@ -727,7 +730,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 	}
 
 	index := 0
-	fmt.Println("Previous tx id: ", c.ptxid)
+	//fmt.Println("Previous tx id: ", c.ptxid)
 	value, scriptPubkeyBytes := getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
 
 	// TODO: instead of calling getTxOUt we need to check for the latest transaction
@@ -739,11 +742,11 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		value, scriptPubkeyBytes = getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
 	}
 	newValue := value - c.cpconfig.Fee
-	fmt.Println("Fee for next transaction is: ", c.cpconfig.Fee)
+	//fmt.Println("Fee for next transaction is: ", c.cpconfig.Fee)
 	payload1 := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.8f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
-	fmt.Println("Raw tx: ", payload1)
+	fmt.Println("Data pushed to opreturn: ", hex.EncodeToString(data))
 	result := jsonRPC(c.cpconfig.BitcoinHost, payload1)
-	fmt.Println("Result from Raw tx: ", result)
+	//fmt.Println("Result from Raw tx: ", result)
 	if result == nil {
 		return xerrors.Errorf("can not create new transaction")
 	}
@@ -798,10 +801,10 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 	// Actually all participants can broadcast the transcation. It will be the same everywhere.
 	rawtx := prepareWitnessRawTransaction(rawTransaction, r.(taproot.Signature))
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendrawtransaction\", \"params\": [\"" + rawtx + "\"]}"
-	fmt.Println("Send raw transaction command:", payload)
-	fmt.Println("Raw tx: ", payload1)
+	//fmt.Println("Send raw transaction command:", payload)
+	//fmt.Println("Raw tx: ", payload1)
 	result = jsonRPC(c.cpconfig.BitcoinHost, payload)
-	fmt.Println("Transaction to be sent: ", result)
+	//fmt.Println("Transaction to be sent: ", result)
 	if result["error"] != nil {
 		return xerrors.Errorf("failed to broadcast transaction")
 	}
@@ -887,8 +890,8 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 	}
 
 	cidBytes := ts.Key().Bytes()
-	fmt.Println("cidbytes: ", cidBytes)
-	fmt.Println("public key before decoding: ", c.cpconfig.PublicKey) // this is the checkpoint (i.e. hash of block)
+	//fmt.Println("cidbytes: ", cidBytes)
+	//fmt.Println("public key before decoding: ", c.cpconfig.PublicKey) // this is the checkpoint (i.e. hash of block)
 	publickey, err := hex.DecodeString(c.cpconfig.PublicKey)          //publickey pre-generated
 	fmt.Println("public key after: ", publickey)
 	if err != nil {
@@ -926,12 +929,12 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 			}
 			newValue := value - c.cpconfig.Fee
 			//why not send the transaction from here?
-			fmt.Println("Creating the initial transaction now")
+			//fmt.Println("Creating the initial transaction now")
 			payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendtoaddress\", \"params\": [\"" + address + "\", \"" + fmt.Sprintf("%.8f", newValue) + "\" ]}"
-			fmt.Println(payload)
+			//fmt.Println(payload)
 			// payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.2f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
 			result := jsonRPC(c.cpconfig.BitcoinHost, payload)
-			fmt.Println(result)
+			//fmt.Println(result)
 			if result["error"] != nil {
 				log.Errorf("could not send initial Bitcoin transaction to: %v", address)
 			} else {
@@ -977,8 +980,11 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 	// NOTE: We should be able to get the config regarless of storage (minio, IPFS, KVS,....)
 	cp, err := GetMinersConfig(ctx, c.minioClient, c.cpconfig.MinioBucketName, btccp.cid)
 
-
+	fmt.Println("last cid from bitcoin: ", btccp.cid)
 	// get the config in the KVS
+
+	cp1, _, err := c.r.getLocal(ctx, btccp.cid)
+	fmt.Println("data from kvs", cp1)
 
 	if cp != "" {
 		// Decode hex checkpoint to bytes

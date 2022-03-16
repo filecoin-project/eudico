@@ -167,8 +167,8 @@ func addTaprootToWallet(url, taprootScript string) bool {
 	}
 	//time.Sleep(6 * time.Second)
 	result := jsonRPC(url, payload)
-	fmt.Println("Add address to wallet: ", taprootScript)
-	fmt.Println("Result from add", result)
+	//fmt.Println("Add address to wallet: ", taprootScript)
+	//fmt.Println("Result from add", result)
 	if result["error"] == nil {
 		return true
 	}
@@ -226,7 +226,7 @@ func parseUnspentTxOut(utxo []byte) (amount, script []byte) {
 func getTxOut(url, txid string, index int) (float64, []byte) {
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"gettxout\", \"params\": [\"" + txid + "\", " + strconv.Itoa(index) + "]}"
 	result := jsonRPC(url, payload)
-	fmt.Println("GetTxOut result: ", result)
+	//fmt.Println("GetTxOut result: ", result)
 	if result == nil {
 		panic("Cannot retrieve previous transaction.")
 	}

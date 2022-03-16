@@ -106,7 +106,7 @@ func GetLatestCheckpoint(url string, first_pk []byte, first_cp []byte) (*Checkpo
 		for transaction linked to it.
 	*/
 	addTaprootToWallet(url, firstscript)
-	fmt.Println(firstscript)
+	//fmt.Println(firstscript)
 	checkpoint, done := GetFirstCheckpointAddress(url, taprootAddress)
 	// Again we add taproot "address" (actually the script) to the wallet in the Bitcoin node
 	addTaprootToWallet(url, checkpoint.address)
