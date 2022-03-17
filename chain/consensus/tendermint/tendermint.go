@@ -37,7 +37,6 @@ const (
 	tendermintRPCAddressEnv     = "EUDICO_TENDERMINT_RPC"
 	defaultTendermintRPCAddress = "http://127.0.0.1:26657"
 
-	// MaxHeightDrift TODO: is that correct or should be adapted?
 	MaxHeightDrift = 5
 )
 

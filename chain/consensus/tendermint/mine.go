@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	tendermintConsensusBlockDelay = 1000
+	tendermintConsensusBlockDelay = 1200
 )
 
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {
@@ -164,9 +164,10 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 			log.Info("create block function was canceled")
 			return nil, nil
 		case <-ticker.C:
+			log.Info("Received an new block from Tendermint over RPC")
 			next, err = tm.client.Block(ctx, &height)
 			if err != nil {
-				log.Infof("unable to get Tendermint block @%d: %s", height, err)
+				log.Infof("unable to get a Tendermint block via RPC @%d: %s", height, err)
 				continue
 			}
 			try = false

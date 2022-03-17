@@ -241,7 +241,7 @@ func registerNetworkViaTxSync(
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
-	timeout := time.After(60 * time.Second)
+	timeout := time.After(120 * time.Second)
 
 	try := true
 	var resq *coretypes.ResultABCIQuery

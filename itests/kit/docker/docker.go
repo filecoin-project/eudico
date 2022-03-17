@@ -47,8 +47,8 @@ func StartTendermintContainer() (*Container, error) {
 	stdErrOut.Reset()
 
 	cmd = exec.Command(
-		"docker", "run", "-d", "--rm", "-p",
-		"0.0.0.0:26657:26657/tcp",
+		"docker", "run", "-d", "--rm",
+		"-p", "0.0.0.0:26657:26657/tcp",
 		"-v", dir+"/"+kit.TendermintConsensusTestDir+":/tendermint",
 		"--entrypoint", "/usr/bin/tendermint",
 		"tendermint/tendermint:v0.35.1", "start",
@@ -73,7 +73,7 @@ func StartTendermintContainer() (*Container, error) {
 
 // StopContainer stops and removes the specified container.
 func StopContainer(id string) error {
-	fmt.Printf("Stopping container %s ...", id)
+	fmt.Printf("Stopping container %s ...\n", id)
 
 	if err := exec.Command("docker", "stop", id).Run(); err != nil {
 		return fmt.Errorf("could not stop container: %w", err)
