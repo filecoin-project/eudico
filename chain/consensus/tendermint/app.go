@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	codeBadRequest   = 513 // arbitrary non-zero
+	codeBadRequest   = 513
 	codeStateFailure = 514
 )
 

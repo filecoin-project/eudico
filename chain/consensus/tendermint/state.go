@@ -25,16 +25,6 @@ func NewState() *State {
 	}
 }
 
-// GetBlock returns the block by the given ID.
-func (s *State) GetBlock(id [32]byte) ([]byte, bool) {
-	s.m.Lock()
-	defer s.m.Unlock()
-
-	b, ok := s.filecoinBlocks[id]
-
-	return b, ok
-}
-
 // SetOrGetSubnetOffset sets the offset value for the subnet if it hasn't beet already set.
 // In the latter case, the function returns the set value.
 func (s *State) SetOrGetSubnetOffset(subnetName []byte) int64 {
