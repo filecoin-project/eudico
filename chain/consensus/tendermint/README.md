@@ -114,7 +114,6 @@ To perform simple benchmarks for the running deployment:
 ./eudico benchmark consensus
 ```
 
-
 ###  Tendermint
 ```
 ./eudico tendermint application
@@ -180,3 +179,20 @@ stop-app1
 start-app1
 start-node1
 ```
+
+## Testing
+
+### Sanity Tests
+
+The following command run Eudico consensus sanity testsuite:
+```
+make eudico-test
+```
+
+### Acceptance Tests
+ The following acceptance test can be used to make sure that the Tendermint consensus integration satisfy to the Eudico consensus requirements:
+ 1. Verify messages (funds) can be sent between accounts.
+ 2. Verify the Tendermint consensus can be instantiated in the root net.
+ 3. Verify the Tendermint consensus can be instantiated in a subnet within the hierarchical framework.
+ 4. Verify cross-messages can be sent.
+ 5. Verify a Tendermint node can be restarted while mining.
