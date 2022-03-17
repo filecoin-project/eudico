@@ -16,7 +16,6 @@ import (
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/beacon"
 	"github.com/filecoin-project/lotus/chain/consensus"
-	"github.com/filecoin-project/lotus/chain/consensus/benchmark"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
@@ -48,7 +47,6 @@ var tendermintCmd = &cli.Command{
 		tendermintGenesisCmd,
 		tendermintMinerCmd,
 		tendermintApplicationCmd,
-		tendermintBenchCmd,
 
 		daemonCmd(node.Options(
 			node.Override(new(consensus.Consensus), NewRootTendermintConsensus),
@@ -144,37 +142,6 @@ var tendermintMinerCmd = &cli.Command{
 
 		log.Infow("Starting mining with miner", "miner", miner)
 		return tendermint.Mine(ctx, miner, api)
-	},
-}
-
-var tendermintBenchCmd = &cli.Command{
-	Name:  "benchmark",
-	Usage: "run Tendermint consensus benchmark",
-	Flags: []cli.Flag{
-		&cli.IntFlag{
-			Name:  "length",
-			Value: 10,
-			Usage: "benchmark length",
-		},
-	},
-	Action: func(cctx *cli.Context) error {
-		log.Info("Starting Tendermint benchmarks")
-		defer log.Info("Stopping Tendermint benchmarks")
-
-		ctx := cliutil.ReqContext(cctx)
-
-		api, closer, err := lcli.GetFullNodeAPIV1(cctx)
-		if err != nil {
-			return err
-		}
-		defer closer()
-
-		stats, err := benchmark.RunSimpleBenchmark(ctx, api, cctx.Int("length"))
-		if err != nil {
-			return err
-		}
-		log.Info(stats.String())
-		return nil
 	},
 }
 

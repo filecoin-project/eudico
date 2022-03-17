@@ -107,11 +107,11 @@ The following commands can be used in Eudico-Tendermint setup for testing and de
 
 ```
 
-#### Benchmarking
+#### Benchmarks
 
-To perform simple benchmarking for a working deployment run the following:
+To perform simple benchmarks for the running deployment:
 ```
-./eudico tendermint benchmark
+./eudico benchmark consensus
 ```
 
 
@@ -167,15 +167,13 @@ Then run the following commands:
 
 ### Tendermint Consensus with Fault Injection
 
-To run a deployment run the following script:
+To run a deployment use the following script:
 ```
 ./scripts/eud-tendermint-testnet.sh
 ```
 
 Run the following commands in terminal 4 (that will be the bottom-right terminal):
 ```
-connect-node0
-
 stop-node1
 stop-app1
 
