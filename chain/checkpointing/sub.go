@@ -1029,12 +1029,14 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 		cid_str, _ := msgs.Cid() //this need to be hex.encodetostring(hash)
 		//err1 := c.r.PullCrossMsgs(cid_str)
 		fmt.Println("Trying to pull from KVS now")
-		//cp1, found, err1 := c.r.ResolveCrossMsgs(ctx, cid_str)
-		err1 := c.r.WaitCrossMsgsResolved(ctx, cid_str)
+		
+		err2 := c.r.WaitCrossMsgsResolved(ctx, cid_str)
+		fmt.Println("result from waitresolvemsg: ", err2)
+		cp1, found, err1 := c.r.ResolveCrossMsgs(ctx, cid_str)
 		//err1 := c.r.PullCrossMsgs(btccp.cid)
 		//err1 := c.r.PullCrossMsgs(cid_str)
-		//fmt.Println("data pulled from kvs", cp1, found, err1)
-		fmt.Println("result from pull: ", err1)
+		fmt.Println("data pulled from kvs", cp1, found, err1)
+		
 	} else{
 		// do pull here 
 		cp1, found, err1 := c.r.ResolveCrossMsgs(ctx, btccp.cid)
