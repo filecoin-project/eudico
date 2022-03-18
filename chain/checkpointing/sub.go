@@ -983,7 +983,7 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 			// 	fmt.Println("Pushed to KVS in string(): ", string(msgs.Content))
 			// }	
 
-			c.r.processPush(ctx, &ResolveMsg{Type: Push, Cid: cid_str ,Content:*msgs})
+			//c.r.processPush(ctx, &ResolveMsg{Type: Push, Cid: cid_str ,Content:*msgs})
 			r.PushCrossMsgs(*msgs,false)
 		}
 		for {
