@@ -426,34 +426,34 @@ func (r *Resolver) publishMsg(m *ResolveMsg) error {
 	return r.pubsub.Publish("pikachu", b)
 }
 
-// WaitCrossMsgsResolved waits until crossMsgs for meta have been fully resolved
-// func (r *Resolver) WaitCrossMsgsResolved(ctx context.Context, c cid.Cid, from address.SubnetID) chan error {
-// 	out := make(chan error)
-// 	resolved := false
-// 	go func() {
-// 		var err error
-// 		for !resolved {
-// 			select {
-// 			case <-ctx.Done():
-// 				out <- xerrors.Errorf("context timeout")
-// 				return
-// 			default:
-// 				// Check if crossMsg fully resolved.
-// 				_, resolved, err = r.ResolveCrossMsgs(ctx, c, address.SubnetID(from))
-// 				if err != nil {
-// 					out <- err
-// 				}
-// 				// If not resolved wait two seconds to poll again and see if it has been resolved
-// 				// FIXME: This is not the best approach, but good enough for now.
-// 				if !resolved {
-// 					time.Sleep(2 * time.Second)
-// 				}
-// 			}
-// 		}
-// 		close(out)
-// 	}()
-// 	return out
-// }
+//WaitCrossMsgsResolved waits until crossMsgs for meta have been fully resolved
+func (r *Resolver) WaitCrossMsgsResolved(ctx context.Context, c string) chan error {
+	out := make(chan error)
+	resolved := false
+	go func() {
+		var err error
+		for !resolved {
+			select {
+			case <-ctx.Done():
+				out <- xerrors.Errorf("context timeout")
+				return
+			default:
+				// Check if crossMsg fully resolved.
+				_, resolved, err = r.ResolveCrossMsgs(ctx, c)
+				if err != nil {
+					out <- err
+				}
+				// If not resolved wait two seconds to poll again and see if it has been resolved
+				// FIXME: This is not the best approach, but good enough for now.
+				if !resolved {
+					time.Sleep(2 * time.Second)
+				}
+			}
+		}
+		close(out)
+	}()
+	return out
+}
 
 func (r *Resolver) ResolveCrossMsgs(ctx context.Context, c string) ([]byte, bool, error) {
 	// FIXME: This function should keep track of the retries that have been done,
