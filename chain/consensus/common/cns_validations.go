@@ -3,7 +3,6 @@ package common
 import (
 	"context"
 	"fmt"
-
 	"github.com/Gurpartap/async"
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/network"
@@ -90,6 +89,7 @@ func CheckMsgs(ctx context.Context, store *store.ChainStore, sm *stmgr.StateMana
 		}
 		return nil
 	})
+
 	blockSigCheck := async.Err(func() error {
 		if err := sigs.CheckBlockSignature(ctx, h, b.Header.Miner); err != nil {
 			return xerrors.Errorf("check block signature failed: %w", err)
@@ -99,6 +99,33 @@ func CheckMsgs(ctx context.Context, store *store.ChainStore, sm *stmgr.StateMana
 
 	return []async.ErrorFuture{msgsCheck, baseFeeCheck, blockSigCheck}
 
+}
+
+func CheckMsgsWithoutBlockSig(ctx context.Context, store *store.ChainStore, sm *stmgr.StateManager, submgr subnet.SubnetMgr, r *resolver.Resolver, netName address.SubnetID, b *types.FullBlock, baseTs *types.TipSet) []async.ErrorFuture {
+	msgsCheck := async.Err(func() error {
+		if b.Cid() == build.WhitelistedBlock {
+			return nil
+		}
+
+		if err := checkBlockMessages(ctx, store, sm, submgr, r, netName, b, baseTs); err != nil {
+			return xerrors.Errorf("block had invalid messages: %w", err)
+		}
+		return nil
+	})
+
+	baseFeeCheck := async.Err(func() error {
+		baseFee, err := store.ComputeBaseFee(ctx, baseTs)
+		if err != nil {
+			return xerrors.Errorf("computing base fee: %w", err)
+		}
+		if types.BigCmp(baseFee, b.Header.ParentBaseFee) != 0 {
+			return xerrors.Errorf("base fee doesn't match: %s (header) != %s (computed)",
+				b.Header.ParentBaseFee, baseFee)
+		}
+		return nil
+	})
+
+	return []async.ErrorFuture{msgsCheck, baseFeeCheck}
 }
 
 func BlockSanityChecks(ctype hierarchical.ConsensusType, h *types.BlockHeader) error {
@@ -111,6 +138,10 @@ func BlockSanityChecks(ctype hierarchical.ConsensusType, h *types.BlockHeader) e
 		if h.Ticket != nil {
 			return xerrors.Errorf("block must have nil ticket")
 		}
+	case hierarchical.Tendermint:
+		if h.Ticket == nil {
+			return xerrors.Errorf("Tendermint-backed block must have a ticket: ", h.Ticket)
+		}
 	default:
 		// FIXME: We currently support PoW and delegated, thus the
 		// default instead of specifying other consensus. This needs
@@ -118,10 +149,9 @@ func BlockSanityChecks(ctype hierarchical.ConsensusType, h *types.BlockHeader) e
 		if h.Ticket == nil {
 			return xerrors.Errorf("block must not have nil ticket")
 		}
-	}
-
-	if h.BlockSig == nil {
-		return xerrors.Errorf("block had nil signature")
+		if h.BlockSig == nil {
+			return xerrors.Errorf("block had nil signature")
+		}
 	}
 
 	if h.BLSAggregate == nil {
@@ -351,6 +381,243 @@ func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.St
 
 	// Finally, flush.
 	return vm.Copy(ctx, tmpbs, str.ChainBlockstore(), mrcid)
+}
+
+type ValidatedMessages struct {
+	BLSMessages   []*types.Message
+	SecpkMessages []*types.SignedMessage
+	CrossMsgs     []*types.Message
+}
+
+func FilterBlockMessages(
+	ctx context.Context,
+	str *store.ChainStore,
+	sm *stmgr.StateManager,
+	submgr subnet.SubnetMgr,
+	r *resolver.Resolver,
+	netName address.SubnetID,
+	b *types.FullBlock,
+	baseTs *types.TipSet,
+) (*ValidatedMessages, error) {
+	var validBlsMessages []*types.Message
+	var validSecpkMessages []*types.SignedMessage
+
+	nonces := make(map[address.Address]uint64)
+
+	stateroot, _, err := sm.TipSetState(ctx, baseTs)
+	if err != nil {
+		return nil, err
+	}
+
+	st, err := state.LoadStateTree(str.ActorStore(ctx), stateroot)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to load base state tree: %w", err)
+	}
+
+	nv := sm.GetNetworkVersion(ctx, b.Header.Height)
+	pl := vm.PricelistByEpoch(baseTs.Height())
+	var sumGasLimit int64
+	checkMsg := func(msg types.ChainMsg) error {
+		m := msg.VMMessage()
+
+		// Phase 1: syntactic validation, as defined in the spec
+		minGas := pl.OnChainMessage(msg.ChainLength())
+		if err := m.ValidForBlockInclusion(minGas.Total(), nv); err != nil {
+			return err
+		}
+
+		// ValidForBlockInclusion checks if any single message does not exceed BlockGasLimit
+		// So below is overflow safe
+		sumGasLimit += m.GasLimit
+		if sumGasLimit > build.BlockGasLimit {
+			return xerrors.Errorf("block gas limit exceeded")
+		}
+
+		// Phase 2: (Partial) semantic validation:
+		// the sender exists and is an account actor, and the nonces make sense
+		var sender address.Address
+		if sm.GetNetworkVersion(ctx, b.Header.Height) >= network.Version13 {
+			sender, err = st.LookupID(m.From)
+			if err != nil {
+				return err
+			}
+		} else {
+			sender = m.From
+		}
+
+		if _, ok := nonces[sender]; !ok {
+			// `GetActor` does not validate that this is an account actor.
+			act, err := st.GetActor(sender)
+			if err != nil {
+				return xerrors.Errorf("failed to get actor: %w", err)
+			}
+
+			if !builtin.IsAccountActor(act.Code) {
+				return xerrors.New("Sender must be an account actor")
+			}
+			nonces[sender] = act.Nonce
+		}
+
+		if nonces[sender] != m.Nonce {
+			return xerrors.Errorf("wrong nonce (exp: %d, got: %d)", nonces[sender], m.Nonce)
+		}
+		nonces[sender]++
+
+		return nil
+	}
+
+	// Validate message arrays in a temporary blockstore.
+	tmpbs := bstore.NewMemory()
+	tmpstore := blockadt.WrapStore(ctx, cbor.NewCborStore(tmpbs))
+
+	bmArr := blockadt.MakeEmptyArray(tmpstore)
+	for i, m := range b.BlsMessages {
+		if err := checkMsg(m); err != nil {
+			log.Infof("block had invalid bls message at index %d: %w", i, err)
+			continue
+		}
+
+		c, err := store.PutMessage(ctx, tmpbs, m)
+		if err != nil {
+			log.Info("failed to store message %s: %w", m.Cid(), err)
+			continue
+		}
+
+		k := cbg.CborCid(c)
+		if err := bmArr.Set(uint64(i), &k); err != nil {
+			log.Infof("failed to put bls message at index %d: %w", i, err)
+			continue
+		}
+		validBlsMessages = append(validBlsMessages, m)
+	}
+
+	smArr := blockadt.MakeEmptyArray(tmpstore)
+	for i, m := range b.SecpkMessages {
+		if err := checkMsg(m); err != nil {
+			log.Infof("block had invalid secpk message at index %d: %w", i, err)
+			continue
+		}
+
+		// `From` being an account actor is only validated inside the `vm.ResolveToKeyAddr` call
+		// in `StateManager.ResolveToKeyAddress` here (and not in `checkMsg`).
+		kaddr, err := sm.ResolveToKeyAddress(ctx, m.Message.From, baseTs)
+		if err != nil {
+			log.Infof("failed to resolve key addr: %w", err)
+			continue
+		}
+
+		if err := sigs.Verify(&m.Signature, kaddr, m.Message.Cid().Bytes()); err != nil {
+			log.Infof("secpk message %s has invalid signature: %w", m.Cid(), err)
+			continue
+		}
+
+		c, err := store.PutMessage(ctx, tmpbs, m)
+		if err != nil {
+			log.Infof("failed to store message %s: %w", m.Cid(), err)
+			continue
+		}
+		k := cbg.CborCid(c)
+		if err := smArr.Set(uint64(i), &k); err != nil {
+			log.Infof("failed to put secpk message at index %d: %w", i, err)
+			continue
+		}
+		validSecpkMessages = append(validSecpkMessages, m)
+	}
+
+	crossArr := blockadt.MakeEmptyArray(tmpstore)
+	// Preamble to get states required for cross-msg checks.
+	var (
+		parentSCA *sca.SCAState
+		snSCA     *sca.SCAState
+		pstore    blockadt.Store
+		snstore   blockadt.Store
+	)
+	// If subnet manager is not set we are in the root chain and we don't need to get parentSCA
+	// state
+	if submgr != nil {
+		parentSCA, pstore, err = getSCAState(ctx, sm, submgr, netName.Parent(), baseTs)
+		if err != nil {
+			return nil, err
+		}
+	}
+	// Get SCA state in subnet.
+	snSCA, snstore, err = getSCAState(ctx, sm, submgr, netName, baseTs)
+	if err != nil {
+		return nil, err
+	}
+
+	var validCrossMsgs []*types.Message
+	// Check cross messages
+	for i, m := range b.CrossMessages {
+		if err := checkCrossMsg(ctx, r, pstore, snstore, parentSCA, snSCA, m); err != nil {
+			log.Infof("failed to check message %s: %w", m.Cid(), err)
+			continue
+		}
+
+		// FIXME: Should we try to apply the message before accepting the block?
+		// Check if the message can be applied before accepting it for proposal.
+		// if err := canApplyMsg(ctx, submgr, sm, netName, m); err != nil {
+		//         return xerrors.Errorf("failed testing the application of cross-msg %s: %w", m.Cid(), err)
+		// }
+		// // NOTE: We don't check mesage against VM for cross shard messages. They are
+		// // checked in some other way.
+		// if err := checkMsg(m); err != nil {
+		//         return xerrors.Errorf("block had invalid bls message at index %d: %w", i, err)
+		// }
+
+		c, err := store.PutMessage(ctx, tmpbs, m)
+		if err != nil {
+			log.Infof("failed to store message %s: %w", m.Cid(), err)
+			continue
+		}
+
+		k := cbg.CborCid(c)
+		if err := crossArr.Set(uint64(i), &k); err != nil {
+			log.Infof("failed to put cross message at index %d: %w", i, err)
+			continue
+		}
+		validCrossMsgs = append(validCrossMsgs, m)
+	}
+
+	bmroot, err := bmArr.Root()
+	if err != nil {
+		return nil, err
+	}
+
+	smroot, err := smArr.Root()
+	if err != nil {
+		return nil, err
+	}
+
+	crossroot, err := crossArr.Root()
+	if err != nil {
+		return nil, err
+	}
+
+	mrcid, err := tmpstore.Put(ctx, &types.MsgMeta{
+		BlsMessages:   bmroot,
+		SecpkMessages: smroot,
+		CrossMessages: crossroot,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if b.Header.Messages != mrcid {
+		return nil, fmt.Errorf("messages didnt match message root in header")
+	}
+
+	// Finally, flush.
+	err = vm.Copy(ctx, tmpbs, str.ChainBlockstore(), mrcid)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ValidatedMessages{
+		BLSMessages:   validBlsMessages,
+		SecpkMessages: validSecpkMessages,
+		CrossMsgs:     validCrossMsgs,
+	}, nil
 }
 
 func ValidateLocalBlock(ctx context.Context, msg *pubsub.Message) (pubsub.ValidationResult, string) {

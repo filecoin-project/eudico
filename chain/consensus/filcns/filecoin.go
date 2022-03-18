@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"os"
 	"strings"
 	"time"
@@ -877,6 +878,10 @@ func (filec *FilecoinEC) isChainNearSynced() bool {
 	timestamp := ts.MinTimestamp()
 	timestampTime := time.Unix(int64(timestamp), 0)
 	return build.Clock.Since(timestampTime) < 6*time.Hour
+}
+
+func (filec *FilecoinEC) Type() hierarchical.ConsensusType {
+	return hierarchical.FilecoinEC
 }
 
 var _ consensus.Consensus = &FilecoinEC{}

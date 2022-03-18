@@ -8,13 +8,13 @@ require (
 	github.com/GeertJohan/go.rice v1.0.2
 	github.com/Gurpartap/async v0.0.0-20180927173644-4f7f499dd9ee
 	github.com/Kubuxu/imtui v0.0.0-20210401140320-41663d68d0fa
-	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d
 	github.com/alecthomas/jsonschema v0.0.0-20200530073317-71f438968921
 	github.com/buger/goterm v1.0.3
 	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e
 	github.com/containerd/cgroups v0.0.0-20201119153540-4cbc285b3327
 	github.com/coreos/go-systemd/v22 v22.3.2
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1
 	github.com/detailyang/go-fallocate v0.0.0-20180908115635-432fa640bd2e
 	github.com/dgraph-io/badger/v2 v2.2007.3
 	github.com/dgraph-io/ristretto v0.1.0 // indirect
@@ -60,7 +60,7 @@ require (
 	github.com/golang/glog v1.0.0 // indirect
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.3.0
-	github.com/gorilla/mux v1.7.4
+	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/websocket v1.4.2
 	github.com/hako/durafmt v0.0.0-20200710122514-c0fb7b4da026
 	github.com/hannahhoward/go-pubsub v0.0.0-20200423002714-8d62886cc36e
@@ -142,7 +142,9 @@ require (
 	github.com/raulk/go-watchdog v1.2.0
 	github.com/streadway/quantile v0.0.0-20150917103942-b0c588724d25
 	github.com/stretchr/testify v1.7.0
-	github.com/syndtr/goleveldb v1.0.0
+	github.com/syndtr/goleveldb v1.0.1-0.20200815110645-5c35d600f0ca
+	github.com/tendermint/tendermint v0.35.0
+	github.com/tidwall/gjson v1.9.3 // indirect
 	github.com/uber/jaeger-client-go v2.25.0+incompatible // indirect
 	github.com/urfave/cli/v2 v2.2.0
 	github.com/whyrusleeping/bencher v0.0.0-20190829221104-bb6607aa8bba
@@ -160,7 +162,7 @@ require (
 	go.uber.org/fx v1.9.0
 	go.uber.org/multierr v1.7.0
 	go.uber.org/zap v1.19.1
-	golang.org/x/crypto v0.0.0-20211209193657-4570a0811e8b // indirect
+	golang.org/x/crypto v0.0.0-20211209193657-4570a0811e8b
 	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20211209171907-798191bca915

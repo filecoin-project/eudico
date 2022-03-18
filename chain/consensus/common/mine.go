@@ -2,7 +2,6 @@ package common
 
 import (
 	"context"
-
 	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
@@ -135,7 +134,7 @@ func SignBlock(ctx context.Context, w lapi.Wallet, b *types.FullBlock) error {
 		Type: lapi.MTBlock,
 	})
 	if err != nil {
-		return xerrors.Errorf("failed to sign new block: %w", err)
+		return xerrors.Errorf("failed to sign new block %x: %w", next.Miner, err)
 	}
 
 	next.BlockSig = sig

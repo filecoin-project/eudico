@@ -60,14 +60,17 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		}
 
 		// Get cross-message pool from subnet.
+
 		nn, err := api.StateNetworkName(ctx)
 		if err != nil {
 			return err
 		}
+
 		crossmsgs, err := api.GetCrossMsgsPool(ctx, address.SubnetID(nn), base.Height()+1)
 		if err != nil {
 			log.Errorw("selecting cross-messages failed", "error", err)
 		}
+
 		log.Debugf("CrossMsgs being proposed in block @%s: %d", base.Height()+1, len(crossmsgs))
 
 		bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{

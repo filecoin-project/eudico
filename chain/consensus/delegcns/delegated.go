@@ -265,3 +265,7 @@ func (deleg *Delegated) validateBlockHeader(ctx context.Context, b *types.BlockH
 
 	return "", nil
 }
+
+func (deleg *Delegated) Type() hierarchical.ConsensusType {
+	return hierarchical.Delegated
+}

@@ -143,6 +143,8 @@ var ChainNode = Options(
 	Override(new(*resolver.Resolver), resolver.NewRootResolver),
 	Override(new(*snmgr.SubnetMgr), snmgr.NewSubnetMgr),
 	Override(new(subnet.SubnetMgr), module.SetSubMgrIface),
+	Override(new(api.FullNodeServer), func(path string, api api.FullNode) error { return nil }),
+
 	Override(StartSubnetMgrKey, snmgr.BuildSubnetMgr),
 	Override(StartCrossMsgResolverMgrKey, resolver.HandleMsgs),
 
