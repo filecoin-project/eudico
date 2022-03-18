@@ -146,8 +146,8 @@ func NewRootResolver(self peer.ID, ds dtypes.MetadataDS, pubsub *pubsub.PubSub) 
 func NewResolver(self peer.ID, ds datastore.Datastore, pubsub *pubsub.PubSub) *Resolver {
 	return &Resolver{
 		self:        self,
-		//ds:          nsds.Wrap(ds, datastore.NewKey("pikachu")),
-		ds: 		 ds,
+		ds:          nsds.Wrap(ds, datastore.NewKey("pikachu")),
+		//ds: 		 ds,
 		pubsub:      pubsub,
 		pushCache:   newMsgReceiptCache(),
 		pullCache:   newMsgReceiptCache(),
@@ -176,7 +176,7 @@ func (r *Resolver) HandleMsgs(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	time.Sleep(6 * time.Second)
+	//time.Sleep(6 * time.Second)
 
 	// Start handle incoming resolver msg.
 	go r.HandleIncomingResolveMsg(ctx, msgSub)
@@ -240,27 +240,27 @@ func (v *Validator) Validate(ctx context.Context, pid peer.ID, msg *pubsub.Messa
 	log.Infof("Received cross-msg resolution message of type: %v, from %v", rmsg.Type, pid.String())
 	fmt.Println("Message: ", rmsg)
 	// Check the CID and messages sent are correct for push messages
-	if rmsg.Type == Push {
-		msgs := rmsg.Content
-		c, err := msgs.Cid() //
-		if err != nil {
-			log.Errorf("error computing msgs cid: %s", err)
-			return pubsub.ValidationIgnore
-		}
-		if rmsg.Cid != c {
-			log.Errorf("cid computed for crossMsgs not equal to the one requested: %s", err)
-			return pubsub.ValidationReject
-		}
-	}
+	// if rmsg.Type == Push {
+	// 	msgs := rmsg.Content
+	// 	c, err := msgs.Cid() //
+	// 	if err != nil {
+	// 		log.Errorf("error computing msgs cid: %s", err)
+	// 		return pubsub.ValidationIgnore
+	// 	}
+	// 	if rmsg.Cid != c {
+	// 		log.Errorf("cid computed for crossMsgs not equal to the one requested: %s", err)
+	// 		return pubsub.ValidationReject
+	// 	}
+	// }
 
-	// it's a correct message! make sure we've only seen it once
-	if count := v.r.addMsgReceipt(rmsg.Type, rmsg.Cid, msg.GetFrom()); count > 0 {
-		if pid == v.r.self {
-			log.Warnf("local block has been seen %d times; ignoring", count)
-		}
+	// // it's a correct message! make sure we've only seen it once
+	// if count := v.r.addMsgReceipt(rmsg.Type, rmsg.Cid, msg.GetFrom()); count > 0 {
+	// 	if pid == v.r.self {
+	// 		log.Warnf("local block has been seen %d times; ignoring", count)
+	// 	}
 
-		return pubsub.ValidationIgnore
-	}
+	// 	return pubsub.ValidationIgnore
+	// }
 
 	// Process the resolveMsg, record error, and return gossipsub validation status.
 	sub, err := v.r.processResolveMsg(ctx, rmsg)

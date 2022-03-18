@@ -152,7 +152,8 @@ func NewCheckpointSub(
 	lc fx.Lifecycle,
 	host host.Host,
 	pubsub *pubsub.PubSub,
-	api impl.FullNodeAPI) (*CheckpointingSub, error) {
+	api impl.FullNodeAPI,
+	ds dtypes.MetadataDS) (*CheckpointingSub, error) {
 
 	ctx := helpers.LifecycleCtx(mctx, lc)
 	// Starting checkpoint listener
@@ -274,7 +275,7 @@ func NewCheckpointSub(
 		minioClient:      minioClient,
 		synced:           synced,
 		// r:				  r,
-		// ds: 			  ds,
+		ds: 			  ds,
 	}, nil
 }
 
@@ -909,8 +910,8 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 	// h, err := libp2p.New()
 	// ps, err := pubsub.NewGossipSub(context.TODO(), h)
 	
-	ds := datastore.NewMapDatastore()
-	c.ds = ds
+	//ds := datastore.NewMapDatastore()
+	//c.ds = ds
 	//create kvs store
 	r := NewResolver(c.host.ID(), c.ds, c.pubsub)
 	fmt.Println("My id: ",c.host.ID())
