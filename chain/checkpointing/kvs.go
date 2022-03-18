@@ -176,6 +176,7 @@ func (r *Resolver) HandleMsgs(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	fmt.Println("suscribed to message sub", msgSub)
 	//time.Sleep(6 * time.Second)
 
 	// Start handle incoming resolver msg.
