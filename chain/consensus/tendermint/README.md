@@ -190,8 +190,9 @@ make eudico-test
 ```
 
 ### Acceptance Tests
- The following acceptance test can be used to make sure that the Tendermint consensus integration satisfy to the Eudico consensus requirements:
- 1. Verify messages (funds) can be sent between accounts.
+
+ The following acceptance tests can be used to make sure that the Tendermint consensus integration satisfies to the Eudico consensus requirements:
+ 1. Verify messages (funds) can be sent between accounts: nonce are increased, funds are updated.
  2. Verify the Tendermint consensus can be instantiated in the root net.
  3. Verify the Tendermint consensus can be instantiated in a subnet within the hierarchical framework.
  4. Verify cross-messages can be sent.

@@ -1,3 +1,5 @@
+// Package tendermint implements integration with Tendermint Core,
+// as specified in https://hackmd.io/@consensuslab/SJg-BGBeq.
 package tendermint
 
 import (
@@ -41,7 +43,7 @@ const (
 )
 
 var (
-	log                     = logging.Logger("tendermint-consensus")
+	log                     = logging.Logger("tm-consensus")
 	_   consensus.Consensus = &Tendermint{}
 )
 

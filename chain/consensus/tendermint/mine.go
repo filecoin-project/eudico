@@ -47,11 +47,9 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 
 		base, err := api.ChainHead(ctx)
 		if err != nil {
-			log.Errorw("getting block failed", "error", err)
+			log.Errorw("failed to get the head of chain", "error", err)
 			continue
 		}
-
-		log.Infof("[%s] epoch is %d", subnetID, base.Height())
 
 		msgs, err := api.MpoolSelect(ctx, base.Key(), 1)
 		if err != nil {
@@ -60,9 +58,9 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 
 		crossMsgs, err := api.GetCrossMsgsPool(ctx, subnetID, base.Height()+1)
 		if err != nil {
-			log.Errorw("selecting cross-messages failed", "error", err)
+			log.Errorw("unable to get cross-messages from mempool", "error", err)
 		}
-		log.Infof("[%s] retrieved %d - msgs, %d - crossmsgs from the pool for @%s", subnetID, len(msgs), len(crossMsgs), base.Height()+1)
+		log.Infof("[subnet: %s, epoch: %d] retrieved %d - msgs, %d - crossmsgs", subnetID, base.Height()+1, len(msgs), len(crossMsgs))
 
 		for _, msg := range msgs {
 			id := msg.Cid().String()
@@ -80,7 +78,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 					continue
 				} else {
 					cache.addSentMessage(id, base.Height())
-					log.Infof("successfully sent a message with ID %s to Tendermint", id)
+					log.Infof("successfully sent a message %s to Tendermint", id)
 				}
 			}
 		}
@@ -101,12 +99,12 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 					continue
 				} else {
 					cache.addSentMessage(id, base.Height())
-					log.Infof("successfully sent a message with ID %s to Tendermint", id)
+					log.Infof("successfully sent a message %s to Tendermint", id)
 				}
 			}
 		}
 
-		log.Infof("[%s] try creating Tendermint block for epoch %d", subnetID, base.Height()+1)
+		log.Infof("[subnet: %s, epoch: %d] try to create a block", subnetID, base.Height()+1)
 
 		bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
 			Miner:            address.Undef,
@@ -127,7 +125,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			continue
 		}
 
-		log.Infof("[%s] try syncing Tendermint block for epoch %d", subnetID, base.Height()+1)
+		log.Infof("[subnet: %s, epoch: %d] try to sync a block", subnetID, base.Height()+1)
 
 		err = api.SyncSubmitBlock(ctx, &types.BlockMsg{
 			Header:        bh.Header,
@@ -136,12 +134,12 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			CrossMessages: bh.CrossMessages,
 		})
 		if err != nil {
-			log.Errorw("submitting block failed", "error", err)
+			log.Errorw("unable to sync the block", "error", err)
 		}
 
 		cache.clearSentMessages(base.Height())
 
-		log.Infof("[%s] Tendermint mined a block %v for epoch %d", subnetID, bh.Cid(), bh.Header.Height)
+		log.Infof("[subnet: %s, epoch: %d] mined a block %v", subnetID, bh.Header.Height, bh.Cid())
 	}
 }
 
@@ -167,7 +165,7 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 			log.Info("Received an new block from Tendermint over RPC")
 			next, err = tm.client.Block(ctx, &height)
 			if err != nil {
-				log.Infof("unable to get a Tendermint block via RPC @%d: %s", height, err)
+				log.Warnf("unable to get a Tendermint block via RPC @%d: %s", height, err)
 				continue
 			}
 			try = false
@@ -239,7 +237,7 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 		b.CrossMessages = validMsgs.CrossMsgs
 	}
 
-	log.Infof("!!! %s mined a block", b.Header.Miner)
+	log.Infof("%s mined a block", b.Header.Miner)
 
 	return b, nil
 }

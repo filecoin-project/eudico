@@ -103,7 +103,6 @@ func parseTx(tx []byte) (interface{}, uint32, error) {
 	var msg interface{}
 
 	lastByte := tx[ln-1]
-	log.Info("last byte:", lastByte)
 	switch lastByte {
 	case SignedMessageType:
 		msg, err = types.DecodeSignedMessage(tx[:ln-1])
