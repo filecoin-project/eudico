@@ -23,6 +23,7 @@ import (
 var eudCmds = []*cli.Command{
 	lcli.WithCategory("daemon", delegatedCmd),
 	lcli.WithCategory("daemon", tpowCmd),
+	lcli.WithCategory("daemon", filcnsCmd),
 	lcli.WithCategory("subnet", subnetCmds),
 }
 

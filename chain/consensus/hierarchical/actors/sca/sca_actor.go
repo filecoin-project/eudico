@@ -540,7 +540,7 @@ func (a SubnetCoordActor) SendCross(rt runtime.Runtime, params *CrossMsgParams) 
 	// Get SECP/BLS publickey to know the specific actor ID in the target subnet to
 	// whom the funds need to be sent.
 	// Funds are sent to the ID that controls the actor account in the destination subnet.
-	// FIXME: Additional processing may be required if we want to
+	// NOTE: Additional processing may be required if we want to
 	// support cross-messages sent by actors.
 	secp := SecpBLSAddr(rt, rt.Caller())
 
@@ -676,7 +676,7 @@ func (a SubnetCoordActor) InitAtomicExec(rt runtime.Runtime, params *AtomicExecP
 		}
 
 		// Check if the atomic execution is initiated by the same address from different subnets.
-		// FIXME: If needed this can be easily supported.
+		// NOTE: If needed this can be easily supported.
 		if ok, err := sameRawAddr(params.Inputs); ok {
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error verifying same address")
 			rt.Abortf(exitcode.ErrIllegalArgument, "atomic execution for same address from different subnets not yet supported")

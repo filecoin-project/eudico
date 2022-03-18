@@ -140,7 +140,7 @@ var ChainNode = Options(
 	Override(new(*full.GasPriceCache), full.NewGasPriceCache),
 
 	// Subneting
-	// Start sharding sub to listent to shard events
+	// Start hierarchical sub to listen to shard events
 	Override(new(*resolver.Resolver), resolver.NewRootResolver),
 	Override(new(*snmgr.SubnetMgr), snmgr.NewSubnetMgr),
 	Override(new(subnet.SubnetMgr), module.SetSubMgrIface),

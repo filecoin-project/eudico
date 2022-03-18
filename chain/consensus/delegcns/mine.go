@@ -20,7 +20,7 @@ func Mine(ctx context.Context, api v1api.FullNode) error {
 		return xerrors.Errorf("getting head: %w", err)
 	}
 
-	// NOTE: Miner in delegated consensus is always the one with
+	// FIXME: Miner in delegated consensus is always the one with
 	// ID=t0100, if we want this to be configurable it may require
 	// some tweaking in delegated genesis and mining.
 	// Leaving it like this for now.

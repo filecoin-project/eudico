@@ -70,6 +70,10 @@ var genesisNewCmd = &cli.Command{
 			out.NetworkName = "localnet-" + uuid.New().String()
 		}
 
+		// FIXME: force localnets to always have root/ as ID
+		// if not, things may break in hierarchical consensus.
+		out.NetworkName = address.RootSubnet.String()
+
 		genb, err := json.MarshalIndent(&out, "", "  ")
 		if err != nil {
 			return err

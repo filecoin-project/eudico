@@ -323,18 +323,13 @@ var mineCmd = &cli.Command{
 			}
 		}
 
-		// Get actor ID for wallet to use for mining.
-		walletID, err := api.StateLookupID(ctx, addr, types.EmptyTSK)
-		if err != nil {
-			return err
-		}
 		// If subnet not set use root. Otherwise, use flag value
 		var subnet string
 		if cctx.String("subnet") != address.RootSubnet.String() {
 			subnet = cctx.String("subnet")
 		}
 
-		err = api.MineSubnet(ctx, walletID, address.SubnetID(subnet), cctx.Bool("stop"))
+		err = api.MineSubnet(ctx, addr, address.SubnetID(subnet), cctx.Bool("stop"))
 		if err != nil {
 			return err
 		}

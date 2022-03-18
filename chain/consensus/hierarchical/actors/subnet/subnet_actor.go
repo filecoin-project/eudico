@@ -323,7 +323,7 @@ func (a SubnetActor) SubmitCheckpoint(rt runtime.Runtime, params *sca.Checkpoint
 			if found {
 				err := st.rmChecks(adt.AsStore(rt), c)
 				builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error removing windowChecks")
-				// TODO: XXX Consider periodically emptying the full votes map to avoid
+				// FIXME: XXX Consider periodically emptying the full votes map to avoid
 				// keeping state for wrong Cids committed in the past. This could be
 				// a DoS vector/source of inefficiency. Use a rotating map scheme to empty every
 				// epoch?
@@ -336,7 +336,7 @@ func (a SubnetActor) SubmitCheckpoint(rt runtime.Runtime, params *sca.Checkpoint
 
 	})
 
-	// If we reached amjority propagate the commitment to SCA
+	// If we reached majority propagate the commitment to SCA
 	if majority {
 		// If the checkpoint is correct we can reuse params and avoid having to marshal it again.
 		code := rt.Send(hierarchical.SubnetCoordActorAddr, sca.Methods.CommitChildCheckpoint, params, big.Zero(), &builtin.Discard{})
