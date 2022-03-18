@@ -971,7 +971,7 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 			}	
 			msgs := &MsgData{Content: []byte(minersConfig)}
 			//push config to kvs
-			cid_str, _ := msgs.Cid() //this need to be hex.encodetostring(hash)
+			//cid_str, _ := msgs.Cid() //this need to be hex.encodetostring(hash)
 
 			// err = c.r.setLocal(ctx, cid_str, msgs)
 			// if err != nil {
