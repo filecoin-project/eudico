@@ -10,6 +10,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"encoding/hex"
+	"fmt"
 
 	// "github.com/filecoin-project/go-address"
 	// "github.com/filecoin-project/lotus/chain/actors/adt"
@@ -175,6 +176,7 @@ func (r *Resolver) HandleMsgs(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	time.Sleep(6 * time.Second)
 
 	// Start handle incoming resolver msg.
 	go r.HandleIncomingResolveMsg(ctx, msgSub)
@@ -235,7 +237,8 @@ func (v *Validator) Validate(ctx context.Context, pid peer.ID, msg *pubsub.Messa
 		return pubsub.ValidationReject
 	}
 
-	log.Infof("Received cross-msg resolution message of type: %v ", rmsg.Type)
+	log.Infof("Received cross-msg resolution message of type: %v, from %v", rmsg.Type, pid.String())
+	fmt.Println("Message: ", rmsg)
 	// Check the CID and messages sent are correct for push messages
 	if rmsg.Type == Push {
 		msgs := rmsg.Content
@@ -307,6 +310,7 @@ func (r *Resolver) HandleIncomingResolveMsg(ctx context.Context, sub *pubsub.Sub
 func (r *Resolver) processResolveMsg(ctx context.Context, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
 	switch rmsg.Type {
 	case Push:
+		fmt.Println("message push")
 		return r.processPush(ctx, rmsg)
 	case PullMeta:
 		return r.processPull( rmsg)
@@ -353,7 +357,7 @@ func (r *Resolver) processPull(rmsg *ResolveMsg) (pubsub.ValidationResult, error
 	// 	return pubsub.ValidationReject, xerrors.Errorf("couldn't find crossmsgs for msgMeta with cid: %s", rmsg.Cid)
 	// }
 	// Send response
-	if err := r.PushCrossMsgs((*rmsg).Content,  true); err != nil {
+	if err := r.PushCrossMsgs((*rmsg).Content,true); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
 	// Publish a Response message to the source subnet if the CID is found.
@@ -416,6 +420,7 @@ func (r *Resolver) publishMsg(m *ResolveMsg) error {
 	if err != nil {
 		return xerrors.Errorf("error serializing resolveMsg: %v", err)
 	}
+	fmt.Println("publishing message ",m)
 	return r.pubsub.Publish("pikachu", b)
 }
 
@@ -461,6 +466,7 @@ func (r *Resolver) ResolveCrossMsgs(ctx context.Context, c string) ([]byte, bool
 	}
 	// If not try to pull message
 	if r.shouldPull(c) {
+		fmt.Println("Try pullcrossmsgs now")
 		return []byte{}, false, r.PullCrossMsgs(c)
 	}
 

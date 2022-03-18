@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 
+	//"github.com/libp2p/go-libp2p"
 	datastore "github.com/ipfs/go-datastore"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/BurntSushi/toml"
@@ -35,6 +36,7 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/helpers"
 	cbor "github.com/ipfs/go-ipld-cbor"
 	logging "github.com/ipfs/go-log/v2"
+	//peer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/host"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/minio/minio-go/v7"
@@ -488,8 +490,9 @@ func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *ty
 				//fmt.Println("Pushed to KVS in ecodetostring: ", hex.EncodeToString(msgs.content))
 				fmt.Println("Pushed to KVS in string(): ", string(msgs.Content))
 			}
+			c.r.processPull(&ResolveMsg{Type: Push, Cid: cid_str ,Content:*msgs})
 
-			c.r.processPush(ctx, &ResolveMsg{Type: Push, Cid: cid_str ,Content:*msgs})
+			//c.r.processPull(ctx, &ResolveMsg{Type: Push, Cid: cid_str ,Content:*msgs})
 		}
 
 		return true, nil
@@ -895,15 +898,30 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 	//fmt.Println("cidbytes: ", cidBytes)
 	//fmt.Println("public key before decoding: ", c.cpconfig.PublicKey) // this is the checkpoint (i.e. hash of block)
 	publickey, err := hex.DecodeString(c.cpconfig.PublicKey)          //publickey pre-generated
-	fmt.Println("public key after: ", publickey)
 	if err != nil {
 		log.Errorf("could not decode public key: %v", err)
 		return
 	} else {
-		//fmt.Println("public key", publickey)
-		fmt.Println("Pub key", publickey)
 		log.Infow("Decoded Public key")
 	}
+
+	// initialize the kvs
+	// h, err := libp2p.New()
+	// ps, err := pubsub.NewGossipSub(context.TODO(), h)
+	
+	ds := datastore.NewMapDatastore()
+	c.ds = ds
+	//create kvs store
+	r := NewResolver(c.host.ID(), c.ds, c.pubsub)
+	fmt.Println("My id: ",c.host.ID())
+	c.r = r
+	err = c.r.HandleMsgs(ctx)
+	if err != nil {
+		log.Errorf("error initializing cross-msg resolver: %s", err)
+		return
+	}
+	//c.pubsub.Join("pikachu")
+
 
 	//eiher send the initial transaction (if needed) or get the latest checkpoint
 	// of the transaction has already been sent
@@ -933,29 +951,40 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 			//why not send the transaction from here?
 			//fmt.Println("Creating the initial transaction now")
 			payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendtoaddress\", \"params\": [\"" + address + "\", \"" + fmt.Sprintf("%.8f", newValue) + "\" ]}"
-			//fmt.Println(payload)
+			fmt.Println(payload)
 			// payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.2f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
 			result := jsonRPC(c.cpconfig.BitcoinHost, payload)
-			//fmt.Println(result)
+			fmt.Println(result)
 			if result["error"] != nil {
 				log.Errorf("could not send initial Bitcoin transaction to: %v", address)
 			} else {
 				log.Infow("successfully sent first bitcoin tx")
 				c.ptxid = result["result"].(string)
 			}
+			//put the data in kvs
+			var minersConfig string = hex.EncodeToString(cidBytes) + "\n"
+			// c.orderParticipantsList() orders the miners from the taproot config --> to change
+			//for _, partyId := range c.orderParticipantsList() {
+			for _, partyId := range c.participants { // list of new miners
+				minersConfig += partyId + "\n"
+			}	
+			msgs := &MsgData{Content: []byte(minersConfig)}
+			//push config to kvs
+			cid_str, _ := msgs.Cid() //this need to be hex.encodetostring(hash)
+
+			// err = c.r.setLocal(ctx, cid_str, msgs)
+			// if err != nil {
+			// 	log.Errorf("could not push miners config to kvs: %v", err)
+			// 	return false, err
+			// } else{
+			// 	fmt.Println("Pushed to KVS: ",msgs, cid_str)
+			// 	//fmt.Println("Pushed to KVS in ecodetostring: ", hex.EncodeToString(msgs.content))
+			// 	fmt.Println("Pushed to KVS in string(): ", string(msgs.Content))
+			// }	
+
+			c.r.processPush(ctx, &ResolveMsg{Type: Push, Cid: cid_str ,Content:*msgs})
+			r.PushCrossMsgs(*msgs,false)
 		}
-		// init, txid, err := CheckIfFirstTxHasBeenSent(c.cpconfig.BitcoinHost, publickey, cidBytes)
-		// if err != nil {
-		// 	log.Errorf("Error with check if first tx has been sent")
-		// }
-		// if init {
-		// 	c.ptxid = txid
-		// }
-		// else {
-		// 	time.Sleep(2 * time.Second)
-		// 	init, txid, err := CheckIfFirstTxHasBeenSent(c.cpconfig.BitcoinHost, publickey, cidBytes)
-		// 	c.ptxid = txid
-		// }
 		for {
 			init, txid, err := CheckIfFirstTxHasBeenSent(c.cpconfig.BitcoinHost, publickey, cidBytes)
 			if init {
@@ -971,11 +1000,13 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 	// Get the last checkpoint from the bitcoin node
 
 	btccp, err := GetLatestCheckpoint(c.cpconfig.BitcoinHost, publickey, cidBytes)
+
 	if err != nil {
 		log.Errorf("could not get last checkpoint from Bitcoin: %v", err)
 		return
 	} else {
 		log.Infow("Got last checkpoint from Bitcoin node")
+		fmt.Println(btccp)
 	}
 
 	// Get the config in minio using the last checkpoint found through Bitcoin.
@@ -985,26 +1016,29 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 	fmt.Println("last cid from bitcoin: ", btccp.cid)
 	// get the config in the KVS
 
-	ds := datastore.NewMapDatastore()
-
-	c.ds = ds
-
-	//create kvs store
-	r := NewResolver(c.host.ID(), c.ds, c.pubsub)
-
-	c.r = r
-
-	err = c.r.HandleMsgs(ctx)
-	if err != nil {
-		log.Errorf("error initializing cross-msg resolver: %s", err)
-		return
+	if len(c.participants)>0{
+		var minersConfig string = hex.EncodeToString(cidBytes) + "\n"
+		// c.orderParticipantsList() orders the miners from the taproot config --> to change
+		//for _, partyId := range c.orderParticipantsList() {
+		for _, partyId := range c.participants { // list of new miners
+			minersConfig += partyId + "\n"
+		}	
+		msgs := &MsgData{Content: []byte(minersConfig)}
+		//push config to kvs
+		cid_str, _ := msgs.Cid() //this need to be hex.encodetostring(hash)
+		//err1 := c.r.PullCrossMsgs(cid_str)
+		fmt.Println("Trying to pull from KVS now")
+		cp1, found, err1 := c.r.ResolveCrossMsgs(ctx, cid_str)
+		//err1 := c.r.PullCrossMsgs(btccp.cid)
+		//err1 := c.r.PullCrossMsgs(cid_str)
+		fmt.Println("data pulled from kvs", cp1, found, err1)
+		//fmt.Println("result from pull: ", err1)
+	} else{
+		// do pull here 
+		cp1, found, err1 := c.r.ResolveCrossMsgs(ctx, btccp.cid)
+		//err1 := c.r.PullCrossMsgs(btccp.cid)
+		fmt.Println("data from kvs", cp1, found, err1)
 	}
-
-	// do pull here 
-	cp1, found, err1 := c.r.ResolveCrossMsgs(ctx, btccp.cid)
-	//err1 := c.r.PullCrossMsgs(btccp.cid)
-	fmt.Println("data from kvs", cp1, found, err1)
-
 	if cp != "" {
 		// Decode hex checkpoint to bytes
 		cpBytes, err := hex.DecodeString(cp)
