@@ -23,7 +23,7 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	//"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
-	//nsds "github.com/ipfs/go-datastore/namespace"
+	nsds "github.com/ipfs/go-datastore/namespace"
 
 	//logging "github.com/ipfs/go-log/v2"
 	peer "github.com/libp2p/go-libp2p-core/peer"

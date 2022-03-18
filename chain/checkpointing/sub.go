@@ -15,7 +15,7 @@ import (
 	"sync"
 
 	//"github.com/libp2p/go-libp2p"
-	datastore "github.com/ipfs/go-datastore"
+	//datastore "github.com/ipfs/go-datastore"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/BurntSushi/toml"
 	"github.com/Zondax/multi-party-sig/pkg/math/curve"
