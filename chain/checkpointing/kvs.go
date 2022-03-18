@@ -231,6 +231,7 @@ func NewValidator( r *Resolver) *Validator {
 
 func (v *Validator) Validate(ctx context.Context, pid peer.ID, msg *pubsub.Message) (res pubsub.ValidationResult) {
 	// Decode resolve msg
+	fmt.Println("Calling Validate")
 	rmsg, err := DecodeResolveMsg(msg.GetData())
 	if err != nil {
 		log.Errorf("error decoding resolve msg cid: %s", err)
