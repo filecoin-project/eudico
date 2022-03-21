@@ -182,14 +182,15 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 
 	log.Infow("Creating new subnet", "subnetID", id)
 	sh := &Subnet{
-		ctx:        ctx,
-		ctxCancel:  cancel,
-		ID:         id,
-		host:       s.host,
-		pubsub:     s.pubsub,
-		nodeServer: s.nodeServer,
-		pmgr:       s.pmgr,
-		consType:   consensus,
+		ctx:          ctx,
+		ctxCancel:    cancel,
+		ID:           id,
+		host:         s.host,
+		pubsub:       s.pubsub,
+		nodeServer:   s.nodeServer,
+		pmgr:         s.pmgr,
+		consType:     consensus,
+		signingState: newSigningState(),
 	}
 
 	// Add subnet to registry
@@ -543,10 +544,16 @@ func (s *SubnetMgr) MineSubnet(
 		return err
 	}
 
-	if st.IsMiner(wallet) && st.Status != subnet.Killed {
+	// Get actor ID for wallet to use for mining.
+	walletID, err := s.api.StateLookupID(ctx, wallet, types.EmptyTSK)
+	if err != nil {
+		return err
+	}
+
+	if st.IsMiner(walletID) && st.Status != subnet.Killed {
 		log.Infow("Starting to mine subnet", "subnetID", id)
 		// We need to start mining from the context of the subnet manager.
-		return sh.mine(s.ctx)
+		return sh.mine(s.ctx, wallet)
 	}
 
 	return xerrors.Errorf("Address %v Not a miner in subnet, or subnet already killed", wallet)

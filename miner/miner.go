@@ -555,10 +555,22 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 		return nil, err
 	}
 
+	// Get cross-message pool from subnet.
+	nn, err := m.api.StateNetworkName(ctx)
+	if err != nil {
+		return nil, err
+	}
+	crossmsgs, err := m.api.GetCrossMsgsPool(ctx, address.SubnetID(nn), base.TipSet.Height()+1)
+	if err != nil {
+		log.Errorw("selecting cross-messages failed", "error", err)
+	}
+
+	log.Debugf("CrossMsgs being proposed in block @%s: %d", base.TipSet.Height()+1, len(crossmsgs))
+
 	tPending := build.Clock.Now()
 
 	// TODO: winning post proof
-	minedBlock, err = m.createBlock(base, m.address, ticket, winner, bvals, postProof, msgs)
+	minedBlock, err = m.createBlock(base, m.address, ticket, winner, bvals, postProof, msgs, crossmsgs)
 	if err != nil {
 		err = xerrors.Errorf("failed to create block: %w", err)
 		return nil, err
@@ -611,7 +623,8 @@ func (m *Miner) computeTicket(ctx context.Context, brand *types.BeaconEntry, bas
 }
 
 func (m *Miner) createBlock(base *MiningBase, addr address.Address, ticket *types.Ticket,
-	eproof *types.ElectionProof, bvals []types.BeaconEntry, wpostProof []proof2.PoStProof, msgs []*types.SignedMessage) (*types.BlockMsg, error) {
+	eproof *types.ElectionProof, bvals []types.BeaconEntry, wpostProof []proof2.PoStProof, msgs []*types.SignedMessage,
+	crossmsgs []*types.Message) (*types.BlockMsg, error) {
 	uts := base.TipSet.MinTimestamp() + build.BlockDelaySecs*(uint64(base.NullRounds)+1)
 
 	nheight := base.TipSet.Height() + base.NullRounds + 1
@@ -624,6 +637,7 @@ func (m *Miner) createBlock(base *MiningBase, addr address.Address, ticket *type
 		Eproof:           eproof,
 		BeaconValues:     bvals,
 		Messages:         msgs,
+		CrossMessages:    crossmsgs,
 		Epoch:            nheight,
 		Timestamp:        uts,
 		WinningPoStProof: wpostProof,

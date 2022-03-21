@@ -19,6 +19,124 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
+// signingState keeps track of checkpoint signing state
+// for an epoch.
+type signingState struct {
+	wait        abi.ChainEpoch
+	currEpoch   abi.ChainEpoch
+	signed      bool
+	checkBuffer map[abi.ChainEpoch]*schema.Checkpoint
+}
+
+func newSigningState() *signingState {
+	return &signingState{
+		checkBuffer: make(map[abi.ChainEpoch]*schema.Checkpoint),
+	}
+}
+
+// getPrevCheck checks if a high-confidence prevCheck cid can be retrieved
+// subnet state or we need to use the one from our checkBuffer.
+func (sh *Subnet) getPrevCheck(store adt.Store, st *subnet.SubnetState, epoch abi.ChainEpoch) (cid.Cid, error) {
+	ep := epoch - st.CheckPeriod
+	prevch, found, err := st.GetCheckpoint(store, ep)
+	if err != nil {
+		return cid.Undef, err
+	}
+	if !found {
+		// if not use the previous from buffer
+		prevch, ok := sh.signingState.checkBuffer[ep]
+		if ok {
+			return prevch.Cid()
+		}
+		// If nothing found in state or buffer
+		return schema.NoPreviousCheck, nil
+
+	}
+	return prevch.Cid()
+}
+
+// gc the check buffer to prevent it from growing indefinitely
+func (sh *Subnet) gcCheckBuf(store adt.Store, st *subnet.SubnetState, epoch abi.ChainEpoch) {
+	ep := epoch - st.CheckPeriod
+	for ep >= 0 {
+		_, found, err := st.GetCheckpoint(store, ep)
+		if err != nil {
+			log.Errorf("error getting checkpoint in gc: %w", err)
+			return
+		}
+		if found {
+			sh.checklk.Lock()
+			// remove if it is in buffer
+			_, ok := sh.signingState.checkBuffer[ep]
+			if !ok {
+				// past cleaned
+				sh.checklk.Unlock()
+				return
+			}
+			delete(sh.signingState.checkBuffer, ep)
+			sh.checklk.Unlock()
+		}
+		ep = ep - st.CheckPeriod
+	}
+}
+
+func (sh *Subnet) resetSigState(epoch abi.ChainEpoch) {
+	sh.checklk.Lock()
+	defer sh.checklk.Unlock()
+	sh.signingState.currEpoch = epoch
+	sh.signingState.wait = 0
+	sh.signingState.signed = false
+}
+
+func (sh *Subnet) sigWaitTick() {
+	sh.checklk.Lock()
+	defer sh.checklk.Unlock()
+	sh.signingState.wait++
+}
+
+func (sh *Subnet) signed(ch *schema.Checkpoint) {
+	sh.checklk.Lock()
+	defer sh.checklk.Unlock()
+	sh.signingState.signed = true
+	sh.signingState.checkBuffer[ch.Epoch()] = ch
+}
+
+func (sh *Subnet) hasSigned() bool {
+	sh.checklk.RLock()
+	defer sh.checklk.RUnlock()
+	return sh.signingState.signed
+}
+
+func (sh *Subnet) sigWaitReached() bool {
+	sh.checklk.RLock()
+	defer sh.checklk.RUnlock()
+	return sh.signingState.wait >= finalityThreshold
+}
+
+func (sh *Subnet) sigWindow() abi.ChainEpoch {
+	sh.checklk.RLock()
+	defer sh.checklk.RUnlock()
+	return sh.signingState.currEpoch
+}
+
+// PopulateCheckpoint sets previous checkpoint and tipsetKey.
+func (sh *Subnet) populateCheckpoint(ctx context.Context, store adt.Store, st *subnet.SubnetState, ch *schema.Checkpoint) error {
+	// Set Previous.
+	prevCid, err := sh.getPrevCheck(store, st, ch.Epoch())
+	if err != nil {
+		return err
+	}
+	ch.SetPrevious(prevCid)
+
+	// Set tipsetKeys for the epoch.
+	ts, err := sh.api.ChainGetTipSetByHeight(ctx, ch.Epoch(), types.EmptyTSK)
+	if err != nil {
+		return err
+	}
+	ch.SetTipsetKey(ts.Key())
+	return nil
+}
+
 func (s *SubnetMgr) SubmitSignedCheckpoint(
 	ctx context.Context, wallet address.Address,
 	id address.SubnetID, ch *schema.Checkpoint) (cid.Cid, error) {

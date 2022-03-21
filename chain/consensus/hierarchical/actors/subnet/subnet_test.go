@@ -570,7 +570,6 @@ func (h *shActorHarness) fullSignCheckpoint(t *testing.T, rt *mock.Runtime, mine
 	nonminer, err := w.WalletNew(ctx, types.KTSecp256k1)
 	require.NoError(t, err)
 	rt.SetCaller(nonminer, builtin.AccountActorCodeID)
-	rt.SetEpoch(abi.ChainEpoch(epoch + 22))
 	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
 	err = ver.Sign(ctx, w, nonminer, ch)
 	require.NoError(t, err)
@@ -583,7 +582,6 @@ func (h *shActorHarness) fullSignCheckpoint(t *testing.T, rt *mock.Runtime, mine
 
 	// Submit checkpoint from second miner
 	rt.SetCaller(miners[1], builtin.AccountActorCodeID)
-	rt.SetEpoch(abi.ChainEpoch(epoch + 22))
 	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
 	err = ver.Sign(ctx, w, miners[1], ch)
 	require.NoError(t, err)

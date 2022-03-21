@@ -24,6 +24,8 @@ import (
 // finalityThreshold determines the number of epochs to wait
 // before considering a change "final" and consider signing the
 // checkpoint
+//
+// This should always be less than the checkpoint period.
 const finalityThreshold = 5
 
 // struct used to propagate detected changes.
@@ -37,14 +39,6 @@ type signInfo struct {
 	checkpoint *schema.Checkpoint
 	addr       address.Address
 	idAddr     address.Address
-}
-
-// signingState keeps track of checkpoint signing state
-// for an epoch.
-type signingState struct {
-	wait      abi.ChainEpoch
-	currEpoch abi.ChainEpoch
-	signed    bool
 }
 
 // listenSubnetEvents is the routine responsible for listening to events
@@ -206,8 +200,6 @@ func (s *SubnetMgr) matchCheckpointSignature(ctx context.Context, sh *Subnet, ne
 	// Get the epoch for the current tipset in subnet.
 	subnetEpoch := newTs.Height()
 
-	// Get the state of the corresponding subnet actor in the parent chain
-	// Get actor from subnet ID
 	subnetActAddr, err := sh.ID.Actor()
 	if err != nil {
 		return false, err
@@ -239,6 +231,8 @@ func (s *SubnetMgr) matchCheckpointSignature(ctx context.Context, sh *Subnet, ne
 	// Reset state if we have changed signing windows
 	if signWindow != sh.sigWindow() {
 		sh.resetSigState(signWindow)
+		// trigger gc
+		go sh.gcCheckBuf(pstore, &snst, signWindow)
 	}
 	_, found, err := snst.GetCheckpoint(pstore, signWindow)
 	if err != nil {
@@ -307,7 +301,7 @@ func (s *SubnetMgr) matchCheckpointSignature(ctx context.Context, sh *Subnet, ne
 				if sh.sigWaitReached() && !sh.hasSigned() {
 					diff.checkToSign = &signInfo{ch, waddr, addr}
 					// Notify that this epoch for subnet has been marked for signing.
-					sh.signed()
+					sh.signed(ch)
 					return true, nil
 				}
 			}
@@ -317,24 +311,6 @@ func (s *SubnetMgr) matchCheckpointSignature(ctx context.Context, sh *Subnet, ne
 	// If not return.
 	return false, nil
 
-}
-
-// PopulateCheckpoint sets previous checkpoint and tipsetKey.
-func (sh *Subnet) populateCheckpoint(ctx context.Context, store adt.Store, st *subnet.SubnetState, ch *schema.Checkpoint) error {
-	// Set Previous.
-	prevCid, err := st.PrevCheckCid(store, ch.Epoch())
-	if err != nil {
-		return err
-	}
-	ch.SetPrevious(prevCid)
-
-	// Set tipsetKeys for the epoch.
-	ts, err := sh.api.ChainGetTipSetByHeight(ctx, ch.Epoch(), types.EmptyTSK)
-	if err != nil {
-		return err
-	}
-	ch.SetTipsetKey(ts.Key())
-	return nil
 }
 
 func (s *SubnetMgr) triggerChange(ctx context.Context, sh *Subnet, diff *diffInfo) (more bool, err error) {
@@ -395,40 +371,4 @@ func (s *SubnetMgr) childCheckDetected(ctx context.Context, info map[string][]ci
 	}
 	return nil
 
-}
-
-func (sh *Subnet) resetSigState(epoch abi.ChainEpoch) {
-	sh.checklk.Lock()
-	defer sh.checklk.Unlock()
-	sh.singingState = &signingState{currEpoch: epoch}
-}
-
-func (sh *Subnet) sigWaitTick() {
-	sh.checklk.Lock()
-	defer sh.checklk.Unlock()
-	sh.singingState.wait++
-}
-
-func (sh *Subnet) signed() {
-	sh.checklk.Lock()
-	defer sh.checklk.Unlock()
-	sh.singingState.signed = true
-}
-
-func (sh *Subnet) hasSigned() bool {
-	sh.checklk.RLock()
-	defer sh.checklk.RUnlock()
-	return sh.singingState.signed
-}
-
-func (sh *Subnet) sigWaitReached() bool {
-	sh.checklk.RLock()
-	defer sh.checklk.RUnlock()
-	return sh.singingState.wait >= finalityThreshold
-}
-
-func (sh *Subnet) sigWindow() abi.ChainEpoch {
-	sh.checklk.RLock()
-	defer sh.checklk.RUnlock()
-	return sh.singingState.currEpoch
 }

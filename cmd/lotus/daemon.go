@@ -13,11 +13,13 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path"
 	"runtime/pprof"
 	"strings"
 
 	"github.com/filecoin-project/go-jsonrpc"
 	paramfetch "github.com/filecoin-project/go-paramfetch"
+	"github.com/gorilla/mux"
 	metricsprom "github.com/ipfs/go-metrics-prometheus"
 	"github.com/mitchellh/go-homedir"
 	"github.com/multiformats/go-multiaddr"
@@ -31,7 +33,9 @@ import (
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/filcns"
+	snmgr "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/manager"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -44,6 +48,7 @@ import (
 	"github.com/filecoin-project/lotus/lib/ulimit"
 	"github.com/filecoin-project/lotus/metrics"
 	"github.com/filecoin-project/lotus/node"
+	"github.com/filecoin-project/lotus/node/impl"
 	"github.com/filecoin-project/lotus/node/modules"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/modules/testing"
@@ -313,18 +318,59 @@ var DaemonCmd = &cli.Command{
 			log.Warnf("unable to inject prometheus ipfs/go-metrics exporter; some metrics will be unavailable; err: %s", err)
 		}
 
-		var api api.FullNode
+		// Populate JSON-RPC options.
+		serverOptions := make([]jsonrpc.ServerOption, 0)
+		if maxRequestSize := cctx.Int("api-max-req-size"); maxRequestSize != 0 {
+			serverOptions = append(serverOptions, jsonrpc.WithMaxRequestSize(int64(maxRequestSize)))
+		}
+
+		globalMux := mux.NewRouter()
+		subnetMux := mux.NewRouter()
+		globalMux.NewRoute().PathPrefix("/subnet/").Handler(subnetMux)
+
+		serveNamedApi := func(p string, iapi api.FullNode) error {
+			pp := path.Join("/subnet/", p+"/")
+
+			var h http.Handler
+			// If this is a full node API
+			api, ok := iapi.(*impl.FullNodeAPI)
+			if ok {
+				// Instantiate the full node handler.
+				h, err = node.FullNodeHandler(pp, api, true, serverOptions...)
+				if err != nil {
+					return fmt.Errorf("failed to instantiate rpc handler: %s", err)
+				}
+			} else {
+				// If not instantiate a subnet api
+				api, ok := iapi.(*snmgr.API)
+				if !ok {
+					return xerrors.Errorf("Couldn't instantiate new subnet API. Something went wrong: %s", err)
+				}
+				// Instantiate the full node handler.
+				h, err = snmgr.FullNodeHandler(pp, api, true, serverOptions...)
+				if err != nil {
+					return fmt.Errorf("failed to instantiate rpc handler: %s", err)
+				}
+			}
+			fmt.Println("[*] serve new subnet API", pp)
+			subnetMux.NewRoute().PathPrefix(pp).Handler(h)
+			return nil
+		}
+
+		var napi api.FullNode
 		stop, err := node.New(ctx,
-			node.FullAPI(&api, node.Lite(isLite)),
+			node.FullAPI(&napi),
 
 			node.Base(),
 			node.Repo(r),
 
 			node.Override(new(dtypes.Bootstrapper), isBootstrapper),
 			node.Override(new(dtypes.ShutdownChan), shutdownChan),
+			node.Override(new(api.FullNodeServer), serveNamedApi),
 
 			genesis,
 			liteModeDeps,
+			// overrides,
 
 			node.ApplyIf(func(s *node.Settings) bool { return cctx.IsSet("api") },
 				node.Override(node.SetApiEndpointKey, func(lr repo.LockedRepo) error {
@@ -345,7 +391,7 @@ var DaemonCmd = &cli.Command{
 		}
 
 		if cctx.String("import-key") != "" {
-			if err := importKey(ctx, api, cctx.String("import-key")); err != nil {
+			if err := importKey(ctx, napi, cctx.String("import-key")); err != nil {
 				log.Errorf("importing key failed: %+v", err)
 			}
 		}
@@ -358,18 +404,12 @@ var DaemonCmd = &cli.Command{
 		//
 		// Instantiate JSON-RPC endpoint.
 		// ----
-
-		// Populate JSON-RPC options.
-		serverOptions := make([]jsonrpc.ServerOption, 0)
-		if maxRequestSize := cctx.Int("api-max-req-size"); maxRequestSize != 0 {
-			serverOptions = append(serverOptions, jsonrpc.WithMaxRequestSize(int64(maxRequestSize)))
-		}
-
-		// Instantiate the full node handler.
-		h, err := node.FullNodeHandler("", api, true, serverOptions...)
+		h, err := node.FullNodeHandler("", napi, true, serverOptions...)
 		if err != nil {
 			return fmt.Errorf("failed to instantiate rpc handler: %s", err)
 		}
+
+		globalMux.NewRoute().PathPrefix("/").Handler(h)
 
 		// Serve the RPC.
 		rpcStopper, err := node.ServeRPC(h, "lotus-daemon", endpoint)
@@ -521,7 +561,7 @@ func ImportChain(ctx context.Context, r repo.Repo, fname string, snapshot bool) 
 	}
 
 	// TODO: We need to supply the actual beacon after v14
-	stm, err := stmgr.NewStateManager(cst, filcns.NewTipSetExecutor(), nil, vm.Syscalls(ffiwrapper.ProofVerifier), filcns.DefaultUpgradeSchedule(), nil)
+	stm, err := stmgr.NewStateManager(cst, common.NewFilCnsTipSetExecutor(), nil, vm.Syscalls(ffiwrapper.ProofVerifier), filcns.DefaultUpgradeSchedule(), nil)
 	if err != nil {
 		return err
 	}

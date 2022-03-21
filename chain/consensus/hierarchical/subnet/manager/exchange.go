@@ -37,7 +37,7 @@ type helloService struct {
 	svc *hello.Service
 	// FIXME: We should probably garbage collect this map
 	// periodically to prevent from growing indefinitely
-	// with peers that no longer part of the subnet.
+	// with peers that are no longer part of the subnet.
 	peers map[peer.ID]abi.ChainEpoch
 	lk    *keymutex.KeyMutex
 }

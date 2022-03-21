@@ -81,7 +81,7 @@ type Subnet struct {
 
 	// Checkpointing signing state
 	checklk      sync.RWMutex
-	singingState *signingState
+	signingState *signingState
 
 	// Cross-msg resolver
 	r *resolver.Resolver
@@ -256,14 +256,14 @@ func (sh *Subnet) isMining() bool {
 	return sh.miningCtx != nil
 }
 
-func (sh *Subnet) mine(ctx context.Context) error {
+func (sh *Subnet) mine(ctx context.Context, wallet address.Address) error {
 	if sh.miningCtx != nil {
 		log.Warnw("already mining in subnet", "subnetID", sh.ID)
 		return nil
 	}
 
 	mctx, cancel := context.WithCancel(ctx)
-	if err := subcns.Mine(mctx, sh.api, sh.consType); err != nil {
+	if err := subcns.Mine(mctx, sh.api, wallet, sh.consType); err != nil {
 		cancel()
 		return err
 	}

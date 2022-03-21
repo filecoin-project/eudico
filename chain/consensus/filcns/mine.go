@@ -11,7 +11,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/types"
-	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 )
 
 func (filec *FilecoinEC) CreateBlock(ctx context.Context, w api.Wallet, bt *api.BlockTemplate) (*types.FullBlock, error) {
@@ -52,7 +51,7 @@ func (filec *FilecoinEC) CreateBlock(ctx context.Context, w api.Wallet, bt *api.
 	var blsMessages []*types.Message
 	var secpkMessages []*types.SignedMessage
 
-	var blsMsgCids, secpkMsgCids []cid.Cid
+	var blsMsgCids, secpkMsgCids, crossMsgCids []cid.Cid
 	var blsSigs []crypto.Signature
 	for _, msg := range bt.Messages {
 		if msg.Signature.Type == crypto.SigTypeBLS {
@@ -79,6 +78,15 @@ func (filec *FilecoinEC) CreateBlock(ctx context.Context, w api.Wallet, bt *api.
 		}
 	}
 
+	for _, msg := range bt.CrossMessages {
+		c, err := filec.sm.ChainStore().PutMessage(ctx, msg)
+		if err != nil {
+			return nil, err
+		}
+
+		crossMsgCids = append(crossMsgCids, c)
+	}
+
 	store := filec.sm.ChainStore().ActorStore(ctx)
 	blsmsgroot, err := consensus.ToMessagesArray(store, blsMsgCids)
 	if err != nil {
@@ -88,15 +96,15 @@ func (filec *FilecoinEC) CreateBlock(ctx context.Context, w api.Wallet, bt *api.
 	if err != nil {
 		return nil, xerrors.Errorf("building secpk amt: %w", err)
 	}
-
-	emptyroot, err := blockadt.MakeEmptyArray(store).Root()
+	crossmsgroot, err := consensus.ToMessagesArray(store, crossMsgCids)
 	if err != nil {
-		return nil, err
+		return nil, xerrors.Errorf("building cross amt: %w", err)
 	}
+
 	mmcid, err := store.Put(store.Context(), &types.MsgMeta{
 		BlsMessages:   blsmsgroot,
 		SecpkMessages: secpkmsgroot,
-		CrossMessages: emptyroot,
+		CrossMessages: crossmsgroot,
 	})
 	if err != nil {
 		return nil, err
@@ -139,6 +147,7 @@ func (filec *FilecoinEC) CreateBlock(ctx context.Context, w api.Wallet, bt *api.
 		Header:        next,
 		BlsMessages:   blsMessages,
 		SecpkMessages: secpkMessages,
+		CrossMessages: bt.CrossMessages,
 	}
 
 	return fullBlock, nil

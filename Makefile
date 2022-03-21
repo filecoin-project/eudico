@@ -64,7 +64,7 @@ CLEAN+=build/.update-modules
 deps: $(BUILD_DEPS)
 .PHONY: deps
 
-build-devnets: build lotus-seed lotus-shed lotus-wallet lotus-gateway
+build-devnets: build lotus-seed lotus-shed lotus-wallet lotus-gateway eudico
 .PHONY: build-devnets
 
 debug: GOFLAGS+=-tags=debug
@@ -89,14 +89,14 @@ lotus: $(BUILD_DEPS)
 .PHONY: lotus
 BINS+=lotus
 
-eudico-linux: GOFLAGS+=-tags=debug
+eudico-linux: GOFLAGS+=-tags=2k
 eudico-linux: $(BUILD_DEPS)
 	rm -f eudico-linux
 	GOOS=linux $(GOCC) build $(GOFLAGS) -o eudico-linux ./cmd/eudico
 
 .PHONY: eudico-linux
 
-eudico: GOFLAGS+=-tags=debug
+eudico: GOFLAGS+=-tags=2k
 eudico: $(BUILD_DEPS)
 	rm -f eudico
 	$(GOCC) build $(GOFLAGS) -o eudico ./cmd/eudico

@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"fmt"
+
 	"github.com/Gurpartap/async"
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/network"
@@ -19,6 +20,7 @@ import (
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/consensus"
+	"github.com/filecoin-project/lotus/chain/consensus/common/crossmsg"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
@@ -313,19 +315,19 @@ func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.St
 	// If subnet manager is not set we are in the root chain and we don't need to get parentSCA
 	// state
 	if submgr != nil {
-		parentSCA, pstore, err = getSCAState(ctx, sm, submgr, netName.Parent(), baseTs)
+		parentSCA, pstore, err = crossmsg.GetSCAState(ctx, sm, submgr, netName.Parent(), baseTs)
 		if err != nil {
 			return err
 		}
 	}
 	// Get SCA state in subnet.
-	snSCA, snstore, err = getSCAState(ctx, sm, submgr, netName, baseTs)
+	snSCA, snstore, err = crossmsg.GetSCAState(ctx, sm, submgr, netName, baseTs)
 	if err != nil {
 		return err
 	}
 	// Check cross messages
 	for i, m := range b.CrossMessages {
-		if err := checkCrossMsg(ctx, r, pstore, snstore, parentSCA, snSCA, m); err != nil {
+		if err := crossmsg.CheckCrossMsg(ctx, r, pstore, snstore, parentSCA, snSCA, m); err != nil {
 			return xerrors.Errorf("failed to check message %s: %w", m.Cid(), err)
 		}
 
@@ -535,13 +537,13 @@ func FilterBlockMessages(
 	// If subnet manager is not set we are in the root chain and we don't need to get parentSCA
 	// state
 	if submgr != nil {
-		parentSCA, pstore, err = getSCAState(ctx, sm, submgr, netName.Parent(), baseTs)
+		parentSCA, pstore, err = crossmsg.GetSCAState(ctx, sm, submgr, netName.Parent(), baseTs)
 		if err != nil {
 			return nil, err
 		}
 	}
 	// Get SCA state in subnet.
-	snSCA, snstore, err = getSCAState(ctx, sm, submgr, netName, baseTs)
+	snSCA, snstore, err = crossmsg.GetSCAState(ctx, sm, submgr, netName, baseTs)
 	if err != nil {
 		return nil, err
 	}
@@ -549,7 +551,7 @@ func FilterBlockMessages(
 	var validCrossMsgs []*types.Message
 	// Check cross messages
 	for i, m := range b.CrossMessages {
-		if err := checkCrossMsg(ctx, r, pstore, snstore, parentSCA, snSCA, m); err != nil {
+		if err := crossmsg.CheckCrossMsg(ctx, r, pstore, snstore, parentSCA, snSCA, m); err != nil {
 			log.Infof("failed to check message %s: %w", m.Cid(), err)
 			continue
 		}

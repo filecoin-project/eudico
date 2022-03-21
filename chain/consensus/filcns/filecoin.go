@@ -5,12 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"os"
 	"strings"
 	"time"
-
-	"github.com/filecoin-project/lotus/chain/rand"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/ipfs/go-cid"
@@ -36,6 +33,11 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin/power"
 	"github.com/filecoin-project/lotus/chain/beacon"
 	"github.com/filecoin-project/lotus/chain/consensus"
+	"github.com/filecoin-project/lotus/chain/consensus/common/crossmsg"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
+	"github.com/filecoin-project/lotus/chain/rand"
 	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
@@ -62,6 +64,8 @@ type FilecoinEC struct {
 	verifier ffiwrapper.Verifier
 
 	genesis *types.TipSet
+
+	r *resolver.Resolver
 }
 
 // Blocks that are more than MaxHeightDrift epochs above
@@ -72,6 +76,7 @@ func NewFilecoinExpectedConsensus(
 	ctx context.Context,
 	sm *stmgr.StateManager,
 	beacon beacon.Schedule,
+	r *resolver.Resolver,
 	verifier ffiwrapper.Verifier,
 	genesis chain.Genesis,
 ) consensus.Consensus {
@@ -87,6 +92,7 @@ func NewFilecoinExpectedConsensus(
 		sm:       sm,
 		verifier: verifier,
 		genesis:  genesis,
+		r:        r,
 	}
 }
 
@@ -579,6 +585,41 @@ func (filec *FilecoinEC) checkBlockMessages(ctx context.Context, b *types.FullBl
 		}
 	}
 
+	crossArr := blockadt.MakeEmptyArray(tmpstore)
+	// Preamble to get states required for cross-msg checks.
+	var (
+		parentSCA *sca.SCAState
+		snSCA     *sca.SCAState
+		pstore    blockadt.Store
+		snstore   blockadt.Store
+	)
+	// Get SCA state in rootnet
+	// NOTE: filecns only supported in rootnet
+	snSCA, snstore, err = crossmsg.GetSCAState(ctx, filec.sm, nil, address.RootSubnet, baseTs)
+	if err != nil {
+		return err
+	}
+
+	// Check cross messages
+	for i, m := range b.CrossMessages {
+		if err := crossmsg.CheckCrossMsg(ctx, filec.r, pstore, snstore, parentSCA, snSCA, m); err != nil {
+			log.Infof("failed to check message %s: %w", m.Cid(), err)
+			continue
+		}
+
+		c, err := store.PutMessage(ctx, tmpbs, m)
+		if err != nil {
+			log.Infof("failed to store message %s: %w", m.Cid(), err)
+			continue
+		}
+
+		k := cbg.CborCid(c)
+		if err := crossArr.Set(uint64(i), &k); err != nil {
+			log.Infof("failed to put cross message at index %d: %w", i, err)
+			continue
+		}
+	}
+
 	bmroot, err := bmArr.Root()
 	if err != nil {
 		return xerrors.Errorf("failed to root bls msgs: %w", err)
@@ -590,14 +631,15 @@ func (filec *FilecoinEC) checkBlockMessages(ctx context.Context, b *types.FullBl
 		return xerrors.Errorf("failed to root secp msgs: %w", err)
 	}
 
-	emptyroot, err := blockadt.MakeEmptyArray(tmpstore).Root()
+	crossroot, err := crossArr.Root()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to root cross msgs: %w", err)
 	}
+
 	mrcid, err := tmpstore.Put(ctx, &types.MsgMeta{
 		BlsMessages:   bmroot,
 		SecpkMessages: smroot,
-		CrossMessages: emptyroot,
+		CrossMessages: crossroot,
 	})
 	if err != nil {
 		return xerrors.Errorf("failed to put msg meta: %w", err)
@@ -763,6 +805,7 @@ func (filec *FilecoinEC) validateMsgMeta(ctx context.Context, msg *types.BlockMs
 	store := blockadt.WrapStore(ctx, cbor.NewCborStore(bstore.NewMemory()))
 	bmArr := blockadt.MakeEmptyArray(store)
 	smArr := blockadt.MakeEmptyArray(store)
+	crossArr := blockadt.MakeEmptyArray(store)
 
 	for i, m := range msg.BlsMessages {
 		c := cbg.CborCid(m)
@@ -778,6 +821,12 @@ func (filec *FilecoinEC) validateMsgMeta(ctx context.Context, msg *types.BlockMs
 		}
 	}
 
+	for i, m := range msg.CrossMessages {
+		c := cbg.CborCid(m)
+		if err := crossArr.Set(uint64(i), &c); err != nil {
+			return err
+		}
+	}
 	bmroot, err := bmArr.Root()
 	if err != nil {
 		return err
@@ -787,17 +836,16 @@ func (filec *FilecoinEC) validateMsgMeta(ctx context.Context, msg *types.BlockMs
 	if err != nil {
 		return err
 	}
-	emptyroot, err := blockadt.MakeEmptyArray(store).Root()
+
+	crossroot, err := crossArr.Root()
 	if err != nil {
 		return err
 	}
-	// TODO FIXME: No support for the application of cross-messages with
-	// filecoin consensus. To support cross-messages with Filecoin consensus this
-	// will need to change.
+
 	mrcid, err := store.Put(store.Context(), &types.MsgMeta{
 		BlsMessages:   bmroot,
 		SecpkMessages: smroot,
-		CrossMessages: emptyroot,
+		CrossMessages: crossroot,
 	})
 
 	if err != nil {

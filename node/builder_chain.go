@@ -15,6 +15,7 @@ import (
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/beacon"
 	"github.com/filecoin-project/lotus/chain/consensus"
+	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	module "github.com/filecoin-project/lotus/chain/consensus/hierarchical/modules"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
@@ -75,7 +76,7 @@ var ChainNode = Options(
 	// Consensus: Chain storage/access
 	Override(new(chain.Genesis), chain.LoadGenesis),
 	Override(new(store.WeightFunc), filcns.Weight),
-	Override(new(stmgr.Executor), filcns.NewTipSetExecutor()),
+	Override(new(stmgr.Executor), common.NewFilCnsTipSetExecutor),
 	Override(new(consensus.Consensus), filcns.NewFilecoinExpectedConsensus),
 	Override(new(*store.ChainStore), modules.ChainStore),
 	Override(new(*stmgr.StateManager), modules.StateManager),
@@ -139,7 +140,7 @@ var ChainNode = Options(
 	Override(new(*full.GasPriceCache), full.NewGasPriceCache),
 
 	// Subneting
-	// Start sharding sub to listent to shard events
+	// Start hierarchical sub to listen to shard events
 	Override(new(*resolver.Resolver), resolver.NewRootResolver),
 	Override(new(*snmgr.SubnetMgr), snmgr.NewSubnetMgr),
 	Override(new(subnet.SubnetMgr), module.SetSubMgrIface),

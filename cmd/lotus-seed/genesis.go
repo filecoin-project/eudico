@@ -26,8 +26,8 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 
 	"github.com/filecoin-project/lotus/build"
+	genesis2 "github.com/filecoin-project/lotus/chain/consensus/genesis"
 	"github.com/filecoin-project/lotus/chain/gen"
-	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/genesis"
 )
@@ -69,6 +69,10 @@ var genesisNewCmd = &cli.Command{
 		if out.NetworkName == "" {
 			out.NetworkName = "localnet-" + uuid.New().String()
 		}
+
+		// FIXME: force localnets to always have root/ as ID
+		// if not, things may break in hierarchical consensus.
+		out.NetworkName = address.RootSubnet.String()
 
 		genb, err := json.MarshalIndent(&out, "", "  ")
 		if err != nil {
