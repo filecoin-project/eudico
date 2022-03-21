@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 
 	"github.com/filecoin-project/lotus/chain/consensus/actors/registry"
+	"github.com/filecoin-project/lotus/chain/consensus/common/crossmsg"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/rand"
@@ -203,7 +204,7 @@ func (t *FilCnsTipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateM
 		}
 
 		// Sort cross-messages deterministically before applying them
-		crossm, aerr := sortCrossMsgs(ctx, sm, cr, b.CrossMessages, ts)
+		crossm, aerr := crossmsg.SortCrossMsgs(ctx, sm, cr, b.CrossMessages, ts)
 		if aerr != nil {
 			return cid.Undef, cid.Undef, xerrors.Errorf("error sorting cross-msgs: %w", aerr)
 		}
@@ -220,7 +221,7 @@ func (t *FilCnsTipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateM
 			}
 			log.Infof("Executing cross message: %v", crossm)
 
-			if err := ApplyCrossMsg(ctx, vmi, nil, em, m, ts); err != nil {
+			if err := crossmsg.ApplyCrossMsg(ctx, vmi, nil, em, m, ts); err != nil {
 				return cid.Undef, cid.Undef, xerrors.Errorf("cross messsage application failed: %w", err)
 			}
 			processedMsgs[m.Cid()] = struct{}{}

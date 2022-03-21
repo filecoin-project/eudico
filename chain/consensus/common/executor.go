@@ -16,6 +16,7 @@ import (
 
 	"github.com/filecoin-project/lotus/chain/consensus/actors/registry"
 	"github.com/filecoin-project/lotus/chain/consensus/actors/reward"
+	"github.com/filecoin-project/lotus/chain/consensus/common/crossmsg"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/rand"
@@ -38,7 +39,8 @@ func DefaultUpgradeSchedule() stmgr.UpgradeSchedule {
 	}
 
 	for _, u := range updates {
-                // NOTE: Using default `UpgradeScheduler` for eudico instead of disabling it. This may be revisited if eudico                  ends up needing different upgrade strategies.
+		// NOTE: Using default `UpgradeScheduler` for eudico instead of disabling it. This may be revisited if eudico
+		// ends up needing different upgrade strategies.
 		// if u.Height < 0 {
 		// 	// upgrade disabled
 		// 	continue
@@ -161,7 +163,7 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 		}
 
 		// Sort cross-messages deterministically before applying them
-		crossm, err := sortCrossMsgs(ctx, sm, cr, b.CrossMessages, ts)
+		crossm, err := crossmsg.SortCrossMsgs(ctx, sm, cr, b.CrossMessages, ts)
 		if err != nil {
 			return cid.Undef, cid.Undef, xerrors.Errorf("error sorting cross-msgs: %w", err)
 		}
@@ -178,7 +180,7 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 			}
 			log.Infof("Executing cross message: %v", crossm)
 
-			if err := ApplyCrossMsg(ctx, vmi, t.submgr, em, m, ts); err != nil {
+			if err := crossmsg.ApplyCrossMsg(ctx, vmi, t.submgr, em, m, ts); err != nil {
 				return cid.Undef, cid.Undef, xerrors.Errorf("cross messsage application failed: %w", err)
 			}
 			processedMsgs[m.Cid()] = struct{}{}
