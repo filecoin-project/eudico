@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"os"
 	"strings"
 	"time"
@@ -67,7 +68,13 @@ type FilecoinEC struct {
 // the theoretical max height based on systime are quickly rejected
 const MaxHeightDrift = 5
 
-func NewFilecoinExpectedConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, verifier ffiwrapper.Verifier, genesis chain.Genesis) consensus.Consensus {
+func NewFilecoinExpectedConsensus(
+	ctx context.Context,
+	sm *stmgr.StateManager,
+	beacon beacon.Schedule,
+	verifier ffiwrapper.Verifier,
+	genesis chain.Genesis,
+) consensus.Consensus {
 	if build.InsecurePoStValidation {
 		log.Warn("*********************************************************************************************")
 		log.Warn(" [INSECURE-POST-VALIDATION] Insecure test validation is enabled. If you see this outside of a test, it is a severe bug! ")
@@ -883,6 +890,10 @@ func (filec *FilecoinEC) isChainNearSynced() bool {
 	timestamp := ts.MinTimestamp()
 	timestampTime := time.Unix(int64(timestamp), 0)
 	return build.Clock.Since(timestampTime) < 6*time.Hour
+}
+
+func (filec *FilecoinEC) Type() hierarchical.ConsensusType {
+	return hierarchical.FilecoinEC
 }
 
 var _ consensus.Consensus = &FilecoinEC{}

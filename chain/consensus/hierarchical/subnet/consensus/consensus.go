@@ -3,10 +3,9 @@ package consensus
 import (
 	"context"
 
-	"github.com/filecoin-project/go-address"
-	logging "github.com/ipfs/go-log/v2"
 	"golang.org/x/xerrors"
 
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/beacon"
@@ -15,14 +14,13 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
+	"github.com/filecoin-project/lotus/chain/consensus/tendermint"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
-
-var log = logging.Logger("subnet-cns")
 
 // TODO // FIXME: Make an SubnetConsensus interface from this functions
 // to avoid having to use so many switch/cases. Deferring to the next
@@ -33,22 +31,28 @@ func Weight(consensus hierarchical.ConsensusType) (store.WeightFunc, error) {
 		return delegcns.Weight, nil
 	case hierarchical.PoW:
 		return tspow.Weight, nil
+	case hierarchical.Tendermint:
+		return tendermint.Weight, nil
 	default:
 		return nil, xerrors.New("consensus type not suported")
 	}
 }
 
-func New(consensus hierarchical.ConsensusType,
+func New(
+	ctx context.Context,
+	consensus hierarchical.ConsensusType,
 	sm *stmgr.StateManager, snMgr subnet.SubnetMgr,
 	beacon beacon.Schedule, r *resolver.Resolver,
 	verifier ffiwrapper.Verifier,
-	genesis chain.Genesis, netName dtypes.NetworkName) (consensus.Consensus, error) {
-
+	genesis chain.Genesis, netName dtypes.NetworkName,
+) (consensus.Consensus, error) {
 	switch consensus {
 	case hierarchical.Delegated:
-		return delegcns.NewDelegatedConsensus(sm, snMgr, beacon, r, verifier, genesis, netName), nil
+		return delegcns.NewDelegatedConsensus(ctx, sm, snMgr, beacon, r, verifier, genesis, netName), nil
 	case hierarchical.PoW:
-		return tspow.NewTSPoWConsensus(sm, snMgr, beacon, r, verifier, genesis, netName), nil
+		return tspow.NewTSPoWConsensus(ctx, sm, snMgr, beacon, r, verifier, genesis, netName), nil
+	case hierarchical.Tendermint:
+		return tendermint.NewConsensus(ctx, sm, snMgr, beacon, r, verifier, genesis, netName), nil
 	default:
 		return nil, xerrors.New("consensus type not suported")
 	}
@@ -61,6 +65,8 @@ func Mine(ctx context.Context, api v1api.FullNode, wallet address.Address, cnsTy
 		go delegcns.Mine(ctx, api)
 	case hierarchical.PoW:
 		go tspow.Mine(ctx, wallet, api)
+	case hierarchical.Tendermint:
+		go tendermint.Mine(ctx, wallet, api)
 	default:
 		return xerrors.New("consensus type not suported")
 	}

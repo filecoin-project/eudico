@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"time"
 
@@ -28,9 +29,9 @@ import (
 	"github.com/filecoin-project/lotus/node"
 )
 
-func NewRootDelegatedConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
+func NewRootDelegatedConsensus(ctx context.Context, sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
 	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
-	return delegcns.NewDelegatedConsensus(sm, nil, beacon, r, verifier, genesis, netName)
+	return delegcns.NewDelegatedConsensus(ctx, sm, nil, beacon, r, verifier, genesis, netName)
 }
 
 var delegatedCmd = &cli.Command{

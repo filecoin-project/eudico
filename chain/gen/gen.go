@@ -511,7 +511,9 @@ func (cg *ChainGen) makeBlock(parents *types.TipSet, m address.Address, vrfticke
 		ts = parents.MinTimestamp() + uint64(height-parents.Height())*build.BlockDelaySecs
 	}
 
-	fblk, err := filcns.NewFilecoinExpectedConsensus(cg.sm, nil, nil, nil).CreateBlock(context.TODO(), cg.w, &api.BlockTemplate{
+	ctx := context.TODO()
+
+	fblk, err := filcns.NewFilecoinExpectedConsensus(ctx, cg.sm, nil, nil, nil).CreateBlock(ctx, cg.w, &api.BlockTemplate{
 		Miner:            m,
 		Parents:          parents.Key(),
 		Ticket:           vrfticket,

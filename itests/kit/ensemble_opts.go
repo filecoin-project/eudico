@@ -1,6 +1,7 @@
 package kit
 
 import (
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"time"
 
 	"github.com/filecoin-project/go-state-types/abi"
@@ -25,6 +26,8 @@ type ensembleOpts struct {
 	mockProofs   bool
 
 	upgradeSchedule stmgr.UpgradeSchedule
+
+	consensus hierarchical.ConsensusType
 }
 
 var DefaultEnsembleOpts = ensembleOpts{
@@ -33,6 +36,30 @@ var DefaultEnsembleOpts = ensembleOpts{
 		Height:  -1,
 		Network: build.NewestNetworkVersion,
 	}},
+}
+
+// TSPoW activates PoW consensus protocol in Eudico.
+func TSPoW() EnsembleOpt {
+	return func(opts *ensembleOpts) error {
+		opts.consensus = hierarchical.PoW
+		return nil
+	}
+}
+
+// Delegated activates Delegated consensus protocol in Eudico.
+func Delegated() EnsembleOpt {
+	return func(opts *ensembleOpts) error {
+		opts.consensus = hierarchical.Delegated
+		return nil
+	}
+}
+
+// Tendermint activates Tendermint consensus protocol in Eudico.
+func Tendermint() EnsembleOpt {
+	return func(opts *ensembleOpts) error {
+		opts.consensus = hierarchical.Tendermint
+		return nil
+	}
 }
 
 // MockProofs activates mock proofs for the entire ensemble.

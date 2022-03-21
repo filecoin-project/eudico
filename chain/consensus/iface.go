@@ -7,6 +7,7 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 
 	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
@@ -16,4 +17,5 @@ type Consensus interface {
 	IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool
 
 	CreateBlock(ctx context.Context, w api.Wallet, bt *api.BlockTemplate) (*types.FullBlock, error)
+	Type() hierarchical.ConsensusType
 }

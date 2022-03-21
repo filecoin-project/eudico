@@ -101,8 +101,16 @@ type TSPoW struct {
 // the theoretical max height based on systime are quickly rejected
 const MaxHeightDrift = 5
 
-func NewTSPoWConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon.Schedule, r *resolver.Resolver,
-	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
+func NewTSPoWConsensus(
+	ctx context.Context,
+	sm *stmgr.StateManager,
+	submgr subnet.SubnetMgr,
+	beacon beacon.Schedule,
+	r *resolver.Resolver,
+	verifier ffiwrapper.Verifier,
+	genesis chain.Genesis,
+	netName dtypes.NetworkName,
+) consensus.Consensus {
 	return &TSPoW{
 		store:    sm.ChainStore(),
 		beacon:   beacon,
@@ -338,6 +346,10 @@ func (tsp *TSPoW) validateBlockHeader(ctx context.Context, b *types.BlockHeader)
 	}
 
 	return "", nil
+}
+
+func (tsp *TSPoW) Type() hierarchical.ConsensusType {
+	return hierarchical.PoW
 }
 
 func BestWorkBlock(ts *types.TipSet) *types.BlockHeader {
