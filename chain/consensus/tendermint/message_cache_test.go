@@ -36,7 +36,7 @@ func TestTendermintMessageCache(t *testing.T) {
 	_, sent = c.getInfo(badMessage)
 	require.Equal(t, false, sent)
 
-	c.clearSentMessages(finalityWait + 2)
+	c.clearSentMessages(cacheFinalityWait + 2)
 	shouldSend = c.shouldSendMessage(badMessage)
 	require.Equal(t, true, shouldSend)
 	_, sent = c.getInfo(badMessage)
