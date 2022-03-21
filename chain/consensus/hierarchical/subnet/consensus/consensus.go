@@ -2,10 +2,11 @@ package consensus
 
 import (
 	"context"
-	"github.com/filecoin-project/go-address"
+
 	logging "github.com/ipfs/go-log/v2"
 	"golang.org/x/xerrors"
 
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/beacon"
@@ -40,19 +41,21 @@ func Weight(consensus hierarchical.ConsensusType) (store.WeightFunc, error) {
 	}
 }
 
-func New(consensus hierarchical.ConsensusType,
+func New(
+	ctx context.Context,
+	consensus hierarchical.ConsensusType,
 	sm *stmgr.StateManager, snMgr subnet.SubnetMgr,
 	beacon beacon.Schedule, r *resolver.Resolver,
 	verifier ffiwrapper.Verifier,
-	genesis chain.Genesis, netName dtypes.NetworkName) (consensus.Consensus, error) {
-
+	genesis chain.Genesis, netName dtypes.NetworkName,
+) (consensus.Consensus, error) {
 	switch consensus {
 	case hierarchical.Delegated:
-		return delegcns.NewDelegatedConsensus(sm, snMgr, beacon, r, verifier, genesis, netName), nil
+		return delegcns.NewDelegatedConsensus(ctx, sm, snMgr, beacon, r, verifier, genesis, netName), nil
 	case hierarchical.PoW:
-		return tspow.NewTSPoWConsensus(sm, snMgr, beacon, r, verifier, genesis, netName), nil
+		return tspow.NewTSPoWConsensus(ctx, sm, snMgr, beacon, r, verifier, genesis, netName), nil
 	case hierarchical.Tendermint:
-		return tendermint.NewConsensus(sm, snMgr, beacon, r, verifier, genesis, netName), nil
+		return tendermint.NewConsensus(ctx, sm, snMgr, beacon, r, verifier, genesis, netName), nil
 	default:
 		return nil, xerrors.New("consensus type not suported")
 	}

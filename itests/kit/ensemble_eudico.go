@@ -291,19 +291,19 @@ func (n *EudicoEnsemble) Miner(minerNode *TestMiner, full *TestFullNode, opts ..
 	return n
 }
 
-func NewRootTSPoWConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
+func NewRootTSPoWConsensus(ctx context.Context, sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
 	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
-	return tspow.NewTSPoWConsensus(sm, nil, beacon, r, verifier, genesis, netName)
+	return tspow.NewTSPoWConsensus(ctx, sm, nil, beacon, r, verifier, genesis, netName)
 }
 
-func NewRootDelegatedConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
+func NewRootDelegatedConsensus(ctx context.Context, sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
 	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
-	return delegcns.NewDelegatedConsensus(sm, nil, beacon, r, verifier, genesis, netName)
+	return delegcns.NewDelegatedConsensus(ctx, sm, nil, beacon, r, verifier, genesis, netName)
 }
 
-func NewRootTendermintConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
+func NewRootTendermintConsensus(ctx context.Context, sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
 	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
-	return tendermint.NewConsensus(sm, nil, beacon, r, verifier, genesis, netName)
+	return tendermint.NewConsensus(ctx, sm, nil, beacon, r, verifier, genesis, netName)
 }
 
 func NetworkName(mctx helpers.MetricsCtx,

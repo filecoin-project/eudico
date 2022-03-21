@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -31,9 +32,9 @@ import (
 	"github.com/filecoin-project/lotus/node"
 )
 
-func NewRootTSPoWConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
+func NewRootTSPoWConsensus(ctx context.Context, sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
 	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
-	return tspow.NewTSPoWConsensus(sm, nil, beacon, r, verifier, genesis, netName)
+	return tspow.NewTSPoWConsensus(ctx, sm, nil, beacon, r, verifier, genesis, netName)
 }
 
 var tpowCmd = &cli.Command{

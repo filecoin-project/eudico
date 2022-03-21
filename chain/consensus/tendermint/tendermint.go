@@ -72,6 +72,7 @@ type Tendermint struct {
 }
 
 func NewConsensus(
+	ctx context.Context,
 	sm *stmgr.StateManager,
 	submgr subnet.SubnetMgr,
 	b beacon.Schedule,
@@ -80,8 +81,6 @@ func NewConsensus(
 	g chain.Genesis,
 	netName dtypes.NetworkName,
 ) consensus.Consensus {
-	ctx := context.TODO()
-
 	subnetID := address.SubnetID(netName)
 	log.Infof("New Tendermint consensus for %s subnet", subnetID)
 
