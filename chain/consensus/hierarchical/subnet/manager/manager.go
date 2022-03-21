@@ -182,14 +182,15 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 
 	log.Infow("Creating new subnet", "subnetID", id)
 	sh := &Subnet{
-		ctx:        ctx,
-		ctxCancel:  cancel,
-		ID:         id,
-		host:       s.host,
-		pubsub:     s.pubsub,
-		nodeServer: s.nodeServer,
-		pmgr:       s.pmgr,
-		consType:   consensus,
+		ctx:          ctx,
+		ctxCancel:    cancel,
+		ID:           id,
+		host:         s.host,
+		pubsub:       s.pubsub,
+		nodeServer:   s.nodeServer,
+		pmgr:         s.pmgr,
+		consType:     consensus,
+		signingState: newSigningState(),
 	}
 
 	// Add subnet to registry

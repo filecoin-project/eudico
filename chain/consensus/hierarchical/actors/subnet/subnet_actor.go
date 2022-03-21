@@ -217,7 +217,7 @@ func (st *SubnetState) verifyCheck(rt runtime.Runtime, ch *schema.Checkpoint) ad
 	}
 
 	// Check that the checkpoint for this epoch hasn't been committed yet.
-	if _, found, _ := st.epochCheckpoint(rt); found {
+	if _, found, _ := st.GetCheckpoint(adt.AsStore(rt), ch.Epoch()); found {
 		rt.Abortf(exitcode.ErrIllegalArgument, "cannot submit checkpoint for epoch that has been committed already")
 	}
 

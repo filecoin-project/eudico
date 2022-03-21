@@ -81,7 +81,7 @@ type Subnet struct {
 
 	// Checkpointing signing state
 	checklk      sync.RWMutex
-	singingState *signingState
+	signingState *signingState
 
 	// Cross-msg resolver
 	r *resolver.Resolver
