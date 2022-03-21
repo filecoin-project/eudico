@@ -16,7 +16,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/types"
 )
 
 var (
@@ -147,12 +146,6 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 		WindowChecks:  emptyWindowChecks,
 	}, nil
 
-}
-
-// windowCheckpoint returns the checkpoint for the current signing window (if any).
-func (st *SubnetState) epochCheckpoint(rt runtime.Runtime) (*schema.Checkpoint, bool, error) {
-	chEpoch := types.CheckpointEpoch(rt.CurrEpoch(), st.CheckPeriod)
-	return st.GetCheckpoint(adt.AsStore(rt), chEpoch)
 }
 
 // PrevCheckCid returns the Cid of the previously committed checkpoint

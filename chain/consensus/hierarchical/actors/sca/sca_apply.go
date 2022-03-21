@@ -135,8 +135,6 @@ func bottomUpStateTransition(rt runtime.Runtime, st *SCAState, msg types.Message
 
 	// As soon as we see a message with the next msgMeta nonce, we increment the nonce
 	// and start accepting the one for the next nonce.
-	// FIXME: Once we have the end-to-end flow of cross-message this REALLY needs to
-	// be revisited.
 	if st.AppliedBottomUpNonce+1 == msg.Nonce {
 		// Increment latest nonce applied for bottomup
 		incrementNonce(rt, &st.AppliedBottomUpNonce)

@@ -3,7 +3,6 @@ package consensus
 import (
 	"context"
 
-	logging "github.com/ipfs/go-log/v2"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
@@ -22,8 +21,6 @@ import (
 	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
-
-var log = logging.Logger("subnet-cns")
 
 // TODO // FIXME: Make an SubnetConsensus interface from this functions
 // to avoid having to use so many switch/cases. Deferring to the next
@@ -61,47 +58,17 @@ func New(
 	}
 }
 
-func Mine(ctx context.Context, api v1api.FullNode, cnsType hierarchical.ConsensusType) error {
+func Mine(ctx context.Context, api v1api.FullNode, wallet address.Address, cnsType hierarchical.ConsensusType) error {
 	// TODO: We should check if these processes throw an error
 	switch cnsType {
 	case hierarchical.Delegated:
 		go delegcns.Mine(ctx, api)
 	case hierarchical.PoW:
-		miner, err := GetWallet(ctx, api)
-		if err != nil {
-			log.Errorw("no valid identity found for PoW mining", "err", err)
-			return err
-		}
-		go tspow.Mine(ctx, miner, api)
+		go tspow.Mine(ctx, wallet, api)
 	case hierarchical.Tendermint:
-		miner, err := GetWallet(ctx, api)
-		if err != nil {
-			log.Errorw("no valid identity found for Tendermint mining", "err", err)
-			return err
-		}
-		go tendermint.Mine(ctx, miner, api)
+		go tendermint.Mine(ctx, wallet, api)
 	default:
 		return xerrors.New("consensus type not suported")
 	}
 	return nil
-}
-
-// Get an identity from the peer's wallet.
-// First check if a default identity has been set and
-// if not take the first from the list.
-// NOTE: We should probably make this configurable.
-func GetWallet(ctx context.Context, api v1api.FullNode) (address.Address, error) {
-	addr, err := api.WalletDefaultAddress(ctx)
-	// If no defualt wallet set
-	if err != nil || addr == address.Undef {
-		addrs, err := api.WalletList(ctx)
-		if err != nil {
-			return address.Undef, err
-		}
-		if len(addrs) == 0 {
-			return address.Undef, xerrors.Errorf("no valid wallet found in peer")
-		}
-		addr = addrs[0]
-	}
-	return addr, nil
 }

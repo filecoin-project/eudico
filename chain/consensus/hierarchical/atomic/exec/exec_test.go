@@ -105,6 +105,7 @@ func TestComputeState(t *testing.T) {
 	own1 := &replace.Owners{M: map[string]cid.Cid{target.String(): cidUndef}}
 	ts := cg.StateManager().ChainStore().GetHeaviestTipSet()
 	output, err := exec.ComputeAtomicOutput(ctx, cg.StateManager(), ts, msgs[0].To, []atomic.LockableState{own1}, msgs)
+	require.NoError(t, err)
 	var owners replace.Owners
 	err = atomic.UnwrapLockableState(output, &owners)
 	require.NoError(t, err)

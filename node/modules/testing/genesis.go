@@ -18,8 +18,8 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/lotus/build"
+	genesis2 "github.com/filecoin-project/lotus/chain/consensus/genesis"
 	"github.com/filecoin-project/lotus/chain/gen"
-	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/vm"
 	"github.com/filecoin-project/lotus/genesis"

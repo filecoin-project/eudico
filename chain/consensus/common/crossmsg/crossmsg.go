@@ -1,4 +1,4 @@
-package common
+package crossmsg
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/big"
 	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
+	logging "github.com/ipfs/go-log/v2"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/lotus/chain/actors"
@@ -22,9 +23,11 @@ import (
 	"github.com/filecoin-project/lotus/chain/vm"
 )
 
+var log = logging.Logger("crossmsg-val")
+
 const crossMsgResolutionTimeout = 30 * time.Second
 
-func checkCrossMsg(ctx context.Context, r *resolver.Resolver, pstore, snstore blockadt.Store, parentSCA, snSCA *sca.SCAState, msg *types.Message) error {
+func CheckCrossMsg(ctx context.Context, r *resolver.Resolver, pstore, snstore blockadt.Store, parentSCA, snSCA *sca.SCAState, msg *types.Message) error {
 
 	buApply, err := hierarchical.ApplyAsBottomUp(snSCA.NetworkName, msg)
 	if err != nil {
@@ -212,7 +215,7 @@ func applyMsg(ctx context.Context, vmi *vm.VM, em stmgr.ExecMonitor,
 	return nil
 }
 
-func getSCAState(ctx context.Context, sm *stmgr.StateManager, submgr subnet.SubnetMgr, id address.SubnetID, ts *types.TipSet) (*sca.SCAState, blockadt.Store, error) {
+func GetSCAState(ctx context.Context, sm *stmgr.StateManager, submgr subnet.SubnetMgr, id address.SubnetID, ts *types.TipSet) (*sca.SCAState, blockadt.Store, error) {
 
 	var st sca.SCAState
 	// if submgr == nil we are in root, so we can load the actor using the state manager.
@@ -233,7 +236,7 @@ func getSCAState(ctx context.Context, sm *stmgr.StateManager, submgr subnet.Subn
 	return submgr.GetSCAState(ctx, id)
 }
 
-func sortCrossMsgs(ctx context.Context, sm *stmgr.StateManager, r *resolver.Resolver, msgs []types.ChainMsg, ts *types.TipSet) ([]*types.Message, error) {
+func SortCrossMsgs(ctx context.Context, sm *stmgr.StateManager, r *resolver.Resolver, msgs []types.ChainMsg, ts *types.TipSet) ([]*types.Message, error) {
 	buApply := map[uint64][]*types.Message{}
 	out := make([]*types.Message, len(msgs))
 
@@ -277,7 +280,7 @@ func sortCrossMsgs(ctx context.Context, sm *stmgr.StateManager, r *resolver.Reso
 
 	// GetSCA to get bottomUp messages for nonce. We don't need
 	// subnet-specific information here.
-	sca, store, err := getSCAState(ctx, sm, nil, address.UndefSubnetID, ts)
+	sca, store, err := GetSCAState(ctx, sm, nil, address.UndefSubnetID, ts)
 	if err != nil {
 		return []*types.Message{}, err
 	}
