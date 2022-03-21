@@ -228,7 +228,7 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 		return err
 	}
 	// Instantiate consensus
-	sh.cons, err = subcns.New(consensus, sh.sm, s, s.beacon, sh.r, s.verifier, gen, dtypes.NetworkName(id))
+	sh.cons, err = subcns.New(ctx, consensus, sh.sm, s, s.beacon, sh.r, s.verifier, gen, dtypes.NetworkName(id))
 	if err != nil {
 		log.Errorw("Error creating consensus", "subnetID", id, "err", err)
 		return err

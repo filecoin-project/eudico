@@ -72,9 +72,16 @@ var producer = func() address.Address {
 // the theoretical max height based on systime are quickly rejected
 const MaxHeightDrift = 5
 
-func NewDelegatedConsensus(sm *stmgr.StateManager, submgr subnet.SubnetMgr, beacon beacon.Schedule,
-	r *resolver.Resolver, verifier ffiwrapper.Verifier,
-	genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
+func NewDelegatedConsensus(
+	ctx context.Context,
+	sm *stmgr.StateManager,
+	submgr subnet.SubnetMgr,
+	beacon beacon.Schedule,
+	r *resolver.Resolver,
+	verifier ffiwrapper.Verifier,
+	genesis chain.Genesis,
+	netName dtypes.NetworkName,
+) consensus.Consensus {
 	return &Delegated{
 		store:    sm.ChainStore(),
 		beacon:   beacon,

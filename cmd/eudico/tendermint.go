@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -35,9 +36,9 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
-func NewRootTendermintConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
+func NewRootTendermintConsensus(ctx context.Context, sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
 	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
-	return tendermint.NewConsensus(sm, nil, beacon, r, verifier, genesis, netName)
+	return tendermint.NewConsensus(ctx, sm, nil, beacon, r, verifier, genesis, netName)
 }
 
 var tendermintCmd = &cli.Command{
