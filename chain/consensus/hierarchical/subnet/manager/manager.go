@@ -715,4 +715,12 @@ func (s *SubnetMgr) GetSCAState(ctx context.Context, id address.SubnetID) (*sca.
 	return &st, blockadt.WrapStore(ctx, pcst), nil
 }
 
+func (s *SubnetMgr) SubnetChainNotify(ctx context.Context, id address.SubnetID) (<-chan []*api.HeadChange, error) {
+	api, err := s.GetSubnetAPI(id)
+	if err != nil {
+		return nil, err
+	}
+	return api.ChainNotify(ctx)
+}
+
 var _ subiface.SubnetMgr = &SubnetMgr{}
