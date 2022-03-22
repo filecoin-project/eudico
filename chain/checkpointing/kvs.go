@@ -334,7 +334,7 @@ func (r *Resolver) processPush(ctx context.Context, rmsg *ResolveMsg) (pubsub.Va
 	fmt.Println("Processing push for message with cid: ", rmsg.Cid)
 	_, found, err := r.getLocal(ctx, rmsg.Cid)
 	if err != nil {
-		return pubsub.ValidationIgnore, xerrors.Errorf("Error getting cross-msg locally: %w", err)
+		return pubsub.ValidationIgnore, xerrors.Errorf("Error getting msg locally: %w", err)
 	}
 	if found {
 		// Ignoring message, we already have these cross-msgs
@@ -374,7 +374,7 @@ func (r *Resolver) processPull(rmsg *ResolveMsg) (pubsub.ValidationResult, error
 		//return pubsub.ValidationReject, xerrors.Errorf("couldn't find crossmsgs for msgMeta with cid: %s", rmsg.Cid)
 	}
 	// Send response
-	if err := r.PushCrossMsgs(*msg,true); err != nil {
+	if err := r.PushCheckpointMsgs(*msg,true); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
 	// Publish a Response message to the source subnet if the CID is found.
@@ -443,7 +443,7 @@ func (r *Resolver) publishMsg(m *ResolveMsg) error {
 }
 
 //WaitCrossMsgsResolved waits until crossMsgs for meta have been fully resolved
-func (r *Resolver) WaitCrossMsgsResolved(ctx context.Context, c string) chan error {
+func (r *Resolver) WaitCheckpointResolved(ctx context.Context, c string) chan error {
 	out := make(chan error)
 	resolved := false
 	go func() {
@@ -455,7 +455,7 @@ func (r *Resolver) WaitCrossMsgsResolved(ctx context.Context, c string) chan err
 				return
 			default:
 				// Check if crossMsg fully resolved.
-				_, resolved, err = r.ResolveCrossMsgs(ctx, c)
+				_, resolved, err = r.ResolveCheckpointMsgs(ctx, c)
 				if err != nil {
 					out <- err
 				}
@@ -468,11 +468,11 @@ func (r *Resolver) WaitCrossMsgsResolved(ctx context.Context, c string) chan err
 		}
 		close(out)
 	}()
-	fmt.Println("done with WaitCrossMsgsResolved")
+	fmt.Println("done with WaitCheckpointResolved")
 	return out
 }
 
-func (r *Resolver) ResolveCrossMsgs(ctx context.Context, c string) ([]byte, bool, error) {
+func (r *Resolver) ResolveCheckpointMsgs(ctx context.Context, c string) ([]byte, bool, error) {
 	// FIXME: This function should keep track of the retries that have been done,
 	// and fallback to a 1:1 exchange if this fails.
 	cross, found, err := r.getLocal(ctx, c)
@@ -485,7 +485,7 @@ func (r *Resolver) ResolveCrossMsgs(ctx context.Context, c string) ([]byte, bool
 	}
 	// If not try to pull message
 	if r.shouldPull(c) {
-		return []byte{}, false, r.PullCrossMsgs(c)
+		return []byte{}, false, r.PullCheckpointMsgs(c)
 	}
 
 	// If we shouldn't pull yet because we pulled recently
@@ -494,7 +494,7 @@ func (r *Resolver) ResolveCrossMsgs(ctx context.Context, c string) ([]byte, bool
 
 }
 
-func (r *Resolver) PushCrossMsgs(msgs MsgData, isResponse bool) error {
+func (r *Resolver) PushCheckpointMsgs(msgs MsgData, isResponse bool) error {
 	c, err := msgs.Cid()
 	if err != nil {
 		return err
@@ -533,7 +533,7 @@ func (r *Resolver) PushCrossMsgs(msgs MsgData, isResponse bool) error {
 // 	return nil
 // }
 
-func (r *Resolver) PullCrossMsgs(ci string) error {
+func (r *Resolver) PullCheckpointMsgs(ci string) error {
 	m := &ResolveMsg{
 		Type: PullMeta,
 		Cid:  ci,

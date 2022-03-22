@@ -73,12 +73,12 @@ func TestResolve(t *testing.T) {
 	out := &MsgData{Content: []byte{0,1}}
 	r := NewResolver(h.ID(), ds, ps)
 	c, _ := out.Cid()
-	_, found, err := r.ResolveCrossMsgs(ctx, c)
+	_, found, err := r.ResolveCheckpointMsgs(ctx, c)
 	require.NoError(t, err)
 	require.False(t, found)
 	err = r.setLocal(ctx, c, out)
 	require.NoError(t, err)
-	pulled, found, err := r.ResolveCrossMsgs(ctx, c)
+	pulled, found, err := r.ResolveCheckpointMsgs(ctx, c)
 	require.NoError(t, err)
 	require.True(t, found)
 	require.Equal(t, len(pulled), 2)
@@ -111,7 +111,7 @@ func TestWaitResolve(t *testing.T) {
 	c, _ := out.Cid()
 
 	// Wait for resolution.
-	found := r.WaitCrossMsgsResolved(context.TODO(), c)
+	found := r.WaitCheckpointMsgsResolved(context.TODO(), c)
 	go func() {
 		// Wait one second, and store cross-msgs locally
 		time.Sleep(1 * time.Second)
