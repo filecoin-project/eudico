@@ -34,6 +34,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
+	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	snmgr "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/manager"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
@@ -72,6 +73,9 @@ const (
 	TendermintConsensusTestDir         = "../testdata/tendermint-test"
 	TendermintConsensusKeyFile         = TendermintConsensusTestDir + "/config/priv_validator_key.json"
 	TendermintApplicationAddress       = "tcp://127.0.0.1:26658"
+
+	//TODO: do we need this?
+	FilcnsConsensusGenesisTestFile = "../testdata/filcns.gen"
 )
 
 func init() {
@@ -306,6 +310,11 @@ func NewRootTendermintConsensus(ctx context.Context, sm *stmgr.StateManager, bea
 	return tendermint.NewConsensus(ctx, sm, nil, beacon, r, verifier, genesis, netName)
 }
 
+func NewFilecoinExpectedConsensus(ctx context.Context, sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
+	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
+	return filcns.NewFilecoinExpectedConsensus(ctx, sm, beacon, r, verifier, genesis)
+}
+
 func NetworkName(mctx helpers.MetricsCtx,
 	lc fx.Lifecycle,
 	cs *store.ChainStore,
@@ -382,6 +391,8 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		consensusConstructor = NewRootDelegatedConsensus
 	case hierarchical.Tendermint:
 		consensusConstructor = NewRootTendermintConsensus
+	case hierarchical.FilecoinEC:
+		consensusConstructor = NewFilecoinExpectedConsensus
 	default:
 		n.t.Fatalf("unknown consensus constructor %d", n.options.consensus)
 	}
@@ -394,6 +405,8 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		weightConstructor = delegcns.Weight
 	case hierarchical.Tendermint:
 		weightConstructor = tendermint.Weight
+	case hierarchical.FilecoinEC:
+		weightConstructor = filcns.Weight
 	default:
 		n.t.Fatalf("unknown consensus weight %d", n.options.consensus)
 	}
@@ -449,6 +462,8 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 			genBytes, testDataFileErr = ioutil.ReadFile(DelegatedConsensusGenesisTestFile)
 		case hierarchical.Tendermint:
 			genBytes, testDataFileErr = ioutil.ReadFile(TendermintConsensusGenesisTestFile)
+		case hierarchical.FilecoinEC:
+			genBytes, testDataFileErr = ioutil.ReadFile(FilcnsConsensusGenesisTestFile)
 		default:
 			n.t.Fatalf("unknown consensus genesis file %d", n.options.consensus)
 		}

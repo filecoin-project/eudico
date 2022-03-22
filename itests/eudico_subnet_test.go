@@ -3,14 +3,16 @@ package itests
 
 import (
 	"context"
-	"github.com/filecoin-project/go-state-types/big"
 	mbig "math/big"
-
-	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-state-types/abi"
 	"testing"
 	"time"
 
+	cbor "github.com/ipfs/go-ipld-cbor"
+	"github.com/stretchr/testify/require"
+
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
@@ -18,8 +20,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/itests/kit"
-	cbor "github.com/ipfs/go-ipld-cbor"
-	"github.com/stretchr/testify/require"
 )
 
 func TestEudicoSubnetConsensus(t *testing.T) {
@@ -113,10 +113,27 @@ func (ts *eudicoSubnetConsensusSuite) testBasicInitialization(t *testing.T) {
 	require.NoError(t, err)
 	_ = c
 
-	err = full.MineSubnet(ctx, walletID, subnet.ID, false)
-	require.NoError(t, err)
+	go full.MineSubnet(ctx, walletID, subnet.ID, false)
 
-	newHeads, err := full.ChainNotify(ctx)
+	newHeads, err := full.SubnetChainNotify(ctx, name)
 	require.NoError(t, err)
+	initHead := (<-newHeads)[0]
+	baseHeight := initHead.Val.Height()
+
+	h1, err := full.ChainHead(ctx)
+	require.NoError(t, err)
+	require.Equal(t, int64(h1.Height()), int64(baseHeight))
+
+	<-newHeads
+
+	h2, err := full.ChainHead(ctx)
+	require.NoError(t, err)
+	require.Greater(t, int64(h2.Height()), int64(h1.Height()))
+
+	<-newHeads
+
+	h3, err := full.ChainHead(ctx)
+	require.NoError(t, err)
+	require.Greater(t, int64(h3.Height()), int64(h2.Height()))
 
 }
