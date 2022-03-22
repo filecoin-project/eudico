@@ -3,7 +3,7 @@ package checkpointing
 import (
 	"context"
 	"testing"
-	//"time"
+	"time"
 
 	//"github.com/filecoin-project/go-address"
 	//"github.com/filecoin-project/go-state-types/abi"
@@ -87,37 +87,38 @@ func TestResolve(t *testing.T) {
 	// TODO: Test recursive resolve with Metas.
 }
 
-// func TestWaitResolve(t *testing.T) {
-// 	ctx := context.Background()
-// 	ds := datastore.NewMapDatastore()
-// 	h, err := libp2p.New()
-// 	require.NoError(t, err)
-// 	ps, err := pubsub.NewGossipSub(context.TODO(), h)
-// 	require.NoError(t, err)
-// 	addr := tutil.NewIDAddr(t, 101)
-// 	msg := ltypes.Message{
-// 		To:         addr,
-// 		From:       addr,
-// 		Value:      abi.NewTokenAmount(1),
-// 		Nonce:      2,
-// 		GasLimit:   1 << 30, // This is will be applied as an implicit msg, add enough gas
-// 		GasFeeCap:  ltypes.NewInt(0),
-// 		GasPremium: ltypes.NewInt(0),
-// 		Params:     nil,
-// 	}
-// 	out := &sca.CrossMsgs{Msgs: []ltypes.Message{msg}}
-// 	r := NewResolver(h.ID(), ds, ps, address.RootSubnet)
-// 	c, _ := out.Cid()
+func TestWaitResolve(t *testing.T) {
+	ctx := context.Background()
+	ds := datastore.NewMapDatastore()
+	h, err := libp2p.New()
+	require.NoError(t, err)
+	ps, err := pubsub.NewGossipSub(context.TODO(), h)
+	require.NoError(t, err)
+	// addr := tutil.NewIDAddr(t, 101)
+	// msg := ltypes.Message{
+	// 	To:         addr,
+	// 	From:       addr,
+	// 	Value:      abi.NewTokenAmount(1),
+	// 	Nonce:      2,
+	// 	GasLimit:   1 << 30, // This is will be applied as an implicit msg, add enough gas
+	// 	GasFeeCap:  ltypes.NewInt(0),
+	// 	GasPremium: ltypes.NewInt(0),
+	// 	Params:     nil,
+	// }
+	// out := &sca.CrossMsgs{Msgs: []ltypes.Message{msg}}
+	out := &MsgData{Content: []byte{0,1}}
+	r := NewResolver(h.ID(), ds, ps)
+	c, _ := out.Cid()
 
-// 	// Wait for resolution.
-// 	found := r.WaitCrossMsgsResolved(context.TODO(), c, address.RootSubnet)
-// 	go func() {
-// 		// Wait one second, and store cross-msgs locally
-// 		time.Sleep(1 * time.Second)
-// 		err = r.setLocal(ctx, c, out)
-// 		require.NoError(t, err)
-// 	}()
+	// Wait for resolution.
+	found := r.WaitCrossMsgsResolved(context.TODO(), c)
+	go func() {
+		// Wait one second, and store cross-msgs locally
+		time.Sleep(1 * time.Second)
+		err = r.setLocal(ctx, c, out)
+		require.NoError(t, err)
+	}()
 
-// 	err = <-found
-// 	require.NoError(t, err)
-// }
+	err = <-found
+	require.NoError(t, err)
+}

@@ -232,37 +232,43 @@ func NewValidator( r *Resolver) *Validator {
 
 func (v *Validator) Validate(ctx context.Context, pid peer.ID, msg *pubsub.Message) (res pubsub.ValidationResult) {
 	// Decode resolve msg
-	fmt.Println("Calling Validate")
+	fmt.Println("Calling Validate ")
 	rmsg, err := DecodeResolveMsg(msg.GetData())
+	fmt.Println("decoded message cid: ", rmsg.Cid)
+	fmt.Println("Message is coming from: ", pid.String())
 	if err != nil {
+		fmt.Println("errod decoding message cid")
 		log.Errorf("error decoding resolve msg cid: %s", err)
 		return pubsub.ValidationReject
 	}
-
-	log.Infof("Received cross-msg resolution message of type: %v, from %v", rmsg.Type, pid.String())
-	fmt.Println("Message: ", rmsg)
+	fmt.Println(rmsg)
+	fmt.Println("we are here! hello")
+	log.Infof("Received kvs resolution message of type: %v, from %v", rmsg.Type, pid.String())
+	log.Warnf("trying to warn you")
+	//fmt.Println("Message id: ", msg.Cid)
 	// Check the CID and messages sent are correct for push messages
-	// if rmsg.Type == Push {
-	// 	msgs := rmsg.Content
-	// 	c, err := msgs.Cid() //
-	// 	if err != nil {
-	// 		log.Errorf("error computing msgs cid: %s", err)
-	// 		return pubsub.ValidationIgnore
-	// 	}
-	// 	if rmsg.Cid != c {
-	// 		log.Errorf("cid computed for crossMsgs not equal to the one requested: %s", err)
-	// 		return pubsub.ValidationReject
-	// 	}
-	// }
+	if rmsg.Type == Push {
+		fmt.Println("message to validate is of type push")
+		msgs := rmsg.Content
+		c, err := msgs.Cid() //
+		if err != nil {
+			log.Errorf("error computing msgs cid: %s", err)
+			return pubsub.ValidationIgnore
+		}
+		if rmsg.Cid != c {
+			log.Errorf("cid computed for crossMsgs not equal to the one requested: %s", err)
+			return pubsub.ValidationReject
+		}
+	}
 
-	// // it's a correct message! make sure we've only seen it once
-	// if count := v.r.addMsgReceipt(rmsg.Type, rmsg.Cid, msg.GetFrom()); count > 0 {
-	// 	if pid == v.r.self {
-	// 		log.Warnf("local block has been seen %d times; ignoring", count)
-	// 	}
+	// it's a correct message! make sure we've only seen it once
+	if count := v.r.addMsgReceipt(rmsg.Type, rmsg.Cid, msg.GetFrom()); count > 0 {
+		if pid == v.r.self {
+			log.Warnf("local block has been seen %d times; ignoring", count)
+		}
 
-	// 	return pubsub.ValidationIgnore
-	// }
+		return pubsub.ValidationIgnore
+	}
 
 	// Process the resolveMsg, record error, and return gossipsub validation status.
 	sub, err := v.r.processResolveMsg(ctx, rmsg)
@@ -275,6 +281,7 @@ func (v *Validator) Validate(ctx context.Context, pid peer.ID, msg *pubsub.Messa
 
 	// Pass validated request.
 	// msg.ValidatorData = rmsg
+	fmt.Println("end of validate")
 
 	return pubsub.ValidationAccept
 }
@@ -315,6 +322,7 @@ func (r *Resolver) processResolveMsg(ctx context.Context, rmsg *ResolveMsg) (pub
 		fmt.Println("message push")
 		return r.processPush(ctx, rmsg)
 	case PullMeta:
+		fmt.Println("Process resolve message of type pull")
 		return r.processPull( rmsg)
 	case Response:
 		return r.processResponse(ctx, rmsg)
@@ -325,6 +333,7 @@ func (r *Resolver) processResolveMsg(ctx context.Context, rmsg *ResolveMsg) (pub
 
 func (r *Resolver) processPush(ctx context.Context, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
 	// Check if we are already storing the CrossMsgs CID locally.
+	fmt.Println("Processing push for message with cid: ", rmsg.Cid)
 	_, found, err := r.getLocal(ctx, rmsg.Cid)
 	if err != nil {
 		return pubsub.ValidationIgnore, xerrors.Errorf("Error getting cross-msg locally: %w", err)
@@ -337,7 +346,8 @@ func (r *Resolver) processPush(ctx context.Context, rmsg *ResolveMsg) (pubsub.Va
 	if err := r.setLocal(ctx, rmsg.Cid, &rmsg.Content); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
-
+	fmt.Println("Message added! yay")
+	
 	// TODO: Introduce checks here to ensure that push messages come from the right
 	// source?
 	return pubsub.ValidationAccept, nil
@@ -353,13 +363,20 @@ func (r *Resolver) processPull(rmsg *ResolveMsg) (pubsub.ValidationResult, error
 	// if err != nil {
 	// 	return pubsub.ValidationIgnore, err
 	// }
-	// if !found {
-	// 	// Reject instead of ignore. Someone may be trying to spam us with
-	// 	// random unvalid CIDs.
-	// 	return pubsub.ValidationReject, xerrors.Errorf("couldn't find crossmsgs for msgMeta with cid: %s", rmsg.Cid)
-	// }
+	fmt.Println("Processing a pull request for message with cid: ",rmsg.Cid)
+	msg, found, err := r.getLocal(context.TODO(), rmsg.Cid)
+	if err != nil {
+		return pubsub.ValidationIgnore, err
+	}
+	if !found {
+		// Reject instead of ignore. Someone may be trying to spam us with
+		// random unvalid CIDs.
+		//return pubsub.ValidationIgnore, xerrors.Errorf("couldn't find data for msgMeta with cid: %s", rmsg.Cid)
+		return pubsub.ValidationAccept, nil
+		//return pubsub.ValidationReject, xerrors.Errorf("couldn't find crossmsgs for msgMeta with cid: %s", rmsg.Cid)
+	}
 	// Send response
-	if err := r.PushCrossMsgs((*rmsg).Content,true); err != nil {
+	if err := r.PushCrossMsgs(*msg,true); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
 	// Publish a Response message to the source subnet if the CID is found.
@@ -414,6 +431,7 @@ func (r *Resolver) setLocal(ctx context.Context, c string, msgs *MsgData) error 
 	if err := msgs.MarshalCBOR(w); err != nil {
 		return err
 	}
+	fmt.Println("We are currently adding message %v to KVS.", msgs)
 	return r.ds.Put(ctx, datastore.NewKey(c), w.Bytes())
 }
 
@@ -452,6 +470,7 @@ func (r *Resolver) WaitCrossMsgsResolved(ctx context.Context, c string) chan err
 		}
 		close(out)
 	}()
+	fmt.Println("done with WaitCrossMsgsResolved")
 	return out
 }
 
@@ -517,10 +536,10 @@ func (r *Resolver) PushCrossMsgs(msgs MsgData, isResponse bool) error {
 // 	return nil
 // }
 
-func (r *Resolver) PullCrossMsgs(c string) error {
+func (r *Resolver) PullCrossMsgs(ci string) error {
 	m := &ResolveMsg{
 		Type: PullMeta,
-		Cid:  c,
+		Cid:  ci,
 	}
 	return r.publishMsg(m)
 }

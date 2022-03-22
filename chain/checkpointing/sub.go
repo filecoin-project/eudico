@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	//"github.com/libp2p/go-libp2p"
 	//datastore "github.com/ipfs/go-datastore"
@@ -51,6 +52,8 @@ import (
 
 var log = logging.Logger("checkpointing")
 
+//const kvsResolutionTimeout = 30 * time.Second
+
 //update this value with the amount you have in your wallet (for testing purpose)
 const initialValueInWallet = 50
 //const initialValueInWallet = 0.002
@@ -64,7 +67,7 @@ var sendall = false
 const writeTxLocally = true
 
 // this variable is the number of blocks (in eudico) we want between each checkpoints
-const checkpointFrequency = 15
+const checkpointFrequency = 30
 
 //change to true if regtest is used
 const Regtest = true
@@ -135,6 +138,10 @@ type CheckpointingSub struct {
 	synced bool
 	// height verified! (the height of the latest checkpoint)
 	height abi.ChainEpoch
+	// last cid
+	lastCid string
+	//bool just for debug
+	askedData bool
 
 	// KVS
 	r *Resolver
@@ -378,6 +385,46 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 
 		change2, err := c.matchCheckpoint(ctx, oldTs, newTs, oldSt, newSt, diff)
 
+		if c.host.ID().String() == "12D3KooWSpyoi7KghH98SWDfDFMyAwuvtP8MWWGDcC1e1uHWzjSm" && !c.askedData{
+			cid := c.lastCid
+			// m := &ResolveMsg{
+			// 	Type: PullMeta,
+			// 	Cid:  cid,
+			// }
+			fmt.Println("try pull with cid: ", cid)
+			// fmt.Println("Publish pull")
+			// c.r.publishMsg(m)
+			//c.r.PullCrossMsgs(cid)
+			out := c.r.WaitCrossMsgsResolved(ctx, cid)
+			select {
+				case <-ctx.Done():
+					 log.Errorf("context timeout")
+				case err := <-out:
+					if err != nil {
+						log.Errorf("error fully resolving messages: %s", err)
+					}
+			}
+			//fmt.Println("data from kvs", cp1, found, err1)
+			data, found, err := c.r.ResolveCrossMsgs(ctx, cid)
+			if err != nil {
+				log.Errorf("Error resolving messages: %v", err)
+			}
+			// sanity-check, it should always be found
+			if !found {
+				log.Errorf("messages haven't been resolved: %v", err)
+			}
+			fmt.Println("Data pulled from KVS: ", data)
+			// fmt.Println("Publish push")
+			// msgs := &MsgData{Content: []byte("hello")}
+			// // c.r.PushCrossMsgs(*msgs,false)
+			// c.r.publishMsg(*msgs)
+			// fmt.Println("Pushed hello")
+			//err1 := r.PullCrossMsgs(btccp.cid)
+			c.askedData = true
+			
+
+		}
+
 
 		return change || change2 || change3 , diff, nil
 	}
@@ -491,8 +538,8 @@ func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *ty
 				//fmt.Println("Pushed to KVS in ecodetostring: ", hex.EncodeToString(msgs.content))
 				fmt.Println("Pushed to KVS in string(): ", string(msgs.Content))
 			}
-			c.r.processPull(&ResolveMsg{Type: Push, Cid: cid_str ,Content:*msgs})
-
+			//c.r.processPull(&ResolveMsg{Type: Push, Cid: cid_str ,Content:*msgs})
+			c.r.PushCrossMsgs(*msgs,false)
 			//c.r.processPull(ctx, &ResolveMsg{Type: Push, Cid: cid_str ,Content:*msgs})
 		}
 
@@ -866,6 +913,43 @@ func (c *CheckpointingSub) formIDSlice(ids []string) party.IDSlice {
 	return idsSlice
 }
 
+func (c *CheckpointingSub) pullInitialData(ctx context.Context, cid_str string) error {
+	time.Sleep(3 *time.Second)
+	fmt.Println("Message to pull cid: ", cid_str)
+	//err1 := c.r.PullCrossMsgs(cid_str)
+	fmt.Println("Trying to pull from KVS now")
+	
+	// err2 := c.r.WaitCrossMsgsResolved(ctx, cid_str)
+	// fmt.Println("result from waitresolvemsg: ", err2)
+	// cp1, found, err1 := c.r.ResolveCrossMsgs(ctx, cid_str)
+	// //err1 := c.r.PullCrossMsgs(btccp.cid)
+	// //err1 := c.r.PullCrossMsgs(cid_str)
+	// fmt.Println("data pulled from kvs", cp1, found, err1)
+
+	//ctx, cancel := context.WithTimeout(ctx, kvsResolutionTimeout)
+	//defer cancel()
+	out := c.r.WaitCrossMsgsResolved(ctx, cid_str)
+	select {
+		case <-ctx.Done():
+			 log.Errorf("context timeout")
+		case err := <-out:
+			if err != nil {
+				log.Errorf("error fully resolving messages: %s", err)
+			}
+	}
+	data, found, err := c.r.ResolveCrossMsgs(ctx, cid_str)
+	if err != nil {
+		log.Errorf("Error resolving messages: %v", err)
+	}
+	// sanity-check, it should always be found
+	if !found {
+		log.Errorf("messages haven't been resolved: %v", err)
+	}
+	fmt.Println("Data pulled from KVS: ", data)
+
+return nil
+}
+
 /*
 	BuildCheckpointingSub is called after creating the checkpointing instance.
 	It verifies connectivity with the Bitcoin node and retrieve the first checkpoint
@@ -984,6 +1068,7 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 			// }	
 
 			//c.r.processPush(ctx, &ResolveMsg{Type: Push, Cid: cid_str ,Content:*msgs})
+			time.Sleep(2 * time.Second)
 			r.PushCrossMsgs(*msgs,false)
 		}
 		for {
@@ -1015,34 +1100,8 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 	cp, err := GetMinersConfig(ctx, c.minioClient, c.cpconfig.MinioBucketName, btccp.cid)
 
 	fmt.Println("last cid from bitcoin: ", btccp.cid)
-	// get the config in the KVS
+	c.lastCid = btccp.cid
 
-	if len(c.participants)>0{
-		var minersConfig string = hex.EncodeToString(cidBytes) + "\n"
-		// c.orderParticipantsList() orders the miners from the taproot config --> to change
-		//for _, partyId := range c.orderParticipantsList() {
-		for _, partyId := range c.participants { // list of new miners
-			minersConfig += partyId + "\n"
-		}	
-		msgs := &MsgData{Content: []byte(minersConfig)}
-		//push config to kvs
-		cid_str, _ := msgs.Cid() //this need to be hex.encodetostring(hash)
-		//err1 := c.r.PullCrossMsgs(cid_str)
-		fmt.Println("Trying to pull from KVS now")
-		
-		err2 := c.r.WaitCrossMsgsResolved(ctx, cid_str)
-		fmt.Println("result from waitresolvemsg: ", err2)
-		cp1, found, err1 := c.r.ResolveCrossMsgs(ctx, cid_str)
-		//err1 := c.r.PullCrossMsgs(btccp.cid)
-		//err1 := c.r.PullCrossMsgs(cid_str)
-		fmt.Println("data pulled from kvs", cp1, found, err1)
-		
-	} else{
-		// do pull here 
-		cp1, found, err1 := c.r.ResolveCrossMsgs(ctx, btccp.cid)
-		//err1 := c.r.PullCrossMsgs(btccp.cid)
-		fmt.Println("data from kvs", cp1, found, err1)
-	}
 	if cp != "" {
 		// Decode hex checkpoint to bytes
 		cpBytes, err := hex.DecodeString(cp)
@@ -1091,6 +1150,49 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 	if err != nil {
 		log.Errorf("could not start checkpointing module: %v", err)
 	}
+
+	// if len(c.participants)>0{
+	// // 	fmt.Println("Time to pull now!")
+	// // 	var minersConfig string = hex.EncodeToString(cidBytes) + "\n"
+	// // // c.orderParticipantsList() orders the miners from the taproot config --> to change
+	// // //for _, partyId := range c.orderParticipantsList() {
+	// // 	for _, partyId := range c.participants { // list of new miners
+	// // 		minersConfig += partyId + "\n"
+	// // 	}	
+	// // 	fmt.Println("Initial data: ", minersConfig)
+	// // 	msgs := &MsgData{Content: []byte(minersConfig)}
+	// // 	//push config to kvs
+	// // 	cid_str, _ := msgs.Cid() //this need to be hex.encodetostring(hash)
+	// // 	c.pullInitialData(ctx, cid_str)
+		
+	// } else{
+	// 	// do pull here 
+	// 	// //cp1, found, err1 := c.r.ResolveCrossMsgs(ctx, btccp.cid)
+	// 	// //err1 := c.r.PullCrossMsgs(btccp.cid)
+	// 	// out := r.WaitCrossMsgsResolved(ctx, btccp.cid)
+	// 	// select {
+	// 	// 	case <-ctx.Done():
+	// 	// 		 log.Errorf("context timeout")
+	// 	// 	case err := <-out:
+	// 	// 		if err != nil {
+	// 	// 			log.Errorf("error fully resolving messages: %s", err)
+	// 	// 		}
+	// 	// }
+	// 	// //fmt.Println("data from kvs", cp1, found, err1)
+	// 	// data, found, err := r.ResolveCrossMsgs(ctx, btccp.cid)
+	// 	// if err != nil {
+	// 	// 	log.Errorf("Error resolving messages: %v", err)
+	// 	// }
+	// 	// // sanity-check, it should always be found
+	// 	// if !found {
+	// 	// 	log.Errorf("messages haven't been resolved: %v", err)
+	// 	// }
+	// 	msgs := &MsgData{Content: []byte("hello")}
+	// 	r.PushCrossMsgs(*msgs,false)
+	// 	fmt.Println("Pushed hello")
+	// 	//err1 := r.PullCrossMsgs(btccp.cid)
+	// 	//fmt.Println("Data pulled from KVS: ", err1)
+	// }
 
 	lc.Append(fx.Hook{
 		OnStop: func(ctx context.Context) error {
