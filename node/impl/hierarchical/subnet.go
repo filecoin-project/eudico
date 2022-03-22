@@ -117,3 +117,11 @@ func (a *HierarchicalAPI) AbortAtomicExec(ctx context.Context, wallet address.Ad
 	id address.SubnetID, execID cid.Cid) (sca.ExecStatus, error) {
 	return a.Sub.AbortAtomicExec(ctx, wallet, id, execID)
 }
+
+func (a *HierarchicalAPI) SubnetChainNotify(ctx context.Context, id address.SubnetID) (<-chan []*api.HeadChange, error) {
+	api, err := a.Sub.GetSubnetAPI(id)
+	if err != nil {
+		return nil, err
+	}
+	return api.ChainNotify(ctx)
+}

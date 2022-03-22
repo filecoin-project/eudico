@@ -3057,6 +3057,21 @@ func (mr *MockFullNodeMockRecorder) StateWaitMsgLimited(arg0, arg1, arg2, arg3 i
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StateWaitMsgLimited", reflect.TypeOf((*MockFullNode)(nil).StateWaitMsgLimited), arg0, arg1, arg2, arg3)
 }
 
+// SubnetChainNotify mocks base method.
+func (m *MockFullNode) SubnetChainNotify(arg0 context.Context, arg1 address.SubnetID) (<-chan []*api.HeadChange, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubnetChainNotify", arg0, arg1)
+	ret0, _ := ret[0].(<-chan []*api.HeadChange)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubnetChainNotify indicates an expected call of SubnetChainNotify.
+func (mr *MockFullNodeMockRecorder) SubnetChainNotify(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubnetChainNotify", reflect.TypeOf((*MockFullNode)(nil).SubnetChainNotify), arg0, arg1)
+}
+
 // SyncCheckBad mocks base method.
 func (m *MockFullNode) SyncCheckBad(arg0 context.Context, arg1 cid.Cid) (string, error) {
 	m.ctrl.T.Helper()
