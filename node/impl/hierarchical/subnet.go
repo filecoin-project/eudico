@@ -121,3 +121,7 @@ func (a *HierarchicalAPI) AbortAtomicExec(ctx context.Context, wallet address.Ad
 func (a *HierarchicalAPI) SubnetChainNotify(ctx context.Context, id address.SubnetID) (<-chan []*api.HeadChange, error) {
 	return a.Sub.SubnetChainNotify(ctx, id)
 }
+
+func (a *HierarchicalAPI) SubnetChainHead(ctx context.Context, id address.SubnetID) (*types.TipSet, error) {
+	return a.Sub.SubnetChainHead(ctx, id)
+}

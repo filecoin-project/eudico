@@ -595,6 +595,8 @@ type HierarchicalCnsStruct struct {
 
 		ReleaseFunds func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) `perm:"write"`
 
+		SubnetChainHead func(p0 context.Context, p1 address.SubnetID) (*types.TipSet, error) `perm:"read"`
+
 		SubnetChainNotify func(p0 context.Context, p1 address.SubnetID) (<-chan []*HeadChange, error) `perm:"read"`
 
 		SyncSubnet func(p0 context.Context, p1 address.SubnetID, p2 bool) error `perm:"write"`
@@ -3691,6 +3693,17 @@ func (s *HierarchicalCnsStruct) ReleaseFunds(p0 context.Context, p1 address.Addr
 
 func (s *HierarchicalCnsStub) ReleaseFunds(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) {
 	return *new(cid.Cid), ErrNotSupported
+}
+
+func (s *HierarchicalCnsStruct) SubnetChainHead(p0 context.Context, p1 address.SubnetID) (*types.TipSet, error) {
+	if s.Internal.SubnetChainHead == nil {
+		return nil, ErrNotSupported
+	}
+	return s.Internal.SubnetChainHead(p0, p1)
+}
+
+func (s *HierarchicalCnsStub) SubnetChainHead(p0 context.Context, p1 address.SubnetID) (*types.TipSet, error) {
+	return nil, ErrNotSupported
 }
 
 func (s *HierarchicalCnsStruct) SubnetChainNotify(p0 context.Context, p1 address.SubnetID) (<-chan []*HeadChange, error) {

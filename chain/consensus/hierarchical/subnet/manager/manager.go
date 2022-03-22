@@ -5,11 +5,6 @@ import (
 	"context"
 	"sync"
 
-	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/specs-actors/actors/builtin"
-	init_ "github.com/filecoin-project/specs-actors/actors/builtin/init"
-	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 	"github.com/ipfs/go-blockservice"
 	"github.com/ipfs/go-cid"
 	ds "github.com/ipfs/go-datastore"
@@ -23,6 +18,8 @@ import (
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
 
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/blockstore"
@@ -55,6 +52,9 @@ import (
 	"github.com/filecoin-project/lotus/node/impl/paych"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/modules/helpers"
+	"github.com/filecoin-project/specs-actors/actors/builtin"
+	init_ "github.com/filecoin-project/specs-actors/actors/builtin/init"
+	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 )
 
 var log = logging.Logger("subnetMgr")
@@ -721,6 +721,14 @@ func (s *SubnetMgr) SubnetChainNotify(ctx context.Context, id address.SubnetID) 
 		return nil, err
 	}
 	return api.ChainNotify(ctx)
+}
+
+func (s *SubnetMgr) SubnetChainHead(ctx context.Context, id address.SubnetID) (*types.TipSet, error) {
+	api, err := s.GetSubnetAPI(id)
+	if err != nil {
+		return nil, err
+	}
+	return api.ChainHead(ctx)
 }
 
 var _ subiface.SubnetMgr = &SubnetMgr{}

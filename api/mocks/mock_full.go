@@ -3129,6 +3129,21 @@ func (mr *MockFullNodeMockRecorder) StateWaitMsg(arg0, arg1, arg2, arg3, arg4 in
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StateWaitMsg", reflect.TypeOf((*MockFullNode)(nil).StateWaitMsg), arg0, arg1, arg2, arg3, arg4)
 }
 
+// SubnetChainHead mocks base method.
+func (m *MockFullNode) SubnetChainHead(arg0 context.Context, arg1 address.SubnetID) (*types.TipSet, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubnetChainHead", arg0, arg1)
+	ret0, _ := ret[0].(*types.TipSet)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubnetChainHead indicates an expected call of SubnetChainHead.
+func (mr *MockFullNodeMockRecorder) SubnetChainHead(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubnetChainHead", reflect.TypeOf((*MockFullNode)(nil).SubnetChainHead), arg0, arg1)
+}
+
 // SubnetChainNotify mocks base method.
 func (m *MockFullNode) SubnetChainNotify(arg0 context.Context, arg1 address.SubnetID) (<-chan []*api.HeadChange, error) {
 	m.ctrl.T.Helper()

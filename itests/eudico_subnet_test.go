@@ -3,7 +3,6 @@ package itests
 
 import (
 	"context"
-	mbig "math/big"
 	"testing"
 	"time"
 
@@ -52,29 +51,12 @@ func (ts *eudicoSubnetConsensusSuite) testBasicInitialization(t *testing.T) {
 
 	go tspow.Mine(ctx, l[0], full)
 
-	var st sca.SCAState
-	bs := blockstore.NewAPIBlockstore(full)
-	cst := cbor.NewCborStore(bs)
-	s := adt.WrapStore(ctx, cst)
-	act, err := full.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, types.EmptyTSK)
-	require.NoError(t, err)
-
-	/*
-		subnets, err := sca.ListSubnets(s, st)
-		require.NoError(t, err)
-		require.Equal(t, len(subnets), 1)
-
-	*/
-
-	err = cst.Get(ctx, act.Head, &st)
-	require.NoError(t, err)
-
 	addr, err := full.WalletDefaultAddress(ctx)
 	require.NoError(t, err)
 
 	parent := address.RootSubnet
-	name := "testSubnet"
-	consensus := hierarchical.Tendermint
+	subnetName := "testSubnet"
+	consensus := hierarchical.PoW
 	minerStake := abi.NewStoragePower(1e8) // TODO: Make this value configurable in a flag/argument
 	checkperiod := abi.ChainEpoch(10)
 	delegminer := hierarchical.SubnetCoordActorAddr
@@ -83,57 +65,75 @@ func (ts *eudicoSubnetConsensusSuite) testBasicInitialization(t *testing.T) {
 	for wait {
 		balance, err := full.WalletBalance(ctx, addr)
 		require.NoError(t, err)
-		t.Log("Balance:", balance)
+		t.Log("\t>>>>> Balance:", balance)
 		time.Sleep(time.Second * 3)
-		a := mbig.NewInt(2)
-		if balance.Cmp(a) == 1 {
+		m := types.FromFil(3)
+		if big.Cmp(balance, m) == 1 {
 			wait = false
 		}
 
 	}
 
-	actorAddr, err := full.AddSubnet(ctx, addr, parent, name, uint64(consensus), minerStake, checkperiod, delegminer)
+	actorAddr, err := full.AddSubnet(ctx, addr, parent, subnetName, uint64(consensus), minerStake, checkperiod, delegminer)
 	require.NoError(t, err)
 
-	_ = actorAddr
+	subnetAddr := address.NewSubnetID(parent, actorAddr)
 
-	subnets, err := sca.ListSubnets(s, st)
-	require.NoError(t, err)
-	require.Equal(t, 1, len(subnets))
-
-	subnet := subnets[0]
+	t.Log("\t>>>>> Subnet addr:", subnetAddr)
 
 	val, err := types.ParseFIL("10")
 	require.NoError(t, err)
 
-	walletID, err := full.StateLookupID(ctx, addr, types.EmptyTSK)
+	_, err = full.StateLookupID(ctx, addr, types.EmptyTSK)
 	require.NoError(t, err)
 
-	c, err := full.JoinSubnet(ctx, addr, big.Int(val), subnet.ID)
+	_, err = full.JoinSubnet(ctx, addr, big.Int(val), subnetAddr)
 	require.NoError(t, err)
-	_ = c
 
-	go full.MineSubnet(ctx, walletID, subnet.ID, false)
+	// AddSubnet only deploys the subnet actor. The subnet will only be listed after joining the subnet.
+	var st sca.SCAState
+	act, err := full.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, types.EmptyTSK)
+	require.NoError(t, err)
+	bs := blockstore.NewAPIBlockstore(full)
+	cst := cbor.NewCborStore(bs)
+	s := adt.WrapStore(ctx, cst)
+	err = cst.Get(ctx, act.Head, &st)
+	require.NoError(t, err)
+	sn, err := sca.ListSubnets(s, st)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(sn))
+	require.NotEqual(t, 0, sn[0].Status)
 
-	newHeads, err := full.SubnetChainNotify(ctx, name)
+	go full.MineSubnet(ctx, addr, subnetAddr, false)
+
+	newHeads, err := full.SubnetChainNotify(ctx, subnetAddr)
 	require.NoError(t, err)
 	initHead := (<-newHeads)[0]
 	baseHeight := initHead.Val.Height()
 
-	h1, err := full.ChainHead(ctx)
+	h1, err := full.SubnetChainHead(ctx, subnetAddr)
 	require.NoError(t, err)
 	require.Equal(t, int64(h1.Height()), int64(baseHeight))
 
 	<-newHeads
 
-	h2, err := full.ChainHead(ctx)
+	h2, err := full.SubnetChainHead(ctx, subnetAddr)
 	require.NoError(t, err)
 	require.Greater(t, int64(h2.Height()), int64(h1.Height()))
 
 	<-newHeads
 
-	h3, err := full.ChainHead(ctx)
+	h3, err := full.SubnetChainHead(ctx, subnetAddr)
 	require.NoError(t, err)
 	require.Greater(t, int64(h3.Height()), int64(h2.Height()))
 
+	_, err = full.LeaveSubnet(ctx, addr, subnetAddr)
+	require.NoError(t, err)
+
+	err = cst.Get(ctx, act.Head, &st)
+	require.NoError(t, err)
+	sn, err = sca.ListSubnets(s, st)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(sn))
+	require.NotEqual(t, 0, sn[0].Status)
 }
