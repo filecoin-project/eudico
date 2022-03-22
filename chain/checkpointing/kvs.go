@@ -319,10 +319,8 @@ func (r *Resolver) HandleIncomingResolveMsg(ctx context.Context, sub *pubsub.Sub
 func (r *Resolver) processResolveMsg(ctx context.Context, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
 	switch rmsg.Type {
 	case Push:
-		fmt.Println("message push")
 		return r.processPush(ctx, rmsg)
 	case PullMeta:
-		fmt.Println("Process resolve message of type pull")
 		return r.processPull( rmsg)
 	case Response:
 		return r.processResponse(ctx, rmsg)
@@ -487,7 +485,6 @@ func (r *Resolver) ResolveCrossMsgs(ctx context.Context, c string) ([]byte, bool
 	}
 	// If not try to pull message
 	if r.shouldPull(c) {
-		fmt.Println("Try pullcrossmsgs now")
 		return []byte{}, false, r.PullCrossMsgs(c)
 	}
 
