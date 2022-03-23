@@ -3,10 +3,6 @@ package itests
 
 import (
 	"context"
-	"github.com/filecoin-project/lotus/api"
-	"github.com/filecoin-project/lotus/chain/actors"
-	"github.com/filecoin-project/lotus/chain/actors/builtin"
-	lcli "github.com/filecoin-project/lotus/cli"
 	"testing"
 	"time"
 
@@ -16,75 +12,32 @@ import (
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/blockstore"
+	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
+	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
-	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/types"
+	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/itests/kit"
 )
 
 func TestEudicoSubnetConsensus(t *testing.T) {
 	t.Run("subnet", func(t *testing.T) {
-		runSubnetConsensusTests(t, kit.ThroughRPC(), kit.TSPoW())
+		runSubnetConsensusTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTSPoW())
 	})
-}
-
-type eudicoSubnetConsensusSuite struct {
-	opts []interface{}
 }
 
 func runSubnetConsensusTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoSubnetConsensusSuite{opts: opts}
 
-	t.Run("testBasicInitialization", ts.testBasicSubnetFlow)
+	t.Run("testBasicFlow", ts.testBasicSubnetFlow)
 }
 
-func messageForSend(ctx context.Context, s api.FullNode, params lcli.SendParams) (*api.MessagePrototype, error) {
-	if params.From == address.Undef {
-		defaddr, err := s.WalletDefaultAddress(ctx)
-		if err != nil {
-			return nil, err
-		}
-		params.From = defaddr
-	}
-
-	msg := types.Message{
-		From:  params.From,
-		To:    params.To,
-		Value: params.Val,
-
-		Method: params.Method,
-		Params: params.Params,
-	}
-
-	if params.GasPremium != nil {
-		msg.GasPremium = *params.GasPremium
-	} else {
-		msg.GasPremium = types.NewInt(0)
-	}
-	if params.GasFeeCap != nil {
-		msg.GasFeeCap = *params.GasFeeCap
-	} else {
-		msg.GasFeeCap = types.NewInt(0)
-	}
-	if params.GasLimit != nil {
-		msg.GasLimit = *params.GasLimit
-	} else {
-		msg.GasLimit = 0
-	}
-	validNonce := false
-	if params.Nonce != nil {
-		msg.Nonce = *params.Nonce
-		validNonce = true
-	}
-
-	prototype := &api.MessagePrototype{
-		Message:    msg,
-		ValidNonce: validNonce,
-	}
-	return prototype, nil
+type eudicoSubnetConsensusSuite struct {
+	opts []interface{}
 }
 
 func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
@@ -92,6 +45,7 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	defer cancel()
 
 	full, _, _ := kit.EudicoEnsembleMinimal(t, ts.opts...)
+	rootMiner, subnetMinerType := kit.EudicoRootConsensusMiner(t, ts.opts...)
 
 	l, err := full.WalletList(ctx)
 	require.NoError(t, err)
@@ -99,14 +53,14 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 		t.Fatal("wallet key list is empty")
 	}
 
-	go tspow.Mine(ctx, l[0], full)
+	go rootMiner(ctx, l[0], full)
 
 	addr, err := full.WalletDefaultAddress(ctx)
 	require.NoError(t, err)
 
 	parent := address.RootSubnet
 	subnetName := "testSubnet"
-	consensus := hierarchical.PoW
+	//consensus := hierarchical.PoW
 	minerStake := abi.NewStoragePower(1e8) // TODO: Make this value configurable in a flag/argument
 	checkPeriod := abi.ChainEpoch(10)
 	delegMiner := hierarchical.SubnetCoordActorAddr
@@ -124,7 +78,7 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 
 	}
 
-	actorAddr, err := full.AddSubnet(ctx, addr, parent, subnetName, uint64(consensus), minerStake, checkPeriod, delegMiner)
+	actorAddr, err := full.AddSubnet(ctx, addr, parent, subnetName, uint64(subnetMinerType), minerStake, checkPeriod, delegMiner)
 	require.NoError(t, err)
 
 	subnetAddr := address.NewSubnetID(parent, actorAddr)
@@ -255,4 +209,51 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(sn))
 	require.NotEqual(t, 0, sn[0].Status)
+}
+
+// TODO: use MessageForSend from cli package.
+func messageForSend(ctx context.Context, s api.FullNode, params lcli.SendParams) (*api.MessagePrototype, error) {
+	if params.From == address.Undef {
+		defaddr, err := s.WalletDefaultAddress(ctx)
+		if err != nil {
+			return nil, err
+		}
+		params.From = defaddr
+	}
+
+	msg := types.Message{
+		From:  params.From,
+		To:    params.To,
+		Value: params.Val,
+
+		Method: params.Method,
+		Params: params.Params,
+	}
+
+	if params.GasPremium != nil {
+		msg.GasPremium = *params.GasPremium
+	} else {
+		msg.GasPremium = types.NewInt(0)
+	}
+	if params.GasFeeCap != nil {
+		msg.GasFeeCap = *params.GasFeeCap
+	} else {
+		msg.GasFeeCap = types.NewInt(0)
+	}
+	if params.GasLimit != nil {
+		msg.GasLimit = *params.GasLimit
+	} else {
+		msg.GasLimit = 0
+	}
+	validNonce := false
+	if params.Nonce != nil {
+		msg.Nonce = *params.Nonce
+		validNonce = true
+	}
+
+	prototype := &api.MessagePrototype{
+		Message:    msg,
+		ValidNonce: validNonce,
+	}
+	return prototype, nil
 }

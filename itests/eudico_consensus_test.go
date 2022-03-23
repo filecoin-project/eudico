@@ -12,6 +12,7 @@ import (
 	abciserver "github.com/tendermint/tendermint/abci/server"
 	tmlogger "github.com/tendermint/tendermint/libs/log"
 
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
 	"github.com/filecoin-project/lotus/chain/consensus/tendermint"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
@@ -23,15 +24,15 @@ import (
 
 func TestEudicoConsensus(t *testing.T) {
 	t.Run("tspow", func(t *testing.T) {
-		runTSPoWConsensusTests(t, kit.ThroughRPC(), kit.TSPoW())
+		runTSPoWConsensusTests(t, kit.ThroughRPC(), kit.RootTSPoW())
 	})
 
 	t.Run("delegated", func(t *testing.T) {
-		runDelegatedConsensusTests(t, kit.ThroughRPC(), kit.Delegated())
+		runDelegatedConsensusTests(t, kit.ThroughRPC(), kit.RootDelegated())
 	})
 
 	t.Run("tendermint", func(t *testing.T) {
-		runTendermintConsensusTests(t, kit.ThroughRPC(), kit.Tendermint())
+		runTendermintConsensusTests(t, kit.ThroughRPC(), kit.RootTendermint())
 	})
 }
 
@@ -104,7 +105,7 @@ func (ts *eudicoConsensusSuite) testDelegatedMining(t *testing.T) {
 	k, err := wallet.NewKey(ki)
 	require.NoError(t, err)
 
-	go delegcns.Mine(ctx, full)
+	go delegcns.Mine(ctx, address.Undef, full)
 
 	newHeads, err := full.ChainNotify(ctx)
 	require.NoError(t, err)

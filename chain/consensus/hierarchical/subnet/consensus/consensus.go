@@ -62,7 +62,7 @@ func Mine(ctx context.Context, api v1api.FullNode, wallet address.Address, cnsTy
 	// TODO: We should check if these processes throw an error
 	switch cnsType {
 	case hierarchical.Delegated:
-		go delegcns.Mine(ctx, api)
+		go delegcns.Mine(ctx, address.Undef, api)
 	case hierarchical.PoW:
 		go tspow.Mine(ctx, wallet, api)
 	case hierarchical.Tendermint:

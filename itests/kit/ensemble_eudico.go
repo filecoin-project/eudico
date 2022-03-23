@@ -28,6 +28,7 @@ import (
 	"github.com/filecoin-project/go-jsonrpc"
 	"github.com/filecoin-project/go-state-types/network"
 	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/beacon"
@@ -145,6 +146,39 @@ type EudicoEnsemble struct {
 		miners   []genesis.Miner
 		accounts []genesis.Actor
 	}
+}
+
+func EudicoRootConsensusMiner(t *testing.T, opts ...interface{}) (
+	rootMiner func(ctx context.Context, addr address.Address, api v1api.FullNode) error,
+	subnetMinerType hierarchical.ConsensusType) {
+
+	eopts, _ := siftOptions(t, opts)
+
+	options := DefaultEnsembleOpts
+	for _, o := range eopts {
+		err := o(&options)
+		require.NoError(t, err)
+	}
+
+	switch options.rootConsensus {
+	case hierarchical.Tendermint:
+		rootMiner = tendermint.Mine
+	case hierarchical.PoW:
+		rootMiner = tspow.Mine
+	case hierarchical.Delegated:
+		rootMiner = delegcns.Mine
+	}
+
+	switch options.subnetConsensus {
+	case hierarchical.Tendermint:
+		subnetMinerType = hierarchical.Tendermint
+	case hierarchical.PoW:
+		subnetMinerType = hierarchical.PoW
+	case hierarchical.Delegated:
+		subnetMinerType = hierarchical.Delegated
+	}
+
+	return
 }
 
 // NewEudicoEnsemble instantiates a new blank EudicoEnsemble.
@@ -384,7 +418,7 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 	}
 
 	var consensusConstructor interface{}
-	switch n.options.consensus {
+	switch n.options.rootConsensus {
 	case hierarchical.PoW:
 		consensusConstructor = NewRootTSPoWConsensus
 	case hierarchical.Delegated:
@@ -394,11 +428,11 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 	case hierarchical.FilecoinEC:
 		consensusConstructor = NewFilecoinExpectedConsensus
 	default:
-		n.t.Fatalf("unknown consensus constructor %d", n.options.consensus)
+		n.t.Fatalf("unknown consensus constructor %d", n.options.rootConsensus)
 	}
 
 	var weightConstructor interface{}
-	switch n.options.consensus {
+	switch n.options.rootConsensus {
 	case hierarchical.PoW:
 		weightConstructor = tspow.Weight
 	case hierarchical.Delegated:
@@ -408,7 +442,7 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 	case hierarchical.FilecoinEC:
 		weightConstructor = filcns.Weight
 	default:
-		n.t.Fatalf("unknown consensus weight %d", n.options.consensus)
+		n.t.Fatalf("unknown consensus weight %d", n.options.rootConsensus)
 	}
 
 	// ---------------------
@@ -455,7 +489,7 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 
 		var genBytes []byte
 		var testDataFileErr error
-		switch n.options.consensus {
+		switch n.options.rootConsensus {
 		case hierarchical.PoW:
 			genBytes, testDataFileErr = ioutil.ReadFile(TSPoWConsensusGenesisTestFile)
 		case hierarchical.Delegated:
@@ -465,7 +499,7 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		case hierarchical.FilecoinEC:
 			genBytes, testDataFileErr = ioutil.ReadFile(FilcnsConsensusGenesisTestFile)
 		default:
-			n.t.Fatalf("unknown consensus genesis file %d", n.options.consensus)
+			n.t.Fatalf("unknown consensus genesis file %d", n.options.rootConsensus)
 		}
 
 		require.NoError(n.t, testDataFileErr)
@@ -499,7 +533,7 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 
 		var addr address.Address
 		var ki types.KeyInfo
-		switch n.options.consensus {
+		switch n.options.rootConsensus {
 		case hierarchical.PoW:
 			addr, err = full.WalletImport(context.Background(), &full.DefaultKey.KeyInfo)
 		case hierarchical.Delegated:
@@ -513,7 +547,7 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 			addr, err = full.WalletImport(ctx, ki)
 			require.NoError(n.t, err)
 		default:
-			n.t.Fatalf("unknown consensus type %d", n.options.consensus)
+			n.t.Fatalf("unknown consensus type %d", n.options.rootConsensus)
 		}
 		require.NoError(n.t, err)
 
