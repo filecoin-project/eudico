@@ -4,17 +4,18 @@ import (
 	"context"
 	"time"
 
-	"github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
 	"golang.org/x/xerrors"
 
+	"github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
 	"github.com/filecoin-project/lotus/extern/sector-storage/stores"
+	"github.com/filecoin-project/lotus/extern/sector-storage/storiface"
 )
 
 type schedWorker struct {
 	sched  *scheduler
 	worker *workerHandle
 
-	wid WorkerID
+	wid storiface.WorkerID
 
 	heartbeatTimer   *time.Ticker
 	scheduledWindows chan *schedWindow
@@ -50,7 +51,7 @@ func (sh *scheduler) runWorker(ctx context.Context, w Worker) error {
 		closedMgr:  make(chan struct{}),
 	}
 
-	wid := WorkerID(sessID)
+	wid := storiface.WorkerID(sessID)
 
 	sh.workersLk.Lock()
 	_, exist := sh.workers[wid]
@@ -237,7 +238,7 @@ func (sw *schedWorker) checkSession(ctx context.Context) bool {
 			continue
 		}
 
-		if WorkerID(curSes) != sw.wid {
+		if storiface.WorkerID(curSes) != sw.wid {
 			if curSes != ClosedWorkerID {
 				// worker restarted
 				log.Warnw("worker session changed (worker restarted?)", "initial", sw.wid, "current", curSes)
@@ -296,7 +297,7 @@ func (sw *schedWorker) workerCompactWindows() {
 			var moved []int
 
 			for ti, todo := range window.todo {
-				needRes := ResourceTable[todo.taskType][todo.sector.ProofType]
+				needRes := worker.info.Resources.ResourceSpec(todo.sector.ProofType, todo.taskType)
 				if !lower.allocated.canHandleRequest(needRes, sw.wid, "compactWindows", worker.info) {
 					continue
 				}
@@ -357,7 +358,7 @@ assignLoop:
 
 			worker.lk.Lock()
 			for t, todo := range firstWindow.todo {
-				needRes := ResourceTable[todo.taskType][todo.sector.ProofType]
+				needRes := worker.info.Resources.ResourceSpec(todo.sector.ProofType, todo.taskType)
 				if worker.preparing.canHandleRequest(needRes, sw.wid, "startPreparing", worker.info) {
 					tidx = t
 					break
@@ -418,7 +419,7 @@ assignLoop:
 					continue
 				}
 
-				needRes := ResourceTable[todo.taskType][todo.sector.ProofType]
+				needRes := storiface.ResourceTable[todo.taskType][todo.sector.ProofType]
 				if worker.active.canHandleRequest(needRes, sw.wid, "startPreparing", worker.info) {
 					tidx = t
 					break
@@ -456,7 +457,7 @@ assignLoop:
 func (sw *schedWorker) startProcessingTask(req *workerRequest) error {
 	w, sh := sw.worker, sw.sched
 
-	needRes := ResourceTable[req.taskType][req.sector.ProofType]
+	needRes := w.info.Resources.ResourceSpec(req.sector.ProofType, req.taskType)
 
 	w.lk.Lock()
 	w.preparing.add(w.info.Resources, needRes)
@@ -464,7 +465,9 @@ func (sw *schedWorker) startProcessingTask(req *workerRequest) error {
 
 	go func() {
 		// first run the prepare step (e.g. fetching sector data from other worker)
-		err := req.prepare(req.ctx, sh.workTracker.worker(sw.wid, w.info, w.workerRpc))
+		tw := sh.workTracker.worker(sw.wid, w.info, w.workerRpc)
+		tw.start()
+		err := req.prepare(req.ctx, tw)
 		w.lk.Lock()
 
 		if err != nil {
@@ -488,6 +491,14 @@ func (sw *schedWorker) startProcessingTask(req *workerRequest) error {
 			return
 		}
 
+		tw = sh.workTracker.worker(sw.wid, w.info, w.workerRpc)
+
+		// start tracking work first early in case we need to wait for resources
+		werr := make(chan error, 1)
+		go func() {
+			werr <- req.work(req.ctx, tw)
+		}()
+
 		// wait (if needed) for resources in the 'active' window
 		err = w.active.withResources(sw.wid, w.info, needRes, &w.lk, func() error {
 			w.preparing.free(w.info.Resources, needRes)
@@ -501,7 +512,8 @@ func (sw *schedWorker) startProcessingTask(req *workerRequest) error {
 			}
 
 			// Do the work!
-			err = req.work(req.ctx, sh.workTracker.worker(sw.wid, w.info, w.workerRpc))
+			tw.start()
+			err = <-werr
 
 			select {
 			case req.ret <- workerResponse{err: err}:
@@ -528,13 +540,15 @@ func (sw *schedWorker) startProcessingTask(req *workerRequest) error {
 func (sw *schedWorker) startProcessingReadyTask(req *workerRequest) error {
 	w, sh := sw.worker, sw.sched
 
-	needRes := ResourceTable[req.taskType][req.sector.ProofType]
+	needRes := w.info.Resources.ResourceSpec(req.sector.ProofType, req.taskType)
 
 	w.active.add(w.info.Resources, needRes)
 
 	go func() {
 		// Do the work!
-		err := req.work(req.ctx, sh.workTracker.worker(sw.wid, w.info, w.workerRpc))
+		tw := sh.workTracker.worker(sw.wid, w.info, w.workerRpc)
+		tw.start()
+		err := req.work(req.ctx, tw)
 
 		select {
 		case req.ret <- workerResponse{err: err}:
@@ -566,7 +580,7 @@ func (sw *schedWorker) startProcessingReadyTask(req *workerRequest) error {
 	return nil
 }
 
-func (sh *scheduler) workerCleanup(wid WorkerID, w *workerHandle) {
+func (sh *scheduler) workerCleanup(wid storiface.WorkerID, w *workerHandle) {
 	select {
 	case <-w.closingMgr:
 	default:

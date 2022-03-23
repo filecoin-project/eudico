@@ -7,16 +7,12 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/big"
-	"github.com/ipfs/go-cid"
-	"golang.org/x/xerrors"
-
-	"github.com/filecoin-project/go-state-types/crypto"
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
-
-	"github.com/filecoin-project/lotus/chain/consensus"
-	param "github.com/filecoin-project/lotus/chain/consensus/params"
+	common "github.com/filecoin-project/lotus/chain/consensus/common"
+	param "github.com/filecoin-project/lotus/chain/consensus/common/params"
 	"github.com/filecoin-project/lotus/chain/types"
+	"golang.org/x/xerrors"
 )
 
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {
@@ -62,6 +58,17 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			log.Errorw("selecting messages failed", "error", err)
 		}
 
+		// Get cross-message pool from subnet.
+		nn, err := api.StateNetworkName(ctx)
+		if err != nil {
+			return err
+		}
+		crossmsgs, err := api.GetCrossMsgsPool(ctx, address.SubnetID(nn), base.Height()+1)
+		if err != nil {
+			log.Errorw("selecting cross-messages failed", "error", err)
+		}
+		log.Debugf("CrossMsgs being proposed in block @%s: %d", base.Height()+1, len(crossmsgs))
+
 		bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
 			Miner:            miner,
 			Parents:          types.NewTipSetKey(BestWorkBlock(base).Cid()),
@@ -71,6 +78,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			Epoch:            base.Height() + 1,
 			Timestamp:        uint64(time.Now().Unix()),
 			WinningPoStProof: nil,
+			CrossMessages:    crossmsgs,
 		})
 		if err != nil {
 			log.Errorw("creating block failed", "error", err)
@@ -80,12 +88,13 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			continue
 		}
 
-		log.Info("try PpW mining at @", base.Height(), base.String())
+		log.Info("try PoW mining at @", base.Height(), base.String())
 
 		err = api.SyncSubmitBlock(ctx, &types.BlockMsg{
 			Header:        bh.Header,
 			BlsMessages:   bh.BlsMessages,
 			SecpkMessages: bh.SecpkMessages,
+			CrossMessages: bh.CrossMessages,
 		})
 		if err != nil {
 			log.Errorw("submitting block failed", "error", err)
@@ -96,93 +105,11 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 }
 
 func (tsp *TSPoW) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.BlockTemplate) (*types.FullBlock, error) {
-	pts, err := tsp.sm.ChainStore().LoadTipSet(bt.Parents)
-	if err != nil {
-		return nil, xerrors.Errorf("failed to load parent tipset: %w", err)
-	}
-
-	st, recpts, err := tsp.sm.TipSetState(ctx, pts)
-	if err != nil {
-		return nil, xerrors.Errorf("failed to load tipset state: %w", err)
-	}
-
-	next := &types.BlockHeader{
-		Miner:         bt.Miner,
-		Parents:       bt.Parents.Cids(),
-		Ticket:        bt.Ticket,
-		ElectionProof: bt.Eproof,
-
-		BeaconEntries:         bt.BeaconValues,
-		Height:                bt.Epoch,
-		Timestamp:             bt.Timestamp,
-		WinPoStProof:          bt.WinningPoStProof,
-		ParentStateRoot:       st,
-		ParentMessageReceipts: recpts,
-	}
-
-	var blsMessages []*types.Message
-	var secpkMessages []*types.SignedMessage
-
-	var blsMsgCids, secpkMsgCids []cid.Cid
-	var blsSigs []crypto.Signature
-	for _, msg := range bt.Messages {
-		if msg.Signature.Type == crypto.SigTypeBLS {
-			blsSigs = append(blsSigs, msg.Signature)
-			blsMessages = append(blsMessages, &msg.Message)
-
-			c, err := tsp.sm.ChainStore().PutMessage(&msg.Message)
-			if err != nil {
-				return nil, err
-			}
-
-			blsMsgCids = append(blsMsgCids, c)
-		} else {
-			c, err := tsp.sm.ChainStore().PutMessage(msg)
-			if err != nil {
-				return nil, err
-			}
-
-			secpkMsgCids = append(secpkMsgCids, c)
-			secpkMessages = append(secpkMessages, msg)
-		}
-	}
-
-	store := tsp.sm.ChainStore().ActorStore(ctx)
-	blsmsgroot, err := consensus.ToMessagesArray(store, blsMsgCids)
-	if err != nil {
-		return nil, xerrors.Errorf("building bls amt: %w", err)
-	}
-	secpkmsgroot, err := consensus.ToMessagesArray(store, secpkMsgCids)
-	if err != nil {
-		return nil, xerrors.Errorf("building secpk amt: %w", err)
-	}
-
-	mmcid, err := store.Put(store.Context(), &types.MsgMeta{
-		BlsMessages:   blsmsgroot,
-		SecpkMessages: secpkmsgroot,
-	})
+	b, err := common.PrepareBlockForSignature(ctx, tsp.sm, bt)
 	if err != nil {
 		return nil, err
 	}
-	next.Messages = mmcid
-
-	aggSig, err := consensus.AggregateSignatures(blsSigs)
-	if err != nil {
-		return nil, err
-	}
-
-	next.BLSAggregate = aggSig
-	pweight, err := tsp.sm.ChainStore().Weight(ctx, pts)
-	if err != nil {
-		return nil, err
-	}
-	next.ParentWeight = pweight
-
-	baseFee, err := tsp.sm.ChainStore().ComputeBaseFee(ctx, pts)
-	if err != nil {
-		return nil, xerrors.Errorf("computing base fee: %w", err)
-	}
-	next.ParentBaseFee = baseFee
+	next := b.Header
 
 	tgt := big.Zero()
 	tgt.SetBytes(next.Ticket.VRFProof)
@@ -206,25 +133,10 @@ func (tsp *TSPoW) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.Block
 		return nil, nil
 	}
 
-	nosigbytes, err := next.SigningBytes()
+	err = common.SignBlock(ctx, w, b)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to get signing bytes for block: %w", err)
+		return nil, err
 	}
 
-	sig, err := w.WalletSign(ctx, bt.Miner, nosigbytes, lapi.MsgMeta{
-		Type: lapi.MTBlock,
-	})
-	if err != nil {
-		return nil, xerrors.Errorf("failed to sign new block: %w", err)
-	}
-
-	next.BlockSig = sig
-
-	fullBlock := &types.FullBlock{
-		Header:        next,
-		BlsMessages:   blsMessages,
-		SecpkMessages: secpkMessages,
-	}
-
-	return fullBlock, nil
+	return b, nil
 }

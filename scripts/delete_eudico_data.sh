@@ -1,2 +1,2 @@
 rm -rf data/
-cp -R ../fil-taproot-data/data ./
+cp -R ../fil-testnet-data/data ./

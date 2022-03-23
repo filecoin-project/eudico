@@ -20,8 +20,8 @@ import (
 )
 
 // TODO: We can probably deduplicate some code with pow genesis generation.
-func makeDelegatedGenesisBlock(ctx context.Context, bs bstore.Blockstore, template genesis.Template) (*genesis2.GenesisBootstrap, error) {
-	st, _, err := MakeInitialStateTree(ctx, bs, template)
+func makeDelegatedGenesisBlock(ctx context.Context, bs bstore.Blockstore, template genesis.Template, checkPeriod abi.ChainEpoch) (*genesis2.GenesisBootstrap, error) {
+	st, _, err := MakeInitialStateTree(ctx, bs, template, checkPeriod)
 	if err != nil {
 		return nil, xerrors.Errorf("make initial state tree failed: %w", err)
 	}
@@ -54,12 +54,13 @@ func makeDelegatedGenesisBlock(ctx context.Context, bs bstore.Blockstore, templa
 	mm := &types.MsgMeta{
 		BlsMessages:   emptyroot,
 		SecpkMessages: emptyroot,
+		CrossMessages: emptyroot,
 	}
 	mmb, err := mm.ToStorageBlock()
 	if err != nil {
 		return nil, xerrors.Errorf("serializing msgmeta failed: %w", err)
 	}
-	if err := bs.Put(mmb); err != nil {
+	if err := bs.Put(ctx, mmb); err != nil {
 		return nil, xerrors.Errorf("putting msgmeta block to blockstore: %w", err)
 	}
 
@@ -99,7 +100,7 @@ func makeDelegatedGenesisBlock(ctx context.Context, bs bstore.Blockstore, templa
 		return nil, xerrors.Errorf("serializing block header failed: %w", err)
 	}
 
-	if err := bs.Put(sb); err != nil {
+	if err := bs.Put(ctx, sb); err != nil {
 		return nil, xerrors.Errorf("putting header to blockstore: %w", err)
 	}
 

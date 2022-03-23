@@ -107,7 +107,15 @@ func pubkeyToTapprootAddress(pubkey []byte) (string, error) {
 
 	// regtest human-readable part is "bcrt" according to no documentation ever... (see https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki)
 	// Using EncodeM becasue we want bech32m... which has a new checksum
-	taprootAddress, err := bech32.EncodeM("bcrt", conv)
+	if Regtest {
+		taprootAddress, err := bech32.EncodeM("bcrt", conv)
+		if err != nil {
+			return "", err
+		}
+		return taprootAddress, nil
+	}
+	// for testnet the human-readable part is "tb"
+	taprootAddress, err := bech32.EncodeM("tb", conv)
 	if err != nil {
 		return "", err
 	}
@@ -153,8 +161,13 @@ func genCheckpointPublicKeyTaproot(internal_pubkey []byte, checkpoint []byte) []
 }
 
 func addTaprootToWallet(url, taprootScript string) bool {
-	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"importaddress\", \"params\": [\"" + taprootScript + "\", \"\", true]}"
+	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"importaddress\", \"params\": [\"" + taprootScript + "\", \"\", false]}"
+	if Regtest {
+		payload = "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"importaddress\", \"params\": [\"" + taprootScript + "\", \"\", true]}"
+	}
+	//time.Sleep(6 * time.Second)
 	result := jsonRPC(url, payload)
+
 	if result["error"] == nil {
 		return true
 	}
@@ -209,8 +222,13 @@ func parseUnspentTxOut(utxo []byte) (amount, script []byte) {
 func getTxOut(url, txid string, index int) (float64, []byte) {
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"gettxout\", \"params\": [\"" + txid + "\", " + strconv.Itoa(index) + "]}"
 	result := jsonRPC(url, payload)
+
 	if result == nil {
 		panic("Cannot retrieve previous transaction.")
+	}
+	if result["result"] == nil {
+		panic("No transaction returned (maybe the output has already be spent")
+
 	}
 	taprootTxOut := result["result"].(map[string]interface{})
 	scriptPubkey := taprootTxOut["scriptPubKey"].(map[string]interface{})
@@ -223,9 +241,12 @@ func jsonRPC(url, payload string) map[string]interface{} {
 	// ZONDAX TODO
 	// This needs to be in a config file
 	method := "POST"
-
-	user := "satoshi"
-	password := "amiens"
+	user := "sarah"
+	password := "pikachutestnetB2"
+	if Regtest {
+		user = "satoshi"
+		password = "amiens"
+	}
 
 	client := &http.Client{}
 
@@ -254,4 +275,27 @@ func jsonRPC(url, payload string) map[string]interface{} {
 	var result map[string]interface{}
 	json.Unmarshal([]byte(body), &result)
 	return result
+}
+
+func sameStringSlice(x, y []string) bool {
+	if len(x) != len(y) {
+		return false
+	}
+	// create a map of string -> int
+	diff := make(map[string]int, len(x))
+	for _, _x := range x {
+		// 0 value for int is 0, so just increment a counter for the string
+		diff[_x]++
+	}
+	for _, _y := range y {
+		// If the string _y is not in diff bail out early
+		if _, ok := diff[_y]; !ok {
+			return false
+		}
+		diff[_y] -= 1
+		if diff[_y] == 0 {
+			delete(diff, _y)
+		}
+	}
+	return len(diff) == 0
 }
