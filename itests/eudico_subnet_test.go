@@ -3,6 +3,10 @@ package itests
 
 import (
 	"context"
+	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/chain/actors"
+	"github.com/filecoin-project/lotus/chain/actors/builtin"
+	lcli "github.com/filecoin-project/lotus/cli"
 	"testing"
 	"time"
 
@@ -34,10 +38,56 @@ type eudicoSubnetConsensusSuite struct {
 func runSubnetConsensusTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoSubnetConsensusSuite{opts: opts}
 
-	t.Run("testBasicInitialization", ts.testBasicInitialization)
+	t.Run("testBasicInitialization", ts.testBasicSubnetFlow)
 }
 
-func (ts *eudicoSubnetConsensusSuite) testBasicInitialization(t *testing.T) {
+func messageForSend(ctx context.Context, s api.FullNode, params lcli.SendParams) (*api.MessagePrototype, error) {
+	if params.From == address.Undef {
+		defaddr, err := s.WalletDefaultAddress(ctx)
+		if err != nil {
+			return nil, err
+		}
+		params.From = defaddr
+	}
+
+	msg := types.Message{
+		From:  params.From,
+		To:    params.To,
+		Value: params.Val,
+
+		Method: params.Method,
+		Params: params.Params,
+	}
+
+	if params.GasPremium != nil {
+		msg.GasPremium = *params.GasPremium
+	} else {
+		msg.GasPremium = types.NewInt(0)
+	}
+	if params.GasFeeCap != nil {
+		msg.GasFeeCap = *params.GasFeeCap
+	} else {
+		msg.GasFeeCap = types.NewInt(0)
+	}
+	if params.GasLimit != nil {
+		msg.GasLimit = *params.GasLimit
+	} else {
+		msg.GasLimit = 0
+	}
+	validNonce := false
+	if params.Nonce != nil {
+		msg.Nonce = *params.Nonce
+		validNonce = true
+	}
+
+	prototype := &api.MessagePrototype{
+		Message:    msg,
+		ValidNonce: validNonce,
+	}
+	return prototype, nil
+}
+
+func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -58,14 +108,14 @@ func (ts *eudicoSubnetConsensusSuite) testBasicInitialization(t *testing.T) {
 	subnetName := "testSubnet"
 	consensus := hierarchical.PoW
 	minerStake := abi.NewStoragePower(1e8) // TODO: Make this value configurable in a flag/argument
-	checkperiod := abi.ChainEpoch(10)
-	delegminer := hierarchical.SubnetCoordActorAddr
+	checkPeriod := abi.ChainEpoch(10)
+	delegMiner := hierarchical.SubnetCoordActorAddr
 
 	wait := true
 	for wait {
 		balance, err := full.WalletBalance(ctx, addr)
 		require.NoError(t, err)
-		t.Log("\t>>>>> Balance:", balance)
+		t.Log("\t>>>>> balance:", balance)
 		time.Sleep(time.Second * 3)
 		m := types.FromFil(3)
 		if big.Cmp(balance, m) == 1 {
@@ -74,12 +124,12 @@ func (ts *eudicoSubnetConsensusSuite) testBasicInitialization(t *testing.T) {
 
 	}
 
-	actorAddr, err := full.AddSubnet(ctx, addr, parent, subnetName, uint64(consensus), minerStake, checkperiod, delegminer)
+	actorAddr, err := full.AddSubnet(ctx, addr, parent, subnetName, uint64(consensus), minerStake, checkPeriod, delegMiner)
 	require.NoError(t, err)
 
 	subnetAddr := address.NewSubnetID(parent, actorAddr)
 
-	t.Log("\t>>>>> Subnet addr:", subnetAddr)
+	t.Log("\t>>>>> subnet addr:", subnetAddr)
 
 	val, err := types.ParseFIL("10")
 	require.NoError(t, err)
@@ -127,6 +177,75 @@ func (ts *eudicoSubnetConsensusSuite) testBasicInitialization(t *testing.T) {
 	require.NoError(t, err)
 	require.Greater(t, int64(h3.Height()), int64(h2.Height()))
 
+	// Inject new funds to the address in a subnet
+
+	t.Log("\t>>>>> funding yourself")
+	injectedFils, err := types.ParseFIL("3")
+	require.NoError(t, err)
+
+	_, err = full.FundSubnet(ctx, addr, subnetAddr, big.Int(injectedFils))
+	require.NoError(t, err)
+
+	// Send a message to yourself
+	t.Log("\t>>>>> sending a message")
+
+	sentFils, err := types.ParseFIL("2")
+	require.NoError(t, err)
+
+	var params lcli.SendParams
+	params.Method = abi.MethodNum(uint64(builtin.MethodSend))
+	params.To = addr
+	params.From = addr
+	params.Val = abi.TokenAmount(sentFils)
+	proto, err := messageForSend(ctx, full, params)
+	require.NoError(t, err)
+
+	crossParams := &sca.CrossMsgParams{
+		Destination: subnetAddr,
+		Msg:         proto.Message,
+	}
+	serparams, err := actors.SerializeParams(crossParams)
+	require.NoError(t, err)
+
+	msg, err := full.MpoolPushMessage(ctx, &types.Message{
+		To:     hierarchical.SubnetCoordActorAddr,
+		From:   params.From,
+		Value:  params.Val,
+		Method: sca.Methods.SendCross,
+		Params: serparams,
+	}, nil)
+	require.NoError(t, err)
+
+	c, err := full.StateWaitMsg(ctx, msg.Cid(), 10, 100, false)
+	require.NoError(t, err)
+	t.Logf("\t>>>>> the message was found in %d epoch:", c.Height)
+
+	a, err := full.SubnetGetActor(ctx, subnetAddr, addr, types.EmptyTSK)
+	require.NoError(t, err)
+	t.Logf("\t>>>>> balance: %d", a.Balance)
+	//require.Equal(t, types.BigAdd(types.BigInt(injectedFils), types.BigInt(sentFils)), a.Balance)
+	require.Equal(t, abi.TokenAmount(types.MustParseFIL("5")), a.Balance)
+
+	// Stop mining
+
+	t.Log("\t>>>>> stop mining")
+	err = full.MineSubnet(ctx, addr, subnetAddr, true)
+	require.NoError(t, err)
+
+	notStopped := true
+	for notStopped {
+		select {
+		case b := <-newHeads:
+			t.Logf("\t>>>>> mined a block: %d", b[0].Val.Height())
+		default:
+			t.Log("\t>>>>> stopped the miner eventually")
+			notStopped = false
+		}
+	}
+
+	// Leaving the subnet
+
+	t.Log("\t>>>>> leaving the subnet")
 	_, err = full.LeaveSubnet(ctx, addr, subnetAddr)
 	require.NoError(t, err)
 

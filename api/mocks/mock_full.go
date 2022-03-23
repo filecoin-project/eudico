@@ -3159,6 +3159,21 @@ func (mr *MockFullNodeMockRecorder) SubnetChainNotify(arg0, arg1 interface{}) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubnetChainNotify", reflect.TypeOf((*MockFullNode)(nil).SubnetChainNotify), arg0, arg1)
 }
 
+// SubnetGetActor mocks base method.
+func (m *MockFullNode) SubnetGetActor(arg0 context.Context, arg1 address.SubnetID, arg2 address.Address, arg3 types.TipSetKey) (*types.Actor, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubnetGetActor", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(*types.Actor)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubnetGetActor indicates an expected call of SubnetGetActor.
+func (mr *MockFullNodeMockRecorder) SubnetGetActor(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubnetGetActor", reflect.TypeOf((*MockFullNode)(nil).SubnetGetActor), arg0, arg1, arg2, arg3)
+}
+
 // SyncCheckBad mocks base method.
 func (m *MockFullNode) SyncCheckBad(arg0 context.Context, arg1 cid.Cid) (string, error) {
 	m.ctrl.T.Helper()

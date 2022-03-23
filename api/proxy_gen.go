@@ -599,6 +599,8 @@ type HierarchicalCnsStruct struct {
 
 		SubnetChainNotify func(p0 context.Context, p1 address.SubnetID) (<-chan []*HeadChange, error) `perm:"read"`
 
+		SubnetGetActor func(p0 context.Context, p1 address.SubnetID, p2 address.Address, p3 types.TipSetKey) (*types.Actor, error) `perm:"read"`
+
 		SyncSubnet func(p0 context.Context, p1 address.SubnetID, p2 bool) error `perm:"write"`
 
 		UnlockState func(p0 context.Context, p1 address.Address, p2 address.Address, p3 address.SubnetID, p4 abi.MethodNum) error `perm:"write"`
@@ -3714,6 +3716,17 @@ func (s *HierarchicalCnsStruct) SubnetChainNotify(p0 context.Context, p1 address
 }
 
 func (s *HierarchicalCnsStub) SubnetChainNotify(p0 context.Context, p1 address.SubnetID) (<-chan []*HeadChange, error) {
+	return nil, ErrNotSupported
+}
+
+func (s *HierarchicalCnsStruct) SubnetGetActor(p0 context.Context, p1 address.SubnetID, p2 address.Address, p3 types.TipSetKey) (*types.Actor, error) {
+	if s.Internal.SubnetGetActor == nil {
+		return nil, ErrNotSupported
+	}
+	return s.Internal.SubnetGetActor(p0, p1, p2, p3)
+}
+
+func (s *HierarchicalCnsStub) SubnetGetActor(p0 context.Context, p1 address.SubnetID, p2 address.Address, p3 types.TipSetKey) (*types.Actor, error) {
 	return nil, ErrNotSupported
 }
 

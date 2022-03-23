@@ -125,3 +125,7 @@ func (a *HierarchicalAPI) SubnetChainNotify(ctx context.Context, id address.Subn
 func (a *HierarchicalAPI) SubnetChainHead(ctx context.Context, id address.SubnetID) (*types.TipSet, error) {
 	return a.Sub.SubnetChainHead(ctx, id)
 }
+
+func (a *HierarchicalAPI) SubnetGetActor(ctx context.Context, id address.SubnetID, addr address.Address, tsk types.TipSetKey) (*types.Actor, error) {
+	return a.Sub.SubnetGetActor(ctx, id, addr, tsk)
+}

@@ -32,6 +32,7 @@ type HierarchicalCns interface {
 	ListAtomicExecs(ctx context.Context, id address.SubnetID, addr address.Address) ([]sca.AtomicExec, error)                             // perm:read
 	ComputeAndSubmitExec(ctx context.Context, wallet address.Address, id address.SubnetID, execID cid.Cid) (sca.ExecStatus, error)        // perm:write
 	AbortAtomicExec(ctx context.Context, wallet address.Address, id address.SubnetID, execID cid.Cid) (sca.ExecStatus, error)             // perm:write
-	SubnetChainNotify(context.Context, address.SubnetID) (<-chan []*HeadChange, error)                                                    //perm:read
-	SubnetChainHead(context.Context, address.SubnetID) (*types.TipSet, error)                                                             //perm:read
+	SubnetChainNotify(context.Context, address.SubnetID) (<-chan []*HeadChange, error)                                                    // perm:read
+	SubnetChainHead(context.Context, address.SubnetID) (*types.TipSet, error)                                                             // perm:read
+	SubnetGetActor(ctx context.Context, id address.SubnetID, addr address.Address, tsk types.TipSetKey) (*types.Actor, error)             // perm:read
 }

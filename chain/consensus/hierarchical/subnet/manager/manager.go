@@ -731,4 +731,12 @@ func (s *SubnetMgr) SubnetChainHead(ctx context.Context, id address.SubnetID) (*
 	return api.ChainHead(ctx)
 }
 
+func (s *SubnetMgr) SubnetGetActor(ctx context.Context, id address.SubnetID, addr address.Address, tsk types.TipSetKey) (*types.Actor, error) {
+	api, err := s.GetSubnetAPI(id)
+	if err != nil {
+		return nil, err
+	}
+	return api.StateGetActor(ctx, addr, tsk)
+}
+
 var _ subiface.SubnetMgr = &SubnetMgr{}
