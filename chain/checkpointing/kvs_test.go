@@ -37,7 +37,7 @@ func TestGetSet(t *testing.T) {
 	//out := &sca.CrossMsgs{Msgs: []ltypes.Message{msg}}
 	out := &MsgData{Content: []byte{0,1}}
 	r := NewResolver(h.ID(), ds, ps)
-	cid, _ := out.Cid()
+	cid, _ := out.HashedCid()
 	out1, found, err := r.getLocal(ctx,cid )
 	require.NoError(t, err)
 	require.False(t, found)
@@ -72,7 +72,7 @@ func TestResolve(t *testing.T) {
 	// out := &sca.CrossMsgs{Msgs: []ltypes.Message{msg}}
 	out := &MsgData{Content: []byte{0,1}}
 	r := NewResolver(h.ID(), ds, ps)
-	c, _ := out.Cid()
+	c, _ := out.HashedCid()
 	_, found, err := r.ResolveCheckpointMsgs(ctx, c)
 	require.NoError(t, err)
 	require.False(t, found)
@@ -108,7 +108,7 @@ func TestWaitResolve(t *testing.T) {
 	// out := &sca.CrossMsgs{Msgs: []ltypes.Message{msg}}
 	out := &MsgData{Content: []byte{0,1}}
 	r := NewResolver(h.ID(), ds, ps)
-	c, _ := out.Cid()
+	c, _ := out.HashedCid()
 
 	// Wait for resolution.
 	found := r.WaitCheckpointMsgsResolved(context.TODO(), c)

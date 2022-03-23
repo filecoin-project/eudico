@@ -18,7 +18,6 @@ import (
 	// "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	//"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	//"github.com/filecoin-project/lotus/chain/types"
-	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/modules/helpers"
 	lru "github.com/hashicorp/golang-lru"
 	//"github.com/ipfs/go-cid"
@@ -71,8 +70,8 @@ type MsgType uint64
 const (
 	// Push content to other subnet
 	Push MsgType = iota
-	// PullMeta requests CrossMsgs behind a CID
-	PullMeta
+	// Pullrequests CrossMsgs behind a CID
+	Pull
 	// Response is used to answer to pull requests.
 	Response
 
@@ -140,9 +139,7 @@ func (r *Resolver) addMsgReceipt(t MsgType, bcid string, from peer.ID) int {
 	return r.pullCache.add(bcid + from.String())
 }
 
-func NewRootResolver(self peer.ID, ds dtypes.MetadataDS, pubsub *pubsub.PubSub) *Resolver {
-	return NewResolver(self, ds, pubsub)
-}
+
 func NewResolver(self peer.ID, ds datastore.Datastore, pubsub *pubsub.PubSub) *Resolver {
 	return &Resolver{
 		self:        self,
@@ -250,7 +247,7 @@ func (v *Validator) Validate(ctx context.Context, pid peer.ID, msg *pubsub.Messa
 	if rmsg.Type == Push {
 		fmt.Println("message to validate is of type push")
 		msgs := rmsg.Content
-		c, err := msgs.Cid() //
+		c, err := msgs.HashedCid() //
 		if err != nil {
 			log.Errorf("error computing msgs cid: %s", err)
 			return pubsub.ValidationIgnore
@@ -286,7 +283,7 @@ func (v *Validator) Validate(ctx context.Context, pid peer.ID, msg *pubsub.Messa
 	return pubsub.ValidationAccept
 }
 
-func (cm *MsgData) Cid() (string, error) {
+func (cm *MsgData) HashedCid() (string, error) {
 	// to do
 	if len((*cm).Content) == 0 {
 		return "", errors.New("Message data is empty.")
@@ -320,7 +317,7 @@ func (r *Resolver) processResolveMsg(ctx context.Context, rmsg *ResolveMsg) (pub
 	switch rmsg.Type {
 	case Push:
 		return r.processPush(ctx, rmsg)
-	case PullMeta:
+	case Pull:
 		return r.processPull( rmsg)
 	case Response:
 		return r.processResponse(ctx, rmsg)
@@ -495,7 +492,7 @@ func (r *Resolver) ResolveCheckpointMsgs(ctx context.Context, c string) ([]byte,
 }
 
 func (r *Resolver) PushCheckpointMsgs(msgs MsgData, isResponse bool) error {
-	c, err := msgs.Cid()
+	c, err := msgs.HashedCid()
 	if err != nil {
 		return err
 	}
@@ -535,7 +532,7 @@ func (r *Resolver) PushCheckpointMsgs(msgs MsgData, isResponse bool) error {
 
 func (r *Resolver) PullCheckpointMsgs(ci string) error {
 	m := &ResolveMsg{
-		Type: PullMeta,
+		Type: Pull,
 		Cid:  ci,
 	}
 	return r.publishMsg(m)

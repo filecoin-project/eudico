@@ -8,7 +8,7 @@ import (
 	//"encoding/json"
 	"fmt"
 	"os"
-	"reflect"
+	"bytes"
 	"sort"
 	"strconv"
 	"strings"
@@ -317,6 +317,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 				//first we fetch the checkpoint from the KVS using the cid found from bitcoin
 				cid := c.lastCid
 				fmt.Println("try pull with cid: ", cid)
+				ctx, _ = context.WithTimeout(ctx, 10 * time.Second)
 				out := c.r.WaitCheckpointResolved(ctx, cid)
 				select {
 					case <-ctx.Done():
@@ -399,10 +400,16 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 
 		// check if a new public key was created (i.e. the DKG completed)
 		change3, err := c.matchNewPublicKey(ctx, oldTs, newTs, oldSt, newSt, diff)
-
+		if err != nil {
+			log.Errorw("Error checking for new public key", "err", err)
+			return false, nil, err
+		}
 		//check if it is time for a new checkpoint
 		change2, err := c.matchCheckpoint(ctx, oldTs, newTs, oldSt, newSt, diff)
-
+		if err != nil {
+			log.Errorw("Error checking if it is time for a new checkpoint", "err", err)
+			return false, nil, err
+		}
 
 
 		return change || change2 || change3 , diff, nil
@@ -419,7 +426,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 }
 
 func (c *CheckpointingSub) matchNewPublicKey(ctx context.Context, oldTs, newTs *types.TipSet, oldSt, newSt mpower.State, diff *diffInfo) (bool, error) {
-	if !reflect.DeepEqual(oldSt.PublicKey, newSt.PublicKey) {
+	if !bytes.Equal(oldSt.PublicKey, newSt.PublicKey) {
 		// update this variable to add later on the ability to remove miners
 		c.newDKGComplete = true
 		c.newKey = newSt.PublicKey
@@ -481,7 +488,7 @@ func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *ty
 			//c.newKey =
 
 		} else {
-			// Miners config is the data that will be stored for now in Minio, later on a eudico-KVS
+			// Miners config is the data that will be stored on a eudico-KVS
 			var minersConfig string = hex.EncodeToString(cp) + "\n"
 			for _, partyId := range newSt.Miners { // list of new miners
 				minersConfig += partyId + "\n"
@@ -498,7 +505,7 @@ func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *ty
 			//Push config to the KVS
 			msgs := &MsgData{Content: []byte(minersConfig)}
 			//push config to kvs
-			cid_str, err := msgs.Cid() 
+			cid_str, err := msgs.HashedCid() 
 			err = c.r.setLocal(ctx, cid_str, msgs)
 			if err != nil {
 				log.Errorf("could not push miners config to kvs: %v", err)
@@ -885,9 +892,8 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 	}
 
 	// initialize the kvs
-	r := NewResolver(c.host.ID(), c.ds, c.pubsub)
+	c.r = NewResolver(c.host.ID(), c.ds, c.pubsub)
 	fmt.Println("My id: ",c.host.ID())
-	c.r = r
 	err = c.r.HandleMsgs(ctx)
 	if err != nil {
 		log.Errorf("error initializing cross-msg resolver: %s", err)
@@ -941,7 +947,7 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 			}	
 			msgs := &MsgData{Content: []byte(minersConfig)}
 			time.Sleep(2 * time.Second)
-			r.PushCheckpointMsgs(*msgs,false)
+			c.r.PushCheckpointMsgs(*msgs,false)
 		}
 		for {
 			init, txid, err := CheckIfFirstTxHasBeenSent(c.cpconfig.BitcoinHost, publickey, cidBytes)
