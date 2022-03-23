@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Zondax/multi-party-sig/pkg/protocol"
+	"github.com/sa8/multi-party-sig/pkg/protocol"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
 

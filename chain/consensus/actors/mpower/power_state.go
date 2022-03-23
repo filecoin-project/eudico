@@ -2,7 +2,6 @@ package mpower
 
 import (
 	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
-	//"github.com/Zondax/multi-party-sig/pkg/taproot"
 )
 
 // Mpower actor is only used to determine if a new miner joined or not when running the checkpointing module

@@ -14,7 +14,6 @@ import (
 	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
 
-	//"github.com/Zondax/multi-party-sig/pkg/taproot"
 
 )
 
