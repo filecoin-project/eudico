@@ -203,9 +203,9 @@ func (s *SubnetMgr) getSCAStateWithFinality(ctx context.Context, api *API, id ad
 	height := finTs.Height()
 
 	// Avoid negative epochs
-	if height-finalityThreshold >= 0 {
-		// Go back finalityThreshold to ensure the state is final in parent chain
-		finTs, err = api.ChainGetTipSetByHeight(ctx, height-finalityThreshold, types.EmptyTSK)
+	if height-FinalityThreshold >= 0 {
+		// Go back FinalityThreshold to ensure the state is final in parent chain
+		finTs, err = api.ChainGetTipSetByHeight(ctx, height-FinalityThreshold, types.EmptyTSK)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -227,7 +227,7 @@ func (s *SubnetMgr) getSCAStateWithFinality(ctx context.Context, api *API, id ad
 	return &st, adt.WrapStore(ctx, pcst), nil
 }
 
-// getParentSCAWithFinality returns the state of the SCA of the parent with `finalityThreshold`
+// getParentSCAWithFinality returns the state of the SCA of the parent with `FinalityThreshold`
 // epochs ago to ensure that no reversion happens and we can operate with the state we got.
 func (s *SubnetMgr) getParentSCAWithFinality(ctx context.Context, id address.SubnetID) (*sca.SCAState, adt.Store, error) {
 	parentAPI, err := s.getParentAPI(id)
@@ -255,7 +255,7 @@ func (s *SubnetMgr) getTopDownPool(ctx context.Context, id address.SubnetID, hei
 		return nil, err
 	}
 
-	// Get tipset at height-finalityThreshold to ensure some level of finality
+	// Get tipset at height-FinalityThreshold to ensure some level of finality
 	// to get pool of cross-messages.
 	st, pstore, err := s.getParentSCAWithFinality(ctx, id)
 	if err != nil {
@@ -302,7 +302,7 @@ func (s *SubnetMgr) getBottomUpPool(ctx context.Context, id address.SubnetID, he
 	if subAPI == nil {
 		return nil, xerrors.Errorf("Not listening to subnet")
 	}
-	// Get tipset at height-finalityThreshold to ensure some level of finality
+	// Get tipset at height-FinalityThreshold to ensure some level of finality
 	// to get pool of cross-messages.
 	st, pstore, err := s.getSCAStateWithFinality(ctx, subAPI, id)
 	if err != nil {

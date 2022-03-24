@@ -110,7 +110,7 @@ func (sh *Subnet) hasSigned() bool {
 func (sh *Subnet) sigWaitReached() bool {
 	sh.checklk.RLock()
 	defer sh.checklk.RUnlock()
-	return sh.signingState.wait >= finalityThreshold
+	return sh.signingState.wait >= FinalityThreshold
 }
 
 func (sh *Subnet) sigWindow() abi.ChainEpoch {

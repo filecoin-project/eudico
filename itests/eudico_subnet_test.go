@@ -3,11 +3,10 @@ package itests
 
 import (
 	"context"
-	"testing"
-	"time"
-
+	subnetmgr "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/manager"
 	cbor "github.com/ipfs/go-ipld-cbor"
 	"github.com/stretchr/testify/require"
+	"testing"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -25,9 +24,12 @@ import (
 )
 
 func TestEudicoSubnetConsensus(t *testing.T) {
-	t.Run(":root/pow-subnet/pow", func(t *testing.T) {
-		runSubnetConsensusTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTSPoW())
-	})
+	/*
+		t.Run(":root/pow-subnet/pow", func(t *testing.T) {
+			runSubnetConsensusTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTSPoW())
+		})
+
+	*/
 
 	t.Run(":root/pow-subnet/tendermint", func(t *testing.T) {
 		runSubnetConsensusTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTendermint())
@@ -66,23 +68,16 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 
 	parent := address.RootSubnet
 	subnetName := "testSubnet"
-	//consensus := hierarchical.PoW
-	minerStake := abi.NewStoragePower(1e8) // TODO: Make this value configurable in a flag/argument
+	minerStake := abi.NewStoragePower(1e8)
 	checkPeriod := abi.ChainEpoch(10)
 	delegMiner := hierarchical.SubnetCoordActorAddr
 
-	wait := true
-	for wait {
-		balance, err := full.WalletBalance(ctx, addr)
-		require.NoError(t, err)
-		t.Logf("\t>>>>> %s balance: %d", addr, balance)
-		time.Sleep(time.Second * 3)
-		m := types.FromFil(3)
-		if big.Cmp(balance, m) == 1 {
-			wait = false
-		}
+	err = kit.WaitForBalance(ctx, addr, 3, full)
+	require.NoError(t, err)
 
-	}
+	balance, err := full.WalletBalance(ctx, addr)
+	require.NoError(t, err)
+	t.Logf("\t>>>>> %s balance: %d", addr, balance)
 
 	actorAddr, err := full.AddSubnet(ctx, addr, parent, subnetName, uint64(subnetMinerType), minerStake, checkPeriod, delegMiner)
 	require.NoError(t, err)
@@ -118,24 +113,9 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 
 	newHeads, err := full.SubnetChainNotify(ctx, subnetAddr)
 	require.NoError(t, err)
-	initHead := (<-newHeads)[0]
-	baseHeight := initHead.Val.Height()
 
-	h1, err := full.SubnetChainHead(ctx, subnetAddr)
+	err = kit.PerformBasicCheckForSubnetBlocks(ctx, 4, subnetAddr, newHeads, full)
 	require.NoError(t, err)
-	require.Equal(t, int64(h1.Height()), int64(baseHeight))
-
-	<-newHeads
-
-	h2, err := full.SubnetChainHead(ctx, subnetAddr)
-	require.NoError(t, err)
-	require.Greater(t, int64(h2.Height()), int64(h1.Height()))
-
-	<-newHeads
-
-	h3, err := full.SubnetChainHead(ctx, subnetAddr)
-	require.NoError(t, err)
-	require.Greater(t, int64(h3.Height()), int64(h2.Height()))
 
 	// Inject new funds to the address in a subnet
 
@@ -176,9 +156,12 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	}, nil)
 	require.NoError(t, err)
 
-	c, err := full.StateWaitMsg(ctx, msg.Cid(), 10, 100, false)
+	c, err := full.StateWaitMsg(ctx, msg.Cid(), 10, 500, false)
 	require.NoError(t, err)
-	t.Logf("\t>>>>> the message was found in %d epoch:", c.Height)
+	t.Logf("\t>>>>> the message was found in %d epoch", c.Height)
+
+	err = kit.WaitForFinality(ctx, subnetmgr.FinalityThreshold+10, newHeads)
+	require.NoError(t, err)
 
 	t.Logf("\t>>>>> actor: %s", addr)
 	a, err := full.SubnetGetActor(ctx, subnetAddr, addr, types.EmptyTSK)
@@ -186,12 +169,23 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	t.Logf("\t>>>>> %s addr balance: %d", addr, a.Balance)
 	require.Equal(t, abi.TokenAmount(types.MustParseFIL("5")), a.Balance)
 
+	// Release funds
+
+	// TODO: Is it correct?
+	t.Log("\t>>>>> release funds")
+	_, err = full.ReleaseFunds(ctx, addr, subnetAddr, big.Int(types.MustParseFIL("5")))
+	require.NoError(t, err)
+
+	err = kit.WaitForBalanceDiff(ctx, addr, 5, full)
+	require.NoError(t, err)
+
 	// Stop mining
 
 	t.Log("\t>>>>> stop mining")
 	err = full.MineSubnet(ctx, addr, subnetAddr, true)
 	require.NoError(t, err)
 
+	// TODO: is this correct?
 	notStopped := true
 	for notStopped {
 		select {
