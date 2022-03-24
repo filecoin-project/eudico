@@ -10,8 +10,11 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
 	"path"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -21,6 +24,9 @@ import (
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
+	abciserver "github.com/tendermint/tendermint/abci/server"
+	tmlogger "github.com/tendermint/tendermint/libs/log"
+	"github.com/tendermint/tendermint/libs/service"
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
 
@@ -86,45 +92,7 @@ func init() {
 	messagepool.HeadChangeCoalesceMergeInterval = 100 * time.Nanosecond
 }
 
-// EudicoEnsemble is a collection of nodes instantiated within a test.
-//
-// Create a new ensemble with:
-//
-//   ens := kit.NewEudicoEnsemble()
-//
-// Create full nodes and miners:
-//
-//   var full TestFullNode
-//   var miner TestMiner
-//   ens.FullNode(&full, opts...)       // populates a full node
-//   ens.Miner(&miner, &full, opts...)  // populates a miner, using the full node as its chain daemon
-//
-// It is possible to pass functional options to set initial balances,
-// presealed sectors, owner keys, etc.
-//
-// After the initial nodes are added, call `ens.Start()` to forge genesis
-// and start the network. Mining will NOT be started automatically. It needs
-// to be started explicitly by calling `BeginMining`.
-//
-// Nodes also need to be connected with one another, either via `ens.Connect()`
-// or `ens.InterconnectAll()`. A common inchantation for simple tests is to do:
-//
-//   ens.InterconnectAll().BeginMining(blocktime)
-//
-// You can continue to add more nodes, but you must always follow with
-// `ens.Start()` to activate the new nodes.
-//
-// The API is chainable, so it's possible to do a lot in a very succinct way:
-//
-//   kit.NewEnsemble().FullNode(&full).Miner(&miner, &full).Start().InterconnectAll().BeginMining()
-//
-// You can also find convenient fullnode:miner presets, such as 1:1, 1:2,
-// and 2:1, e.g.:
-//
-//   kit.EnsembleMinimal()
-//   kit.EnsembleOneTwo()
-//   kit.EnsembleTwoOne()
-//
+// EudicoEnsemble is a type similar to the original Ensemble type, but having extensions that allow to work with Eudico.
 type EudicoEnsemble struct {
 	t            *testing.T
 	bootstrapped bool
@@ -146,9 +114,12 @@ type EudicoEnsemble struct {
 		miners   []genesis.Miner
 		accounts []genesis.Actor
 	}
+
+	tendermintContainerID string
+	tendermintAppServer   service.Service
 }
 
-func EudicoRootConsensusMiner(t *testing.T, opts ...interface{}) (
+func EudicoMiners(t *testing.T, opts ...interface{}) (
 	rootMiner func(ctx context.Context, addr address.Address, api v1api.FullNode) error,
 	subnetMinerType hierarchical.ConsensusType) {
 
@@ -370,8 +341,15 @@ func NetworkName(mctx helpers.MetricsCtx,
 	return netName, err
 }
 
+// Stop stop ensemble mechanisms.
+func (n *EudicoEnsemble) Stop() error {
+	n.t.Log(">>>>> stop Eudico ensemble")
+	return n.stopTendermint()
+}
+
 // Start starts all enrolled nodes.
 func (n *EudicoEnsemble) Start() *EudicoEnsemble {
+	n.t.Log(">>>>> start Eudico ensemble")
 	ctx := context.Background()
 
 	var gtempl *genesis.Template
@@ -412,43 +390,48 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 				return fmt.Errorf("failed to instantiate rpc handler: %s", err)
 			}
 		}
-		fmt.Println("[*] serve new subnet API", pp)
+		n.t.Log(">>>>> [*] serve new subnet API", pp)
 		subnetMux.NewRoute().PathPrefix(pp).Handler(h)
 		return nil
 	}
 
-	var consensusConstructor interface{}
+	var rootConsensusConstructor interface{}
 	switch n.options.rootConsensus {
 	case hierarchical.PoW:
-		consensusConstructor = NewRootTSPoWConsensus
+		rootConsensusConstructor = NewRootTSPoWConsensus
 	case hierarchical.Delegated:
-		consensusConstructor = NewRootDelegatedConsensus
+		rootConsensusConstructor = NewRootDelegatedConsensus
 	case hierarchical.Tendermint:
-		consensusConstructor = NewRootTendermintConsensus
+		rootConsensusConstructor = NewRootTendermintConsensus
 	case hierarchical.FilecoinEC:
-		consensusConstructor = NewFilecoinExpectedConsensus
+		rootConsensusConstructor = NewFilecoinExpectedConsensus
 	default:
 		n.t.Fatalf("unknown consensus constructor %d", n.options.rootConsensus)
 	}
 
-	var weightConstructor interface{}
+	var rootConsensusWeight interface{}
 	switch n.options.rootConsensus {
 	case hierarchical.PoW:
-		weightConstructor = tspow.Weight
+		rootConsensusWeight = tspow.Weight
 	case hierarchical.Delegated:
-		weightConstructor = delegcns.Weight
+		rootConsensusWeight = delegcns.Weight
 	case hierarchical.Tendermint:
-		weightConstructor = tendermint.Weight
+		rootConsensusWeight = tendermint.Weight
 	case hierarchical.FilecoinEC:
-		weightConstructor = filcns.Weight
+		rootConsensusWeight = filcns.Weight
 	default:
 		n.t.Fatalf("unknown consensus weight %d", n.options.rootConsensus)
+	}
+
+	if n.options.subnetConsensus == hierarchical.Tendermint ||
+		n.options.rootConsensus == hierarchical.Tendermint {
+		terr := n.startTendermint()
+		require.NoError(n.t, terr)
 	}
 
 	// ---------------------
 	//  FULL NODES
 	// ---------------------
-
 	// Create all inactive full nodes.
 	for i, full := range n.inactive.fullnodes {
 		r := repo.NewMemory(nil)
@@ -462,8 +445,8 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 			node.Test(),
 
 			node.Override(new(dtypes.NetworkName), NetworkName),
-			node.Override(new(consensus.Consensus), consensusConstructor),
-			node.Override(new(store.WeightFunc), weightConstructor),
+			node.Override(new(consensus.Consensus), rootConsensusConstructor),
+			node.Override(new(store.WeightFunc), rootConsensusWeight),
 			node.Unset(new(*slashfilter.SlashFilter)),
 			node.Override(new(stmgr.Executor), common.RootTipSetExecutor),
 			node.Override(new(stmgr.UpgradeSchedule), common.DefaultUpgradeSchedule()),
@@ -487,31 +470,31 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		// append any node builder options.
 		opts = append(opts, full.options.extraNodeOpts...)
 
-		var genBytes []byte
-		var testDataFileErr error
+		var rootGenesisBytes []byte
+		var gferr error
 		switch n.options.rootConsensus {
 		case hierarchical.PoW:
-			genBytes, testDataFileErr = ioutil.ReadFile(TSPoWConsensusGenesisTestFile)
+			rootGenesisBytes, gferr = ioutil.ReadFile(TSPoWConsensusGenesisTestFile)
 		case hierarchical.Delegated:
-			genBytes, testDataFileErr = ioutil.ReadFile(DelegatedConsensusGenesisTestFile)
+			rootGenesisBytes, gferr = ioutil.ReadFile(DelegatedConsensusGenesisTestFile)
 		case hierarchical.Tendermint:
-			genBytes, testDataFileErr = ioutil.ReadFile(TendermintConsensusGenesisTestFile)
+			rootGenesisBytes, gferr = ioutil.ReadFile(TendermintConsensusGenesisTestFile)
 		case hierarchical.FilecoinEC:
-			genBytes, testDataFileErr = ioutil.ReadFile(FilcnsConsensusGenesisTestFile)
+			rootGenesisBytes, gferr = ioutil.ReadFile(FilcnsConsensusGenesisTestFile)
 		default:
 			n.t.Fatalf("unknown consensus genesis file %d", n.options.rootConsensus)
 		}
 
-		require.NoError(n.t, testDataFileErr)
+		require.NoError(n.t, gferr)
 
 		// Either generate the genesis or inject it.
 		if i == 0 && !n.bootstrapped {
 			//TODO: compare with original itests and fix
-			opts = append(opts, node.Override(new(modules.Genesis), modules.LoadGenesis(genBytes)))
+			opts = append(opts, node.Override(new(modules.Genesis), modules.LoadGenesis(rootGenesisBytes)))
 			_ = gtempl
 			//opts = append(opts, node.Override(new(modules.Genesis), testing2.MakeGenesisMem(&n.genesisBlock, *gtempl)))
 		} else {
-			opts = append(opts, node.Override(new(modules.Genesis), modules.LoadGenesis(genBytes)))
+			opts = append(opts, node.Override(new(modules.Genesis), modules.LoadGenesis(rootGenesisBytes)))
 		}
 
 		// Are we mocking proofs?
@@ -705,6 +688,71 @@ func (n *EudicoEnsemble) generateGenesis() *genesis.Template {
 	}
 
 	return templ
+}
+
+func (n *EudicoEnsemble) startTendermint() error {
+	n.t.Log(">>>>> start tendermint")
+	// ensure there is no old tendermint data and config files.
+	if err := n.removeTendermintFiles(); err != nil {
+		return err
+	}
+	shutdown := make(chan os.Signal, 1)
+	signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM)
+	serverErrors := make(chan error, 1)
+	app, err := tendermint.NewApplication()
+	if err != nil {
+		return err
+	}
+
+	logger := tmlogger.MustNewDefaultLogger(tmlogger.LogFormatPlain, tmlogger.LogLevelInfo, false)
+	n.tendermintAppServer = abciserver.NewSocketServer(TendermintApplicationAddress, app)
+	n.tendermintAppServer.SetLogger(logger)
+
+	go func() {
+		serverErrors <- n.tendermintAppServer.Start()
+	}()
+
+	// start Tendermint validator
+	tm, err := StartTendermintContainer()
+	if err != nil {
+		return err
+	}
+
+	n.tendermintContainerID = tm.ID
+	n.t.Log(">>>>> tendermint container ID:", n.tendermintContainerID)
+	return nil
+}
+func (n *EudicoEnsemble) removeTendermintFiles() error {
+	if err := os.RemoveAll(TendermintConsensusTestDir + "/config"); err != nil {
+		return err
+	}
+	if err := os.RemoveAll(TendermintConsensusTestDir + "/data"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (n *EudicoEnsemble) stopTendermint() error {
+	n.t.Log(">>>>> stop tendermint")
+	if n.tendermintAppServer == nil {
+		return xerrors.New("tendermint server is not running")
+	}
+
+	if err := n.tendermintAppServer.Stop(); err != nil {
+		return xerrors.Errorf("failed to stop tendermint server %w:", err)
+	}
+
+	if n.tendermintContainerID == "" {
+		return xerrors.New("tendermint container ID is not set")
+	}
+
+	StopContainer(n.tendermintContainerID)
+
+	if err := n.removeTendermintFiles(); err != nil {
+		return err
+	}
+	n.t.Log(">>>>> tendermint stopped")
+	return nil
 }
 
 // EudicoEnsembleMinimal creates and starts an EudicoEnsemble with a single full node and a single miner.

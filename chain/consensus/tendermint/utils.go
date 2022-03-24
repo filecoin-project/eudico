@@ -240,7 +240,7 @@ func registerNetworkViaTxSync(
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
-	timeout := time.After(120 * time.Second)
+	timeout := time.After(30 * time.Second)
 
 	try := true
 	var resq *coretypes.ResultABCIQuery
@@ -255,16 +255,15 @@ func registerNetworkViaTxSync(
 				return nil, xerrors.Errorf("unable to create a registration message: %s", err)
 			}
 
-			_, err = c.BroadcastTxSync(ctx, regMsg)
-			if err != nil {
-				log.Infof("unable to broadcast a registration request: %s", err)
-				continue
+			_, berr := c.BroadcastTxSync(ctx, regMsg)
+			if berr != nil {
+				return nil, xerrors.Errorf("unable to broadcast a registration request: %s", err)
 			}
+			log.Info("broadcasted a reg message: ", regMsg)
 
 			resq, err = c.ABCIQuery(ctx, "/reg", []byte(subnetID))
 			if err != nil {
-				log.Infof("unable to get Tendermint height %s", err)
-				continue
+				return nil, xerrors.Errorf("unable to query Tendermint %s", err)
 			}
 			if resq.Response.Code != 0 {
 				log.Info(resq.Response.Log)

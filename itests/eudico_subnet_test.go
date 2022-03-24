@@ -25,8 +25,14 @@ import (
 )
 
 func TestEudicoSubnetConsensus(t *testing.T) {
+	/*
+		t.Run("subnet", func(t *testing.T) {
+			runSubnetConsensusTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTSPoW())
+		})
+
+	*/
 	t.Run("subnet", func(t *testing.T) {
-		runSubnetConsensusTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTSPoW())
+		runSubnetConsensusTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTendermint())
 	})
 }
 
@@ -44,8 +50,9 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	full, _, _ := kit.EudicoEnsembleMinimal(t, ts.opts...)
-	rootMiner, subnetMinerType := kit.EudicoRootConsensusMiner(t, ts.opts...)
+	full, _, ens := kit.EudicoEnsembleMinimal(t, ts.opts...)
+
+	rootMiner, subnetMinerType := kit.EudicoMiners(t, ts.opts...)
 
 	l, err := full.WalletList(ctx)
 	require.NoError(t, err)
@@ -57,6 +64,7 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 
 	addr, err := full.WalletDefaultAddress(ctx)
 	require.NoError(t, err)
+	t.Logf(">>>>> wallet addr: %s", addr)
 
 	parent := address.RootSubnet
 	subnetName := "testSubnet"
@@ -69,7 +77,7 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	for wait {
 		balance, err := full.WalletBalance(ctx, addr)
 		require.NoError(t, err)
-		t.Log("\t>>>>> balance:", balance)
+		t.Logf("\t>>>>> %s balance: %d", addr, balance)
 		time.Sleep(time.Second * 3)
 		m := types.FromFil(3)
 		if big.Cmp(balance, m) == 1 {
@@ -174,10 +182,10 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("\t>>>>> the message was found in %d epoch:", c.Height)
 
+	t.Logf("\t>>>>> actor: %s", addr)
 	a, err := full.SubnetGetActor(ctx, subnetAddr, addr, types.EmptyTSK)
 	require.NoError(t, err)
-	t.Logf("\t>>>>> balance: %d", a.Balance)
-	//require.Equal(t, types.BigAdd(types.BigInt(injectedFils), types.BigInt(sentFils)), a.Balance)
+	t.Logf("\t>>>>> %s addr balance: %d", addr, a.Balance)
 	require.Equal(t, abi.TokenAmount(types.MustParseFIL("5")), a.Balance)
 
 	// Stop mining
@@ -209,6 +217,9 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(sn))
 	require.NotEqual(t, 0, sn[0].Status)
+
+	err = ens.Stop()
+	require.NoError(t, err)
 }
 
 // TODO: use MessageForSend from cli package.

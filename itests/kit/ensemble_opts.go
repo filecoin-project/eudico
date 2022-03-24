@@ -63,6 +63,14 @@ func RootTendermint() EnsembleOpt {
 	}
 }
 
+// RootFilcns activates Filcns consensus protocol for the root subnet in Eudico.
+func RootFilcns() EnsembleOpt {
+	return func(opts *ensembleOpts) error {
+		opts.rootConsensus = hierarchical.FilecoinEC
+		return nil
+	}
+}
+
 // SubnetTSPoW activates PoW consensus protocol for the subnet in Eudico
 func SubnetTSPoW() EnsembleOpt {
 	return func(opts *ensembleOpts) error {
@@ -83,6 +91,14 @@ func SubnetDelegated() EnsembleOpt {
 func SubnetTendermint() EnsembleOpt {
 	return func(opts *ensembleOpts) error {
 		opts.subnetConsensus = hierarchical.Tendermint
+		return nil
+	}
+}
+
+// SubnetFilcns activates Tendermint consensus protocol for the subnet in Eudico.
+func SubnetFilcns() EnsembleOpt {
+	return func(opts *ensembleOpts) error {
+		opts.subnetConsensus = hierarchical.FilecoinEC
 		return nil
 	}
 }

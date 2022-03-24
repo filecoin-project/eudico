@@ -121,7 +121,6 @@ func (a *Application) DeliverTx(req abci.RequestDeliverTx) (resp abci.ResponseDe
 				Log:  "only one subnet can be registered",
 			}
 		}
-
 		height := a.consensus.SetOrGetSubnetOffset(subnet.Name)
 		regResp := RegistrationMessageResponse{
 			Name:   subnet.Name,

@@ -3,14 +3,9 @@ package itests
 
 import (
 	"context"
-	"os"
-	"os/signal"
-	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	abciserver "github.com/tendermint/tendermint/abci/server"
-	tmlogger "github.com/tendermint/tendermint/libs/log"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
@@ -19,7 +14,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/wallet"
 	"github.com/filecoin-project/lotus/itests/kit"
-	"github.com/filecoin-project/lotus/itests/kit/docker"
 )
 
 func TestEudicoConsensus(t *testing.T) {
@@ -92,6 +86,7 @@ func (ts *eudicoConsensusSuite) testDelegatedMining(t *testing.T) {
 	defer cancel()
 
 	full, _, _ := kit.EudicoEnsembleMinimal(t, ts.opts...)
+
 	l, err := full.WalletList(ctx)
 	require.NoError(t, err)
 	if len(l) != 1 {
@@ -140,39 +135,15 @@ func (ts *eudicoConsensusSuite) testTendermintMining(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// start a Tendermint application
-
-	shutdown := make(chan os.Signal, 1)
-	signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM)
-	serverErrors := make(chan error, 1)
-	app, err := tendermint.NewApplication()
-	require.NoError(t, err)
-
-	logger := tmlogger.MustNewDefaultLogger(tmlogger.LogFormatPlain, tmlogger.LogLevelInfo, false)
-	server := abciserver.NewSocketServer(kit.TendermintApplicationAddress, app)
-	server.SetLogger(logger)
-
-	go func() {
-		serverErrors <- server.Start()
-	}()
-	defer server.Stop()
-
-	// start Tendermint validator
-
-	tm, err := docker.StartTendermintContainer()
-	defer docker.StopContainer(tm.ID)
-	require.NoError(t, err)
+	// start a Eudico node and a Tendermint node
+	full, _, ens := kit.EudicoEnsembleMinimal(t, ts.opts...)
+	defer ens.Stop()
 
 	// Get the Tendermint validator secp256k1 key
-
 	ki, err := tendermint.GetSecp256k1TendermintKey(kit.TendermintConsensusKeyFile)
 	require.NoError(t, err)
 	k, err := wallet.NewKey(*ki)
 	require.NoError(t, err)
-
-	// start a Eudico node and a Tendermint miner
-
-	full, _, _ := kit.EudicoEnsembleMinimal(t, ts.opts...)
 
 	l, err := full.WalletList(ctx)
 	require.NoError(t, err)
