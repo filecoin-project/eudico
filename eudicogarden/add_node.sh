@@ -16,10 +16,10 @@ scp -o "StrictHostKeyChecking no" ubuntu@$BOOTSTRAP:~/eudico/eudicogarden/eudico
 
 LENGTH=`terraform output -json eudico_nodes_ip | jq -r length`
 TOTAL_NODES=`expr $LENGTH + $NUM`
-# echo [*] Provisioning infrastructure
-# terraform validate
-# terraform plan -out=plan.out -var="num_nodes=${TOTAL_NODES}"
-# terraform apply plan.out
+echo [*] Provisioning infrastructure
+terraform validate
+terraform plan -out=plan.out -var="num_nodes=${TOTAL_NODES}"
+terraform apply plan.out
 
 BOOTSTRAP_MADDR=`ssh -o "StrictHostKeyChecking no" ubuntu@$BOOTSTRAP "cd eudico && ./eudico net listen | head -n 1"`
 echo [*] Initializing $NUM eudico-nodes
@@ -29,9 +29,8 @@ do
         IP=`terraform output -json eudico_nodes_ip | jq -r '.['"-$i"']'`
         INDEX=`expr $LENGTH - $i`
         echo "[*] Initializing node with IP: $IP"
-        # TODO: Remove once this is merged in eudico's main branch
+        # TODO: Remove this line once merged in eudico's main branch
         scp -o "StrictHostKeyChecking no" -r ../eudicogarden ubuntu@$IP:~/eudico/eudicogarden
         scp -o "StrictHostKeyChecking no" eudicogarden.car ubuntu@$IP:~/eudico/eudicogarden
-        # TODO: We need to initialize sectors and the miner (without genesis)
         ssh -o "StrictHostKeyChecking no" ubuntu@$IP "cd eudico/eudicogarden && ./init_new_node.sh $INDEX $BOOTSTRAP_MADDR"
 done
