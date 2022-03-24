@@ -29,9 +29,7 @@ provider "aws" {
 resource "aws_security_group" "project-iac-sg" {
   name        = lookup(var.awsprops, "secgroupname")
   description = lookup(var.awsprops, "secgroupname")
-  // vpc_id      = lookup(var.awsprops, "vpc")
 
-  // To Allow SSH Transport
   ingress {
     from_port   = 22
     protocol    = "tcp"
@@ -94,8 +92,6 @@ resource "aws_instance" "eudico-node" {
   count         = var.num_nodes
   ami           = "ami-0b0ea68c435eb488d"
   instance_type = "m5a.large"
-  // user_data = "${file("entrypoint.sh")}"
-  // subnet_id     = lookup(var.awsprops, "subnet") #FFXsubnet2
   vpc_security_group_ids = [
     aws_security_group.project-iac-sg.id
   ]
