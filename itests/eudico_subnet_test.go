@@ -25,13 +25,11 @@ import (
 )
 
 func TestEudicoSubnetConsensus(t *testing.T) {
-	/*
-		t.Run("subnet", func(t *testing.T) {
-			runSubnetConsensusTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTSPoW())
-		})
+	t.Run(":root/pow-subnet/pow", func(t *testing.T) {
+		runSubnetConsensusTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTSPoW())
+	})
 
-	*/
-	t.Run("subnet", func(t *testing.T) {
+	t.Run(":root/pow-subnet/tendermint", func(t *testing.T) {
 		runSubnetConsensusTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTendermint())
 	})
 }

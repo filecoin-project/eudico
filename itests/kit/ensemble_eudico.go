@@ -344,7 +344,11 @@ func NetworkName(mctx helpers.MetricsCtx,
 // Stop stop ensemble mechanisms.
 func (n *EudicoEnsemble) Stop() error {
 	n.t.Log(">>>>> stop Eudico ensemble")
-	return n.stopTendermint()
+	if n.options.subnetConsensus == hierarchical.Tendermint ||
+		n.options.rootConsensus == hierarchical.Tendermint {
+		return n.stopTendermint()
+	}
+	return nil
 }
 
 // Start starts all enrolled nodes.
