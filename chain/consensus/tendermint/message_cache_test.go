@@ -13,6 +13,7 @@ func TestTendermintMessageCache(t *testing.T) {
 
 	goodMessage := "1"
 	badMessage := "2"
+	newMessage := "3"
 
 	shouldSend := c.shouldSendMessage(goodMessage)
 	require.Equal(t, true, shouldSend)
@@ -36,10 +37,14 @@ func TestTendermintMessageCache(t *testing.T) {
 	_, sent = c.getInfo(badMessage)
 	require.Equal(t, false, sent)
 
+	c.addSentMessage(newMessage, abi.ChainEpoch(1))
+	c.clearSentMessages(cacheFinalityWait - 10)
+	shouldSend = c.shouldSendMessage(newMessage)
+	require.Equal(t, false, shouldSend)
+
 	c.clearSentMessages(cacheFinalityWait + 2)
 	shouldSend = c.shouldSendMessage(badMessage)
 	require.Equal(t, true, shouldSend)
 	_, sent = c.getInfo(badMessage)
 	require.Equal(t, false, sent)
-
 }
