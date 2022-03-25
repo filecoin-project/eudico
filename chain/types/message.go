@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-
 	"github.com/filecoin-project/go-state-types/network"
 
 	"github.com/filecoin-project/go-state-types/abi"
@@ -43,6 +42,26 @@ type Message struct {
 
 	Method abi.MethodNum
 	Params []byte
+}
+
+type UnverifiedCrossMsg struct {
+	Type uint64
+	Msg  *Message
+}
+
+func (m *UnverifiedCrossMsg) Serialize() ([]byte, error) {
+	return m.Msg.Serialize()
+}
+
+func (m *UnverifiedCrossMsg) Uid() string {
+	switch m.Type {
+	case 1:
+		return m.Msg.Cid().String() + "/0000"
+	case 2:
+		return m.Msg.Cid().String() + "/ffff"
+	default:
+		panic("unknown cross message type")
+	}
 }
 
 func (m *Message) Caller() address.Address {

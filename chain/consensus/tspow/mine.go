@@ -66,12 +66,16 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			return err
 		}
 
-		crossmsgs, err := api.GetCrossMsgsPool(ctx, address.SubnetID(nn), base.Height()+1)
+		wrappedCrossMsgs, err := api.GetCrossMsgsPool(ctx, address.SubnetID(nn), base.Height()+1)
 		if err != nil {
 			log.Errorw("selecting cross-messages failed", "error", err)
 		}
+		log.Debugf("CrossMsgs being proposed in block @%s: %d", base.Height()+1, len(wrappedCrossMsgs))
 
-		log.Debugf("CrossMsgs being proposed in block @%s: %d", base.Height()+1, len(crossmsgs))
+		var crossMsgs []*types.Message
+		for _, m := range wrappedCrossMsgs {
+			crossMsgs = append(crossMsgs, m.Msg)
+		}
 
 		bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
 			Miner:            miner,
@@ -82,7 +86,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			Epoch:            base.Height() + 1,
 			Timestamp:        uint64(time.Now().Unix()),
 			WinningPoStProof: nil,
-			CrossMessages:    crossmsgs,
+			CrossMessages:    crossMsgs,
 		})
 		if err != nil {
 			log.Errorw("creating block failed", "error", err)

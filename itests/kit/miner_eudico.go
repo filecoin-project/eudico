@@ -34,43 +34,34 @@ func WaitForFinality(ctx context.Context, finalityBlockNumber int, newHeads <-ch
 }
 
 func WaitForBalance(ctx context.Context, addr addr.Address, balance uint64, api api.FullNode) error {
-	wait := true
-	targetBalance := types.FromFil(balance)
-	for wait {
-		currentBalance, err := api.WalletBalance(ctx, addr)
-		if err != nil {
-			return err
-		}
-		time.Sleep(balanceSleepTime * time.Second)
-		if big.Cmp(currentBalance, targetBalance) == 1 {
-			wait = false
-		}
-	}
-	return nil
-}
-
-func WaitForBalanceDiff(ctx context.Context, addr addr.Address, diff uint64, api api.FullNode) error {
-	wait := true
-	diffBalance := types.FromFil(diff)
-	baseBalance, err := api.WalletBalance(ctx, addr)
+	currentBalance, err := api.WalletBalance(ctx, addr)
 	if err != nil {
 		return err
 	}
-	targetBalance := big.Add(baseBalance, diffBalance)
-	for wait {
-		currentBalance, err := api.WalletBalance(ctx, addr)
-		if err != nil {
-			return err
-		}
-		time.Sleep(balanceSleepTime * time.Second)
-		if big.Cmp(currentBalance, targetBalance) == 1 {
-			wait = false
+	targetBalance := types.FromFil(balance)
+	ticker := time.NewTicker(balanceSleepTime * time.Second)
+	defer ticker.Stop()
+
+	timer := time.After(finalityTimeout * time.Second)
+
+	for big.Cmp(currentBalance, targetBalance) != 1 {
+		select {
+		case <-ctx.Done():
+			return xerrors.New("closed channel")
+		case <-ticker.C:
+			currentBalance, err = api.WalletBalance(ctx, addr)
+			if err != nil {
+				return err
+			}
+		case <-timer:
+			return xerrors.New("balance timer exceeded")
 		}
 	}
+
 	return nil
 }
 
-func PerformBasicCheckForSubnetBlocks(ctx context.Context, validatedBlocksNumber int, subnetAddr addr.SubnetID, newHeads <-chan []*api.HeadChange, api api.FullNode) error {
+func PerformHeightCheckForSubnetBlocks(ctx context.Context, validatedBlocksNumber int, subnetAddr addr.SubnetID, newHeads <-chan []*api.HeadChange, api api.FullNode) error {
 	if validatedBlocksNumber < 2 || validatedBlocksNumber > 100 {
 		return xerrors.New("wrong validated blocks number")
 	}

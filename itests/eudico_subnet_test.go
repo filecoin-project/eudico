@@ -3,7 +3,6 @@ package itests
 
 import (
 	"context"
-	subnetmgr "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/manager"
 	cbor "github.com/ipfs/go-ipld-cbor"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -18,6 +17,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
+	subnetmgr "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/manager"
 	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/itests/kit"
@@ -50,21 +50,31 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Setup
+
 	full, _, ens := kit.EudicoEnsembleMinimal(t, ts.opts...)
 
 	rootMiner, subnetMinerType := kit.EudicoMiners(t, ts.opts...)
 
-	l, err := full.WalletList(ctx)
-	require.NoError(t, err)
-	if len(l) != 1 {
-		t.Fatal("wallet key list is empty")
-	}
-
-	go rootMiner(ctx, l[0], full)
-
 	addr, err := full.WalletDefaultAddress(ctx)
 	require.NoError(t, err)
 	t.Logf(">>>>> wallet addr: %s", addr)
+
+	l, err := full.WalletList(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(l))
+
+	newAddr, err := full.WalletNew(ctx, types.KTSecp256k1)
+	require.NoError(t, err)
+	t.Logf(">>>>> wallet new addr: %s", newAddr)
+
+	l, err = full.WalletList(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(l))
+
+	// Start mining
+
+	go rootMiner(ctx, addr, full)
 
 	parent := address.RootSubnet
 	subnetName := "testSubnet"
@@ -72,7 +82,7 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	checkPeriod := abi.ChainEpoch(10)
 	delegMiner := hierarchical.SubnetCoordActorAddr
 
-	err = kit.WaitForBalance(ctx, addr, 3, full)
+	err = kit.WaitForBalance(ctx, addr, 10, full)
 	require.NoError(t, err)
 
 	balance, err := full.WalletBalance(ctx, addr)
@@ -114,29 +124,27 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	newHeads, err := full.SubnetChainNotify(ctx, subnetAddr)
 	require.NoError(t, err)
 
-	err = kit.PerformBasicCheckForSubnetBlocks(ctx, 4, subnetAddr, newHeads, full)
+	err = kit.PerformHeightCheckForSubnetBlocks(ctx, 4, subnetAddr, newHeads, full)
 	require.NoError(t, err)
 
-	// Inject new funds to the address in a subnet
+	// Inject new funds to the own address in the subnet
 
 	t.Log("\t>>>>> funding yourself")
-	injectedFils, err := types.ParseFIL("3")
+	injectedFils := big.Int(types.MustParseFIL("3"))
+	_, err = full.FundSubnet(ctx, addr, subnetAddr, injectedFils)
 	require.NoError(t, err)
 
-	_, err = full.FundSubnet(ctx, addr, subnetAddr, big.Int(injectedFils))
-	require.NoError(t, err)
-
-	// Send a message to yourself
+	// Send a message to the new address
 	t.Log("\t>>>>> sending a message")
 
-	sentFils, err := types.ParseFIL("2")
+	sentFils := big.Int(types.MustParseFIL("3"))
 	require.NoError(t, err)
 
 	var params lcli.SendParams
 	params.Method = abi.MethodNum(uint64(builtin.MethodSend))
-	params.To = addr
+	params.To = newAddr
 	params.From = addr
-	params.Val = abi.TokenAmount(sentFils)
+	params.Val = sentFils
 	proto, err := messageForSend(ctx, full, params)
 	require.NoError(t, err)
 
@@ -156,27 +164,48 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	}, nil)
 	require.NoError(t, err)
 
+	msg, err = full.MpoolPushMessage(ctx, &types.Message{
+		To:    newAddr,
+		From:  params.From,
+		Value: big.Int(types.MustParseFIL("3")),
+	}, nil)
+	require.NoError(t, err)
+
 	c, err := full.StateWaitMsg(ctx, msg.Cid(), 10, 500, false)
 	require.NoError(t, err)
-	t.Logf("\t>>>>> the message was found in %d epoch", c.Height)
+	t.Logf("\t>>>>> the cross message was found in %d epoch of root", c.Height)
 
-	err = kit.WaitForFinality(ctx, subnetmgr.FinalityThreshold+10, newHeads)
+	err = kit.WaitForFinality(ctx, subnetmgr.FinalityThreshold+20, newHeads)
 	require.NoError(t, err)
 
-	t.Logf("\t>>>>> actor: %s", addr)
-	a, err := full.SubnetGetActor(ctx, subnetAddr, addr, types.EmptyTSK)
+	a, err := full.SubnetStateGetActor(ctx, subnetAddr, addr, types.EmptyTSK)
 	require.NoError(t, err)
 	t.Logf("\t>>>>> %s addr balance: %d", addr, a.Balance)
-	require.Equal(t, abi.TokenAmount(types.MustParseFIL("5")), a.Balance)
+	require.Equal(t, injectedFils, a.Balance)
+
+	a, err = full.SubnetStateGetActor(ctx, subnetAddr, newAddr, types.EmptyTSK)
+	require.NoError(t, err)
+	t.Logf("\t>>>>> %s new addr balance: %d", newAddr, a.Balance)
+	require.Equal(t, sentFils, a.Balance)
 
 	// Release funds
 
-	// TODO: Is it correct?
 	t.Log("\t>>>>> release funds")
-	_, err = full.ReleaseFunds(ctx, addr, subnetAddr, big.Int(types.MustParseFIL("5")))
+	releasedFils := big.Int(types.MustParseFIL("2"))
+	releaseCid, err := full.ReleaseFunds(ctx, newAddr, subnetAddr, releasedFils)
 	require.NoError(t, err)
 
-	err = kit.WaitForBalanceDiff(ctx, addr, 5, full)
+	c, err = full.SubnetStateWaitMsg(ctx, subnetAddr, releaseCid, 10, 500, false)
+	require.NoError(t, err)
+	t.Logf("\t>>>>> the release message was found in %d epoch of subnet", c.Height)
+
+	t.Logf("\t>>>>> new wallet addr: %s", newAddr)
+	a, err = full.StateGetActor(ctx, newAddr, types.EmptyTSK)
+	require.NoError(t, err)
+	t.Logf("\t>>>>> %s new addr balance: %d", addr, a.Balance)
+	require.Equal(t, big.Add(sentFils, releasedFils), a.Balance)
+
+	err = kit.WaitForFinality(ctx, subnetmgr.FinalityThreshold+20, newHeads)
 	require.NoError(t, err)
 
 	// Stop mining

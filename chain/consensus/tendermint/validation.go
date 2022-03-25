@@ -84,34 +84,33 @@ func sanitizeMessagesAndPrepareBlockForSignature(ctx context.Context, sm *stmgr.
 	}
 
 	for _, msg := range bt.CrossMessages {
-		//TODO: do we need any additional validation here?
 		c, err := sm.ChainStore().PutMessage(ctx, msg)
 		if err != nil {
 			return nil, err
 		}
-		crossMessages = append(crossMessages, msg)
 
+		crossMessages = append(crossMessages, msg)
 		crossMsgCids = append(crossMsgCids, c)
 	}
 
 	store := sm.ChainStore().ActorStore(ctx)
-	blsmsgroot, err := consensus.ToMessagesArray(store, blsMsgCids)
+	blsMsgRoot, err := consensus.ToMessagesArray(store, blsMsgCids)
 	if err != nil {
 		return nil, xerrors.Errorf("building bls amt: %w", err)
 	}
-	secpkmsgroot, err := consensus.ToMessagesArray(store, secpkMsgCids)
+	secpkMsgRoot, err := consensus.ToMessagesArray(store, secpkMsgCids)
 	if err != nil {
 		return nil, xerrors.Errorf("building secpk amt: %w", err)
 	}
-	crossmsgroot, err := consensus.ToMessagesArray(store, crossMsgCids)
+	crossMsgRoot, err := consensus.ToMessagesArray(store, crossMsgCids)
 	if err != nil {
 		return nil, xerrors.Errorf("building cross amt: %w", err)
 	}
 
 	mmcid, err := store.Put(store.Context(), &types.MsgMeta{
-		BlsMessages:   blsmsgroot,
-		SecpkMessages: secpkmsgroot,
-		CrossMessages: crossmsgroot,
+		BlsMessages:   blsMsgRoot,
+		SecpkMessages: secpkMsgRoot,
+		CrossMessages: crossMsgRoot,
 	})
 	if err != nil {
 		return nil, err

@@ -731,12 +731,20 @@ func (s *SubnetMgr) SubnetChainHead(ctx context.Context, id address.SubnetID) (*
 	return api.ChainHead(ctx)
 }
 
-func (s *SubnetMgr) SubnetGetActor(ctx context.Context, id address.SubnetID, addr address.Address, tsk types.TipSetKey) (*types.Actor, error) {
+func (s *SubnetMgr) SubnetStateGetActor(ctx context.Context, id address.SubnetID, addr address.Address, tsk types.TipSetKey) (*types.Actor, error) {
 	api, err := s.GetSubnetAPI(id)
 	if err != nil {
 		return nil, err
 	}
 	return api.StateGetActor(ctx, addr, tsk)
+}
+
+func (s *SubnetMgr) SubnetStateWaitMsg(ctx context.Context, id address.SubnetID, cid cid.Cid, confidence uint64, limit abi.ChainEpoch, allowReplaced bool) (*api.MsgLookup, error) {
+	api, err := s.GetSubnetAPI(id)
+	if err != nil {
+		return nil, err
+	}
+	return api.StateWaitMsg(ctx, cid, confidence, limit, allowReplaced)
 }
 
 var _ subiface.SubnetMgr = &SubnetMgr{}

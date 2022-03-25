@@ -58,21 +58,27 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 
 		crossMsgs, err := api.GetCrossMsgsPool(ctx, subnetID, base.Height()+1)
 		if err != nil {
-			log.Errorw("unable to get cross-messages from mempool", "error", err)
+			log.Errorw("unable to select cross-messages from mempool", "error", err)
 		}
 		log.Infof("[subnet: %s, epoch: %d] retrieved %d - msgs, %d - crossmsgs", subnetID, base.Height()+1, len(msgs), len(crossMsgs))
 
 		for _, msg := range msgs {
 			id := msg.Cid().String()
 
+			log.Infof("!!!!!>>>>> msg to send: %s", id)
+
 			if cache.shouldSendMessage(id) {
+				log.Infof("!!!!!>>>>> msg to shouldSendMessage: %s", id)
 				msgBytes, err := msg.Serialize()
 				if err != nil {
 					log.Error(err)
 					continue
 				}
+				log.Infof("!!!!!>>>>> msg to bytes: %s", id)
 				tx := NewSignedMessageBytes(msgBytes)
+				log.Infof("!!!!!>>>>> msg serialized: %s", id)
 				_, err = tendermintClient.BroadcastTxSync(ctx, tx)
+				log.Infof("!!!!!>>>>> msg broadcasted: %s", id)
 				if err != nil {
 					log.Error("unable to send a message to Tendermint:", err)
 					continue
@@ -83,11 +89,13 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			}
 		}
 
-		for _, msg := range crossMsgs {
-			id := msg.Cid().String()
+		for _, wmsg := range crossMsgs {
+			id := wmsg.Uid()
+
+			log.Infof("!!!!!>>>>> cross msg to send: %s", id)
 
 			if cache.shouldSendMessage(id) {
-				msgBytes, err := msg.Serialize()
+				msgBytes, err := wmsg.Serialize()
 				if err != nil {
 					log.Error(err)
 					continue
@@ -162,7 +170,7 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 			log.Info("create block function was canceled")
 			return nil, nil
 		case <-ticker.C:
-			log.Info("Received an new block from Tendermint over RPC")
+			log.Info("Received a new block from Tendermint over RPC")
 			next, err = tm.client.Block(ctx, &height)
 			if err != nil {
 				log.Warnf("unable to get a Tendermint block via RPC @%d: %s", height, err)

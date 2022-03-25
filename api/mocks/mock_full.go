@@ -1042,10 +1042,10 @@ func (mr *MockFullNodeMockRecorder) GasEstimateMessageGas(arg0, arg1, arg2, arg3
 }
 
 // GetCrossMsgsPool mocks base method.
-func (m *MockFullNode) GetCrossMsgsPool(arg0 context.Context, arg1 address.SubnetID, arg2 abi.ChainEpoch) ([]*types.Message, error) {
+func (m *MockFullNode) GetCrossMsgsPool(arg0 context.Context, arg1 address.SubnetID, arg2 abi.ChainEpoch) ([]*types.UnverifiedCrossMsg, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetCrossMsgsPool", arg0, arg1, arg2)
-	ret0, _ := ret[0].([]*types.Message)
+	ret0, _ := ret[0].([]*types.UnverifiedCrossMsg)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -3159,19 +3159,34 @@ func (mr *MockFullNodeMockRecorder) SubnetChainNotify(arg0, arg1 interface{}) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubnetChainNotify", reflect.TypeOf((*MockFullNode)(nil).SubnetChainNotify), arg0, arg1)
 }
 
-// SubnetGetActor mocks base method.
-func (m *MockFullNode) SubnetGetActor(arg0 context.Context, arg1 address.SubnetID, arg2 address.Address, arg3 types.TipSetKey) (*types.Actor, error) {
+// SubnetStateGetActor mocks base method.
+func (m *MockFullNode) SubnetStateGetActor(arg0 context.Context, arg1 address.SubnetID, arg2 address.Address, arg3 types.TipSetKey) (*types.Actor, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SubnetGetActor", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "SubnetStateGetActor", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(*types.Actor)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// SubnetGetActor indicates an expected call of SubnetGetActor.
-func (mr *MockFullNodeMockRecorder) SubnetGetActor(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+// SubnetStateGetActor indicates an expected call of SubnetStateGetActor.
+func (mr *MockFullNodeMockRecorder) SubnetStateGetActor(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubnetGetActor", reflect.TypeOf((*MockFullNode)(nil).SubnetGetActor), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubnetStateGetActor", reflect.TypeOf((*MockFullNode)(nil).SubnetStateGetActor), arg0, arg1, arg2, arg3)
+}
+
+// SubnetStateWaitMsg mocks base method.
+func (m *MockFullNode) SubnetStateWaitMsg(arg0 context.Context, arg1 address.SubnetID, arg2 cid.Cid, arg3 uint64, arg4 abi.ChainEpoch, arg5 bool) (*api.MsgLookup, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubnetStateWaitMsg", arg0, arg1, arg2, arg3, arg4, arg5)
+	ret0, _ := ret[0].(*api.MsgLookup)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubnetStateWaitMsg indicates an expected call of SubnetStateWaitMsg.
+func (mr *MockFullNodeMockRecorder) SubnetStateWaitMsg(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubnetStateWaitMsg", reflect.TypeOf((*MockFullNode)(nil).SubnetStateWaitMsg), arg0, arg1, arg2, arg3, arg4, arg5)
 }
 
 // SyncCheckBad mocks base method.

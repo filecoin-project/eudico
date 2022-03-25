@@ -3,6 +3,9 @@ package hierarchical
 import (
 	"context"
 
+	"github.com/ipfs/go-cid"
+	"go.uber.org/fx"
+
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/api"
@@ -10,8 +13,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	snmgr "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/manager"
 	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/ipfs/go-cid"
-	"go.uber.org/fx"
 )
 
 var _ api.HierarchicalCns = &HierarchicalAPI{}
@@ -67,7 +68,7 @@ func (a *HierarchicalAPI) ValidateCheckpoint(ctx context.Context,
 }
 
 func (a *HierarchicalAPI) GetCrossMsgsPool(ctx context.Context, id address.SubnetID,
-	height abi.ChainEpoch) ([]*types.Message, error) {
+	height abi.ChainEpoch) ([]*types.UnverifiedCrossMsg, error) {
 	return a.Sub.GetCrossMsgsPool(ctx, id, height)
 }
 
@@ -104,7 +105,8 @@ func (a *HierarchicalAPI) InitAtomicExec(
 	return a.Sub.InitAtomicExec(ctx, wallet, inputs, msgs)
 }
 
-func (a *HierarchicalAPI) ListAtomicExecs(ctx context.Context, id address.SubnetID, addr address.Address) ([]sca.AtomicExec, error) {
+func (a *HierarchicalAPI) ListAtomicExecs(ctx context.Context, id address.SubnetID,
+	addr address.Address) ([]sca.AtomicExec, error) {
 	return a.Sub.ListAtomicExecs(ctx, id, addr)
 }
 
@@ -126,6 +128,12 @@ func (a *HierarchicalAPI) SubnetChainHead(ctx context.Context, id address.Subnet
 	return a.Sub.SubnetChainHead(ctx, id)
 }
 
-func (a *HierarchicalAPI) SubnetGetActor(ctx context.Context, id address.SubnetID, addr address.Address, tsk types.TipSetKey) (*types.Actor, error) {
-	return a.Sub.SubnetGetActor(ctx, id, addr, tsk)
+func (a *HierarchicalAPI) SubnetStateGetActor(ctx context.Context, id address.SubnetID, addr address.Address,
+	tsk types.TipSetKey) (*types.Actor, error) {
+	return a.Sub.SubnetStateGetActor(ctx, id, addr, tsk)
+}
+
+func (a *HierarchicalAPI) SubnetStateWaitMsg(ctx context.Context, id address.SubnetID, cid cid.Cid, confidence uint64, limit abi.ChainEpoch,
+	allowReplaced bool) (*api.MsgLookup, error) {
+	return a.Sub.SubnetStateWaitMsg(ctx, id, cid, confidence, limit, allowReplaced)
 }
