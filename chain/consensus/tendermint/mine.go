@@ -65,20 +65,16 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		for _, msg := range msgs {
 			id := msg.Cid().String()
 
-			log.Infof("!!!!!>>>>> msg to send: %s", id)
+			log.Infof(">>>>> msg to send: %s", id)
 
 			if cache.shouldSendMessage(id) {
-				log.Infof("!!!!!>>>>> msg to shouldSendMessage: %s", id)
 				msgBytes, err := msg.Serialize()
 				if err != nil {
 					log.Error(err)
 					continue
 				}
-				log.Infof("!!!!!>>>>> msg to bytes: %s", id)
 				tx := NewSignedMessageBytes(msgBytes)
-				log.Infof("!!!!!>>>>> msg serialized: %s", id)
 				_, err = tendermintClient.BroadcastTxSync(ctx, tx)
-				log.Infof("!!!!!>>>>> msg broadcasted: %s", id)
 				if err != nil {
 					log.Error("unable to send a message to Tendermint:", err)
 					continue
@@ -92,7 +88,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		for _, wmsg := range crossMsgs {
 			id := wmsg.Uid()
 
-			log.Infof("!!!!!>>>>> cross msg to send: %s", id)
+			log.Infof(">>>>> cross msg to send: %s", id)
 
 			if cache.shouldSendMessage(id) {
 				msgBytes, err := wmsg.Serialize()

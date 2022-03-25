@@ -199,14 +199,17 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("\t>>>>> the release message was found in %d epoch of subnet", c.Height)
 
-	t.Logf("\t>>>>> new wallet addr: %s", newAddr)
-	a, err = full.StateGetActor(ctx, newAddr, types.EmptyTSK)
+	newHeads, err = full.ChainNotify(ctx)
 	require.NoError(t, err)
-	t.Logf("\t>>>>> %s new addr balance: %d", addr, a.Balance)
-	require.Equal(t, big.Add(sentFils, releasedFils), a.Balance)
 
 	err = kit.WaitForFinality(ctx, subnetmgr.FinalityThreshold+20, newHeads)
 	require.NoError(t, err)
+
+	a, err = full.StateGetActor(ctx, newAddr, types.EmptyTSK)
+	require.NoError(t, err)
+	t.Logf("\t>>>>> new wallet addr: %s", newAddr)
+	t.Logf("\t>>>>> %s new addr balance: %d", addr, a.Balance)
+	require.Equal(t, big.Add(sentFils, releasedFils), a.Balance)
 
 	// Stop mining
 
