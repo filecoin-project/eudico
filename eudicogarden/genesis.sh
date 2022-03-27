@@ -13,6 +13,17 @@ fi
 rm -rf ~/.genesis-sectors
 echo [*] Genesis template
 ../lotus-seed genesis new genesis.json
+echo [*] Adding some genesis delay
+GENESISDELAY=1800
+GENESISTMP=$(mktemp)
+GENESISTIMESTAMP=$(date --utc +%FT%H:%M:00Z)
+TIMESTAMP=$(echo $(date -d ${GENESISTIMESTAMP} +%s) + ${GENESISDELAY} | bc)
+
+jq --arg Timestamp ${TIMESTAMP} \
+   ' . + { Timestamp: $Timestamp|tonumber } ' \
+   < "./genesis.json" > ${GENESISTMP}
+mv ${GENESISTMP} "./genesis.json"
+
 echo [*] Adding pre-sealed miners
 for((i=0;i<$NUM;i++))
 do

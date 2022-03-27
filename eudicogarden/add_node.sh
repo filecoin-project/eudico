@@ -29,7 +29,8 @@ do
         IP=`terraform output -json eudico_nodes_ip | jq -r '.['"-$i"']'`
         INDEX=`expr $LENGTH - $i`
         echo "[*] Initializing node with IP: $IP"
-        # TODO: Remove this line once merged in eudico's main branch
+        # Copying all eudicogarden assets in case you are using a dirty commit
+        ## Comment this line if you want to speed things up and direclty use the assets in the `eudico` branch
         scp -o "StrictHostKeyChecking no" -r ../eudicogarden ubuntu@$IP:~/eudico/eudicogarden
         scp -o "StrictHostKeyChecking no" eudicogarden.car ubuntu@$IP:~/eudico/eudicogarden
         ssh -o "StrictHostKeyChecking no" ubuntu@$IP "cd eudico/eudicogarden && ./init_new_node.sh $INDEX $BOOTSTRAP_MADDR"
