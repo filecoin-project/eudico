@@ -43,7 +43,7 @@ func (c *messageCache) shouldSendMessage(id string) bool {
 
 func (c *messageCache) clearSentMessages(currentEpoch abi.ChainEpoch) {
 	for k, sentAt := range c.cache {
-		if sentAt+cacheFinalityWait > currentEpoch {
+		if sentAt+cacheFinalityWait < currentEpoch {
 			delete(c.cache, k)
 		}
 	}
