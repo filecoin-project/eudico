@@ -560,20 +560,17 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 	if err != nil {
 		return nil, err
 	}
-	wrappedCrossMsgs, err := m.api.GetCrossMsgsPool(ctx, address.SubnetID(nn), base.TipSet.Height()+1)
+	crossmsgs, err := m.api.GetCrossMsgsPool(ctx, address.SubnetID(nn), base.TipSet.Height()+1)
 	if err != nil {
 		log.Errorw("selecting cross-messages failed", "error", err)
 	}
-	var crossMsgs []*types.Message
-	for _, m := range wrappedCrossMsgs {
-		crossMsgs = append(crossMsgs, m.Msg)
-	}
-	log.Debugf("CrossMsgs being proposed in block @%s: %d", base.TipSet.Height()+1, len(crossMsgs))
+
+	log.Debugf("CrossMsgs being proposed in block @%s: %d", base.TipSet.Height()+1, len(crossmsgs))
 
 	tPending := build.Clock.Now()
 
 	// TODO: winning post proof
-	minedBlock, err = m.createBlock(base, m.address, ticket, winner, bvals, postProof, msgs, crossMsgs)
+	minedBlock, err = m.createBlock(base, m.address, ticket, winner, bvals, postProof, msgs, crossmsgs)
 	if err != nil {
 		err = xerrors.Errorf("failed to create block: %w", err)
 		return nil, err

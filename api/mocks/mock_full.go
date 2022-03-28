@@ -1042,10 +1042,10 @@ func (mr *MockFullNodeMockRecorder) GasEstimateMessageGas(arg0, arg1, arg2, arg3
 }
 
 // GetCrossMsgsPool mocks base method.
-func (m *MockFullNode) GetCrossMsgsPool(arg0 context.Context, arg1 address.SubnetID, arg2 abi.ChainEpoch) ([]*types.UnverifiedCrossMsg, error) {
+func (m *MockFullNode) GetCrossMsgsPool(arg0 context.Context, arg1 address.SubnetID, arg2 abi.ChainEpoch) ([]*types.Message, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetCrossMsgsPool", arg0, arg1, arg2)
-	ret0, _ := ret[0].([]*types.UnverifiedCrossMsg)
+	ret0, _ := ret[0].([]*types.Message)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1054,6 +1054,21 @@ func (m *MockFullNode) GetCrossMsgsPool(arg0 context.Context, arg1 address.Subne
 func (mr *MockFullNodeMockRecorder) GetCrossMsgsPool(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCrossMsgsPool", reflect.TypeOf((*MockFullNode)(nil).GetCrossMsgsPool), arg0, arg1, arg2)
+}
+
+// GetUnverifiedCrossMsgsPool mocks base method.
+func (m *MockFullNode) GetUnverifiedCrossMsgsPool(arg0 context.Context, arg1 address.SubnetID, arg2 abi.ChainEpoch) ([]*types.UnverifiedCrossMsg, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUnverifiedCrossMsgsPool", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]*types.UnverifiedCrossMsg)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUnverifiedCrossMsgsPool indicates an expected call of GetUnverifiedCrossMsgsPool.
+func (mr *MockFullNodeMockRecorder) GetUnverifiedCrossMsgsPool(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUnverifiedCrossMsgsPool", reflect.TypeOf((*MockFullNode)(nil).GetUnverifiedCrossMsgsPool), arg0, arg1, arg2)
 }
 
 // ID mocks base method.

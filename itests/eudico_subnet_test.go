@@ -3,9 +3,10 @@ package itests
 
 import (
 	"context"
+	"testing"
+
 	cbor "github.com/ipfs/go-ipld-cbor"
 	"github.com/stretchr/testify/require"
-	"testing"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -24,6 +25,7 @@ import (
 )
 
 func TestEudicoSubnetConsensus(t *testing.T) {
+
 	t.Run(":root/pow-subnet/pow", func(t *testing.T) {
 		runSubnetConsensusTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTSPoW())
 	})
@@ -31,6 +33,13 @@ func TestEudicoSubnetConsensus(t *testing.T) {
 	t.Run(":root/pow-subnet/tendermint", func(t *testing.T) {
 		runSubnetConsensusTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTendermint())
 	})
+
+	/*
+		t.Run(":root/delegated-subnet/pow", func(t *testing.T) {
+			runSubnetConsensusTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetTSPoW())
+		})
+
+	*/
 }
 
 func runSubnetConsensusTests(t *testing.T, opts ...interface{}) {

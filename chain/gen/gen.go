@@ -9,16 +9,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	proof7 "github.com/filecoin-project/specs-actors/v7/actors/runtime/proof"
-
-	"github.com/filecoin-project/lotus/chain/rand"
-
-	"github.com/filecoin-project/go-state-types/network"
-
-	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/big"
-	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/google/uuid"
 	"github.com/ipfs/go-blockservice"
 	"github.com/ipfs/go-cid"
@@ -29,8 +19,11 @@ import (
 	"github.com/ipld/go-car"
 	"golang.org/x/xerrors"
 
-	proof5 "github.com/filecoin-project/specs-actors/v5/actors/runtime/proof"
-
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-state-types/crypto"
+	"github.com/filecoin-project/go-state-types/network"
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/blockstore"
 	bstore "github.com/filecoin-project/lotus/blockstore"
@@ -39,6 +32,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/beacon"
 	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
+	"github.com/filecoin-project/lotus/chain/rand"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -49,6 +43,8 @@ import (
 	"github.com/filecoin-project/lotus/genesis"
 	"github.com/filecoin-project/lotus/journal"
 	"github.com/filecoin-project/lotus/node/repo"
+	proof5 "github.com/filecoin-project/specs-actors/v5/actors/runtime/proof"
+	proof7 "github.com/filecoin-project/specs-actors/v7/actors/runtime/proof"
 )
 
 const msgsPerBlock = 20

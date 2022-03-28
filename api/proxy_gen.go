@@ -575,7 +575,9 @@ type HierarchicalCnsStruct struct {
 
 		FundSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) `perm:"write"`
 
-		GetCrossMsgsPool func(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) ([]*types.UnverifiedCrossMsg, error) `perm:"read"`
+		GetCrossMsgsPool func(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) ([]*types.Message, error) `perm:"read"`
+
+		GetUnverifiedCrossMsgsPool func(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) ([]*types.UnverifiedCrossMsg, error) `perm:"read"`
 
 		InitAtomicExec func(p0 context.Context, p1 address.Address, p2 map[string]sca.LockedState, p3 []types.Message) (cid.Cid, error) `perm:"write"`
 
@@ -3589,14 +3591,25 @@ func (s *HierarchicalCnsStub) FundSubnet(p0 context.Context, p1 address.Address,
 	return *new(cid.Cid), ErrNotSupported
 }
 
-func (s *HierarchicalCnsStruct) GetCrossMsgsPool(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) ([]*types.UnverifiedCrossMsg, error) {
+func (s *HierarchicalCnsStruct) GetCrossMsgsPool(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) ([]*types.Message, error) {
 	if s.Internal.GetCrossMsgsPool == nil {
-		return *new([]*types.UnverifiedCrossMsg), ErrNotSupported
+		return *new([]*types.Message), ErrNotSupported
 	}
 	return s.Internal.GetCrossMsgsPool(p0, p1, p2)
 }
 
-func (s *HierarchicalCnsStub) GetCrossMsgsPool(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) ([]*types.UnverifiedCrossMsg, error) {
+func (s *HierarchicalCnsStub) GetCrossMsgsPool(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) ([]*types.Message, error) {
+	return *new([]*types.Message), ErrNotSupported
+}
+
+func (s *HierarchicalCnsStruct) GetUnverifiedCrossMsgsPool(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) ([]*types.UnverifiedCrossMsg, error) {
+	if s.Internal.GetUnverifiedCrossMsgsPool == nil {
+		return *new([]*types.UnverifiedCrossMsg), ErrNotSupported
+	}
+	return s.Internal.GetUnverifiedCrossMsgsPool(p0, p1, p2)
+}
+
+func (s *HierarchicalCnsStub) GetUnverifiedCrossMsgsPool(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) ([]*types.UnverifiedCrossMsg, error) {
 	return *new([]*types.UnverifiedCrossMsg), ErrNotSupported
 }
 

@@ -20,8 +20,8 @@ const (
 )
 
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {
-	log.Info("starting miner: ", miner.String())
-	defer log.Info("shutdown miner")
+	log.Info("starting Tendermint miner: ", miner.String())
+	defer log.Info("shutdown Tendermint miner")
 
 	var cache = newMessageCache()
 
@@ -36,7 +36,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	}
 	subnetID := address.SubnetID(nn)
 
-	log.Infof("miner params: network:%s, subnet ID: %s", nn, subnetID)
+	log.Infof("Tendermint miner params: network:%s, subnet ID: %s", nn, subnetID)
 
 	for {
 		select {
@@ -85,13 +85,13 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			}
 		}
 
-		for _, wmsg := range crossMsgs {
-			id := wmsg.Uid()
+		for _, msg := range crossMsgs {
+			id := msg.Cid().String()
 
 			log.Infof(">>>>> cross msg to send: %s", id)
 
 			if cache.shouldSendMessage(id) {
-				msgBytes, err := wmsg.Serialize()
+				msgBytes, err := msg.Serialize()
 				if err != nil {
 					log.Error(err)
 					continue

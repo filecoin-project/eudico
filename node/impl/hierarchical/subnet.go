@@ -68,8 +68,13 @@ func (a *HierarchicalAPI) ValidateCheckpoint(ctx context.Context,
 }
 
 func (a *HierarchicalAPI) GetCrossMsgsPool(ctx context.Context, id address.SubnetID,
-	height abi.ChainEpoch) ([]*types.UnverifiedCrossMsg, error) {
+	height abi.ChainEpoch) ([]*types.Message, error) {
 	return a.Sub.GetCrossMsgsPool(ctx, id, height)
+}
+
+func (a *HierarchicalAPI) GetUnverifiedCrossMsgsPool(ctx context.Context, id address.SubnetID,
+	height abi.ChainEpoch) ([]*types.UnverifiedCrossMsg, error) {
+	return a.Sub.GetUnverifiedCrossMsgsPool(ctx, id, height)
 }
 
 func (a *HierarchicalAPI) FundSubnet(ctx context.Context, wallet address.Address,

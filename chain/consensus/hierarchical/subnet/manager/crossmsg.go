@@ -98,6 +98,42 @@ func (cm *crossMsgPool) isBottomUpApplied(n uint64, id address.SubnetID, height 
 
 // GetCrossMsgsPool returns a list with `num` number of cross messages pending for validation.
 func (s *SubnetMgr) GetCrossMsgsPool(
+	ctx context.Context, id address.SubnetID, height abi.ChainEpoch) ([]*types.Message, error) {
+	// TODO: Think a bit deeper the locking strategy for subnets.
+	// s.lk.RLock()
+	// defer s.lk.RUnlock()
+
+	var (
+		topdown  []*types.Message
+		bottomup []*types.Message
+		err      error
+	)
+
+	// topDown messages only supported in subnets, not the root.
+	if !s.isRoot(id) {
+		topdown, err = s.getTopDownPool(ctx, id, height)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Get bottomup messages and return all cross-messages.
+	bottomup, err = s.getBottomUpPool(ctx, id, height)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]*types.Message, len(topdown)+len(bottomup))
+	copy(out[:len(topdown)], topdown)
+	copy(out[len(topdown):], bottomup)
+
+	log.Debugf("Picked up %d cross-msgs from CrossMsgPool", len(out))
+	return out, nil
+}
+
+// GetUnverifiedCrossMsgsPool returns a list with `num` number of cross messages with their type information
+// (top-down or bottom-up) pending for validation.
+func (s *SubnetMgr) GetUnverifiedCrossMsgsPool(
 	ctx context.Context, id address.SubnetID, height abi.ChainEpoch) ([]*types.UnverifiedCrossMsg, error) {
 	// TODO: Think a bit deeper the locking strategy for subnets.
 	// s.lk.RLock()
@@ -139,7 +175,7 @@ func (s *SubnetMgr) GetCrossMsgsPool(
 		})
 	}
 
-	log.Debugf("Picked up %d cross-msgs from CrossMsgPool", len(out))
+	log.Debugf("Picked up %d unverified cross-msgs from CrossMsgPool", len(out))
 	return out, nil
 }
 

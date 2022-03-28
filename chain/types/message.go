@@ -4,14 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/filecoin-project/go-state-types/network"
 
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-state-types/network"
 	"github.com/filecoin-project/lotus/build"
 	block "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
-	xerrors "golang.org/x/xerrors"
+	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 )
@@ -44,24 +44,19 @@ type Message struct {
 	Params []byte
 }
 
+// UnverifiedCrossMsg is a special type-wrapper to distinguish top-down and bottom-up cross messages,
+// since Message doesn't contain such information.
 type UnverifiedCrossMsg struct {
 	Type uint64
 	Msg  *Message
 }
 
 func (m *UnverifiedCrossMsg) Serialize() ([]byte, error) {
-	return m.Msg.Serialize()
-}
-
-func (m *UnverifiedCrossMsg) Uid() string {
-	switch m.Type {
-	case 1:
-		return m.Msg.Cid().String() + "/0000"
-	case 2:
-		return m.Msg.Cid().String() + "/ffff"
-	default:
-		panic("unknown cross message type")
+	buf := new(bytes.Buffer)
+	if err := m.MarshalCBOR(buf); err != nil {
+		return nil, err
 	}
+	return buf.Bytes(), nil
 }
 
 func (m *Message) Caller() address.Address {
@@ -117,6 +112,29 @@ func (m *Message) ToStorageBlock() (block.Block, error) {
 	}
 
 	return block.NewBlockWithCid(data, c)
+}
+
+func (m *UnverifiedCrossMsg) ToStorageBlock() (block.Block, error) {
+	data, err := m.Serialize()
+	if err != nil {
+		return nil, err
+	}
+
+	c, err := abi.CidBuilder.Sum(data)
+	if err != nil {
+		return nil, err
+	}
+
+	return block.NewBlockWithCid(data, c)
+}
+
+func (m *UnverifiedCrossMsg) Cid() cid.Cid {
+	b, err := m.ToStorageBlock()
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal message: %s", err)) // I think this is maybe sketchy, what happens if we try to serialize a message with an undefined address in it?
+	}
+
+	return b.Cid()
 }
 
 func (m *Message) Cid() cid.Cid {

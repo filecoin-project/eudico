@@ -22,6 +22,7 @@ func main() {
 		types.Ticket{},
 		types.ElectionProof{},
 		types.Message{},
+		types.UnverifiedCrossMsg{},
 		types.SignedMessage{},
 		types.MsgMeta{},
 		types.Actor{},
