@@ -104,10 +104,10 @@ eudico: $(BUILD_DEPS)
 .PHONY: eudico
 BINS+=eudico
 
-eudico-test: GOFLAGS+=-tags=2k
-eudico-test:
-	go test $(GOFLAGS) -count=1 -v -run TestEudicoConsensus ./itests
-.PHONY: eudico-test
+eudico-consensus-test: GOFLAGS+=-tags=2k
+eudico-consensus-test:
+	go test $(GOFLAGS) -count=1 -run TestEudicoConsensus -run TestEudicoSubnetConsensus ./itests
+.PHONY: eudico-consensus-test
 
 # Run a 4-node tendermint-testnet locally
 tm-localnet-start: tm-localnet-stop

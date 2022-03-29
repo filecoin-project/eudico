@@ -127,7 +127,8 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	_, err = full.JoinSubnet(ctx, addr, big.Int(val), subnetAddr)
 	require.NoError(t, err)
 
-	// AddSubnet only deploys the subnet actor. The subnet will only be listed after joining the subnet.
+	// AddSubnet only deploys the subnet actor. The subnet will only be listed after joining the subnet
+
 	var st sca.SCAState
 	act, err := full.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, types.EmptyTSK)
 	require.NoError(t, err)
@@ -183,27 +184,32 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	}, nil)
 	require.NoError(t, err)
 
-	msg, err = full.MpoolPushMessage(ctx, &types.Message{
-		To:    newAddr,
-		From:  params.From,
-		Value: big.Int(types.MustParseFIL("3")),
-	}, nil)
-	require.NoError(t, err)
-
 	t1 := time.Now()
 	c, err := full.StateWaitMsg(ctx, msg.Cid(), 1, 100, false)
 	require.NoError(t, err)
 	t.Logf("\t>>>>> the cross message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
 
+	msg, err = full.MpoolPushMessage(ctx, &types.Message{
+		To:    newAddr,
+		From:  params.From,
+		Value: sentFils,
+	}, nil)
+	require.NoError(t, err)
+
 	t1 = time.Now()
-	bl, err := kit.WaitSubnetFunds(ctx, subnetAddr, addr, injectedFils, 50, full)
+	c, err = full.StateWaitMsg(ctx, msg.Cid(), 1, 100, false)
+	require.NoError(t, err)
+	t.Logf("\t>>>>> the message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
+
+	t1 = time.Now()
+	bl, err := kit.WaitSubnetActorBalance(ctx, subnetAddr, addr, injectedFils, 100, full)
 	require.NoError(t, err)
 	t.Logf("\t>>>>> sent funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
 
 	a, err := full.SubnetStateGetActor(ctx, subnetAddr, addr, types.EmptyTSK)
 	require.NoError(t, err)
 	t.Logf("\t>>>>> %s addr balance: %d", addr, a.Balance)
-	require.Equal(t, injectedFils, a.Balance)
+	require.Equal(t, 0, big.Cmp(injectedFils, a.Balance))
 
 	a, err = full.SubnetStateGetActor(ctx, subnetAddr, newAddr, types.EmptyTSK)
 	require.NoError(t, err)
@@ -222,7 +228,7 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	t.Logf("\t>>>>> the release message was found in %d epoch of subnet", c.Height)
 
 	t1 = time.Now()
-	bl, err = kit.WaitFunds(ctx, newAddr, big.Add(sentFils, releasedFils), 200, full)
+	bl, err = kit.WaitActorBalance(ctx, newAddr, big.Add(sentFils, releasedFils), 100, full)
 	require.NoError(t, err)
 	t.Logf("\t>>>>> released funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
 

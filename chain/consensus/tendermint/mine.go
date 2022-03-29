@@ -38,14 +38,11 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 
 	log.Infof("Tendermint miner params: network name - %s, subnet ID - %s", nn, subnetID)
 
-	timer := time.NewTicker(500 * time.Millisecond)
-	defer timer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-timer.C:
-
+		default:
 			base, err := api.ChainHead(ctx)
 			if err != nil {
 				log.Errorw("failed to get the head of chain", "error", err)
@@ -62,7 +59,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			for _, msg := range msgs {
 				id := msg.Cid().String()
 
-				log.Infof(">>>>> msg to send: %s", id)
+				log.Infof("[subnet: %s, epoch: %d] >>>>> msg to send: %s", subnetID, base.Height()+1, id)
 
 				if cache.shouldSendMessage(id) {
 					msgBytes, err := msg.Serialize()
@@ -86,15 +83,14 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			if err != nil {
 				log.Errorw("unable to select cross-messages from mempool", "error", err)
 			}
-			log.Infof("[subnet: %s, epoch: %d] retrieved %d - crossmsgs", subnetID, base.Height()+1, len(crossMsgs))
+			log.Infof("[subnet: %s, epoch: %d] retrieved %d crossmsgs", subnetID, base.Height()+1, len(crossMsgs))
 
 			for _, w := range crossMsgs {
 				id := w.Cid().String()
 
-				log.Infof(">>>>> cross msg to send: %s", id)
+				log.Infof("[subnet: %s, epoch: %d] >>>>> cross msg to send: %s", id, subnetID, base.Height()+1)
 
 				if cache.shouldSendMessage(id) {
-					log.Infof(">>>>> crossmsgs shouldSendMessage: %s", id)
 					msgBytes, err := w.Msg.Serialize()
 					if err != nil {
 						log.Error(err)
@@ -102,12 +98,10 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 					}
 					tx := NewCrossMessageBytes(msgBytes)
 					_, err = tendermintClient.BroadcastTxSync(ctx, tx)
-					log.Infof(">>>>> cross msg broadcasted: %s", id)
 					if err != nil {
 						log.Error("unable to send a cross message to Tendermint:", err)
 						continue
 					} else {
-						log.Infof(">>>>> cross msg added sent: %s", id)
 						cache.addSentMessage(id, base.Height())
 						log.Infof("successfully sent a message %s to Tendermint", id)
 					}

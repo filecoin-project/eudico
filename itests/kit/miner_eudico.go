@@ -5,6 +5,7 @@ import (
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/lotus/chain/types"
+	"strings"
 	"time"
 
 	"golang.org/x/xerrors"
@@ -17,7 +18,7 @@ const (
 	balanceSleepTime = 3
 )
 
-func WaitFunds(ctx context.Context, addr addr.Address, amount big.Int, limit int, api api.FullNode) (int, error) {
+func WaitActorBalance(ctx context.Context, addr addr.Address, balance big.Int, limit int, api api.FullNode) (int, error) {
 	heads, err := api.ChainNotify(ctx)
 	if err != nil {
 		return 0, err
@@ -32,13 +33,17 @@ func WaitFunds(ctx context.Context, addr addr.Address, amount big.Int, limit int
 			return 0, xerrors.New("closed channel")
 		case <-heads:
 			a, err := api.StateGetActor(ctx, addr, types.EmptyTSK)
-			if err != nil {
+			switch {
+			case err != nil && !strings.Contains(err.Error(), types.ErrActorNotFound.Error()):
 				return 0, err
+			case err != nil && strings.Contains(err.Error(), types.ErrActorNotFound.Error()):
+				n++
+			case err == nil:
+				if big.Cmp(balance, a.Balance) == 0 {
+					return n, nil
+				}
+				n++
 			}
-			if big.Cmp(amount, a.Balance) == 0 {
-				return n, nil
-			}
-			n++
 		case <-timer:
 			return 0, xerrors.New("finality timer exceeded")
 		}
@@ -46,7 +51,7 @@ func WaitFunds(ctx context.Context, addr addr.Address, amount big.Int, limit int
 	return 0, xerrors.New("unable to wait the target amount")
 }
 
-func WaitSubnetFunds(ctx context.Context, subnetAddr addr.SubnetID, addr addr.Address, amount big.Int, limit int, api api.FullNode) (int, error) {
+func WaitSubnetActorBalance(ctx context.Context, subnetAddr addr.SubnetID, addr addr.Address, balance big.Int, limit int, api api.FullNode) (int, error) {
 	heads, err := api.SubnetChainNotify(ctx, subnetAddr)
 	if err != nil {
 		return 0, err
@@ -60,13 +65,17 @@ func WaitSubnetFunds(ctx context.Context, subnetAddr addr.SubnetID, addr addr.Ad
 			return 0, xerrors.New("closed channel")
 		case <-heads:
 			a, err := api.SubnetStateGetActor(ctx, subnetAddr, addr, types.EmptyTSK)
-			if err != nil {
+			switch {
+			case err != nil && !strings.Contains(err.Error(), types.ErrActorNotFound.Error()):
 				return 0, err
+			case err != nil && strings.Contains(err.Error(), types.ErrActorNotFound.Error()):
+				n++
+			case err == nil:
+				if big.Cmp(balance, a.Balance) == 0 {
+					return n, nil
+				}
+				n++
 			}
-			if big.Cmp(amount, a.Balance) == 0 {
-				return n, nil
-			}
-			n++
 		case <-timer:
 			return 0, xerrors.New("finality timer exceeded")
 		}
