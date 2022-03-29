@@ -21,7 +21,7 @@ const (
 
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {
 	log.Info("starting Tendermint miner: ", miner.String())
-	defer log.Info("shutdown Tendermint miner")
+	defer log.Info("shutdown Tendermint miner: ", miner.String())
 
 	var cache = newMessageCache()
 
@@ -36,114 +36,121 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	}
 	subnetID := address.SubnetID(nn)
 
-	log.Infof("Tendermint miner params: network:%s, subnet ID: %s", nn, subnetID)
+	log.Infof("Tendermint miner params: network name - %s, subnet ID - %s", nn, subnetID)
 
+	timer := time.NewTicker(500 * time.Millisecond)
+	defer timer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		default:
-		}
+		case <-timer.C:
 
-		base, err := api.ChainHead(ctx)
-		if err != nil {
-			log.Errorw("failed to get the head of chain", "error", err)
-			continue
-		}
+			base, err := api.ChainHead(ctx)
+			if err != nil {
+				log.Errorw("failed to get the head of chain", "error", err)
+				continue
+			}
 
-		msgs, err := api.MpoolSelect(ctx, base.Key(), 1)
-		if err != nil {
-			log.Errorw("unable to select messages from mempool", "error", err)
-		}
+			msgs, err := api.MpoolSelect(ctx, base.Key(), 1)
+			if err != nil {
+				log.Errorw("unable to select messages from mempool", "error", err)
+			}
 
-		crossMsgs, err := api.GetCrossMsgsPool(ctx, subnetID, base.Height()+1)
-		if err != nil {
-			log.Errorw("unable to select cross-messages from mempool", "error", err)
-		}
-		log.Infof("[subnet: %s, epoch: %d] retrieved %d - msgs, %d - crossmsgs", subnetID, base.Height()+1, len(msgs), len(crossMsgs))
+			log.Infof("[subnet: %s, epoch: %d] retrieved %d msgs", subnetID, base.Height()+1, len(msgs))
 
-		for _, msg := range msgs {
-			id := msg.Cid().String()
+			for _, msg := range msgs {
+				id := msg.Cid().String()
 
-			log.Infof(">>>>> msg to send: %s", id)
+				log.Infof(">>>>> msg to send: %s", id)
 
-			if cache.shouldSendMessage(id) {
-				msgBytes, err := msg.Serialize()
-				if err != nil {
-					log.Error(err)
-					continue
-				}
-				tx := NewSignedMessageBytes(msgBytes)
-				_, err = tendermintClient.BroadcastTxSync(ctx, tx)
-				if err != nil {
-					log.Error("unable to send a message to Tendermint:", err)
-					continue
-				} else {
-					cache.addSentMessage(id, base.Height())
-					log.Infof("successfully sent a message %s to Tendermint", id)
+				if cache.shouldSendMessage(id) {
+					msgBytes, err := msg.Serialize()
+					if err != nil {
+						log.Error(err)
+						continue
+					}
+					tx := NewSignedMessageBytes(msgBytes)
+					_, err = tendermintClient.BroadcastTxSync(ctx, tx)
+					if err != nil {
+						log.Error("unable to send a message to Tendermint:", err)
+						continue
+					} else {
+						cache.addSentMessage(id, base.Height())
+						log.Infof("successfully sent a message %s to Tendermint", id)
+					}
 				}
 			}
-		}
 
-		for _, msg := range crossMsgs {
-			id := msg.Cid().String()
+			crossMsgs, err := api.GetUnverifiedCrossMsgsPool(ctx, subnetID, base.Height()+1)
+			if err != nil {
+				log.Errorw("unable to select cross-messages from mempool", "error", err)
+			}
+			log.Infof("[subnet: %s, epoch: %d] retrieved %d - crossmsgs", subnetID, base.Height()+1, len(crossMsgs))
 
-			log.Infof(">>>>> cross msg to send: %s", id)
+			for _, w := range crossMsgs {
+				id := w.Cid().String()
 
-			if cache.shouldSendMessage(id) {
-				msgBytes, err := msg.Serialize()
-				if err != nil {
-					log.Error(err)
-					continue
-				}
-				tx := NewCrossMessageBytes(msgBytes)
-				_, err = tendermintClient.BroadcastTxSync(ctx, tx)
-				if err != nil {
-					log.Error("unable to send a cross message to Tendermint:", err)
-					continue
-				} else {
-					cache.addSentMessage(id, base.Height())
-					log.Infof("successfully sent a message %s to Tendermint", id)
+				log.Infof(">>>>> cross msg to send: %s", id)
+
+				if cache.shouldSendMessage(id) {
+					log.Infof(">>>>> crossmsgs shouldSendMessage: %s", id)
+					msgBytes, err := w.Msg.Serialize()
+					if err != nil {
+						log.Error(err)
+						continue
+					}
+					tx := NewCrossMessageBytes(msgBytes)
+					_, err = tendermintClient.BroadcastTxSync(ctx, tx)
+					log.Infof(">>>>> cross msg broadcasted: %s", id)
+					if err != nil {
+						log.Error("unable to send a cross message to Tendermint:", err)
+						continue
+					} else {
+						log.Infof(">>>>> cross msg added sent: %s", id)
+						cache.addSentMessage(id, base.Height())
+						log.Infof("successfully sent a message %s to Tendermint", id)
+					}
 				}
 			}
+
+			log.Infof("[subnet: %s, epoch: %d] try to create a block", subnetID, base.Height()+1)
+
+			bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
+				Miner:            address.Undef,
+				Parents:          base.Key(),
+				BeaconValues:     nil,
+				Ticket:           nil,
+				Epoch:            base.Height() + 1,
+				Timestamp:        0,
+				WinningPoStProof: nil,
+				Messages:         nil,
+				CrossMessages:    nil,
+			})
+			if err != nil {
+				log.Errorw("creating block failed", "error", err)
+				continue
+			}
+			if bh == nil {
+				continue
+			}
+
+			log.Infof("[subnet: %s, epoch: %d] try to sync a block", subnetID, base.Height()+1)
+
+			err = api.SyncSubmitBlock(ctx, &types.BlockMsg{
+				Header:        bh.Header,
+				BlsMessages:   bh.BlsMessages,
+				SecpkMessages: bh.SecpkMessages,
+				CrossMessages: bh.CrossMessages,
+			})
+			if err != nil {
+				log.Errorw("unable to sync the block", "error", err)
+			}
+
+			cache.clearSentMessages(base.Height())
+
+			log.Infof("[subnet: %s, epoch: %d] mined a block %v", subnetID, bh.Header.Height, bh.Cid())
 		}
-
-		log.Infof("[subnet: %s, epoch: %d] try to create a block", subnetID, base.Height()+1)
-
-		bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
-			Miner:            address.Undef,
-			Parents:          base.Key(),
-			BeaconValues:     nil,
-			Ticket:           nil,
-			Epoch:            base.Height() + 1,
-			Timestamp:        0,
-			WinningPoStProof: nil,
-			Messages:         nil,
-			CrossMessages:    nil,
-		})
-		if err != nil {
-			log.Errorw("creating block failed", "error", err)
-			continue
-		}
-		if bh == nil {
-			continue
-		}
-
-		log.Infof("[subnet: %s, epoch: %d] try to sync a block", subnetID, base.Height()+1)
-
-		err = api.SyncSubmitBlock(ctx, &types.BlockMsg{
-			Header:        bh.Header,
-			BlsMessages:   bh.BlsMessages,
-			SecpkMessages: bh.SecpkMessages,
-			CrossMessages: bh.CrossMessages,
-		})
-		if err != nil {
-			log.Errorw("unable to sync the block", "error", err)
-		}
-
-		cache.clearSentMessages(base.Height())
-
-		log.Infof("[subnet: %s, epoch: %d] mined a block %v", subnetID, bh.Header.Height, bh.Cid())
 	}
 }
 
@@ -227,7 +234,7 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 		return nil, xerrors.Errorf("load parent tipset failed (%s): %w", h.Parents, err)
 	}
 
-	validMsgs, err := common.FilterBlockMessages(ctx, tm.store, tm.sm, tm.subMgr, tm.r, tm.netName, b, baseTs)
+	validMsgs, err := common.FilterBlockMessages(ctx, tm.store, tm.sm, tm.subMgr, tm.resolver, tm.netName, b, baseTs)
 	if err != nil {
 		return nil, xerrors.Errorf("failed filtering block messages: %w", err)
 	}

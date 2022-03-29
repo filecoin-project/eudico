@@ -134,7 +134,8 @@ func (s *SubnetMgr) GetCrossMsgsPool(
 // GetUnverifiedCrossMsgsPool returns a list with `num` number of cross messages with their type information
 // (top-down or bottom-up) pending for validation.
 func (s *SubnetMgr) GetUnverifiedCrossMsgsPool(
-	ctx context.Context, id address.SubnetID, height abi.ChainEpoch) ([]*types.UnverifiedCrossMsg, error) {
+	ctx context.Context, id address.SubnetID, height abi.ChainEpoch,
+) ([]*types.UnverifiedCrossMsg, error) {
 	// TODO: Think a bit deeper the locking strategy for subnets.
 	// s.lk.RLock()
 	// defer s.lk.RUnlock()

@@ -55,7 +55,7 @@ type Tendermint struct {
 	genesis  *types.TipSet
 	subMgr   subnet.SubnetMgr
 	netName  address.SubnetID
-	r        *resolver.Resolver
+	resolver *resolver.Resolver
 
 	// Used to access Tendermint RPC
 	client *tmclient.HTTP
@@ -114,6 +114,7 @@ func NewConsensus(
 		genesis:                    g,
 		subMgr:                     submgr,
 		netName:                    subnetID,
+		resolver:                   r,
 		client:                     c,
 		offset:                     regSubnet.Offset,
 		tendermintValidatorAddress: valAddr,
@@ -150,7 +151,7 @@ func (tm *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBlock) (er
 		log.Warn("Got block from the future, but within threshold", h.Timestamp, build.Clock.Now().Unix())
 	}
 
-	msgsChecks := common.CheckMsgsWithoutBlockSig(ctx, tm.store, tm.sm, tm.subMgr, tm.r, tm.netName, b, baseTs)
+	msgsChecks := common.CheckMsgsWithoutBlockSig(ctx, tm.store, tm.sm, tm.subMgr, tm.resolver, tm.netName, b, baseTs)
 
 	minerCheck := async.Err(func() error {
 		if err := tm.minerIsValid(b.Header.Miner); err != nil {

@@ -2,7 +2,6 @@ package consensus
 
 import (
 	"context"
-
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
@@ -34,7 +33,7 @@ func Weight(consensus hierarchical.ConsensusType) (store.WeightFunc, error) {
 	case hierarchical.Tendermint:
 		return tendermint.Weight, nil
 	default:
-		return nil, xerrors.New("consensus type not suported")
+		return nil, xerrors.New("consensus type not supported")
 	}
 }
 
@@ -54,7 +53,7 @@ func New(
 	case hierarchical.Tendermint:
 		return tendermint.NewConsensus(ctx, sm, snMgr, beacon, r, verifier, genesis, netName), nil
 	default:
-		return nil, xerrors.New("consensus type not suported")
+		return nil, xerrors.New("consensus type not supported")
 	}
 }
 
@@ -62,13 +61,13 @@ func Mine(ctx context.Context, api v1api.FullNode, wallet address.Address, cnsTy
 	// TODO: We should check if these processes throw an error
 	switch cnsType {
 	case hierarchical.Delegated:
-		go delegcns.Mine(ctx, address.Undef, api)
+		go delegcns.Mine(ctx, wallet, api)
 	case hierarchical.PoW:
 		go tspow.Mine(ctx, wallet, api)
 	case hierarchical.Tendermint:
 		go tendermint.Mine(ctx, wallet, api)
 	default:
-		return xerrors.New("consensus type not suported")
+		return xerrors.New("consensus type not supported")
 	}
 	return nil
 }

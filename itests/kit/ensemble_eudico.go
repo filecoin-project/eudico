@@ -81,7 +81,6 @@ const (
 	TendermintConsensusKeyFile         = TendermintConsensusTestDir + "/config/priv_validator_key.json"
 	TendermintApplicationAddress       = "tcp://127.0.0.1:26658"
 
-	//TODO: do we need this?
 	FilcnsConsensusGenesisTestFile = "../testdata/filcns.gen"
 )
 
@@ -320,13 +319,8 @@ func NewFilecoinExpectedConsensus(ctx context.Context, sm *stmgr.StateManager, b
 	return filcns.NewFilecoinExpectedConsensus(ctx, sm, beacon, r, verifier, genesis)
 }
 
-func NetworkName(mctx helpers.MetricsCtx,
-	lc fx.Lifecycle,
-	cs *store.ChainStore,
-	tsexec stmgr.Executor,
-	syscalls vm.SyscallBuilder,
-	us stmgr.UpgradeSchedule,
-	_ dtypes.AfterGenesisSet) (dtypes.NetworkName, error) {
+func NetworkName(mctx helpers.MetricsCtx, lc fx.Lifecycle, cs *store.ChainStore, tsexec stmgr.Executor,
+	syscalls vm.SyscallBuilder, us stmgr.UpgradeSchedule, _ dtypes.AfterGenesisSet) (dtypes.NetworkName, error) {
 
 	ctx := helpers.LifecycleCtx(mctx, lc)
 
@@ -454,6 +448,7 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 			node.Unset(new(*slashfilter.SlashFilter)),
 			node.Override(new(stmgr.Executor), common.RootTipSetExecutor),
 			node.Override(new(stmgr.UpgradeSchedule), common.DefaultUpgradeSchedule()),
+			node.Override(new(*resolver.Resolver), resolver.NewRootResolver),
 
 			// so that we subscribe to pubsub topics immediately
 			node.Override(new(dtypes.Bootstrapper), dtypes.Bootstrapper(true)),
@@ -488,7 +483,6 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		default:
 			n.t.Fatalf("unknown consensus genesis file %d", n.options.rootConsensus)
 		}
-
 		require.NoError(n.t, gferr)
 
 		// Either generate the genesis or inject it.
@@ -522,11 +516,11 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		var ki types.KeyInfo
 		switch n.options.rootConsensus {
 		case hierarchical.PoW:
-			addr, err = full.WalletImport(context.Background(), &full.DefaultKey.KeyInfo)
+			addr, err = full.WalletImport(ctx, &full.DefaultKey.KeyInfo)
 		case hierarchical.Delegated:
 			err = ReadKeyInfoFromFile(DelegatedConsensusKeyFile, &ki)
 			require.NoError(n.t, err)
-			addr, err = full.WalletImport(context.Background(), &ki)
+			addr, err = full.WalletImport(ctx, &ki)
 			require.NoError(n.t, err)
 		case hierarchical.Tendermint:
 			ki, err := tendermint.GetSecp256k1TendermintKey(TendermintConsensusKeyFile)
@@ -538,7 +532,7 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		}
 		require.NoError(n.t, err)
 
-		err = full.WalletSetDefault(context.Background(), addr)
+		err = full.WalletSetDefault(ctx, addr)
 		require.NoError(n.t, err)
 
 		// Are we hitting this node through its RPC?

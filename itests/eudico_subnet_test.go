@@ -4,6 +4,7 @@ package itests
 import (
 	"context"
 	"testing"
+	"time"
 
 	cbor "github.com/ipfs/go-ipld-cbor"
 	"github.com/stretchr/testify/require"
@@ -18,14 +19,12 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
-	subnetmgr "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/manager"
 	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/itests/kit"
 )
 
 func TestEudicoSubnetConsensus(t *testing.T) {
-
 	t.Run(":root/pow-subnet/pow", func(t *testing.T) {
 		runSubnetConsensusTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTSPoW())
 	})
@@ -34,12 +33,29 @@ func TestEudicoSubnetConsensus(t *testing.T) {
 		runSubnetConsensusTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTendermint())
 	})
 
-	/*
-		t.Run(":root/delegated-subnet/pow", func(t *testing.T) {
-			runSubnetConsensusTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetTSPoW())
-		})
+	t.Run(":root/pow-subnet/delegated", func(t *testing.T) {
+		runSubnetConsensusTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetDelegated())
+	})
 
-	*/
+	t.Run(":root/delegated-subnet/pow", func(t *testing.T) {
+		runSubnetConsensusTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetTSPoW())
+	})
+
+	t.Run(":root/delegated-subnet/tendermint", func(t *testing.T) {
+		runSubnetConsensusTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetTendermint())
+	})
+
+	t.Run(":root/delegated-subnet/delegated", func(t *testing.T) {
+		runSubnetConsensusTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetDelegated())
+	})
+
+	t.Run(":root/tendermint-subnet/delegated", func(t *testing.T) {
+		runSubnetConsensusTests(t, kit.ThroughRPC(), kit.RootTendermint(), kit.SubnetDelegated())
+	})
+
+	t.Run(":root/tendermint-subnet/pow", func(t *testing.T) {
+		runSubnetConsensusTests(t, kit.ThroughRPC(), kit.RootTendermint(), kit.SubnetTSPoW())
+	})
 }
 
 func runSubnetConsensusTests(t *testing.T, opts ...interface{}) {
@@ -53,6 +69,7 @@ type eudicoSubnetConsensusSuite struct {
 }
 
 func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
+	startTime := time.Now()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -86,7 +103,6 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	subnetName := "testSubnet"
 	minerStake := abi.NewStoragePower(1e8)
 	checkPeriod := abi.ChainEpoch(10)
-	delegMiner := hierarchical.SubnetCoordActorAddr
 
 	err = kit.WaitForBalance(ctx, addr, 10, full)
 	require.NoError(t, err)
@@ -95,7 +111,7 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("\t>>>>> %s balance: %d", addr, balance)
 
-	actorAddr, err := full.AddSubnet(ctx, addr, parent, subnetName, uint64(subnetMinerType), minerStake, checkPeriod, delegMiner)
+	actorAddr, err := full.AddSubnet(ctx, addr, parent, subnetName, uint64(subnetMinerType), minerStake, checkPeriod, addr)
 	require.NoError(t, err)
 
 	subnetAddr := address.NewSubnetID(parent, actorAddr)
@@ -127,10 +143,7 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 
 	go full.MineSubnet(ctx, addr, subnetAddr, false)
 
-	newHeads, err := full.SubnetChainNotify(ctx, subnetAddr)
-	require.NoError(t, err)
-
-	err = kit.PerformHeightCheckForSubnetBlocks(ctx, 4, subnetAddr, newHeads, full)
+	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 4, subnetAddr, full)
 	require.NoError(t, err)
 
 	// Inject new funds to the own address in the subnet
@@ -177,12 +190,15 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	}, nil)
 	require.NoError(t, err)
 
-	c, err := full.StateWaitMsg(ctx, msg.Cid(), 10, 500, false)
+	t1 := time.Now()
+	c, err := full.StateWaitMsg(ctx, msg.Cid(), 1, 100, false)
 	require.NoError(t, err)
-	t.Logf("\t>>>>> the cross message was found in %d epoch of root", c.Height)
+	t.Logf("\t>>>>> the cross message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
 
-	err = kit.WaitForFinality(ctx, subnetmgr.FinalityThreshold+20, newHeads)
+	t1 = time.Now()
+	bl, err := kit.WaitSubnetFunds(ctx, subnetAddr, addr, injectedFils, 50, full)
 	require.NoError(t, err)
+	t.Logf("\t>>>>> sent funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
 
 	a, err := full.SubnetStateGetActor(ctx, subnetAddr, addr, types.EmptyTSK)
 	require.NoError(t, err)
@@ -192,7 +208,7 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	a, err = full.SubnetStateGetActor(ctx, subnetAddr, newAddr, types.EmptyTSK)
 	require.NoError(t, err)
 	t.Logf("\t>>>>> %s new addr balance: %d", newAddr, a.Balance)
-	require.Equal(t, sentFils, a.Balance)
+	require.Equal(t, 0, big.Cmp(sentFils, a.Balance))
 
 	// Release funds
 
@@ -201,21 +217,20 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	releaseCid, err := full.ReleaseFunds(ctx, newAddr, subnetAddr, releasedFils)
 	require.NoError(t, err)
 
-	c, err = full.SubnetStateWaitMsg(ctx, subnetAddr, releaseCid, 10, 500, false)
+	c, err = full.SubnetStateWaitMsg(ctx, subnetAddr, releaseCid, 1, 100, false)
 	require.NoError(t, err)
 	t.Logf("\t>>>>> the release message was found in %d epoch of subnet", c.Height)
 
-	newHeads, err = full.ChainNotify(ctx)
+	t1 = time.Now()
+	bl, err = kit.WaitFunds(ctx, newAddr, big.Add(sentFils, releasedFils), 200, full)
 	require.NoError(t, err)
-
-	err = kit.WaitForFinality(ctx, subnetmgr.FinalityThreshold+20, newHeads)
-	require.NoError(t, err)
+	t.Logf("\t>>>>> released funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
 
 	a, err = full.StateGetActor(ctx, newAddr, types.EmptyTSK)
 	require.NoError(t, err)
 	t.Logf("\t>>>>> new wallet addr: %s", newAddr)
 	t.Logf("\t>>>>> %s new addr balance: %d", addr, a.Balance)
-	require.Equal(t, big.Add(sentFils, releasedFils), a.Balance)
+	require.Equal(t, 0, big.Cmp(a.Balance, big.Add(sentFils, releasedFils)))
 
 	// Stop mining
 
@@ -223,7 +238,9 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	err = full.MineSubnet(ctx, addr, subnetAddr, true)
 	require.NoError(t, err)
 
-	// TODO: is this correct?
+	newHeads, err := full.SubnetChainNotify(ctx, subnetAddr)
+	require.NoError(t, err)
+
 	notStopped := true
 	for notStopped {
 		select {
@@ -250,6 +267,8 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 
 	err = ens.Stop()
 	require.NoError(t, err)
+
+	t.Logf("Test time: %v\n", time.Since(startTime).Seconds())
 }
 
 // TODO: use MessageForSend from cli package.

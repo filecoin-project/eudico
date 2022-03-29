@@ -111,12 +111,11 @@ func makeDelegatedGenesisBlock(ctx context.Context, bs bstore.Blockstore, templa
 }
 
 func delegatedGenTemplate(subnetID string, miner, vreg, rem address.Address, seq uint64) (*genesis.Template, error) {
-
 	return &genesis.Template{
 		NetworkVersion: networkVersion,
 		Accounts: []genesis.Actor{{
 			Type:    genesis.TAccount,
-			Balance: types.FromFil(2),
+			Balance: types.FromFil(0),
 			Meta:    json.RawMessage(`{"Owner":"` + miner.String() + `"}`),
 		}},
 		Miners:      nil,
@@ -129,7 +128,7 @@ func delegatedGenTemplate(subnetID string, miner, vreg, rem address.Address, seq
 
 		VerifregRootKey: genesis.Actor{
 			Type:    genesis.TAccount,
-			Balance: types.FromFil(2),
+			Balance: types.FromFil(0),
 			Meta:    json.RawMessage(`{"Owner":"` + vreg.String() + `"}`), // correct??
 		},
 		RemainderAccount: genesis.Actor{

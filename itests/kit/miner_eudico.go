@@ -13,24 +13,65 @@ import (
 )
 
 const (
-	finalityTimeout  = 120
+	finalityTimeout  = 600
 	balanceSleepTime = 3
 )
 
-func WaitForFinality(ctx context.Context, finalityBlockNumber int, newHeads <-chan []*api.HeadChange) error {
-	blocks := 0
+func WaitFunds(ctx context.Context, addr addr.Address, amount big.Int, limit int, api api.FullNode) (int, error) {
+	heads, err := api.ChainNotify(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	n := 0
 	timer := time.After(finalityTimeout * time.Second)
-	for blocks < finalityBlockNumber {
+
+	for n < limit {
 		select {
 		case <-ctx.Done():
-			return xerrors.New("closed channel")
-		case <-newHeads:
-			blocks++
+			return 0, xerrors.New("closed channel")
+		case <-heads:
+			a, err := api.StateGetActor(ctx, addr, types.EmptyTSK)
+			if err != nil {
+				return 0, err
+			}
+			if big.Cmp(amount, a.Balance) == 0 {
+				return n, nil
+			}
+			n++
 		case <-timer:
-			return xerrors.New("finality timer exceeded")
+			return 0, xerrors.New("finality timer exceeded")
 		}
 	}
-	return nil
+	return 0, xerrors.New("unable to wait the target amount")
+}
+
+func WaitSubnetFunds(ctx context.Context, subnetAddr addr.SubnetID, addr addr.Address, amount big.Int, limit int, api api.FullNode) (int, error) {
+	heads, err := api.SubnetChainNotify(ctx, subnetAddr)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	timer := time.After(finalityTimeout * time.Second)
+
+	for n < limit {
+		select {
+		case <-ctx.Done():
+			return 0, xerrors.New("closed channel")
+		case <-heads:
+			a, err := api.SubnetStateGetActor(ctx, subnetAddr, addr, types.EmptyTSK)
+			if err != nil {
+				return 0, err
+			}
+			if big.Cmp(amount, a.Balance) == 0 {
+				return n, nil
+			}
+			n++
+		case <-timer:
+			return 0, xerrors.New("finality timer exceeded")
+		}
+	}
+	return 0, xerrors.New("unable to wait the target amount")
 }
 
 func WaitForBalance(ctx context.Context, addr addr.Address, balance uint64, api api.FullNode) error {
@@ -61,11 +102,15 @@ func WaitForBalance(ctx context.Context, addr addr.Address, balance uint64, api 
 	return nil
 }
 
-func PerformHeightCheckForSubnetBlocks(ctx context.Context, validatedBlocksNumber int, subnetAddr addr.SubnetID, newHeads <-chan []*api.HeadChange, api api.FullNode) error {
+func SubnetPerformHeightCheckForBlocks(ctx context.Context, validatedBlocksNumber int, subnetAddr addr.SubnetID, api api.FullNode) error {
+	subnetHeads, err := api.SubnetChainNotify(ctx, subnetAddr)
+	if err != nil {
+		return err
+	}
 	if validatedBlocksNumber < 2 || validatedBlocksNumber > 100 {
 		return xerrors.New("wrong validated blocks number")
 	}
-	initHead := (<-newHeads)[0]
+	initHead := (<-subnetHeads)[0]
 	prevHeight := initHead.Val.Height()
 
 	i := 1
@@ -73,7 +118,7 @@ func PerformHeightCheckForSubnetBlocks(ctx context.Context, validatedBlocksNumbe
 		select {
 		case <-ctx.Done():
 			return xerrors.New("closed channel")
-		case <-newHeads:
+		case <-subnetHeads:
 			if i > validatedBlocksNumber {
 				return nil
 			}

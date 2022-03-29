@@ -3,10 +3,10 @@ package hierarchical
 import (
 	"strings"
 
-	address "github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-state-types/abi"
 	"golang.org/x/xerrors"
 
+	address "github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
