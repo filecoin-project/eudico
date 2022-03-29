@@ -48,6 +48,15 @@ If you want to add a new node to the network run:
 This scripts adds a new miner to the network. If you are looking to deploy a full-node but not a miner,
 you just need to comment the miner initialization commands from `init_new_node.sh`
 
+### Granting SSH access to other keys
+If you want to grant access to additional ssh keys to the nodes in the Eudico Garden cluster,
+you can run the following script giving the public you want to gran access to as the first argument:
+```bash
+./add_ssh_key.sh <path_ssh_key>
+# Example
+./add_ssh_key.sh ~/.ssh/mykey.pub
+```
+
 ### Destroy
 If you no longer want to run an Eudico Garde you can run the following script to clean the infrastructure
 and all related assets of the deployment:
