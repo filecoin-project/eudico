@@ -41,12 +41,13 @@ tmux a
 If the command succeeds you should be able to see all of your nodes syncing. An easy way to 
 
 ### Adding new nodes
-If you want to add a new node to the network run:
+If you want to add nodes to the network you can run:
 ```bash
-./add_node.sh
+./add_node.sh <num_nodes>
 ```
-This scripts adds a new miner to the network. If you are looking to deploy a full-node but not a miner,
-you just need to comment the miner initialization commands from `init_new_node.sh`
+This script adds a new full-node to the network. If you are looking to deploy a miner,
+you'll need to configure the miner manually (we don't have automations for add new
+miners in runtime yet -- [see issue](https://github.com/filecoin-project/eudico/issues/159)). 
 
 ### Granting SSH access to additional keys
 If you want to grant access to additional ssh keys to the nodes in the Eudico Garden cluster,
