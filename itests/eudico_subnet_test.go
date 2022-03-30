@@ -81,7 +81,7 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 
 	addr, err := full.WalletDefaultAddress(ctx)
 	require.NoError(t, err)
-	t.Logf(">>>>> wallet addr: %s", addr)
+	t.Logf("wallet addr: %s", addr)
 
 	l, err := full.WalletList(ctx)
 	require.NoError(t, err)
@@ -89,7 +89,7 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 
 	newAddr, err := full.WalletNew(ctx, types.KTSecp256k1)
 	require.NoError(t, err)
-	t.Logf(">>>>> wallet new addr: %s", newAddr)
+	t.Logf("wallet new addr: %s", newAddr)
 
 	l, err = full.WalletList(ctx)
 	require.NoError(t, err)
@@ -98,6 +98,8 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	// Start mining
 
 	go rootMiner(ctx, addr, full)
+
+	t.Log("[*] Adding and joining the subnet")
 
 	parent := address.RootSubnet
 	subnetName := "testSubnet"
@@ -109,14 +111,14 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 
 	balance, err := full.WalletBalance(ctx, addr)
 	require.NoError(t, err)
-	t.Logf("\t>>>>> %s balance: %d", addr, balance)
+	t.Logf("%s balance: %d", addr, balance)
 
 	actorAddr, err := full.AddSubnet(ctx, addr, parent, subnetName, uint64(subnetMinerType), minerStake, checkPeriod, addr)
 	require.NoError(t, err)
 
 	subnetAddr := address.NewSubnetID(parent, actorAddr)
 
-	t.Log("\t>>>>> subnet addr:", subnetAddr)
+	t.Log("subnet addr:", subnetAddr)
 
 	val, err := types.ParseFIL("10")
 	require.NoError(t, err)
@@ -149,13 +151,13 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 
 	// Inject new funds to the own address in the subnet
 
-	t.Log("\t>>>>> funding yourself")
+	t.Log("[*] Funding subnet")
 	injectedFils := big.Int(types.MustParseFIL("3"))
 	_, err = full.FundSubnet(ctx, addr, subnetAddr, injectedFils)
 	require.NoError(t, err)
 
 	// Send a message to the new address
-	t.Log("\t>>>>> sending a message")
+	t.Log("[*] Sending a message")
 
 	sentFils := big.Int(types.MustParseFIL("3"))
 	require.NoError(t, err)
@@ -187,7 +189,7 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	t1 := time.Now()
 	c, err := full.StateWaitMsg(ctx, msg.Cid(), 1, 100, false)
 	require.NoError(t, err)
-	t.Logf("\t>>>>> the cross message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
+	t.Logf("the cross message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
 
 	msg, err = full.MpoolPushMessage(ctx, &types.Message{
 		To:    newAddr,
@@ -199,48 +201,48 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	t1 = time.Now()
 	c, err = full.StateWaitMsg(ctx, msg.Cid(), 1, 100, false)
 	require.NoError(t, err)
-	t.Logf("\t>>>>> the message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
+	t.Logf("the message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
 
 	t1 = time.Now()
 	bl, err := kit.WaitSubnetActorBalance(ctx, subnetAddr, addr, injectedFils, 100, full)
 	require.NoError(t, err)
-	t.Logf("\t>>>>> sent funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
+	t.Logf("sent funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
 
 	a, err := full.SubnetStateGetActor(ctx, subnetAddr, addr, types.EmptyTSK)
 	require.NoError(t, err)
-	t.Logf("\t>>>>> %s addr balance: %d", addr, a.Balance)
+	t.Logf("%s addr balance: %d", addr, a.Balance)
 	require.Equal(t, 0, big.Cmp(injectedFils, a.Balance))
 
 	a, err = full.SubnetStateGetActor(ctx, subnetAddr, newAddr, types.EmptyTSK)
 	require.NoError(t, err)
-	t.Logf("\t>>>>> %s new addr balance: %d", newAddr, a.Balance)
+	t.Logf("%s new addr balance: %d", newAddr, a.Balance)
 	require.Equal(t, 0, big.Cmp(sentFils, a.Balance))
 
 	// Release funds
 
-	t.Log("\t>>>>> release funds")
+	t.Log("[*] Releasing funds")
 	releasedFils := big.Int(types.MustParseFIL("2"))
 	releaseCid, err := full.ReleaseFunds(ctx, newAddr, subnetAddr, releasedFils)
 	require.NoError(t, err)
 
 	c, err = full.SubnetStateWaitMsg(ctx, subnetAddr, releaseCid, 1, 100, false)
 	require.NoError(t, err)
-	t.Logf("\t>>>>> the release message was found in %d epoch of subnet", c.Height)
+	t.Logf("the release message was found in %d epoch of subnet", c.Height)
 
 	t1 = time.Now()
 	bl, err = kit.WaitActorBalance(ctx, newAddr, big.Add(sentFils, releasedFils), 100, full)
 	require.NoError(t, err)
-	t.Logf("\t>>>>> released funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
+	t.Logf("released funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
 
 	a, err = full.StateGetActor(ctx, newAddr, types.EmptyTSK)
 	require.NoError(t, err)
-	t.Logf("\t>>>>> new wallet addr: %s", newAddr)
-	t.Logf("\t>>>>> %s new addr balance: %d", addr, a.Balance)
+	t.Logf("new wallet addr: %s", newAddr)
+	t.Logf("%s new addr balance: %d", addr, a.Balance)
 	require.Equal(t, 0, big.Cmp(a.Balance, big.Add(sentFils, releasedFils)))
 
 	// Stop mining
 
-	t.Log("\t>>>>> stop mining")
+	t.Log("[*] Stop mining")
 	err = full.MineSubnet(ctx, addr, subnetAddr, true)
 	require.NoError(t, err)
 
@@ -251,16 +253,16 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	for notStopped {
 		select {
 		case b := <-newHeads:
-			t.Logf("\t>>>>> mined a block: %d", b[0].Val.Height())
+			t.Logf("mined a block: %d", b[0].Val.Height())
 		default:
-			t.Log("\t>>>>> stopped the miner eventually")
+			t.Log("stopped the miner eventually")
 			notStopped = false
 		}
 	}
 
 	// Leaving the subnet
 
-	t.Log("\t>>>>> leaving the subnet")
+	t.Log("[*] Leaving the subnet")
 	_, err = full.LeaveSubnet(ctx, addr, subnetAddr)
 	require.NoError(t, err)
 
