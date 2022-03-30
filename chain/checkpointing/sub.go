@@ -24,7 +24,8 @@ import (
 	"github.com/sa8/multi-party-sig/pkg/protocol"
 	"github.com/sa8/multi-party-sig/pkg/taproot"
 	"github.com/sa8/multi-party-sig/protocols/frost"
-	"github.com/sa8/multi-party-sig/protocols/frost/keygen"
+	//"github.com/sa8/multi-party-sig/protocols/frost/keygen"
+	"github.com/sa8/multi-party-sig/protocols/frost/keygen_gennaro"
 	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/blockstore"
@@ -60,7 +61,7 @@ const initialValueInWallet = 50
 var sendall = false
 
 // this variable is the number of blocks (in eudico) we want between each checkpoints
-const checkpointFrequency = 15
+const checkpointFrequency = 20
 
 //change to true if regtest is used
 const Regtest = true
@@ -114,9 +115,9 @@ type CheckpointingSub struct {
 	// boolean to keep
 	keysUpdated bool
 	// taproot config
-	taprootConfig *keygen.TaprootConfig
+	taprootConfig *keygen_gennaro.TaprootConfig
 	// new config generated
-	newTaprootConfig *keygen.TaprootConfig
+	newTaprootConfig *keygen_gennaro.TaprootConfig
 	// Previous tx
 	ptxid string
 	// Tweaked value
@@ -175,7 +176,7 @@ func NewCheckpointSub(
 	synced := false
 
 	// Load taproot verification shares from EUDICO_PATH environnement if file exist
-	var taprootConfig *keygen.TaprootConfig
+	var taprootConfig *keygen_gennaro.TaprootConfig
 	_, err = os.Stat(os.Getenv("EUDICO_PATH") + "/share.toml")
 	if err == nil {
 		// If we have a share.toml containing the distributed key we load them
@@ -227,7 +228,7 @@ func NewCheckpointSub(
 			verificationShares[party.ID(key)] = &p
 		}
 
-		taprootConfig = &keygen.TaprootConfig{
+		taprootConfig = &keygen_gennaro.TaprootConfig{
 			ID:                 party.ID(host.ID().String()),
 			Threshold:          configTOML.Threshold,
 			PrivateShare:       &privateShare,
@@ -596,8 +597,8 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	n := NewNetwork(c.sub, c.topic)
 
 	// Keygen with Gennaro protocol if failing
-	//f := frost.KeygenTaprootGennaro(id, ids, threshold)
-	f := frost.KeygenTaproot(id, ids, threshold)
+	f := frost.KeygenTaprootGennaro(id, ids, threshold)
+	//f := frost.KeygenTaproot(id, ids, threshold)
 
 
 
@@ -607,7 +608,7 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	if err != nil {
 		return err
 	}
-	LoopHandler(ctx, handler, n) //use the new network, could be re-written
+	LoopHandlerDKG(ctx, handler, n) //use the new network, could be re-written
 	r, err := handler.Result()
 	if err != nil {
 		// if a participant is mibehaving the DKG entirely fail (no fallback)
@@ -616,7 +617,8 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	log.Infow("result :", "result", r)
 
 	var ok bool
-	c.newTaprootConfig, ok = r.(*keygen.TaprootConfig)
+	c.newTaprootConfig, ok = r.(*keygen_gennaro.TaprootConfig)
+	fmt.Println(c.newTaprootConfig)
 	if !ok {
 		return xerrors.Errorf("state change propagated is the wrong type")
 	}

@@ -173,7 +173,7 @@ func (r *Resolver) HandleMsgs(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("suscribed to message sub", msgSub)
+
 	//time.Sleep(6 * time.Second)
 
 	// Start handle incoming resolver msg.
@@ -229,23 +229,17 @@ func NewValidator( r *Resolver) *Validator {
 
 func (v *Validator) Validate(ctx context.Context, pid peer.ID, msg *pubsub.Message) (res pubsub.ValidationResult) {
 	// Decode resolve msg
-	fmt.Println("Calling Validate ")
 	rmsg, err := DecodeResolveMsg(msg.GetData())
-	fmt.Println("decoded message cid: ", rmsg.Cid)
-	fmt.Println("Message is coming from: ", pid.String())
 	if err != nil {
 		fmt.Println("errod decoding message cid")
 		log.Errorf("error decoding resolve msg cid: %s", err)
 		return pubsub.ValidationReject
 	}
-	fmt.Println(rmsg)
-	fmt.Println("we are here! hello")
 	log.Infof("Received kvs resolution message of type: %v, from %v", rmsg.Type, pid.String())
 	log.Warnf("trying to warn you")
 	//fmt.Println("Message id: ", msg.Cid)
 	// Check the CID and messages sent are correct for push messages
 	if rmsg.Type == Push {
-		fmt.Println("message to validate is of type push")
 		msgs := rmsg.Content
 		c, err := msgs.HashedCid() //
 		if err != nil {
@@ -278,7 +272,7 @@ func (v *Validator) Validate(ctx context.Context, pid peer.ID, msg *pubsub.Messa
 
 	// Pass validated request.
 	// msg.ValidatorData = rmsg
-	fmt.Println("end of validate")
+
 
 	return pubsub.ValidationAccept
 }
@@ -328,7 +322,6 @@ func (r *Resolver) processResolveMsg(ctx context.Context, rmsg *ResolveMsg) (pub
 
 func (r *Resolver) processPush(ctx context.Context, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
 	// Check if we are already storing the CrossMsgs CID locally.
-	fmt.Println("Processing push for message with cid: ", rmsg.Cid)
 	_, found, err := r.getLocal(ctx, rmsg.Cid)
 	if err != nil {
 		return pubsub.ValidationIgnore, xerrors.Errorf("Error getting msg locally: %w", err)
@@ -341,7 +334,6 @@ func (r *Resolver) processPush(ctx context.Context, rmsg *ResolveMsg) (pubsub.Va
 	if err := r.setLocal(ctx, rmsg.Cid, &rmsg.Content); err != nil {
 		return pubsub.ValidationIgnore, err
 	}
-	fmt.Println("Message added! yay")
 	
 	// TODO: Introduce checks here to ensure that push messages come from the right
 	// source?
@@ -358,7 +350,6 @@ func (r *Resolver) processPull(rmsg *ResolveMsg) (pubsub.ValidationResult, error
 	// if err != nil {
 	// 	return pubsub.ValidationIgnore, err
 	// }
-	fmt.Println("Processing a pull request for message with cid: ",rmsg.Cid)
 	msg, found, err := r.getLocal(context.TODO(), rmsg.Cid)
 	if err != nil {
 		return pubsub.ValidationIgnore, err
@@ -426,7 +417,6 @@ func (r *Resolver) setLocal(ctx context.Context, c string, msgs *MsgData) error 
 	if err := msgs.MarshalCBOR(w); err != nil {
 		return err
 	}
-	fmt.Println("We are currently adding message %v to KVS.", msgs)
 	return r.ds.Put(ctx, datastore.NewKey(c), w.Bytes())
 }
 
@@ -435,7 +425,6 @@ func (r *Resolver) publishMsg(m *ResolveMsg) error {
 	if err != nil {
 		return xerrors.Errorf("error serializing resolveMsg: %v", err)
 	}
-	fmt.Println("publishing message ",m)
 	return r.pubsub.Publish("pikachu", b)
 }
 
@@ -465,7 +454,6 @@ func (r *Resolver) WaitCheckpointResolved(ctx context.Context, c string) chan er
 		}
 		close(out)
 	}()
-	fmt.Println("done with WaitCheckpointResolved")
 	return out
 }
 
