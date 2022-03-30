@@ -7,7 +7,6 @@ import (
 
 	"github.com/ipfs/go-cid"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/minio/blake2b-simd"
 	tenderminttypes "github.com/tendermint/tendermint/types"
 	"go.opencensus.io/stats"
 	"golang.org/x/xerrors"
@@ -152,36 +151,21 @@ func isBlockSealed(fb *types.FullBlock, tb *tenderminttypes.Block) error {
 	}
 
 	for _, msg := range fb.BlsMessages {
-		bs, err := msg.Serialize()
-		if err != nil {
-			return err
-		}
-		id := blake2b.Sum256(bs)
-		_, found := tendermintMessagesHashes[id]
+		_, found := tendermintMessagesHashes[msg.Cid()]
 		if !found {
 			return xerrors.New("bls messages are not sealed")
 		}
 	}
 
 	for _, msg := range fb.SecpkMessages {
-		bs, err := msg.Serialize()
-		if err != nil {
-			return err
-		}
-		id := blake2b.Sum256(bs)
-		_, found := tendermintMessagesHashes[id]
+		_, found := tendermintMessagesHashes[msg.Cid()]
 		if !found {
 			return xerrors.New("secpk messages are not sealed")
 		}
 	}
 
 	for _, msg := range fb.CrossMessages {
-		bs, err := msg.Serialize()
-		if err != nil {
-			return err
-		}
-		id := blake2b.Sum256(bs)
-		_, found := tendermintMessagesHashes[id]
+		_, found := tendermintMessagesHashes[msg.Cid()]
 		if !found {
 			return xerrors.New("cross msgs messages are not sealed")
 		}

@@ -6,12 +6,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/ipfs/go-cid"
 	"io/ioutil"
 	"os"
 	"time"
 
 	secp "github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/minio/blake2b-simd"
 	abci "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/crypto"
 	tmcrypto "github.com/tendermint/tendermint/crypto"
@@ -40,54 +40,30 @@ func NodeAddr() string {
 	return addr
 }
 
-func getEudicoMessagesFromTendermintBlock(b *tmtypes.Block) ([]*types.SignedMessage, []*types.Message) {
-	var msgs []*types.SignedMessage
-	var crossMsgs []*types.Message
-
-	for _, tx := range b.Txs {
-		stx := tx.String()
-		// Transactions from Tendermint are in the "Tx{....}" format.
-		// So we have to remove T,x,{,} characters.
-		txo := stx[3 : len(stx)-1]
-		txoData, err := hex.DecodeString(txo)
-		if err != nil {
-			log.Error("unable to decode Tendermint tx:", err)
-			continue
-		}
-		// data = {msg... type}
-		msg, _, err := parseTx(txoData)
-		if err != nil {
-			log.Error("unable to decode a message from Tendermint block:", err)
-			continue
-		}
-
-		switch m := msg.(type) {
-		case *types.SignedMessage:
-			log.Infof("found signed message from %s to %s with %s tokens", m.Message.From.String(), m.Message.To.String(), m.Message.Value)
-			msgs = append(msgs, m)
-		case *types.Message:
-			log.Infof("found cross message from %s to %s with %s tokens", m.From.String(), m.To.String(), m.Value)
-			crossMsgs = append(crossMsgs, m)
-		default:
-			log.Info("filtered a message with unknown type:", m)
-		}
-	}
-	return msgs, crossMsgs
-}
-
-func getMessageMapFromTendermintBlock(tb *tmtypes.Block) (map[[32]byte]bool, error) {
-	msgs := make(map[[32]byte]bool)
+func getMessageMapFromTendermintBlock(tb *tmtypes.Block) (map[cid.Cid]bool, error) {
+	msgs := make(map[cid.Cid]bool)
 	for _, msg := range tb.Txs {
 		tx := msg.String()
 		// Transactions from Tendermint are in the Tx{} format. So we have to remove T,x, { and } characters.
-		// Then we have to remove message type.
-		txo := tx[3 : len(tx)-1-2]
+		// Then we have to remove message type and ID hash length.
+		txo := tx[3 : len(tx)-1]
 		txoData, err := hex.DecodeString(txo)
 		if err != nil {
 			return nil, err
 		}
-		id := blake2b.Sum256(txoData)
-		msgs[id] = true
+
+		msg, _, err := parseTx(txoData)
+		if err != nil {
+			return nil, err
+		}
+		switch m := msg.(type) {
+		case *types.Message:
+			msgs[m.Cid()] = true
+		case *types.SignedMessage:
+			msgs[m.Cid()] = true
+		default:
+
+		}
 	}
 	return msgs, nil
 }
@@ -105,9 +81,9 @@ func parseTx(tx []byte) (interface{}, uint32, error) {
 	lastByte := tx[ln-1]
 	switch lastByte {
 	case SignedMessageType:
-		msg, err = types.DecodeSignedMessage(tx[:ln-1])
+		msg, err = types.DecodeSignedMessage(tx[:ln-1-32])
 	case CrossMessageType:
-		msg, err = types.DecodeMessage(tx[:ln-1])
+		msg, err = types.DecodeMessage(tx[:ln-1-32])
 	case RegistrationMessageType:
 		msg, err = DecodeRegistrationMessageRequest(tx[:ln-1])
 	default:
