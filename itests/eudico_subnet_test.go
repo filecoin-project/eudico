@@ -230,7 +230,7 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	t.Logf("the release message was found in %d epoch of subnet", c.Height)
 
 	t1 = time.Now()
-	bl, err = kit.WaitActorBalance(ctx, newAddr, big.Add(sentFils, releasedFils), 100, full)
+	bl, err = kit.WaitSubnetActorBalance(ctx, parent, newAddr, big.Add(sentFils, releasedFils), 100, full)
 	require.NoError(t, err)
 	t.Logf("released funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
 

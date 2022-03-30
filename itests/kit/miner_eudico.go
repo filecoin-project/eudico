@@ -2,15 +2,15 @@ package kit
 
 import (
 	"context"
-	addr "github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-state-types/big"
-	"github.com/filecoin-project/lotus/chain/types"
 	"strings"
 	"time"
 
 	"golang.org/x/xerrors"
 
-	"github.com/filecoin-project/lotus/api"
+	addr "github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/big"
+	napi "github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/chain/types"
 )
 
 const (
@@ -18,8 +18,28 @@ const (
 	balanceSleepTime = 3
 )
 
-func WaitActorBalance(ctx context.Context, addr addr.Address, balance big.Int, limit int, api api.FullNode) (int, error) {
-	heads, err := api.ChainNotify(ctx)
+func getSubnetChainHead(ctx context.Context, subnetAddr addr.SubnetID, api napi.FullNode) (heads <-chan []*napi.HeadChange, err error) {
+	switch subnetAddr.String() {
+	case "root":
+		heads, err = api.ChainNotify(ctx)
+	default:
+		heads, err = api.SubnetChainNotify(ctx, subnetAddr)
+	}
+	return
+}
+
+func getSubnetActor(ctx context.Context, subnetAddr addr.SubnetID, addr addr.Address, api napi.FullNode) (a *types.Actor, err error) {
+	switch subnetAddr.String() {
+	case "root":
+		a, err = api.StateGetActor(ctx, addr, types.EmptyTSK)
+	default:
+		a, err = api.SubnetStateGetActor(ctx, subnetAddr, addr, types.EmptyTSK)
+	}
+	return
+}
+
+func WaitSubnetActorBalance(ctx context.Context, subnetAddr addr.SubnetID, addr addr.Address, balance big.Int, limit int, api napi.FullNode) (int, error) {
+	heads, err := getSubnetChainHead(ctx, subnetAddr, api)
 	if err != nil {
 		return 0, err
 	}
@@ -32,7 +52,7 @@ func WaitActorBalance(ctx context.Context, addr addr.Address, balance big.Int, l
 		case <-ctx.Done():
 			return 0, xerrors.New("closed channel")
 		case <-heads:
-			a, err := api.StateGetActor(ctx, addr, types.EmptyTSK)
+			a, err := getSubnetActor(ctx, subnetAddr, addr, api)
 			switch {
 			case err != nil && !strings.Contains(err.Error(), types.ErrActorNotFound.Error()):
 				return 0, err
@@ -51,39 +71,7 @@ func WaitActorBalance(ctx context.Context, addr addr.Address, balance big.Int, l
 	return 0, xerrors.New("unable to wait the target amount")
 }
 
-func WaitSubnetActorBalance(ctx context.Context, subnetAddr addr.SubnetID, addr addr.Address, balance big.Int, limit int, api api.FullNode) (int, error) {
-	heads, err := api.SubnetChainNotify(ctx, subnetAddr)
-	if err != nil {
-		return 0, err
-	}
-	n := 0
-	timer := time.After(finalityTimeout * time.Second)
-
-	for n < limit {
-		select {
-		case <-ctx.Done():
-			return 0, xerrors.New("closed channel")
-		case <-heads:
-			a, err := api.SubnetStateGetActor(ctx, subnetAddr, addr, types.EmptyTSK)
-			switch {
-			case err != nil && !strings.Contains(err.Error(), types.ErrActorNotFound.Error()):
-				return 0, err
-			case err != nil && strings.Contains(err.Error(), types.ErrActorNotFound.Error()):
-				n++
-			case err == nil:
-				if big.Cmp(balance, a.Balance) == 0 {
-					return n, nil
-				}
-				n++
-			}
-		case <-timer:
-			return 0, xerrors.New("finality timer exceeded")
-		}
-	}
-	return 0, xerrors.New("unable to wait the target amount")
-}
-
-func WaitForBalance(ctx context.Context, addr addr.Address, balance uint64, api api.FullNode) error {
+func WaitForBalance(ctx context.Context, addr addr.Address, balance uint64, api napi.FullNode) error {
 	currentBalance, err := api.WalletBalance(ctx, addr)
 	if err != nil {
 		return err
@@ -111,7 +99,7 @@ func WaitForBalance(ctx context.Context, addr addr.Address, balance uint64, api 
 	return nil
 }
 
-func SubnetPerformHeightCheckForBlocks(ctx context.Context, validatedBlocksNumber int, subnetAddr addr.SubnetID, api api.FullNode) error {
+func SubnetPerformHeightCheckForBlocks(ctx context.Context, validatedBlocksNumber int, subnetAddr addr.SubnetID, api napi.FullNode) error {
 	subnetHeads, err := api.SubnetChainNotify(ctx, subnetAddr)
 	if err != nil {
 		return err
