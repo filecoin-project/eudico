@@ -54,17 +54,17 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 				log.Errorw("unable to select messages from mempool", "error", err)
 			}
 
-			log.Infof("[subnet: %s, epoch: %d] retrieved %d msgs", subnetID, base.Height()+1, len(msgs))
+			log.Debugf("[subnet: %s, epoch: %d] retrieved %d msgs", subnetID, base.Height()+1, len(msgs))
 
 			for _, msg := range msgs {
 				id := msg.Cid().String()
 
-				log.Infof("[subnet: %s, epoch: %d] >>>>> msg to send: %s", subnetID, base.Height()+1, id)
+				log.Debugf("[subnet: %s, epoch: %d] >>>>> msg to send: %s", subnetID, base.Height()+1, id)
 
 				if cache.shouldSendMessage(id) {
 					msgBytes, err := msg.Serialize()
 					if err != nil {
-						log.Error(err)
+						log.Error("unable to serialize message:", err)
 						continue
 					}
 					tx := NewSignedMessageBytes(msgBytes)
@@ -74,7 +74,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 						continue
 					} else {
 						cache.addSentMessage(id, base.Height())
-						log.Infof("successfully sent a message %s to Tendermint", id)
+						log.Debugf("successfully sent a message %s to Tendermint", id)
 					}
 				}
 			}
@@ -83,17 +83,17 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			if err != nil {
 				log.Errorw("unable to select cross-messages from mempool", "error", err)
 			}
-			log.Infof("[subnet: %s, epoch: %d] retrieved %d crossmsgs", subnetID, base.Height()+1, len(crossMsgs))
+			log.Debugf("[subnet: %s, epoch: %d] retrieved %d crossmsgs", subnetID, base.Height()+1, len(crossMsgs))
 
 			for _, w := range crossMsgs {
 				id := w.Cid().String()
 
-				log.Infof("[subnet: %s, epoch: %d] >>>>> cross msg to send: %s", id, subnetID, base.Height()+1)
+				log.Debugf("[subnet: %s, epoch: %d] >>>>> cross msg to send: %s", id, subnetID, base.Height()+1)
 
 				if cache.shouldSendMessage(id) {
 					msgBytes, err := w.Msg.Serialize()
 					if err != nil {
-						log.Error(err)
+						log.Error("unable to serialize message:", err)
 						continue
 					}
 					tx := NewCrossMessageBytes(msgBytes)
@@ -103,7 +103,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 						continue
 					} else {
 						cache.addSentMessage(id, base.Height())
-						log.Infof("successfully sent a message %s to Tendermint", id)
+						log.Debugf("successfully sent a message %s to Tendermint", id)
 					}
 				}
 			}
