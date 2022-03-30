@@ -1,14 +1,12 @@
 package kit
 
 import (
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"time"
 
 	"github.com/filecoin-project/go-state-types/abi"
-
 	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/stmgr"
-
 	"github.com/filecoin-project/lotus/chain/wallet"
 )
 

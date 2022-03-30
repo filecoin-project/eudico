@@ -163,7 +163,7 @@ func (ts *eudicoSubnetConsensusSuite) testBasicSubnetFlow(t *testing.T) {
 	require.NoError(t, err)
 
 	var params lcli.SendParams
-	params.Method = abi.MethodNum(uint64(builtin.MethodSend))
+	params.Method = builtin.MethodSend
 	params.To = newAddr
 	params.From = addr
 	params.Val = sentFils
