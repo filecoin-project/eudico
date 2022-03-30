@@ -48,7 +48,7 @@ If you want to add a new node to the network run:
 This scripts adds a new miner to the network. If you are looking to deploy a full-node but not a miner,
 you just need to comment the miner initialization commands from `init_new_node.sh`
 
-### Granting SSH access to other keys
+### Granting SSH access to additional keys
 If you want to grant access to additional ssh keys to the nodes in the Eudico Garden cluster,
 you can run the following script giving the public you want to gran access to as the first argument:
 ```bash
@@ -63,12 +63,14 @@ and all related assets of the deployment:
 ```bash
 ./destroy.sh
 ```
-## Additional reference
+
+## Additional resources
 If these are your first steps deploying a Filecoin network, you may find these resources quite helpful:
 - [Lotus Local Network Docs](https://lotus.filecoin.io/developers/local-network/)
 - [Test in lotus local devnet](https://www.notion.so/pl-strflt/Test-in-lotus-local-devnet-08618dac5bb54d00837c6dabf08913b8)
 - [How to bootstrap your own network](https://www.notion.so/pl-strflt/PUBLIC-How-to-bootstrap-your-own-network-e072ff97f0bb4906930b809b630eddd0#ebfc402c7eac47c9a2a0a96b5a1da7f4)
+
 ## Contributions Welcome!
 Eudico Garden is a one-week MVP to solve some of our most immediate needs. There's a lot of work to
 be done to make Eudico Garden and its automation scripts stable and consistent. Any feeedback or contribution
-to this code is more than welcome.
+to this code is more than welcome. Filter by the `eudicogarden` tag to find some of the things we are missing.
