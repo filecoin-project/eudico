@@ -3,6 +3,9 @@ package hierarchical
 import (
 	"context"
 
+	"github.com/ipfs/go-cid"
+	"go.uber.org/fx"
+
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/api"
@@ -10,8 +13,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	snmgr "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/manager"
 	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/ipfs/go-cid"
-	"go.uber.org/fx"
 )
 
 var _ api.HierarchicalCns = &HierarchicalAPI{}
@@ -71,6 +72,11 @@ func (a *HierarchicalAPI) GetCrossMsgsPool(ctx context.Context, id address.Subne
 	return a.Sub.GetCrossMsgsPool(ctx, id, height)
 }
 
+func (a *HierarchicalAPI) GetUnverifiedCrossMsgsPool(ctx context.Context, id address.SubnetID,
+	height abi.ChainEpoch) ([]*types.UnverifiedCrossMsg, error) {
+	return a.Sub.GetUnverifiedCrossMsgsPool(ctx, id, height)
+}
+
 func (a *HierarchicalAPI) FundSubnet(ctx context.Context, wallet address.Address,
 	id address.SubnetID, value abi.TokenAmount) (cid.Cid, error) {
 	return a.Sub.FundSubnet(ctx, wallet, id, value)
@@ -104,7 +110,8 @@ func (a *HierarchicalAPI) InitAtomicExec(
 	return a.Sub.InitAtomicExec(ctx, wallet, inputs, msgs)
 }
 
-func (a *HierarchicalAPI) ListAtomicExecs(ctx context.Context, id address.SubnetID, addr address.Address) ([]sca.AtomicExec, error) {
+func (a *HierarchicalAPI) ListAtomicExecs(ctx context.Context, id address.SubnetID,
+	addr address.Address) ([]sca.AtomicExec, error) {
 	return a.Sub.ListAtomicExecs(ctx, id, addr)
 }
 
@@ -120,4 +127,18 @@ func (a *HierarchicalAPI) AbortAtomicExec(ctx context.Context, wallet address.Ad
 
 func (a *HierarchicalAPI) SubnetChainNotify(ctx context.Context, id address.SubnetID) (<-chan []*api.HeadChange, error) {
 	return a.Sub.SubnetChainNotify(ctx, id)
+}
+
+func (a *HierarchicalAPI) SubnetChainHead(ctx context.Context, id address.SubnetID) (*types.TipSet, error) {
+	return a.Sub.SubnetChainHead(ctx, id)
+}
+
+func (a *HierarchicalAPI) SubnetStateGetActor(ctx context.Context, id address.SubnetID, addr address.Address,
+	tsk types.TipSetKey) (*types.Actor, error) {
+	return a.Sub.SubnetStateGetActor(ctx, id, addr, tsk)
+}
+
+func (a *HierarchicalAPI) SubnetStateWaitMsg(ctx context.Context, id address.SubnetID, cid cid.Cid, confidence uint64, limit abi.ChainEpoch,
+	allowReplaced bool) (*api.MsgLookup, error) {
+	return a.Sub.SubnetStateWaitMsg(ctx, id, cid, confidence, limit, allowReplaced)
 }

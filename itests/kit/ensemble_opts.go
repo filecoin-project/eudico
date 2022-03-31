@@ -1,14 +1,12 @@
 package kit
 
 import (
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"time"
 
 	"github.com/filecoin-project/go-state-types/abi"
-
 	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/stmgr"
-
 	"github.com/filecoin-project/lotus/chain/wallet"
 )
 
@@ -27,7 +25,8 @@ type ensembleOpts struct {
 
 	upgradeSchedule stmgr.UpgradeSchedule
 
-	consensus hierarchical.ConsensusType
+	rootConsensus   hierarchical.ConsensusType
+	subnetConsensus hierarchical.ConsensusType
 }
 
 var DefaultEnsembleOpts = ensembleOpts{
@@ -38,26 +37,66 @@ var DefaultEnsembleOpts = ensembleOpts{
 	}},
 }
 
-// TSPoW activates PoW consensus protocol in Eudico.
-func TSPoW() EnsembleOpt {
+// RootTSPoW activates PoW consensus protocol for the root subnet in Eudico.
+func RootTSPoW() EnsembleOpt {
 	return func(opts *ensembleOpts) error {
-		opts.consensus = hierarchical.PoW
+		opts.rootConsensus = hierarchical.PoW
 		return nil
 	}
 }
 
-// Delegated activates Delegated consensus protocol in Eudico.
-func Delegated() EnsembleOpt {
+// RootDelegated activates Delegated consensus protocol for the root subnet in Eudico.
+func RootDelegated() EnsembleOpt {
 	return func(opts *ensembleOpts) error {
-		opts.consensus = hierarchical.Delegated
+		opts.rootConsensus = hierarchical.Delegated
 		return nil
 	}
 }
 
-// Tendermint activates Tendermint consensus protocol in Eudico.
-func Tendermint() EnsembleOpt {
+// RootTendermint activates Tendermint consensus protocol for the root subnet in Eudico.
+func RootTendermint() EnsembleOpt {
 	return func(opts *ensembleOpts) error {
-		opts.consensus = hierarchical.Tendermint
+		opts.rootConsensus = hierarchical.Tendermint
+		return nil
+	}
+}
+
+// RootFilcns activates Filcns consensus protocol for the root subnet in Eudico.
+func RootFilcns() EnsembleOpt {
+	return func(opts *ensembleOpts) error {
+		opts.rootConsensus = hierarchical.FilecoinEC
+		return nil
+	}
+}
+
+// SubnetTSPoW activates PoW consensus protocol for a subnet in Eudico.
+func SubnetTSPoW() EnsembleOpt {
+	return func(opts *ensembleOpts) error {
+		opts.subnetConsensus = hierarchical.PoW
+		return nil
+	}
+}
+
+// SubnetDelegated activates Delegated consensus protocol for a subnet in Eudico.
+func SubnetDelegated() EnsembleOpt {
+	return func(opts *ensembleOpts) error {
+		opts.subnetConsensus = hierarchical.Delegated
+		return nil
+	}
+}
+
+// SubnetTendermint activates Tendermint consensus protocol for a subnet in Eudico.
+func SubnetTendermint() EnsembleOpt {
+	return func(opts *ensembleOpts) error {
+		opts.subnetConsensus = hierarchical.Tendermint
+		return nil
+	}
+}
+
+// SubnetFilcns activates Filcns consensus protocol for the subnet in Eudico.
+func SubnetFilcns() EnsembleOpt {
+	return func(opts *ensembleOpts) error {
+		opts.subnetConsensus = hierarchical.FilecoinEC
 		return nil
 	}
 }

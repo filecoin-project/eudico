@@ -1056,6 +1056,21 @@ func (mr *MockFullNodeMockRecorder) GetCrossMsgsPool(arg0, arg1, arg2 interface{
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCrossMsgsPool", reflect.TypeOf((*MockFullNode)(nil).GetCrossMsgsPool), arg0, arg1, arg2)
 }
 
+// GetUnverifiedCrossMsgsPool mocks base method.
+func (m *MockFullNode) GetUnverifiedCrossMsgsPool(arg0 context.Context, arg1 address.SubnetID, arg2 abi.ChainEpoch) ([]*types.UnverifiedCrossMsg, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUnverifiedCrossMsgsPool", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]*types.UnverifiedCrossMsg)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUnverifiedCrossMsgsPool indicates an expected call of GetUnverifiedCrossMsgsPool.
+func (mr *MockFullNodeMockRecorder) GetUnverifiedCrossMsgsPool(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUnverifiedCrossMsgsPool", reflect.TypeOf((*MockFullNode)(nil).GetUnverifiedCrossMsgsPool), arg0, arg1, arg2)
+}
+
 // ID mocks base method.
 func (m *MockFullNode) ID(arg0 context.Context) (peer.ID, error) {
 	m.ctrl.T.Helper()
@@ -3129,6 +3144,21 @@ func (mr *MockFullNodeMockRecorder) StateWaitMsg(arg0, arg1, arg2, arg3, arg4 in
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StateWaitMsg", reflect.TypeOf((*MockFullNode)(nil).StateWaitMsg), arg0, arg1, arg2, arg3, arg4)
 }
 
+// SubnetChainHead mocks base method.
+func (m *MockFullNode) SubnetChainHead(arg0 context.Context, arg1 address.SubnetID) (*types.TipSet, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubnetChainHead", arg0, arg1)
+	ret0, _ := ret[0].(*types.TipSet)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubnetChainHead indicates an expected call of SubnetChainHead.
+func (mr *MockFullNodeMockRecorder) SubnetChainHead(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubnetChainHead", reflect.TypeOf((*MockFullNode)(nil).SubnetChainHead), arg0, arg1)
+}
+
 // SubnetChainNotify mocks base method.
 func (m *MockFullNode) SubnetChainNotify(arg0 context.Context, arg1 address.SubnetID) (<-chan []*api.HeadChange, error) {
 	m.ctrl.T.Helper()
@@ -3142,6 +3172,36 @@ func (m *MockFullNode) SubnetChainNotify(arg0 context.Context, arg1 address.Subn
 func (mr *MockFullNodeMockRecorder) SubnetChainNotify(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubnetChainNotify", reflect.TypeOf((*MockFullNode)(nil).SubnetChainNotify), arg0, arg1)
+}
+
+// SubnetStateGetActor mocks base method.
+func (m *MockFullNode) SubnetStateGetActor(arg0 context.Context, arg1 address.SubnetID, arg2 address.Address, arg3 types.TipSetKey) (*types.Actor, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubnetStateGetActor", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(*types.Actor)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubnetStateGetActor indicates an expected call of SubnetStateGetActor.
+func (mr *MockFullNodeMockRecorder) SubnetStateGetActor(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubnetStateGetActor", reflect.TypeOf((*MockFullNode)(nil).SubnetStateGetActor), arg0, arg1, arg2, arg3)
+}
+
+// SubnetStateWaitMsg mocks base method.
+func (m *MockFullNode) SubnetStateWaitMsg(arg0 context.Context, arg1 address.SubnetID, arg2 cid.Cid, arg3 uint64, arg4 abi.ChainEpoch, arg5 bool) (*api.MsgLookup, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubnetStateWaitMsg", arg0, arg1, arg2, arg3, arg4, arg5)
+	ret0, _ := ret[0].(*api.MsgLookup)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubnetStateWaitMsg indicates an expected call of SubnetStateWaitMsg.
+func (mr *MockFullNodeMockRecorder) SubnetStateWaitMsg(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubnetStateWaitMsg", reflect.TypeOf((*MockFullNode)(nil).SubnetStateWaitMsg), arg0, arg1, arg2, arg3, arg4, arg5)
 }
 
 // SyncCheckBad mocks base method.

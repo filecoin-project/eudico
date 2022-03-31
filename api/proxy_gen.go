@@ -577,6 +577,8 @@ type HierarchicalCnsStruct struct {
 
 		GetCrossMsgsPool func(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) ([]*types.Message, error) `perm:"read"`
 
+		GetUnverifiedCrossMsgsPool func(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) ([]*types.UnverifiedCrossMsg, error) `perm:"read"`
+
 		InitAtomicExec func(p0 context.Context, p1 address.Address, p2 map[string]sca.LockedState, p3 []types.Message) (cid.Cid, error) `perm:"write"`
 
 		JoinSubnet func(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 address.SubnetID) (cid.Cid, error) `perm:"write"`
@@ -595,7 +597,13 @@ type HierarchicalCnsStruct struct {
 
 		ReleaseFunds func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) `perm:"write"`
 
+		SubnetChainHead func(p0 context.Context, p1 address.SubnetID) (*types.TipSet, error) `perm:"read"`
+
 		SubnetChainNotify func(p0 context.Context, p1 address.SubnetID) (<-chan []*HeadChange, error) `perm:"read"`
+
+		SubnetStateGetActor func(p0 context.Context, p1 address.SubnetID, p2 address.Address, p3 types.TipSetKey) (*types.Actor, error) `perm:"read"`
+
+		SubnetStateWaitMsg func(p0 context.Context, p1 address.SubnetID, p2 cid.Cid, p3 uint64, p4 abi.ChainEpoch, p5 bool) (*MsgLookup, error) `perm:"read"`
 
 		SyncSubnet func(p0 context.Context, p1 address.SubnetID, p2 bool) error `perm:"write"`
 
@@ -3594,6 +3602,17 @@ func (s *HierarchicalCnsStub) GetCrossMsgsPool(p0 context.Context, p1 address.Su
 	return *new([]*types.Message), ErrNotSupported
 }
 
+func (s *HierarchicalCnsStruct) GetUnverifiedCrossMsgsPool(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) ([]*types.UnverifiedCrossMsg, error) {
+	if s.Internal.GetUnverifiedCrossMsgsPool == nil {
+		return *new([]*types.UnverifiedCrossMsg), ErrNotSupported
+	}
+	return s.Internal.GetUnverifiedCrossMsgsPool(p0, p1, p2)
+}
+
+func (s *HierarchicalCnsStub) GetUnverifiedCrossMsgsPool(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) ([]*types.UnverifiedCrossMsg, error) {
+	return *new([]*types.UnverifiedCrossMsg), ErrNotSupported
+}
+
 func (s *HierarchicalCnsStruct) InitAtomicExec(p0 context.Context, p1 address.Address, p2 map[string]sca.LockedState, p3 []types.Message) (cid.Cid, error) {
 	if s.Internal.InitAtomicExec == nil {
 		return *new(cid.Cid), ErrNotSupported
@@ -3693,6 +3712,17 @@ func (s *HierarchicalCnsStub) ReleaseFunds(p0 context.Context, p1 address.Addres
 	return *new(cid.Cid), ErrNotSupported
 }
 
+func (s *HierarchicalCnsStruct) SubnetChainHead(p0 context.Context, p1 address.SubnetID) (*types.TipSet, error) {
+	if s.Internal.SubnetChainHead == nil {
+		return nil, ErrNotSupported
+	}
+	return s.Internal.SubnetChainHead(p0, p1)
+}
+
+func (s *HierarchicalCnsStub) SubnetChainHead(p0 context.Context, p1 address.SubnetID) (*types.TipSet, error) {
+	return nil, ErrNotSupported
+}
+
 func (s *HierarchicalCnsStruct) SubnetChainNotify(p0 context.Context, p1 address.SubnetID) (<-chan []*HeadChange, error) {
 	if s.Internal.SubnetChainNotify == nil {
 		return nil, ErrNotSupported
@@ -3701,6 +3731,28 @@ func (s *HierarchicalCnsStruct) SubnetChainNotify(p0 context.Context, p1 address
 }
 
 func (s *HierarchicalCnsStub) SubnetChainNotify(p0 context.Context, p1 address.SubnetID) (<-chan []*HeadChange, error) {
+	return nil, ErrNotSupported
+}
+
+func (s *HierarchicalCnsStruct) SubnetStateGetActor(p0 context.Context, p1 address.SubnetID, p2 address.Address, p3 types.TipSetKey) (*types.Actor, error) {
+	if s.Internal.SubnetStateGetActor == nil {
+		return nil, ErrNotSupported
+	}
+	return s.Internal.SubnetStateGetActor(p0, p1, p2, p3)
+}
+
+func (s *HierarchicalCnsStub) SubnetStateGetActor(p0 context.Context, p1 address.SubnetID, p2 address.Address, p3 types.TipSetKey) (*types.Actor, error) {
+	return nil, ErrNotSupported
+}
+
+func (s *HierarchicalCnsStruct) SubnetStateWaitMsg(p0 context.Context, p1 address.SubnetID, p2 cid.Cid, p3 uint64, p4 abi.ChainEpoch, p5 bool) (*MsgLookup, error) {
+	if s.Internal.SubnetStateWaitMsg == nil {
+		return nil, ErrNotSupported
+	}
+	return s.Internal.SubnetStateWaitMsg(p0, p1, p2, p3, p4, p5)
+}
+
+func (s *HierarchicalCnsStub) SubnetStateWaitMsg(p0 context.Context, p1 address.SubnetID, p2 cid.Cid, p3 uint64, p4 abi.ChainEpoch, p5 bool) (*MsgLookup, error) {
 	return nil, ErrNotSupported
 }
 

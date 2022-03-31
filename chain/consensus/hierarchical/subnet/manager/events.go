@@ -21,12 +21,12 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
-// finalityThreshold determines the number of epochs to wait
+// FinalityThreshold determines the number of epochs to wait
 // before considering a change "final" and consider signing the
 // checkpoint
 //
 // This should always be less than the checkpoint period.
-const finalityThreshold = 5
+const FinalityThreshold = 5
 
 // struct used to propagate detected changes.
 type diffInfo struct {
@@ -111,7 +111,7 @@ func (s *SubnetMgr) listenSubnetEvents(ctx context.Context, sh *Subnet) {
 
 	}
 
-	err := evs.StateChanged(checkFunc, changeHandler, revertHandler, finalityThreshold, 76587687658765876, match)
+	err := evs.StateChanged(checkFunc, changeHandler, revertHandler, FinalityThreshold, 76587687658765876, match)
 	if err != nil {
 		return
 	}

@@ -1,4 +1,4 @@
-package docker
+package kit
 
 import (
 	"bytes"
@@ -7,8 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-
-	"github.com/filecoin-project/lotus/itests/kit"
 )
 
 // Container tracks information about the docker container started for tests.
@@ -30,7 +28,7 @@ func StartTendermintContainer() (*Container, error) {
 
 	cmd := exec.Command(
 		"docker", "run", "--rm",
-		"-v", dir+"/"+kit.TendermintConsensusTestDir+":/tendermint",
+		"-v", dir+"/"+TendermintConsensusTestDir+":/tendermint",
 		"--entrypoint", "/usr/bin/tendermint",
 		"tendermint/tendermint:v0.35.1",
 		"init", "validator", "--key", "secp256k1")
@@ -49,7 +47,7 @@ func StartTendermintContainer() (*Container, error) {
 	cmd = exec.Command(
 		"docker", "run", "-d", "--rm",
 		"-p", "0.0.0.0:26657:26657/tcp",
-		"-v", dir+"/"+kit.TendermintConsensusTestDir+":/tendermint",
+		"-v", dir+"/"+TendermintConsensusTestDir+":/tendermint",
 		"--entrypoint", "/usr/bin/tendermint",
 		"tendermint/tendermint:v0.35.1", "start",
 		"--rpc.laddr", "tcp://0.0.0.0:26657",

@@ -24,6 +24,12 @@ import (
 // wait for all the state changes to be propagated.
 const finalityWait = 15
 
+// UnverifiedCrossMsg is a wrapper on types.Message to provide information related to its type.
+type UnverifiedCrossMsg struct {
+	Type uint64
+	Msg  *types.Message
+}
+
 func newCrossMsgPool() *crossMsgPool {
 	return &crossMsgPool{pool: make(map[address.SubnetID]*lastApplied)}
 }
@@ -90,11 +96,9 @@ func (cm *crossMsgPool) isBottomUpApplied(n uint64, id address.SubnetID, height 
 	return ok && h != height
 }
 
-// GetCrossMsgsPool returns a list with `num` number of of cross messages pending for validation.
-//
-// height determines the current consensus height
-func (s *SubnetMgr) GetCrossMsgsPool(
-	ctx context.Context, id address.SubnetID, height abi.ChainEpoch) ([]*types.Message, error) {
+// getCrossMsgs returns top-down and bottom-up messages.
+func (s *SubnetMgr) getCrossMsgs(
+	ctx context.Context, id address.SubnetID, height abi.ChainEpoch) ([]*types.Message, []*types.Message, error) {
 	// TODO: Think a bit deeper the locking strategy for subnets.
 	// s.lk.RLock()
 	// defer s.lk.RUnlock()
@@ -105,16 +109,28 @@ func (s *SubnetMgr) GetCrossMsgsPool(
 		err      error
 	)
 
-	// topDown messages only supported in subnets, not the root.
+	// top-down messages only supported in subnets, not the root.
 	if !s.isRoot(id) {
 		topdown, err = s.getTopDownPool(ctx, id, height)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
-	// Get bottomup messages and return all cross-messages.
+	// Get bottom-up messages and return all cross-messages.
 	bottomup, err = s.getBottomUpPool(ctx, id, height)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return topdown, bottomup, nil
+}
+
+// GetCrossMsgsPool returns a list with `num` number of cross messages pending for validation.
+func (s *SubnetMgr) GetCrossMsgsPool(
+	ctx context.Context, id address.SubnetID, height abi.ChainEpoch) ([]*types.Message, error) {
+
+	topdown, bottomup, err := s.getCrossMsgs(ctx, id, height)
 	if err != nil {
 		return nil, err
 	}
@@ -124,6 +140,35 @@ func (s *SubnetMgr) GetCrossMsgsPool(
 	copy(out[len(topdown):], bottomup)
 
 	log.Debugf("Picked up %d cross-msgs from CrossMsgPool", len(out))
+	return out, nil
+}
+
+// GetUnverifiedCrossMsgsPool returns a list with `num` number of cross messages with their type information
+// (top-down or bottom-up) pending for validation.
+func (s *SubnetMgr) GetUnverifiedCrossMsgsPool(
+	ctx context.Context, id address.SubnetID, height abi.ChainEpoch,
+) ([]*types.UnverifiedCrossMsg, error) {
+	topdown, bottomup, err := s.getCrossMsgs(ctx, id, height)
+	if err != nil {
+		return nil, err
+	}
+	var out []*types.UnverifiedCrossMsg
+
+	for _, msg := range topdown {
+		out = append(out, &types.UnverifiedCrossMsg{
+			Type: uint64(hierarchical.TopDown),
+			Msg:  msg,
+		})
+	}
+
+	for _, msg := range bottomup {
+		out = append(out, &types.UnverifiedCrossMsg{
+			Type: uint64(hierarchical.BottomUp),
+			Msg:  msg,
+		})
+	}
+
+	log.Debugf("Picked up %d unverified cross-msgs from CrossMsgPool", len(out))
 	return out, nil
 }
 
@@ -203,9 +248,9 @@ func (s *SubnetMgr) getSCAStateWithFinality(ctx context.Context, api *API, id ad
 	height := finTs.Height()
 
 	// Avoid negative epochs
-	if height-finalityThreshold >= 0 {
-		// Go back finalityThreshold to ensure the state is final in parent chain
-		finTs, err = api.ChainGetTipSetByHeight(ctx, height-finalityThreshold, types.EmptyTSK)
+	if height-FinalityThreshold >= 0 {
+		// Go back FinalityThreshold to ensure the state is final in parent chain
+		finTs, err = api.ChainGetTipSetByHeight(ctx, height-FinalityThreshold, types.EmptyTSK)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -227,7 +272,7 @@ func (s *SubnetMgr) getSCAStateWithFinality(ctx context.Context, api *API, id ad
 	return &st, adt.WrapStore(ctx, pcst), nil
 }
 
-// getParentSCAWithFinality returns the state of the SCA of the parent with `finalityThreshold`
+// getParentSCAWithFinality returns the state of the SCA of the parent with `FinalityThreshold`
 // epochs ago to ensure that no reversion happens and we can operate with the state we got.
 func (s *SubnetMgr) getParentSCAWithFinality(ctx context.Context, id address.SubnetID) (*sca.SCAState, adt.Store, error) {
 	parentAPI, err := s.getParentAPI(id)
@@ -255,7 +300,7 @@ func (s *SubnetMgr) getTopDownPool(ctx context.Context, id address.SubnetID, hei
 		return nil, err
 	}
 
-	// Get tipset at height-finalityThreshold to ensure some level of finality
+	// Get tipset at height-FinalityThreshold to ensure some level of finality
 	// to get pool of cross-messages.
 	st, pstore, err := s.getParentSCAWithFinality(ctx, id)
 	if err != nil {
@@ -302,7 +347,7 @@ func (s *SubnetMgr) getBottomUpPool(ctx context.Context, id address.SubnetID, he
 	if subAPI == nil {
 		return nil, xerrors.Errorf("Not listening to subnet")
 	}
-	// Get tipset at height-finalityThreshold to ensure some level of finality
+	// Get tipset at height-FinalityThreshold to ensure some level of finality
 	// to get pool of cross-messages.
 	st, pstore, err := s.getSCAStateWithFinality(ctx, subAPI, id)
 	if err != nil {

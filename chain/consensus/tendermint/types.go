@@ -72,14 +72,16 @@ func NewRegistrationMessageBytes(name address.SubnetID, nonce []byte) ([]byte, e
 	return b, nil
 }
 
-func NewSignedMessageBytes(msg []byte) []byte {
+func NewSignedMessageBytes(msg, nodeID []byte) []byte {
 	var payload []byte
-	payload = append(msg, SignedMessageType)
+	payload = append(msg, nodeID...)
+	payload = append(payload, SignedMessageType)
 	return payload
 }
 
-func NewCrossMessageBytes(msg []byte) []byte {
+func NewCrossMessageBytes(msg, nodeID []byte) []byte {
 	var payload []byte
-	payload = append(msg, CrossMessageType)
+	payload = append(msg, nodeID...)
+	payload = append(payload, CrossMessageType)
 	return payload
 }

@@ -1,4 +1,4 @@
-TENDERMINT_PATH="testdata/tendermint-testnet"
+TM_PATH="testdata/tendermint-testnet"
 
 # Tendermint node RPC addresses
 NODE_0="127.0.0.1:26657"
@@ -30,10 +30,10 @@ NODE_2_API="1236"
 NODE_3_API="1237"
 
 # secp256k1 private keys
-NODE_0_KEY="$TENDERMINT_PATH/build/node0/config/priv_validator_key.json"
-NODE_1_KEY="$TENDERMINT_PATH/build/node1/config/priv_validator_key.json"
-NODE_2_KEY="$TENDERMINT_PATH/build/node2/config/priv_validator_key.json"
-NODE_3_KEY="$TENDERMINT_PATH/build/node3/config/priv_validator_key.json"
+NODE_0_KEY="$TM_PATH/build/node0/config/priv_validator_key.json"
+NODE_1_KEY="$TM_PATH/build/node1/config/priv_validator_key.json"
+NODE_2_KEY="$TM_PATH/build/node2/config/priv_validator_key.json"
+NODE_3_KEY="$TM_PATH/build/node3/config/priv_validator_key.json"
 
 NODE_0_DAEMON_LOG="./eudico_daemon_0.log"
 NODE_0_MINER_LOG="./eudico_miner_0.log"
@@ -44,7 +44,7 @@ NODE_2_MINER_LOG="./eudico_miner_2.log"
 NODE_3_DAEMON_LOG="./eudico_daemon_3.log"
 NODE_3_MINER_LOG="./eudico_miner_3.log"
 
-NODE_1_APP_DATA="$TENDERMINT_PATH/build/node1/data/"
+NODE_1_APP_DATA="$TM_PATH/build/node1/data/"
 
 make tm-localnet-stop
 
@@ -55,7 +55,7 @@ rm -rvf $NODE_0_PATH
 rm -rvf $NODE_1_PATH
 rm -rvf $NODE_2_PATH
 rm -rvf $NODE_3_PATH
-rm -rf $TENDERMINT_PATH/build/node*
+rm -rf $TM_PATH/build/node*
 rm -rf ./eudico_daemon_*.log
 rm -rf ./eudico_miner_*.log
 
@@ -96,8 +96,8 @@ tmux new-session -d -s "tendermint" \; \
           ./scripts/wait-for-it.sh -t 0 $NODE_1 -- sleep 1;
           ./eudico tendermint daemon --genesis=./testdata/tendermint.gen --api=$NODE_1_API 2>&1 | tee $NODE_1_DAEMON_LOG" Enter \; \
   send-keys -t "tendermint:0.4" "
-        alias stop-node1='(cd \"${TENDERMINT_PATH}\" && docker-compose stop node1)';\
-        alias start-node1='(cd \"${TENDERMINT_PATH}\" && docker-compose start node1)';\
+        alias stop-node1='(cd \"${TM_PATH}\" && docker-compose stop node1)';\
+        alias start-node1='(cd \"${TM_PATH}\" && docker-compose start node1)';\
         alias start-app1='./eudico tendermint application -addr=$ABCI_1 > /dev/null 2>&1 & EUDICO_APP_PID=\$! ';\
         alias stop-app1='kill -9 \$EUDICO_APP_PID'" Enter \; \
   send-keys -t "tendermint:0.4" "

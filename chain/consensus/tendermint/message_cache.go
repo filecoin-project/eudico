@@ -9,7 +9,7 @@ import (
 // finalityWait is the number of epochs that we will be waiting before removing a message from the cache.
 // To be able to resend messages we clear old messages that were sent finalityWait epochs ago.
 const (
-	cacheFinalityWait = 50
+	cacheFinalityWait = 100
 )
 
 // Message cache is the simplest temporal cache to store messages that have been already sent to Tendermint.

@@ -112,6 +112,6 @@ var delegatedMinerCmd = &cli.Command{
 		}
 		defer closer()
 		ctx := cliutil.ReqContext(cctx)
-		return delegcns.Mine(ctx, api)
+		return delegcns.Mine(ctx, address.Undef, api)
 	},
 }

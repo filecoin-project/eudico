@@ -4,14 +4,17 @@ package tendermint
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"strings"
 
 	"github.com/Gurpartap/async"
 	"github.com/hashicorp/go-multierror"
+	"github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log/v2"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	tmclient "github.com/tendermint/tendermint/rpc/client/http"
+	tmtypes "github.com/tendermint/tendermint/types"
 	"go.opencensus.io/stats"
 	"golang.org/x/xerrors"
 
@@ -55,7 +58,7 @@ type Tendermint struct {
 	genesis  *types.TipSet
 	subMgr   subnet.SubnetMgr
 	netName  address.SubnetID
-	r        *resolver.Resolver
+	resolver *resolver.Resolver
 
 	// Used to access Tendermint RPC
 	client *tmclient.HTTP
@@ -69,6 +72,8 @@ type Tendermint struct {
 	eudicoClientPubKey []byte
 	// Mapping between Tendermint validator addresses and Eudico miner addresses
 	tendermintEudicoAddresses map[string]address.Address
+
+	seenMessages map[cid.Cid]bool
 }
 
 func NewConsensus(
@@ -114,12 +119,14 @@ func NewConsensus(
 		genesis:                    g,
 		subMgr:                     submgr,
 		netName:                    subnetID,
+		resolver:                   r,
 		client:                     c,
 		offset:                     regSubnet.Offset,
 		tendermintValidatorAddress: valAddr,
 		eudicoClientAddress:        clientAddr,
 		eudicoClientPubKey:         valPubKey,
 		tendermintEudicoAddresses:  make(map[string]address.Address),
+		seenMessages:               make(map[cid.Cid]bool),
 	}
 }
 
@@ -150,7 +157,7 @@ func (tm *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBlock) (er
 		log.Warn("Got block from the future, but within threshold", h.Timestamp, build.Clock.Now().Unix())
 	}
 
-	msgsChecks := common.CheckMsgsWithoutBlockSig(ctx, tm.store, tm.sm, tm.subMgr, tm.r, tm.netName, b, baseTs)
+	msgsChecks := common.CheckMsgsWithoutBlockSig(ctx, tm.store, tm.sm, tm.subMgr, tm.resolver, tm.netName, b, baseTs)
 
 	minerCheck := async.Err(func() error {
 		if err := tm.minerIsValid(b.Header.Miner); err != nil {
@@ -216,7 +223,7 @@ func (tm *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBlock) (er
 func (tm *Tendermint) validateTendermintData(ctx context.Context, b *types.FullBlock) error {
 	height := int64(b.Header.Height) + tm.offset
 
-	blockInfo, err := tm.client.Block(ctx, &height)
+	tmBlockInfo, err := tm.client.Block(ctx, &height)
 	if err != nil {
 		return xerrors.Errorf("unable to get the Tendermint block info at height %d: %w", height, err)
 	}
@@ -228,26 +235,27 @@ func (tm *Tendermint) validateTendermintData(ctx context.Context, b *types.FullB
 
 	var validMinerEudicoAddress address.Address
 	var convErr error
-	validMinerEudicoAddress, ok := tm.tendermintEudicoAddresses[blockInfo.Block.ProposerAddress.String()]
+	validMinerEudicoAddress, ok := tm.tendermintEudicoAddresses[tmBlockInfo.Block.ProposerAddress.String()]
 	if !ok {
-		proposerPubKey := findValidatorPubKeyByAddress(valInfo.Validators, blockInfo.Block.ProposerAddress.Bytes())
+		proposerPubKey := findValidatorPubKeyByAddress(valInfo.Validators, tmBlockInfo.Block.ProposerAddress.Bytes())
 		if proposerPubKey == nil {
-			return xerrors.Errorf("unable to find pubKey for proposer %w", blockInfo.Block.ProposerAddress)
+			return xerrors.Errorf("unable to find pubKey for proposer %w", tmBlockInfo.Block.ProposerAddress)
 		}
 
 		validMinerEudicoAddress, convErr = getFilecoinAddrFromTendermintPubKey(proposerPubKey)
 		if convErr != nil {
 			return xerrors.Errorf("unable to get proposer addr %w", err)
 		}
-		tm.tendermintEudicoAddresses[blockInfo.Block.ProposerAddress.String()] = validMinerEudicoAddress
+		tm.tendermintEudicoAddresses[tmBlockInfo.Block.ProposerAddress.String()] = validMinerEudicoAddress
 	}
 	if b.Header.Miner != validMinerEudicoAddress {
 		return xerrors.Errorf("invalid miner address %w in the block header", b.Header.Miner)
 	}
 
-	if err := isBlockSealed(b, blockInfo.Block); err != nil {
+	if err := isBlockSealed(b, tmBlockInfo.Block); err != nil {
 		return xerrors.Errorf("block is not sealed: %w", err)
 	}
+
 	return nil
 }
 
@@ -328,4 +336,47 @@ func Weight(ctx context.Context, stateBs bstore.Blockstore, ts *types.TipSet) (t
 	}
 
 	return big.NewInt(int64(ts.Height() + 1)), nil
+}
+
+func (tm *Tendermint) getEudicoMessagesFromTendermintBlock(b *tmtypes.Block) ([]*types.SignedMessage, []*types.Message) {
+	var msgs []*types.SignedMessage
+	var crossMsgs []*types.Message
+
+	for _, tx := range b.Txs {
+		stx := tx.String()
+		// Transactions from Tendermint are in the "Tx{....}" format.
+		// So we have to remove T,x,{,} characters.
+		txo := stx[3 : len(stx)-1]
+		txoData, err := hex.DecodeString(txo)
+		if err != nil {
+			log.Error("unable to decode Tendermint tx:", err)
+			continue
+		}
+		// Eudico data format is {msg hash(nodeID) type}
+		msg, _, err := parseTx(txoData)
+		if err != nil {
+			log.Error("unable to decode a message from Tendermint block:", err)
+			continue
+		}
+
+		switch m := msg.(type) {
+		case *types.SignedMessage:
+			log.Infof("found signed message from %s to %s with %s tokens", m.Message.From.String(), m.Message.To.String(), m.Message.Value)
+			id := m.Cid()
+			if _, found := tm.seenMessages[id]; !found {
+				msgs = append(msgs, m)
+				tm.seenMessages[id] = true
+			}
+		case *types.Message:
+			log.Infof("found cross message from %s to %s with %s tokens", m.From.String(), m.To.String(), m.Value)
+			id := m.Cid()
+			if _, found := tm.seenMessages[id]; !found {
+				crossMsgs = append(crossMsgs, m)
+				tm.seenMessages[id] = true
+			}
+		default:
+			log.Info("filtered a message with unknown type:", m)
+		}
+	}
+	return msgs, crossMsgs
 }

@@ -14,7 +14,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
-func Mine(ctx context.Context, api v1api.FullNode) error {
+func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 	head, err := api.ChainHead(ctx)
 	if err != nil {
 		return xerrors.Errorf("getting head: %w", err)

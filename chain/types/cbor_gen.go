@@ -866,6 +866,86 @@ func (t *Message) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
+var lengthBufUnverifiedCrossMsg = []byte{130}
+
+func (t *UnverifiedCrossMsg) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufUnverifiedCrossMsg); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.Type (uint64) (uint64)
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.Type)); err != nil {
+		return err
+	}
+
+	// t.Msg (types.Message) (struct)
+	if err := t.Msg.MarshalCBOR(w); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *UnverifiedCrossMsg) UnmarshalCBOR(r io.Reader) error {
+	*t = UnverifiedCrossMsg{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 2 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.Type (uint64) (uint64)
+
+	{
+
+		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+		if maj != cbg.MajUnsignedInt {
+			return fmt.Errorf("wrong type for uint64 field")
+		}
+		t.Type = uint64(extra)
+
+	}
+	// t.Msg (types.Message) (struct)
+
+	{
+
+		b, err := br.ReadByte()
+		if err != nil {
+			return err
+		}
+		if b != cbg.CborNull[0] {
+			if err := br.UnreadByte(); err != nil {
+				return err
+			}
+			t.Msg = new(Message)
+			if err := t.Msg.UnmarshalCBOR(br); err != nil {
+				return xerrors.Errorf("unmarshaling t.Msg pointer: %w", err)
+			}
+		}
+
+	}
+	return nil
+}
+
 var lengthBufSignedMessage = []byte{130}
 
 func (t *SignedMessage) MarshalCBOR(w io.Writer) error {
