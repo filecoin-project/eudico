@@ -161,7 +161,7 @@ Then run the following commands:
  ./eudico subnet fund --from=X --subnet=/root/t01001 11
  ./eudico --subnet-api=/root/t01001 send <addr> 10
  ./eudico subnet list-subnets
- ./eudico subnet release --from=X --subnet=root/t01001
+ ./eudico subnet release --from=X --subnet=/root/t01001
 ```
 
 `t01001` name is just an example, in your setup the real subnet name may be different.
