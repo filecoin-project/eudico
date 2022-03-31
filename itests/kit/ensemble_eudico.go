@@ -689,7 +689,6 @@ func (n *EudicoEnsemble) generateGenesis() *genesis.Template {
 }
 
 func (n *EudicoEnsemble) startTendermint() error {
-	n.t.Log(">>>>> start tendermint")
 	// ensure there is no old tendermint data and config files.
 	if err := n.removeTendermintFiles(); err != nil {
 		return err
@@ -717,7 +716,6 @@ func (n *EudicoEnsemble) startTendermint() error {
 	}
 
 	n.tendermintContainerID = tm.ID
-	n.t.Log(">>>>> tendermint container ID:", n.tendermintContainerID)
 	return nil
 }
 func (n *EudicoEnsemble) removeTendermintFiles() error {
@@ -731,7 +729,6 @@ func (n *EudicoEnsemble) removeTendermintFiles() error {
 }
 
 func (n *EudicoEnsemble) stopTendermint() error {
-	n.t.Log(">>>>> stop tendermint")
 	if n.tendermintAppServer == nil {
 		return xerrors.New("tendermint server is not running")
 	}
@@ -749,7 +746,6 @@ func (n *EudicoEnsemble) stopTendermint() error {
 	if err := n.removeTendermintFiles(); err != nil {
 		return err
 	}
-	n.t.Log(">>>>> tendermint stopped")
 	return nil
 }
 
