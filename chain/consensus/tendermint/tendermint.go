@@ -6,11 +6,11 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"github.com/ipfs/go-cid"
 	"strings"
 
 	"github.com/Gurpartap/async"
 	"github.com/hashicorp/go-multierror"
+	"github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log/v2"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	tmclient "github.com/tendermint/tendermint/rpc/client/http"

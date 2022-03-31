@@ -39,6 +39,16 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 
 	log.Infof("Tendermint miner params: network name - %s, subnet ID - %s", nn, subnetID)
 
+	// It is a workaround to address this bug: https://github.com/tendermint/tendermint/issues/7185.
+	// If a message is sent to a Tendermint node at least twice then the Tendermint node hangs.
+	// Eudico node sends a message many times until it is received in a block and applied.
+	// Moreover, all messages are propagated using P2P channels between node. That means that other nodes also send the message.
+	// We use the following workaround to address this:
+	//   - message cache
+	//   - uniqueness of messages using node ID
+	// This allows us to use Tendermint core to order Eudico messages sent by many nodes if all nodes are honest,
+	// but it doesn't guarantee liveness because a malicious node can send messages with ID of another node.
+	//
 	nodeID, err := api.ID(ctx)
 	if err != nil {
 		log.Fatalf("unable to get a node ID: %s", err)
