@@ -2,12 +2,12 @@ package tendermint
 
 import (
 	"context"
-	"github.com/minio/blake2b-simd"
 	"time"
 
 	tmclient "github.com/tendermint/tendermint/rpc/client/http"
 	"github.com/tendermint/tendermint/rpc/coretypes"
 	"golang.org/x/xerrors"
+	"lukechampine.com/blake3"
 
 	"github.com/filecoin-project/go-address"
 	lapi "github.com/filecoin-project/lotus/api"
@@ -43,7 +43,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	if err != nil {
 		log.Fatalf("unable to get a node ID: %s", err)
 	}
-	nodeIDBytes := blake2b.Sum256([]byte(nodeID.String()))
+	nodeIDBytes := blake3.Sum256([]byte(nodeID.String()))
 
 	for {
 		select {

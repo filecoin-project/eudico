@@ -2,26 +2,21 @@ package tendermint
 
 import (
 	"encoding/binary"
-	"fmt"
 	"sync"
-
-	"github.com/minio/blake2b-simd"
 )
 
 type State struct {
 	m sync.Mutex
 
-	filecoinBlocks map[[32]byte][]byte
-	subnets        map[string]int64
-	height         int64
-	hash           []byte
+	subnets map[string]int64
+	height  int64
+	hash    []byte
 }
 
 func NewState() *State {
 	return &State{
-		filecoinBlocks: make(map[[32]byte][]byte),
-		subnets:        make(map[string]int64),
-		height:         0,
+		subnets: make(map[string]int64),
+		height:  0,
 	}
 }
 
@@ -58,22 +53,6 @@ func (s *State) IsSubnetSet() bool {
 	return len(s.subnets) == 1
 }
 
-// AddBlock adds a block into the map, if the same block has not been already added.
-func (s *State) AddBlock(block []byte) error {
-	s.m.Lock()
-	defer s.m.Unlock()
-
-	id := blake2b.Sum256(block)
-
-	_, ok := s.filecoinBlocks[id]
-	if ok {
-		return fmt.Errorf("block with %s ID was already added", id)
-	}
-
-	s.filecoinBlocks[id] = block
-	return nil
-}
-
 // Commit commits the state.
 func (s *State) Commit() error {
 	s.m.Lock()
@@ -81,7 +60,7 @@ func (s *State) Commit() error {
 
 	s.height++
 	appHash := make([]byte, 8)
-	binary.PutVarint(appHash, int64(len(s.filecoinBlocks)))
+	binary.PutVarint(appHash, s.height)
 	s.hash = appHash
 	return nil
 }

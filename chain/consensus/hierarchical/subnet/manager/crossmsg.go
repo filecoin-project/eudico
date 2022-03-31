@@ -96,9 +96,9 @@ func (cm *crossMsgPool) isBottomUpApplied(n uint64, id address.SubnetID, height 
 	return ok && h != height
 }
 
-// GetCrossMsgsPool returns a list with `num` number of cross messages pending for validation.
-func (s *SubnetMgr) GetCrossMsgsPool(
-	ctx context.Context, id address.SubnetID, height abi.ChainEpoch) ([]*types.Message, error) {
+// getCrossMsgs returns top-down and bottom-up messages.
+func (s *SubnetMgr) getCrossMsgs(
+	ctx context.Context, id address.SubnetID, height abi.ChainEpoch) ([]*types.Message, []*types.Message, error) {
 	// TODO: Think a bit deeper the locking strategy for subnets.
 	// s.lk.RLock()
 	// defer s.lk.RUnlock()
@@ -109,16 +109,28 @@ func (s *SubnetMgr) GetCrossMsgsPool(
 		err      error
 	)
 
-	// topDown messages only supported in subnets, not the root.
+	// top-down messages only supported in subnets, not the root.
 	if !s.isRoot(id) {
 		topdown, err = s.getTopDownPool(ctx, id, height)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
-	// Get bottomup messages and return all cross-messages.
+	// Get bottom-up messages and return all cross-messages.
 	bottomup, err = s.getBottomUpPool(ctx, id, height)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return topdown, bottomup, nil
+}
+
+// GetCrossMsgsPool returns a list with `num` number of cross messages pending for validation.
+func (s *SubnetMgr) GetCrossMsgsPool(
+	ctx context.Context, id address.SubnetID, height abi.ChainEpoch) ([]*types.Message, error) {
+
+	topdown, bottomup, err := s.getCrossMsgs(ctx, id, height)
 	if err != nil {
 		return nil, err
 	}
@@ -136,30 +148,10 @@ func (s *SubnetMgr) GetCrossMsgsPool(
 func (s *SubnetMgr) GetUnverifiedCrossMsgsPool(
 	ctx context.Context, id address.SubnetID, height abi.ChainEpoch,
 ) ([]*types.UnverifiedCrossMsg, error) {
-	// TODO: Think a bit deeper the locking strategy for subnets.
-	// s.lk.RLock()
-	// defer s.lk.RUnlock()
-
-	var (
-		topdown  []*types.Message
-		bottomup []*types.Message
-		err      error
-	)
-
-	// topDown messages only supported in subnets, not the root.
-	if !s.isRoot(id) {
-		topdown, err = s.getTopDownPool(ctx, id, height)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// Get bottomup messages and return all cross-messages.
-	bottomup, err = s.getBottomUpPool(ctx, id, height)
+	topdown, bottomup, err := s.getCrossMsgs(ctx, id, height)
 	if err != nil {
 		return nil, err
 	}
-
 	var out []*types.UnverifiedCrossMsg
 
 	for _, msg := range topdown {
