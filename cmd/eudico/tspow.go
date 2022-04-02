@@ -3,33 +3,29 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
-	"time"
+
+	"github.com/urfave/cli/v2"
+	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/beacon"
+	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
+	"github.com/filecoin-project/lotus/chain/gen/genesis"
 	"github.com/filecoin-project/lotus/chain/gen/slashfilter"
-	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
-	"github.com/filecoin-project/lotus/node/modules/dtypes"
-	"github.com/urfave/cli/v2"
-	"golang.org/x/xerrors"
-
-	"github.com/filecoin-project/lotus/chain/consensus"
-	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
-	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/filecoin-project/lotus/chain/wallet"
 	lcli "github.com/filecoin-project/lotus/cli"
 	cliutil "github.com/filecoin-project/lotus/cli/util"
+	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
 	"github.com/filecoin-project/lotus/node"
+	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
 func NewRootTSPoWConsensus(ctx context.Context, sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
@@ -63,39 +59,16 @@ var tpowGenesisCmd = &cli.Command{
 			return xerrors.Errorf("expected 1 argument")
 		}
 
-		memks := wallet.NewMemKeyStore()
-		w, err := wallet.NewWallet(memks)
-		if err != nil {
-			return err
+		fmt.Printf("GENESIS MINER ADDRESS: t0%d\n", genesis.MinerStart)
+
+		fName := cctx.Args().First()
+
+		// TODO: Make checkPeriod configurable
+		if err := subnet.CreateGenesisFile(cctx.Context, fName, hierarchical.PoW, address.Undef, sca.DefaultCheckpointPeriod); err != nil {
+			return xerrors.Errorf("creating genesis: %w", err)
 		}
 
-		vreg, err := w.WalletNew(cctx.Context, types.KTBLS)
-		if err != nil {
-			return err
-		}
-		rem, err := w.WalletNew(cctx.Context, types.KTBLS)
-		if err != nil {
-			return err
-		}
-
-		fmt.Printf("GENESIS MINER ADDRESS: t0%d\n", genesis2.MinerStart)
-
-		f, err := os.OpenFile(cctx.Args().First(), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-		if err != nil {
-			return err
-		}
-
-		// TODO: Make configurable
-		checkPeriod := sca.DefaultCheckpointPeriod
-		if err := subnet.WriteGenesis(address.RootSubnet, hierarchical.PoW, address.Undef, vreg, rem, checkPeriod, uint64(time.Now().Unix()), f); err != nil {
-			return xerrors.Errorf("write genesis car: %w", err)
-		}
-
-		log.Warnf("WRITING GENESIS FILE AT %s", f.Name())
-
-		if err := f.Close(); err != nil {
-			return err
-		}
+		log.Warnf("CREATED GENESIS FILE AT %s", fName)
 
 		return nil
 	},

@@ -5,18 +5,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"time"
 
-	address "github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/network"
+	"github.com/filecoin-project/lotus/chain/wallet"
 	"github.com/ipfs/go-blockservice"
-	cid "github.com/ipfs/go-cid"
+	"github.com/ipfs/go-cid"
 	offline "github.com/ipfs/go-ipfs-exchange-offline"
 	cbor "github.com/ipfs/go-ipld-cbor"
 	"github.com/ipfs/go-merkledag"
 	"github.com/ipld/go-car"
-	xerrors "golang.org/x/xerrors"
+	"golang.org/x/xerrors"
 
 	bstore "github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
@@ -42,7 +45,52 @@ const (
 	networkVersion = network.Version15
 )
 
-func WriteGenesis(netName address.SubnetID, consensus hierarchical.ConsensusType, miner, vreg, rem address.Address, checkPeriod abi.ChainEpoch, seq uint64, w io.Writer) error {
+func CreateGenesisFile(ctx context.Context,
+	fileName string,
+	cns hierarchical.ConsensusType,
+	addr address.Address,
+	checkPeriod abi.ChainEpoch,
+) error {
+	memks := wallet.NewMemKeyStore()
+	w, err := wallet.NewWallet(memks)
+	if err != nil {
+		return err
+	}
+
+	vreg, err := w.WalletNew(ctx, types.KTBLS)
+	if err != nil {
+		return err
+	}
+	rem, err := w.WalletNew(ctx, types.KTBLS)
+	if err != nil {
+		return err
+	}
+
+	f, err := os.OpenFile(fileName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+
+	t := uint64(time.Now().Unix())
+
+	if err := WriteGenesis(address.RootSubnet, cns, addr, vreg, rem, checkPeriod, t, f); err != nil {
+		return xerrors.Errorf("write genesis car: %w", err)
+	}
+
+	if err := f.Close(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func WriteGenesis(
+	netName address.SubnetID,
+	consensus hierarchical.ConsensusType,
+	miner, vreg, rem address.Address,
+	checkPeriod abi.ChainEpoch,
+	seq uint64, w io.Writer,
+) error {
 	bs := bstore.WrapIDStore(bstore.NewMemorySync())
 
 	var b *genesis2.GenesisBootstrap
@@ -91,9 +139,13 @@ func WriteGenesis(netName address.SubnetID, consensus hierarchical.ConsensusType
 	return nil
 }
 
-func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template genesis.Template, checkPeriod abi.ChainEpoch) (*state.StateTree, map[address.Address]address.Address, error) {
+func MakeInitialStateTree(
+	ctx context.Context,
+	bs bstore.Blockstore,
+	template genesis.Template,
+	checkPeriod abi.ChainEpoch,
+) (*state.StateTree, map[address.Address]address.Address, error) {
 	// Create empty state tree
-
 	cst := cbor.NewCborStore(bs)
 	_, err := cst.Put(context.TODO(), []struct{}{})
 	if err != nil {

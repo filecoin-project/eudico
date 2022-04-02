@@ -7,6 +7,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -74,7 +76,8 @@ const (
 	TSPoWConsensusGenesisTestFile = "../testdata/tspow.gen"
 
 	DelegatedConsensusGenesisTestFile = "../testdata/delegcns.gen"
-	DelegatedConsensusKeyFile         = "../testdata/f1ozbo7zqwfx6d4tqb353qoq7sfp4qhycefx6ftgy.key"
+	DelegatedConsnensusMinerAddr      = "f1ozbo7zqwfx6d4tqb353qoq7sfp4qhycefx6ftgy"
+	DelegatedConsensusKeyFile         = "../testdata/" + DelegatedConsnensusMinerAddr + ".key"
 
 	TendermintConsensusGenesisTestFile = "../testdata/tendermint.gen"
 	TendermintConsensusTestDir         = "../testdata/tendermint-test"
@@ -473,10 +476,19 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		var gferr error
 		switch n.options.rootConsensus {
 		case hierarchical.PoW:
+			cerr := subnet.CreateGenesisFile(ctx, TSPoWConsensusGenesisTestFile, hierarchical.PoW, address.Undef, sca.DefaultCheckpointPeriod)
+			require.NoError(n.t, cerr)
 			rootGenesisBytes, gferr = ioutil.ReadFile(TSPoWConsensusGenesisTestFile)
 		case hierarchical.Delegated:
+			miner, merr := address.NewFromString(DelegatedConsnensusMinerAddr)
+			require.NoError(n.t, merr)
+			require.Equal(n.t, address.SECP256K1, miner.Protocol())
+			cerr := subnet.CreateGenesisFile(ctx, DelegatedConsensusGenesisTestFile, hierarchical.Delegated, miner, sca.DefaultCheckpointPeriod)
+			require.NoError(n.t, cerr)
 			rootGenesisBytes, gferr = ioutil.ReadFile(DelegatedConsensusGenesisTestFile)
 		case hierarchical.Tendermint:
+			cerr := subnet.CreateGenesisFile(ctx, TendermintConsensusGenesisTestFile, hierarchical.Tendermint, address.Undef, sca.DefaultCheckpointPeriod)
+			require.NoError(n.t, cerr)
 			rootGenesisBytes, gferr = ioutil.ReadFile(TendermintConsensusGenesisTestFile)
 		case hierarchical.FilecoinEC:
 			rootGenesisBytes, gferr = ioutil.ReadFile(FilcnsConsensusGenesisTestFile)

@@ -2,19 +2,13 @@ package main
 
 import (
 	"context"
-	"os"
-	"time"
+
+	"github.com/urfave/cli/v2"
+	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/beacon"
-	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/filecoin-project/lotus/chain/wallet"
-	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
-	"github.com/filecoin-project/lotus/node/modules/dtypes"
-	"github.com/urfave/cli/v2"
-	"golang.org/x/xerrors"
-
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
@@ -26,7 +20,9 @@ import (
 	"github.com/filecoin-project/lotus/chain/store"
 	lcli "github.com/filecoin-project/lotus/cli"
 	cliutil "github.com/filecoin-project/lotus/cli/util"
+	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
 	"github.com/filecoin-project/lotus/node"
+	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
 func NewRootDelegatedConsensus(ctx context.Context, sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
@@ -64,39 +60,17 @@ var delegatedGenesisCmd = &cli.Command{
 			return xerrors.Errorf("parsing miner address: %w", err)
 		}
 		if miner.Protocol() != address.SECP256K1 {
-			return xerrors.Errorf("must be secp address")
+			return xerrors.Errorf("must be secp256k1 address")
 		}
 
-		memks := wallet.NewMemKeyStore()
-		w, err := wallet.NewWallet(memks)
-		if err != nil {
-			return err
-		}
-		vreg, err := w.WalletNew(cctx.Context, types.KTBLS)
-		if err != nil {
-			return err
-		}
-		rem, err := w.WalletNew(cctx.Context, types.KTBLS)
-		if err != nil {
-			return err
+		fName := cctx.Args().Get(1)
+
+		// TODO: Make checkPeriod configurable
+		if err := subnet.CreateGenesisFile(cctx.Context, fName, hierarchical.Delegated, miner, sca.DefaultCheckpointPeriod); err != nil {
+			return xerrors.Errorf("creating genesis: %w", err)
 		}
 
-		f, err := os.OpenFile(cctx.Args().Get(1), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-		if err != nil {
-			return err
-		}
-
-		// TODO: Make configurable
-		checkPeriod := sca.DefaultCheckpointPeriod
-		if err := subnet.WriteGenesis(address.RootSubnet, hierarchical.Delegated, miner, vreg, rem, checkPeriod, uint64(time.Now().Unix()), f); err != nil {
-			return xerrors.Errorf("write genesis car: %w", err)
-		}
-
-		log.Warnf("WRITING GENESIS FILE AT %s", f.Name())
-
-		if err := f.Close(); err != nil {
-			return err
-		}
+		log.Warnf("CREATED GENESIS FILE AT %s", fName)
 
 		return nil
 	},

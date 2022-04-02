@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	abciserver "github.com/tendermint/tendermint/abci/server"
 	tmlogger "github.com/tendermint/tendermint/libs/log"
@@ -27,8 +26,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/gen/slashfilter"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
-	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/filecoin-project/lotus/chain/wallet"
 	lcli "github.com/filecoin-project/lotus/cli"
 	cliutil "github.com/filecoin-project/lotus/cli/util"
 	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
@@ -68,39 +65,16 @@ var tendermintGenesisCmd = &cli.Command{
 			return xerrors.Errorf("expected 2 arguments")
 		}
 
-		memks := wallet.NewMemKeyStore()
-		w, err := wallet.NewWallet(memks)
-		if err != nil {
-			return err
-		}
-
-		vreg, err := w.WalletNew(cctx.Context, types.KTBLS)
-		if err != nil {
-			return err
-		}
-		rem, err := w.WalletNew(cctx.Context, types.KTBLS)
-		if err != nil {
-			return err
-		}
-
 		fmt.Printf("GENESIS MINER ADDRESS: t0%d\n", genesis.MinerStart)
 
-		f, err := os.OpenFile(cctx.Args().First(), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-		if err != nil {
-			return err
+		fName := cctx.Args().First()
+
+		// TODO: Make checkPeriod configurable
+		if err := subnet.CreateGenesisFile(cctx.Context, fName, hierarchical.Tendermint, address.Undef, sca.DefaultCheckpointPeriod); err != nil {
+			return xerrors.Errorf("creating genesis: %w", err)
 		}
 
-		// TODO: Make configurable
-		checkPeriod := sca.DefaultCheckpointPeriod
-		if err := subnet.WriteGenesis(address.RootSubnet, hierarchical.Tendermint, address.Undef, vreg, rem, checkPeriod, uint64(time.Now().Unix()), f); err != nil {
-			return xerrors.Errorf("write genesis car: %w", err)
-		}
-
-		log.Warnf("WRITING GENESIS FILE AT %s", f.Name())
-
-		if err := f.Close(); err != nil {
-			return err
-		}
+		log.Warnf("CREATED GENESIS FILE AT %s", fName)
 
 		return nil
 	},
