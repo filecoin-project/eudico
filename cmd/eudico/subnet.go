@@ -13,7 +13,7 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
-	big "github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors"
@@ -104,7 +104,7 @@ var addCmd = &cli.Command{
 		},
 		&cli.IntFlag{
 			Name:  "consensus",
-			Usage: "specify consensus for the subnet (0=delegated, 1=PoW, 2=Tendermint)",
+			Usage: "specify consensus for the subnet (0=delegated, 1=PoW, 2=Tendermint, 3=MirBFT)",
 		},
 		&cli.IntFlag{
 			Name:  "checkperiod",

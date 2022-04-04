@@ -18,6 +18,7 @@ const (
 	Delegated ConsensusType = iota
 	PoW
 	Tendermint
+	MirBFT
 	FilecoinEC
 )
 

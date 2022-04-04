@@ -125,6 +125,15 @@ func WriteGenesis(
 		if err != nil {
 			return xerrors.Errorf("error making genesis tendermint block: %w", err)
 		}
+	case hierarchical.MirBFT:
+		template, err := mirbftGenTemplate(netName.String(), vreg, rem, seq)
+		if err != nil {
+			return err
+		}
+		b, err = makeMirbftGenesisBlock(context.TODO(), bs, *template, checkPeriod)
+		if err != nil {
+			return xerrors.Errorf("error making genesis tendermint block: %w", err)
+		}
 	default:
 		return xerrors.Errorf("consensus type not supported. Not writing genesis")
 
