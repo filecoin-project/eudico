@@ -1722,6 +1722,8 @@ github.com/sa8/multi-party-sig v0.6.0-alpha-2021-09-21.0.20220329120542-9c15d210
 github.com/sa8/multi-party-sig v0.6.0-alpha-2021-09-21.0.20220329120542-9c15d2109338/go.mod h1:Nr/dEbaI36Sf29/9CGCEDqvSjLrp2yl2FOm4hhEKOfo=
 github.com/sa8/multi-party-sig v0.6.0-alpha-2021-09-21.0.20220330125613-29061c783202 h1:+Mp3pD9c1FZCE5zckq2porelN3mOAWUuLdNxBH+LuV0=
 github.com/sa8/multi-party-sig v0.6.0-alpha-2021-09-21.0.20220330125613-29061c783202/go.mod h1:Nr/dEbaI36Sf29/9CGCEDqvSjLrp2yl2FOm4hhEKOfo=
+github.com/sa8/multi-party-sig v0.6.0-alpha-2021-09-21.0.20220404213908-234c1ab899ff h1:s0ig5Z3tPLFztqa7YmvUnXMG2/rnx27VQCNb7TQCOPQ=
+github.com/sa8/multi-party-sig v0.6.0-alpha-2021-09-21.0.20220404213908-234c1ab899ff/go.mod h1:Nr/dEbaI36Sf29/9CGCEDqvSjLrp2yl2FOm4hhEKOfo=
 github.com/samuel/go-zookeeper v0.0.0-20190923202752-2cc03de413da/go.mod h1:gi+0XIa01GRL2eRQVjQkKGqKF3SF9vZR/HnPullcV2E=
 github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529/go.mod h1:DxrIzT+xaE7yg65j358z/aeFdxmN0P9QXhEzd20vsDc=
 github.com/sercand/kuberesolver v2.1.0+incompatible/go.mod h1:lWF3GL0xptCB/vCiJPl/ZshwPsX/n4Y7u0CW9E7aQIQ=
