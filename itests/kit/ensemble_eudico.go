@@ -77,7 +77,7 @@ const (
 
 	DelegatedConsensusGenesisTestFile = "../testdata/delegcns.gen"
 	DelegatedConsnensusMinerAddr      = "f1ozbo7zqwfx6d4tqb353qoq7sfp4qhycefx6ftgy"
-	DelegatedConsensusKeyFile         = "../testdata/" + DelegatedConsnensusMinerAddr + ".key"
+	DelegatedConsensusKeyFile         = "../testdata/wallet/" + DelegatedConsnensusMinerAddr + ".key"
 
 	TendermintConsensusGenesisTestFile = "../testdata/tendermint.gen"
 	TendermintConsensusTestDir         = "../testdata/tendermint-test"
