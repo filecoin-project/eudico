@@ -112,3 +112,61 @@ func LoopHandler(ctx context.Context, h protocol.Handler, network *Network) {
 
 	fmt.Println("We are done")
 }
+func waitTimeOut(ctx context.Context, h protocol.Handler, network *Network, over chan bool) {
+	for {
+		select {
+		case <-over:
+			return
+		default:
+			h.TimeOutExpired()
+		}
+
+	}
+}
+func LoopHandlerDKG(ctx context.Context, h protocol.Handler, network *Network) {
+	over := make(chan bool)
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	go broadcastingMessage(ctx, h, network, over)
+	go waitingMessages(ctx, h, network, over)
+	go waitTimeOut(ctx, h, network, over)
+
+	<-over
+
+	fmt.Println("We are done")
+}
+
+// func LoopHandlerDKG(ctx context.Context, h protocol.Handler, network *Network) {
+// 	over := make(chan bool)
+// 	ctx, cancel := context.WithCancel(ctx)
+// 	defer cancel()
+// 	for {
+// 		select {
+
+// 		// outgoing messages
+// 		case msg, ok := <-h.Listen():
+// 			fmt.Println("Outgoing message:", msg)
+// 			if !ok {
+// 			// the channel was closed, indicating that the protocol is done executing.
+// 				close(over)
+// 				return
+// 			}
+// 			go network.Send(ctx, msg)
+
+// 		// incoming messages
+// 		case msg := <-network.Next(ctx):
+// 			fmt.Println("Incoming message:", msg, h.CanAccept(msg))
+// 			/*if h.CanAccept(msg) {
+// 				// This message is ours
+// 				fmt.Println("Incoming message:", msg)
+// 			}*/
+// 			h.Accept(msg)
+
+// 		// timeout case
+// 		default: //timeout done
+// 			h.TimeOutExpired()
+// 		}
+// 	}
+// }
