@@ -2,13 +2,16 @@ package main
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	big "github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/lotus/blockstore"
+	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
+	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -25,10 +28,15 @@ var subnetCmds = &cli.Command{
 	Subcommands: []*cli.Command{
 		addCmd,
 		joinCmd,
+		syncCmd,
 		listSubnetsCmd,
 		mineCmd,
 		leaveCmd,
 		killCmd,
+		checkpointCmds,
+		fundCmd,
+		releaseCmd,
+		sendCmd,
 	},
 }
 
@@ -44,14 +52,9 @@ var listSubnetsCmd = &cli.Command{
 
 		ctx := lcli.ReqContext(cctx)
 
-		ts, err := lcli.LoadTipSet(ctx, cctx, api)
-		if err != nil {
-			return err
-		}
-
 		var st sca.SCAState
 
-		act, err := api.StateGetActor(ctx, sca.SubnetCoordActorAddr, ts.Key())
+		act, err := api.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, types.EmptyTSK)
 		if err != nil {
 			return xerrors.Errorf("error getting actor state: %w", err)
 		}
@@ -71,7 +74,7 @@ var listSubnetsCmd = &cli.Command{
 			if sh.Status != 0 {
 				status = "Inactive"
 			}
-			fmt.Printf("%s (%s): status=%v, stake=%v\n", sh.Cid, sh.ID, status, types.FIL(sh.Stake))
+			fmt.Printf("%s: status=%v, stake=%v, circulating supply=%v\n", sh.ID, status, types.FIL(sh.Stake), types.FIL(sh.CircSupply))
 		}
 
 		return nil
@@ -94,6 +97,10 @@ var addCmd = &cli.Command{
 		&cli.IntFlag{
 			Name:  "consensus",
 			Usage: "specify consensus for the subnet (0=delegated, 1=PoW)",
+		},
+		&cli.IntFlag{
+			Name:  "checkperiod",
+			Usage: "optionally specify checkpointing period for subnet (default = 10epochs)",
 		},
 		&cli.StringFlag{
 			Name:  "name",
@@ -138,15 +145,15 @@ var addCmd = &cli.Command{
 			return lcli.ShowHelp(cctx, fmt.Errorf("no name for subnet specified"))
 		}
 
-		parent := hierarchical.RootSubnet
+		parent := address.RootSubnet
 		if cctx.IsSet("parent") {
-			parent = hierarchical.SubnetID(cctx.String("parent"))
+			parent = address.SubnetID(cctx.String("parent"))
 		}
 
 		// FIXME: This is a horrible workaround to avoid delegminer from
 		// not being set. But need to demo in 30 mins, so will fix it afterwards
 		// (we all know I'll come across this comment in 2 years and laugh at it).
-		delegminer := sca.SubnetCoordActorAddr
+		delegminer := hierarchical.SubnetCoordActorAddr
 		if cctx.IsSet("delegminer") {
 			d := cctx.String("delegminer")
 			delegminer, err = address.NewFromString(d)
@@ -157,12 +164,13 @@ var addCmd = &cli.Command{
 			return lcli.ShowHelp(cctx, fmt.Errorf("no delegated miner for delegated consensus specified"))
 		}
 		minerStake := abi.NewStoragePower(1e8) // TODO: Make this value configurable in a flag/argument
-		actorAddr, err := api.AddSubnet(ctx, addr, parent, name, uint64(consensus), minerStake, delegminer)
+		checkperiod := abi.ChainEpoch(cctx.Int("checkperiod"))
+		actorAddr, err := api.AddSubnet(ctx, addr, parent, name, uint64(consensus), minerStake, checkperiod, delegminer)
 		if err != nil {
 			return err
 		}
 
-		fmt.Printf("[*] subnet actor deployed as %v and new subnet availabe with ID=%v\n\n", actorAddr, hierarchical.NewSubnetID(parent, actorAddr))
+		fmt.Printf("[*] subnet actor deployed as %v and new subnet availabe with ID=%v\n\n", actorAddr, address.NewSubnetID(parent, actorAddr))
 		fmt.Printf("remember to join and register your subnet for it to be discoverable")
 		return nil
 	},
@@ -180,7 +188,7 @@ var joinCmd = &cli.Command{
 		&cli.StringFlag{
 			Name:  "subnet",
 			Usage: "specify the id of the subnet to join",
-			Value: hierarchical.RootSubnet.String(),
+			Value: address.RootSubnet.String(),
 		},
 	},
 	Action: func(cctx *cli.Context) error {
@@ -207,7 +215,7 @@ var joinCmd = &cli.Command{
 
 		// If subnet not set use root. Otherwise, use flag value
 		var subnet string
-		if cctx.String("subnet") != hierarchical.RootSubnet.String() {
+		if cctx.String("subnet") != address.RootSubnet.String() {
 			subnet = cctx.String("subnet")
 		}
 
@@ -216,11 +224,53 @@ var joinCmd = &cli.Command{
 			return lcli.ShowHelp(cctx, fmt.Errorf("failed to parse amount: %w", err))
 		}
 
-		c, err := api.JoinSubnet(ctx, addr, big.Int(val), hierarchical.SubnetID(subnet))
+		c, err := api.JoinSubnet(ctx, addr, big.Int(val), address.SubnetID(subnet))
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cctx.App.Writer, "Successfully added stake to subnet in message: %s\n", c)
+		fmt.Fprintf(cctx.App.Writer, "Successfully added stake to subnet %s in message: %s\n", subnet, c)
+		return nil
+	},
+}
+
+var syncCmd = &cli.Command{
+	Name:      "sync",
+	Usage:     "Sync with a subnet without adding stake to it",
+	ArgsUsage: "[<stake amount>]",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "subnet",
+			Usage: "specify the id of the subnet to sync with",
+			Value: address.RootSubnet.String(),
+		},
+		&cli.BoolFlag{
+			Name:  "stop",
+			Usage: "use this flag to determine if you want to start or stop mining",
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+
+		if cctx.Args().Len() != 0 {
+			return lcli.ShowHelp(cctx, fmt.Errorf("'sync' expects no arguments, and a set of flags"))
+		}
+		api, closer, err := lcli.GetFullNodeAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+
+		ctx := lcli.ReqContext(cctx)
+
+		// If subnet not set use root. Otherwise, use flag value
+		subnet := cctx.String("subnet")
+		if cctx.String("subnet") == address.RootSubnet.String() {
+			return xerrors.Errorf("no valid subnet so sync with specified")
+		}
+		err = api.SyncSubnet(ctx, address.SubnetID(subnet), cctx.Bool("stop"))
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(cctx.App.Writer, "Successfully started/stopped syncing with subnet %s \n", subnet)
 		return nil
 	},
 }
@@ -237,11 +287,11 @@ var mineCmd = &cli.Command{
 		&cli.StringFlag{
 			Name:  "subnet",
 			Usage: "specify the id of the subnet to mine",
-			Value: hierarchical.RootSubnet.String(),
+			Value: address.RootSubnet.String(),
 		},
 		&cli.BoolFlag{
 			Name:  "stop",
-			Usage: "use this flag to determine if you want to start or stop mining",
+			Usage: "use this flag to stop mining a subnet",
 		},
 	},
 	Action: func(cctx *cli.Context) error {
@@ -273,11 +323,11 @@ var mineCmd = &cli.Command{
 		}
 		// If subnet not set use root. Otherwise, use flag value
 		var subnet string
-		if cctx.String("subnet") != hierarchical.RootSubnet.String() {
+		if cctx.String("subnet") != address.RootSubnet.String() {
 			subnet = cctx.String("subnet")
 		}
 
-		err = api.MineSubnet(ctx, walletID, hierarchical.SubnetID(subnet), cctx.Bool("stop"))
+		err = api.MineSubnet(ctx, walletID, address.SubnetID(subnet), cctx.Bool("stop"))
 		if err != nil {
 			return err
 		}
@@ -298,7 +348,7 @@ var leaveCmd = &cli.Command{
 		&cli.StringFlag{
 			Name:  "subnet",
 			Usage: "specify the id of the subnet to mine",
-			Value: hierarchical.RootSubnet.String(),
+			Value: address.RootSubnet.String(),
 		},
 	},
 	Action: func(cctx *cli.Context) error {
@@ -325,11 +375,11 @@ var leaveCmd = &cli.Command{
 
 		// If subnet not set use root. Otherwise, use flag value
 		var subnet string
-		if cctx.String("subnet") != hierarchical.RootSubnet.String() {
+		if cctx.String("subnet") != address.RootSubnet.String() {
 			subnet = cctx.String("subnet")
 		}
 
-		c, err := api.LeaveSubnet(ctx, addr, hierarchical.SubnetID(subnet))
+		c, err := api.LeaveSubnet(ctx, addr, address.SubnetID(subnet))
 		if err != nil {
 			return err
 		}
@@ -350,7 +400,7 @@ var killCmd = &cli.Command{
 		&cli.StringFlag{
 			Name:  "subnet",
 			Usage: "specify the id of the subnet to mine",
-			Value: hierarchical.RootSubnet.String(),
+			Value: address.RootSubnet.String(),
 		},
 	},
 	Action: func(cctx *cli.Context) error {
@@ -377,15 +427,307 @@ var killCmd = &cli.Command{
 
 		// If subnet not set use root. Otherwise, use flag value
 		var subnet string
-		if cctx.String("subnet") != hierarchical.RootSubnet.String() {
+		if cctx.String("subnet") != address.RootSubnet.String() {
 			subnet = cctx.String("subnet")
 		}
 
-		c, err := api.KillSubnet(ctx, addr, hierarchical.SubnetID(subnet))
+		c, err := api.KillSubnet(ctx, addr, address.SubnetID(subnet))
 		if err != nil {
 			return err
 		}
 		fmt.Fprintf(cctx.App.Writer, "Successfully sent kill to subnet in message: %s\n", c)
+		return nil
+	},
+}
+
+var releaseCmd = &cli.Command{
+	Name:      "release",
+	Usage:     "Release funds from your ",
+	ArgsUsage: "[<value amount>]",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "from",
+			Usage: "optionally specify the account to send funds from",
+		},
+		&cli.StringFlag{
+			Name:  "subnet",
+			Usage: "specify the id of the subnet",
+			Value: address.RootSubnet.String(),
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+
+		if cctx.Args().Len() != 1 {
+			return lcli.ShowHelp(cctx, fmt.Errorf("'fund' expects the amount of FILs to inject to subnet, and a set of flags"))
+		}
+		api, closer, err := lcli.GetFullNodeAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+
+		ctx := lcli.ReqContext(cctx)
+
+		// Try to get default address first
+		addr, _ := api.WalletDefaultAddress(ctx)
+		if from := cctx.String("from"); from != "" {
+			addr, err = address.NewFromString(from)
+			if err != nil {
+				return err
+			}
+		}
+
+		// Releasing funds needs to be done in a subnet
+		var subnet string
+		if cctx.String("subnet") == address.RootSubnet.String() ||
+			cctx.String("subnet") == "" {
+			return xerrors.Errorf("only subnets can release funds, please set a valid subnet")
+		}
+
+		subnet = cctx.String("subnet")
+		val, err := types.ParseFIL(cctx.Args().Get(0))
+		if err != nil {
+			return lcli.ShowHelp(cctx, fmt.Errorf("failed to parse amount: %w", err))
+		}
+
+		c, err := api.ReleaseFunds(ctx, addr, address.SubnetID(subnet), big.Int(val))
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(cctx.App.Writer, "Successfully sent release message: %s\n", c)
+		fmt.Fprintf(cctx.App.Writer, "Cross-message should be propagated in the next checkpoint to: %s\n",
+			address.SubnetID(subnet).Parent())
+		return nil
+	},
+}
+
+var fundCmd = &cli.Command{
+	Name:      "fund",
+	Usage:     "Inject new funds to your address in a subnet",
+	ArgsUsage: "[<value amount>]",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "from",
+			Usage: "optionally specify the account to send funds from",
+		},
+		&cli.StringFlag{
+			Name:  "subnet",
+			Usage: "specify the id of the subnet",
+			Value: address.RootSubnet.String(),
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+
+		if cctx.Args().Len() != 1 {
+			return lcli.ShowHelp(cctx, fmt.Errorf("'fund' expects the amount of FILs to inject to subnet, and a set of flags"))
+		}
+		api, closer, err := lcli.GetFullNodeAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+
+		ctx := lcli.ReqContext(cctx)
+
+		// Try to get default address first
+		addr, _ := api.WalletDefaultAddress(ctx)
+		if from := cctx.String("from"); from != "" {
+			addr, err = address.NewFromString(from)
+			if err != nil {
+				return err
+			}
+		}
+
+		// Injecting funds needs to be done in a subnet
+		var subnet string
+		if cctx.String("subnet") == address.RootSubnet.String() ||
+			cctx.String("subnet") == "" {
+			return xerrors.Errorf("only subnets can be fund with new tokens, please set a valid subnet")
+		}
+
+		subnet = cctx.String("subnet")
+		val, err := types.ParseFIL(cctx.Args().Get(0))
+		if err != nil {
+			return lcli.ShowHelp(cctx, fmt.Errorf("failed to parse amount: %w", err))
+		}
+
+		c, err := api.FundSubnet(ctx, addr, address.SubnetID(subnet), big.Int(val))
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(cctx.App.Writer, "Successfully funded subnet in message: %s\n", c)
+		fmt.Fprintf(cctx.App.Writer, "Cross-message should be validated shortly in subnet: %s\n", subnet)
+		return nil
+	},
+}
+
+var sendCmd = &cli.Command{
+	Name:      "send",
+	Usage:     "Send a cross-net message to a subnet",
+	ArgsUsage: "[targetAddress] [amount]",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "subnet",
+			Usage: "specify the id of the destination subnet",
+		},
+		&cli.StringFlag{
+			Name:  "from",
+			Usage: "optionally specify the account to send funds from",
+		},
+		&cli.StringFlag{
+			Name:  "gas-premium",
+			Usage: "specify gas price to use in AttoFIL",
+			Value: "0",
+		},
+		&cli.StringFlag{
+			Name:  "gas-feecap",
+			Usage: "specify gas fee cap to use in AttoFIL",
+			Value: "0",
+		},
+		&cli.Int64Flag{
+			Name:  "gas-limit",
+			Usage: "specify gas limit",
+			Value: 0,
+		},
+		&cli.Uint64Flag{
+			Name:  "nonce",
+			Usage: "specify the nonce to use",
+			Value: 0,
+		},
+		&cli.Uint64Flag{
+			Name:  "method",
+			Usage: "specify method to invoke",
+			Value: uint64(builtin.MethodSend),
+		},
+		&cli.StringFlag{
+			Name:  "params-json",
+			Usage: "specify invocation parameters in json",
+		},
+		&cli.StringFlag{
+			Name:  "params-hex",
+			Usage: "specify invocation parameters in hex",
+		},
+		&cli.BoolFlag{
+			Name:  "force",
+			Usage: "Deprecated: use global 'force-send'",
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+
+		if cctx.Args().Len() != 2 {
+			return lcli.ShowHelp(cctx, fmt.Errorf("'send' expects the destination address and an amount of FILs to send to subnet, along with a set of mandatory flags"))
+		}
+		api, closer, err := lcli.GetFullNodeAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+
+		srv, err := lcli.GetFullNodeServices(cctx)
+		if err != nil {
+			return err
+		}
+		defer srv.Close() //nolint:errcheck
+
+		ctx := lcli.ReqContext(cctx)
+		var params lcli.SendParams
+		params.To, err = address.NewFromString(cctx.Args().Get(0))
+		if err != nil {
+			return lcli.ShowHelp(cctx, fmt.Errorf("failed to parse target address: %w", err))
+		}
+
+		val, err := types.ParseFIL(cctx.Args().Get(1))
+		if err != nil {
+			return lcli.ShowHelp(cctx, fmt.Errorf("failed to parse amount: %w", err))
+		}
+		params.Val = abi.TokenAmount(val)
+
+		if from := cctx.String("from"); from != "" {
+			addr, err := address.NewFromString(from)
+			if err != nil {
+				return err
+			}
+
+			params.From = addr
+		}
+
+		if cctx.IsSet("gas-premium") {
+			gp, err := types.BigFromString(cctx.String("gas-premium"))
+			if err != nil {
+				return err
+			}
+			params.GasPremium = &gp
+		}
+
+		if cctx.IsSet("gas-feecap") {
+			gfc, err := types.BigFromString(cctx.String("gas-feecap"))
+			if err != nil {
+				return err
+			}
+			params.GasFeeCap = &gfc
+		}
+
+		if cctx.IsSet("gas-limit") {
+			limit := cctx.Int64("gas-limit")
+			params.GasLimit = &limit
+		}
+
+		params.Method = abi.MethodNum(cctx.Uint64("method"))
+
+		if cctx.IsSet("params-json") {
+			decparams, err := srv.DecodeTypedParamsFromJSON(ctx, params.To, params.Method, cctx.String("params-json"))
+			if err != nil {
+				return fmt.Errorf("failed to decode json params: %w", err)
+			}
+			params.Params = decparams
+		}
+		if cctx.IsSet("params-hex") {
+			if params.Params != nil {
+				return fmt.Errorf("can only specify one of 'params-json' and 'params-hex'")
+			}
+			decparams, err := hex.DecodeString(cctx.String("params-hex"))
+			if err != nil {
+				return fmt.Errorf("failed to decode hex params: %w", err)
+			}
+			params.Params = decparams
+		}
+
+		if cctx.IsSet("nonce") {
+			n := cctx.Uint64("nonce")
+			params.Nonce = &n
+		}
+
+		proto, err := srv.MessageForSend(ctx, params)
+		if err != nil {
+			return xerrors.Errorf("creating message prototype: %w", err)
+		}
+
+		if cctx.String("subnet") == "" {
+			return xerrors.Errorf("no destination subnet specified")
+		}
+
+		subnet := address.SubnetID(cctx.String("subnet"))
+		crossParams := &sca.CrossMsgParams{
+			Destination: subnet,
+			Msg:         proto.Message,
+		}
+		serparams, err := actors.SerializeParams(crossParams)
+		if err != nil {
+			return xerrors.Errorf("failed serializing init actor params: %s", err)
+		}
+		smsg, aerr := api.MpoolPushMessage(ctx, &types.Message{
+			To:     hierarchical.SubnetCoordActorAddr,
+			From:   params.From,
+			Value:  params.Val,
+			Method: sca.Methods.SendCross,
+			Params: serparams,
+		}, nil)
+		if aerr != nil {
+			return xerrors.Errorf("Error sending message: %s", aerr)
+		}
+
+		fmt.Fprintf(cctx.App.Writer, "Successfully send cross-message with cid: %s\n", smsg.Cid())
+		fmt.Fprintf(cctx.App.Writer, "Cross-message should be propagated shortly to the right subnet: %s\n", subnet)
 		return nil
 	},
 }

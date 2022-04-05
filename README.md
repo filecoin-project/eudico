@@ -71,7 +71,7 @@ See the [official Golang installation instructions](https://golang.org/doc/insta
 
 ### Build and install Eudico
 
-Once all the dependencies are installed, you can build and install the Eudico suite (`eudico`, `eudico-miner`, and `eudico-worker`).
+Once all the dependencies are installed, you can build and install Eudico.
 
 1. Clone the repository:
 
@@ -82,39 +82,60 @@ Once all the dependencies are installed, you can build and install the Eudico su
    
 Note: The default branch `eudico` is the dev branch where the latest new features, bug fixes and improvement are in. 
 
-2. To join mainnet -- don't!
-
-   If you are changing networks from a previous installation or there has been a network reset, read the [Switch networks guide](https://docs.filecoin.io/get-started/lotus/switch-networks/) before proceeding.
-
-   For networks other than mainnet, look up the current branch or tag/commit for the network you want to join in the [Filecoin networks dashboard](https://network.filecoin.io), then build Eudico for your specific network below.
+2. Build Eudico:
 
    ```sh
-   git checkout <tag_or_branch>
-   # For example:
-   git checkout <vX.X.X> # tag for a release
+   make eudico
+   ```
+   This will create the `eudico` executable in the current directory.
+
+### Run a local test network.
+
+**Note**: `eudico` uses the `$HOME/.eudico` folder by default for storage (configuration, chain data, wallets, etc). See [advanced options](https://docs.filecoin.io/get-started/lotus/configuration-and-advanced-usage/) for information on how to customize the folder.
+If you want to run more than one Eudico node the same host, you need to tell the nodes to use different folders (see [FAQ](FAQ.md#q-how-can-i-run-two-eudico-peers-on-the-same-host))
+Make sure that this directory does not exist when you are starting a new network.
+
+First, a key needs to be generated. 
+In order to do that, compile the Lotus key generator:
+
+   ```bash
+   make lotus-keygen
    ```
 
-   Currently, the latest code on the _master_ branch corresponds to mainnet.
+Then, generate a key:
 
-3. If you are in China, see "[Lotus: tips when running in China](https://docs.filecoin.io/get-started/lotus/tips-running-in-china/)".
-4. This build instruction uses the prebuilt proofs binaries. If you want to build the proof binaries from source check the [complete instructions](https://docs.filecoin.io/get-started/lotus/installation/#build-and-install-lotus). Note, if you are building the proof binaries from source, [installing rustup](https://docs.filecoin.io/get-started/lotus/installation/#rustup) is also needed.
+   ```bash
+   ./lotus-keygen -t secp256k1
+   ```
+This creates a key file, with the name `f1[...].key` (e.g. `f16dv4rlp3b33d5deasf3lxkrbfwhi4q4a5uw5scy.key`) in the local directory.
+The file name, without the `.key` extension, is the corresponding Filecoin address.
+If this is the only key you generated so far, you can obtain the address, for example, by running
 
-5. Build and install Eudico:
-
-   ```sh
-   make clean all #mainnet
-
-   # Or to join a testnet or devnet:
-   make clean calibnet # Calibration with min 32GiB sectors
-
-   sudo make eudico
+   ```bash
+   ADDR=$(echo f1* | tr '.' ' ' | awk '{print $1}')
    ```
 
-   This will put `eudico`, `eudico-miner` and `eudico-worker` in `/usr/local/bin`.
+Use this address to create a genesis block for the system and start the Eudico daemon.
+The following command uses the `delegated` consensus.
 
-   `eudico` will use the `$HOME/.eudico` folder by default for storage (configuration, chain data, wallets, etc). See [advanced options](https://docs.filecoin.io/get-started/lotus/configuration-and-advanced-usage/) for information on how to customize the folder.
+   ```bash
+   ./eudico delegated genesis $ADDR gen.gen
+   ./eudico delegated daemon --genesis=gen.gen
+   ```
 
-6. You should now have Eudico installed. You can now [start the Eudico daemon and sync the chain](https://docs.filecoin.io/get-started/lotus/installation/#start-the-lotus-daemon-and-sync-the-chain).
+The daemon will continue running until you stop it.
+To start a miner, first import a wallet, using the generated key
+(replacing `f1*.key` by the generated key file if more than one key is present in the directory).
+
+   ```bash
+   ./eudico wallet import --format=json-lotus f1*.key
+   ```
+
+Then, start the miner.
+
+   ```bash
+   ./eudico delegated miner
+   ```
 
 ## License
 

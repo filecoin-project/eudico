@@ -4,6 +4,9 @@ import (
 	"context"
 	"sync"
 
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
+	"github.com/filecoin-project/specs-actors/v7/actors/migration/nv15"
+
 	"github.com/filecoin-project/lotus/chain/rand"
 
 	"github.com/filecoin-project/lotus/chain/beacon"
@@ -18,10 +21,6 @@ import (
 	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/go-state-types/network"
 
-	// Used for genesis.
-	msig0 "github.com/filecoin-project/specs-actors/actors/builtin/multisig"
-	"github.com/filecoin-project/specs-actors/v3/actors/migration/nv10"
-
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/paych"
@@ -30,6 +29,9 @@ import (
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/vm"
+
+	// Used for genesis.
+	msig0 "github.com/filecoin-project/specs-actors/actors/builtin/multisig"
 )
 
 const LookbackNoLimit = api.LookbackNoLimit
@@ -53,12 +55,12 @@ type versionSpec struct {
 type migration struct {
 	upgrade       MigrationFunc
 	preMigrations []PreMigration
-	cache         *nv10.MemMigrationCache
+	cache         *nv15.MemMigrationCache
 }
 
 type Executor interface {
 	NewActorRegistry() *vm.ActorRegistry
-	ExecuteTipSet(ctx context.Context, sm *StateManager, ts *types.TipSet, em ExecMonitor) (stateroot cid.Cid, rectsroot cid.Cid, err error)
+	ExecuteTipSet(ctx context.Context, sm *StateManager, cr *resolver.Resolver, ts *types.TipSet, em ExecMonitor) (stateroot cid.Cid, rectsroot cid.Cid, err error)
 }
 
 type StateManager struct {
@@ -95,6 +97,8 @@ type StateManager struct {
 	tsExec        Executor
 	tsExecMonitor ExecMonitor
 	beacon        beacon.Schedule
+
+	cr *resolver.Resolver
 }
 
 // Caches a single state tree
@@ -103,7 +107,7 @@ type treeCache struct {
 	tree *state.StateTree
 }
 
-func NewStateManager(cs *store.ChainStore, exec Executor, sys vm.SyscallBuilder, us UpgradeSchedule, beacon beacon.Schedule) (*StateManager, error) {
+func NewStateManager(cs *store.ChainStore, exec Executor, cr *resolver.Resolver, sys vm.SyscallBuilder, us UpgradeSchedule, beacon beacon.Schedule) (*StateManager, error) {
 	// If we have upgrades, make sure they're in-order and make sense.
 	if err := us.Validate(); err != nil {
 		return nil, err
@@ -121,7 +125,7 @@ func NewStateManager(cs *store.ChainStore, exec Executor, sys vm.SyscallBuilder,
 				migration := &migration{
 					upgrade:       upgrade.Migration,
 					preMigrations: upgrade.PreMigrations,
-					cache:         nv10.NewMemMigrationCache(),
+					cache:         nv15.NewMemMigrationCache(),
 				}
 				stateMigrations[upgrade.Height] = migration
 			}
@@ -134,9 +138,6 @@ func NewStateManager(cs *store.ChainStore, exec Executor, sys vm.SyscallBuilder,
 			})
 			lastVersion = upgrade.Network
 		}
-	} else {
-		// Otherwise, go directly to the latest version.
-		lastVersion = build.NewestNetworkVersion
 	}
 
 	return &StateManager{
@@ -147,6 +148,7 @@ func NewStateManager(cs *store.ChainStore, exec Executor, sys vm.SyscallBuilder,
 		newVM:             vm.NewVM,
 		Syscalls:          sys,
 		cs:                cs,
+		cr:                cr,
 		tsExec:            exec,
 		stCache:           make(map[string][]cid.Cid),
 		beacon:            beacon,
@@ -158,8 +160,8 @@ func NewStateManager(cs *store.ChainStore, exec Executor, sys vm.SyscallBuilder,
 	}, nil
 }
 
-func NewStateManagerWithUpgradeScheduleAndMonitor(cs *store.ChainStore, exec Executor, sys vm.SyscallBuilder, us UpgradeSchedule, b beacon.Schedule, em ExecMonitor) (*StateManager, error) {
-	sm, err := NewStateManager(cs, exec, sys, us, b)
+func NewStateManagerWithUpgradeScheduleAndMonitor(cs *store.ChainStore, exec Executor, cr *resolver.Resolver, sys vm.SyscallBuilder, us UpgradeSchedule, b beacon.Schedule, em ExecMonitor) (*StateManager, error) {
+	sm, err := NewStateManager(cs, exec, cr, sys, us, b)
 	if err != nil {
 		return nil, err
 	}
@@ -323,7 +325,7 @@ func (sm *StateManager) LookupID(ctx context.Context, addr address.Address, ts *
 func (sm *StateManager) ValidateChain(ctx context.Context, ts *types.TipSet) error {
 	tschain := []*types.TipSet{ts}
 	for ts.Height() != 0 {
-		next, err := sm.cs.LoadTipSet(ts.Parents())
+		next, err := sm.cs.LoadTipSet(ctx, ts.Parents())
 		if err != nil {
 			return err
 		}
@@ -359,7 +361,7 @@ func (sm *StateManager) VMConstructor() func(context.Context, *vm.VMOpts) (*vm.V
 	}
 }
 
-func (sm *StateManager) GetNtwkVersion(ctx context.Context, height abi.ChainEpoch) network.Version {
+func (sm *StateManager) GetNetworkVersion(ctx context.Context, height abi.ChainEpoch) network.Version {
 	// The epochs here are the _last_ epoch for every version, or -1 if the
 	// version is disabled.
 	for _, spec := range sm.networkVersions {
@@ -375,36 +377,24 @@ func (sm *StateManager) VMSys() vm.SyscallBuilder {
 }
 
 func (sm *StateManager) GetRandomnessFromBeacon(ctx context.Context, personalization crypto.DomainSeparationTag, randEpoch abi.ChainEpoch, entropy []byte, tsk types.TipSetKey) (abi.Randomness, error) {
-	pts, err := sm.ChainStore().GetTipSetFromKey(tsk)
+	pts, err := sm.ChainStore().GetTipSetFromKey(ctx, tsk)
 	if err != nil {
 		return nil, xerrors.Errorf("loading tipset %s: %w", tsk, err)
 	}
 
-	r := rand.NewStateRand(sm.ChainStore(), pts.Cids(), sm.beacon)
-	rnv := sm.GetNtwkVersion(ctx, randEpoch)
+	r := rand.NewStateRand(sm.ChainStore(), pts.Cids(), sm.beacon, sm.GetNetworkVersion)
 
-	if rnv >= network.Version14 {
-		return r.GetBeaconRandomnessV3(ctx, personalization, randEpoch, entropy)
-	} else if rnv == network.Version13 {
-		return r.GetBeaconRandomnessV2(ctx, personalization, randEpoch, entropy)
-	}
-
-	return r.GetBeaconRandomnessV1(ctx, personalization, randEpoch, entropy)
+	return r.GetBeaconRandomness(ctx, personalization, randEpoch, entropy)
 
 }
 
 func (sm *StateManager) GetRandomnessFromTickets(ctx context.Context, personalization crypto.DomainSeparationTag, randEpoch abi.ChainEpoch, entropy []byte, tsk types.TipSetKey) (abi.Randomness, error) {
-	pts, err := sm.ChainStore().LoadTipSet(tsk)
+	pts, err := sm.ChainStore().LoadTipSet(ctx, tsk)
 	if err != nil {
 		return nil, xerrors.Errorf("loading tipset key: %w", err)
 	}
 
-	r := rand.NewStateRand(sm.ChainStore(), pts.Cids(), sm.beacon)
-	rnv := sm.GetNtwkVersion(ctx, randEpoch)
+	r := rand.NewStateRand(sm.ChainStore(), pts.Cids(), sm.beacon, sm.GetNetworkVersion)
 
-	if rnv >= network.Version13 {
-		return r.GetChainRandomnessV2(ctx, personalization, randEpoch, entropy)
-	}
-
-	return r.GetChainRandomnessV1(ctx, personalization, randEpoch, entropy)
+	return r.GetChainRandomness(ctx, personalization, randEpoch, entropy)
 }

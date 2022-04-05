@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	proof7 "github.com/filecoin-project/specs-actors/v7/actors/runtime/proof"
+
 	"github.com/filecoin-project/lotus/chain/rand"
 
 	"github.com/filecoin-project/go-state-types/network"
@@ -31,6 +33,7 @@ import (
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/blockstore"
+	bstore "github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors/policy"
 	"github.com/filecoin-project/lotus/chain/beacon"
@@ -234,12 +237,19 @@ func NewGeneratorWithSectorsAndUpgradeSchedule(numSectors int, us stmgr.UpgradeS
 		return nil, xerrors.Errorf("make genesis block failed: %w", err)
 	}
 
-	cs := store.NewChainStore(bs, bs, ds, nil, j)
+	weight := func(ctx context.Context, stateBs bstore.Blockstore, ts *types.TipSet) (types.BigInt, error) {
+		if ts == nil {
+			return types.NewInt(0), nil
+		}
+
+		return big.NewInt(int64(ts.Height() + 1)), nil
+	}
+	cs := store.NewChainStore(bs, bs, ds, weight, j)
 
 	genfb := &types.FullBlock{Header: genb.Genesis}
 	gents := store.NewFullTipSet([]*types.FullBlock{genfb})
 
-	if err := cs.SetGenesis(genb.Genesis); err != nil {
+	if err := cs.SetGenesis(context.TODO(), genb.Genesis); err != nil {
 		return nil, xerrors.Errorf("set genesis failed: %w", err)
 	}
 
@@ -256,7 +266,9 @@ func NewGeneratorWithSectorsAndUpgradeSchedule(numSectors int, us stmgr.UpgradeS
 	//return nil, xerrors.Errorf("creating drand beacon: %w", err)
 	//}
 
-	sm, err := stmgr.NewStateManager(cs, filcns.NewTipSetExecutor(), sys, us, beac)
+	// TODO: No cross-msgs in genesis, we can use a nil resolver
+	// sh.r = resolver.NewResolver(s.self, sh.ds, sh.pubsub, sh.ID)
+	sm, err := stmgr.NewStateManager(cs, filcns.NewTipSetExecutor(), nil, sys, us, beac)
 	if err != nil {
 		return nil, xerrors.Errorf("initing stmgr: %w", err)
 	}
@@ -459,7 +471,7 @@ func (cg *ChainGen) NextTipSetFromMinersWithMessagesAndNulls(base *types.TipSet,
 
 			if et != nil {
 				// TODO: maybe think about passing in more real parameters to this?
-				wpost, err := cg.eppProvs[m].ComputeProof(context.TODO(), nil, nil)
+				wpost, err := cg.eppProvs[m].ComputeProof(context.TODO(), nil, nil, round, network.Version0)
 				if err != nil {
 					return nil, err
 				}
@@ -469,7 +481,7 @@ func (cg *ChainGen) NextTipSetFromMinersWithMessagesAndNulls(base *types.TipSet,
 					return nil, xerrors.Errorf("making a block for next tipset failed: %w", err)
 				}
 
-				if err := cg.cs.PersistBlockHeaders(fblk.Header); err != nil {
+				if err := cg.cs.PersistBlockHeaders(context.TODO(), fblk.Header); err != nil {
 					return nil, xerrors.Errorf("chainstore AddBlock: %w", err)
 				}
 
@@ -618,7 +630,7 @@ func (mca mca) WalletSign(ctx context.Context, a address.Address, v []byte) (*cr
 
 type WinningPoStProver interface {
 	GenerateCandidates(context.Context, abi.PoStRandomness, uint64) ([]uint64, error)
-	ComputeProof(context.Context, []proof5.SectorInfo, abi.PoStRandomness) ([]proof5.PoStProof, error)
+	ComputeProof(context.Context, []proof7.ExtendedSectorInfo, abi.PoStRandomness, abi.ChainEpoch, network.Version) ([]proof5.PoStProof, error)
 }
 
 type wppProvider struct{}
@@ -627,7 +639,7 @@ func (wpp *wppProvider) GenerateCandidates(ctx context.Context, _ abi.PoStRandom
 	return []uint64{0}, nil
 }
 
-func (wpp *wppProvider) ComputeProof(context.Context, []proof5.SectorInfo, abi.PoStRandomness) ([]proof5.PoStProof, error) {
+func (wpp *wppProvider) ComputeProof(context.Context, []proof7.ExtendedSectorInfo, abi.PoStRandomness, abi.ChainEpoch, network.Version) ([]proof5.PoStProof, error) {
 	return ValidWpostForTesting, nil
 }
 
@@ -686,11 +698,15 @@ func (m genFakeVerifier) VerifyAggregateSeals(aggregate proof5.AggregateSealVeri
 	panic("not supported")
 }
 
-func (m genFakeVerifier) VerifyWinningPoSt(ctx context.Context, info proof5.WinningPoStVerifyInfo) (bool, error) {
+func (m genFakeVerifier) VerifyReplicaUpdate(update proof7.ReplicaUpdateInfo) (bool, error) {
 	panic("not supported")
 }
 
-func (m genFakeVerifier) VerifyWindowPoSt(ctx context.Context, info proof5.WindowPoStVerifyInfo) (bool, error) {
+func (m genFakeVerifier) VerifyWinningPoSt(ctx context.Context, info proof7.WinningPoStVerifyInfo) (bool, error) {
+	panic("not supported")
+}
+
+func (m genFakeVerifier) VerifyWindowPoSt(ctx context.Context, info proof7.WindowPoStVerifyInfo) (bool, error) {
 	panic("not supported")
 }
 

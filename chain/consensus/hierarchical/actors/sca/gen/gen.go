@@ -8,10 +8,21 @@ import (
 
 func main() {
 	if err := gen.WriteTupleEncodersToFile("./cbor_gen.go", "sca",
+		actor.ConstructorParams{},
+		actor.CheckpointParams{},
 		actor.SCAState{},
 		actor.Subnet{},
 		actor.FundParams{},
-		actor.AddSubnetReturn{},
+		actor.SubnetIDParam{},
+		actor.CrossMsgs{},
+		actor.MetaTag{},
+		actor.CrossMsgParams{},
+		actor.ErrorParam{},
+		actor.AtomicExec{},
+		actor.AtomicExecParams{},
+		actor.SubmitExecParams{},
+		actor.SubmitOutput{},
+		actor.LockedState{},
 	); err != nil {
 		panic(err)
 	}

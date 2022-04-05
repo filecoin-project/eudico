@@ -35,6 +35,7 @@ func GetFirstCheckpointAddress(url, taprootAddress string) (Checkpoint, error) {
 			//fmt.Println(result)
 			// vout is the list of outputs of the transaction
 			vout := reader["vout"].([]interface{})
+			//fmt.Println("first vout", vout)
 			taprootOut := vout[0].(map[string]interface{})["scriptPubKey"].(map[string]interface{})
 			new_address := taprootOut["hex"].(string)
 			var cid string
@@ -44,10 +45,11 @@ func GetFirstCheckpointAddress(url, taprootAddress string) (Checkpoint, error) {
 			} else {
 				cid = "0000"
 			}
+			//fmt.Println("first cid", cid)
 			return Checkpoint{txid: tx_id, address: new_address, cid: cid[4:]}, nil
 		}
 	}
-	return Checkpoint{}, errors.New("Did not find checkpoint")
+	return Checkpoint{}, errors.New("Did not find new checkpoint")
 }
 
 func GetNextCheckpointFixed(url, txid string) (Checkpoint, error) {
@@ -57,7 +59,6 @@ func GetNextCheckpointFixed(url, txid string) (Checkpoint, error) {
 	result := jsonRPC(url, payload)
 	list := result["result"].([]interface{})
 	// for each transaction in the list
-	fmt.Println("transaction id (inside getnextcheckpointfixed): ", txid)
 	for _, item := range list {
 		item_map := item.(map[string]interface{})
 		// get the tx id
@@ -83,11 +84,9 @@ func GetNextCheckpointFixed(url, txid string) (Checkpoint, error) {
 			new_address := taprootOut["hex"].(string)
 			cidOut := vout[1].(map[string]interface{})["scriptPubKey"].(map[string]interface{})
 			cid := cidOut["hex"].(string)
-			fmt.Println("Worked fine")
 			return Checkpoint{txid: new_txid, address: new_address, cid: cid[4:]}, nil
 		}
 	}
-	//fmt.Println("Did not work fine")
 	return Checkpoint{}, errors.New("Did not find checkpoint")
 }
 
@@ -106,7 +105,7 @@ func GetLatestCheckpoint(url string, first_pk []byte, first_cp []byte) (*Checkpo
 		for transaction linked to it.
 	*/
 	addTaprootToWallet(url, firstscript)
-	fmt.Println(firstscript)
+	//fmt.Println(firstscript)
 	checkpoint, done := GetFirstCheckpointAddress(url, taprootAddress)
 	// Again we add taproot "address" (actually the script) to the wallet in the Bitcoin node
 	addTaprootToWallet(url, checkpoint.address)

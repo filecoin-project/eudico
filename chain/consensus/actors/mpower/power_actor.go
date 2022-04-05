@@ -10,10 +10,13 @@ import (
 
 	"github.com/ipfs/go-cid"
 
-	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
-	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
-	//"github.com/sa8/multi-party-sig/pkg/taproot"
+
+	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
+	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
+
+
+
 )
 
 type Runtime = runtime.Runtime
@@ -116,7 +119,7 @@ func (a Actor) UpdateTaprootAddress(rt Runtime, addr *NewTaprootAddressParam) *a
 	rt.ValidateImmediateCallerAcceptAny()
 	var st State
 	rt.StateTransaction(&st, func() {
-		// Miners list is replaced with the one passed as parameters
+		// public key is replaced with the one passed as parameters
 		st.PublicKey = addr.PublicKey
 		fmt.Println("address updated", st.PublicKey)
 	})

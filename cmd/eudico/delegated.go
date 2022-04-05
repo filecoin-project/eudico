@@ -5,22 +5,37 @@ import (
 	"time"
 
 	"github.com/filecoin-project/go-address"
+
 	"github.com/filecoin-project/lotus/chain/checkpointing"
+
+	"github.com/filecoin-project/lotus/chain"
+	"github.com/filecoin-project/lotus/chain/beacon"
+
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/wallet"
+	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
+	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/lotus/chain/consensus"
+	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	lcli "github.com/filecoin-project/lotus/cli"
 	cliutil "github.com/filecoin-project/lotus/cli/util"
 	"github.com/filecoin-project/lotus/node"
 )
+
+func NewRootDelegatedConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
+	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
+	return delegcns.NewDelegatedConsensus(sm, nil, beacon, r, verifier, genesis, netName)
+}
 
 var delegatedCmd = &cli.Command{
 	Name:  "delegated",
@@ -30,14 +45,15 @@ var delegatedCmd = &cli.Command{
 		delegatedMinerCmd,
 
 		daemonCmd(node.Options(
-			node.Override(new(consensus.Consensus), delegcns.NewDelegatedConsensus),
+			node.Override(new(consensus.Consensus), NewRootDelegatedConsensus),
 			node.Override(new(store.WeightFunc), delegcns.Weight),
-			node.Override(new(stmgr.Executor), delegcns.TipSetExecutor()),
-			node.Override(new(stmgr.UpgradeSchedule), delegcns.DefaultUpgradeSchedule()),
+			node.Override(new(stmgr.Executor), common.RootTipSetExecutor),
+			node.Override(new(stmgr.UpgradeSchedule), common.DefaultUpgradeSchedule()),
 
 			// Start checkpoint sub
 			node.Override(new(*checkpointing.CheckpointingSub), checkpointing.NewCheckpointSub),
 			node.Override(StartCheckpointingSubKey, checkpointing.BuildCheckpointingSub),
+
 		)),
 	},
 }
@@ -78,7 +94,9 @@ var delegatedGenesisCmd = &cli.Command{
 			return err
 		}
 
-		if err := subnet.WriteGenesis(hierarchical.RootSubnet, subnet.Delegated, miner, vreg, rem, uint64(time.Now().Unix()), f); err != nil {
+		// TODO: Make configurable
+		checkPeriod := sca.DefaultCheckpointPeriod
+		if err := subnet.WriteGenesis(address.RootSubnet, hierarchical.Delegated, miner, vreg, rem, checkPeriod, uint64(time.Now().Unix()), f); err != nil {
 			return xerrors.Errorf("write genesis car: %w", err)
 		}
 

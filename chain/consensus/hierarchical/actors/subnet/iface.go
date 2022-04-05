@@ -1,16 +1,16 @@
 package subnet
 
 import (
-	"github.com/filecoin-project/go-state-types/cbor"
-	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
+	abi "github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
+	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
 )
 
-// ActorIface determines the interface to be implemented by every
-// actor representing a subnet..
-type ActorIface interface {
-	Constructor(rt runtime.Runtime, params cbor.Marshaler) cbor.Marshaler
-	Join(rt runtime.Runtime, params cbor.Marshaler) cbor.Marshaler
-	Leave(rt runtime.Runtime, params cbor.Marshaler) cbor.Marshaler
-	Checkpoint(rt runtime.Runtime, params cbor.Marshaler) cbor.Marshaler
-	Kill(rt runtime.Runtime, params cbor.Marshaler) cbor.Marshaler
+// SubnetIface defines the minimum interface that needs to be implemented by subnet
+// actors
+type SubnetIface interface {
+	Join(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue
+	Leave(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue
+	SubmitCheckpoint(rt runtime.Runtime, params *sca.CheckpointParams) *abi.EmptyValue
+	Kill(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue
 }

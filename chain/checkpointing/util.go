@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+
 	"github.com/btcsuite/btcutil/bech32"
 	"github.com/cronokirby/safenum"
 	"github.com/sa8/multi-party-sig/pkg/math/curve"
@@ -167,15 +168,13 @@ func addTaprootToWallet(url, taprootScript string) bool {
 	}
 	//time.Sleep(6 * time.Second)
 	result := jsonRPC(url, payload)
-	fmt.Println("Add address to wallet: ", taprootScript)
-	fmt.Println("Result from add", result)
+
 	if result["error"] == nil {
 		return true
 	}
 	fmt.Println("Add address to wallet: ", taprootScript)
 	fmt.Println(result)
 	err := result["error"].(map[string]interface{})
-	fmt.Println(err["code"].(float64))
 	if err["code"].(float64) == -4 {
 		// Particular case where we are already in the process of adding the key
 		// because we are using 1 bitcoin node for all
@@ -208,7 +207,6 @@ func walletGetTxidFromAddress(url, taprootAddress string) (string, error) {
 func bitcoindPing(url string) bool {
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"ping\", \"params\": []}"
 	result := jsonRPC(url, payload)
-	fmt.Println("bitcoin ping", result)
 	return result != nil
 }
 
@@ -226,7 +224,7 @@ func parseUnspentTxOut(utxo []byte) (amount, script []byte) {
 func getTxOut(url, txid string, index int) (float64, []byte) {
 	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"gettxout\", \"params\": [\"" + txid + "\", " + strconv.Itoa(index) + "]}"
 	result := jsonRPC(url, payload)
-	fmt.Println("GetTxOut result: ", result)
+
 	if result == nil {
 		panic("Cannot retrieve previous transaction.")
 	}

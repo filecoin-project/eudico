@@ -9,42 +9,39 @@ import (
 	"github.com/filecoin-project/go-state-types/cbor"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
-	initactor "github.com/filecoin-project/lotus/chain/consensus/actors/init"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
+	types "github.com/filecoin-project/lotus/chain/types"
 	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v6/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v6/actors/runtime"
-	"github.com/filecoin-project/specs-actors/v6/actors/util/adt"
+	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
+	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
 	cid "github.com/ipfs/go-cid"
+	xerrors "golang.org/x/xerrors"
 )
 
 var _ runtime.VMActor = SubnetCoordActor{}
 
-// SubnetCoordActorAddr is initialized in genesis with the
-// address t064
-var SubnetCoordActorAddr = func() address.Address {
-	a, err := address.NewIDAddress(64)
-	if err != nil {
-		panic(err)
-	}
-	return a
-}()
-
 var Methods = struct {
-	Constructor  abi.MethodNum
-	Register     abi.MethodNum
-	AddStake     abi.MethodNum
-	ReleaseStake abi.MethodNum
-	Kill         abi.MethodNum
-}{builtin0.MethodConstructor, 2, 3, 4, 5}
+	Constructor           abi.MethodNum
+	Register              abi.MethodNum
+	AddStake              abi.MethodNum
+	ReleaseStake          abi.MethodNum
+	Kill                  abi.MethodNum
+	CommitChildCheckpoint abi.MethodNum
+	Fund                  abi.MethodNum
+	Release               abi.MethodNum
+	SendCross             abi.MethodNum
+	ApplyMessage          abi.MethodNum
+	InitAtomicExec        abi.MethodNum
+	SubmitAtomicExec      abi.MethodNum
+}{builtin0.MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
 
-type FundParams struct {
-	Value abi.TokenAmount
+type SubnetIDParam struct {
+	ID string
 }
 
-type AddSubnetReturn struct {
-	Cid cid.Cid
-}
 type SubnetCoordActor struct{}
 
 func (a SubnetCoordActor) Exports() []interface{} {
@@ -54,11 +51,13 @@ func (a SubnetCoordActor) Exports() []interface{} {
 		3:                         a.AddStake,
 		4:                         a.ReleaseStake,
 		5:                         a.Kill,
-		// -1:                         a.Fund,
-		// -1:                         a.Release,
-		// -1:                         a.Checkpoint,
-		// -1:                         a.RawCheckpoint,
-		// -1:                         a.XSubnetTx,
+		6:                         a.CommitChildCheckpoint,
+		7:                         a.Fund,
+		8:                         a.Release,
+		9:                         a.SendCross,
+		10:                        a.ApplyMessage,
+		11:                        a.InitAtomicExec,
+		12:                        a.SubmitAtomicExec,
 	}
 }
 
@@ -74,9 +73,14 @@ func (a SubnetCoordActor) State() cbor.Er {
 	return new(SCAState)
 }
 
-func (a SubnetCoordActor) Constructor(rt runtime.Runtime, params *initactor.ConstructorParams) *abi.EmptyValue {
+type ConstructorParams struct {
+	NetworkName      string
+	CheckpointPeriod uint64
+}
+
+func (a SubnetCoordActor) Constructor(rt runtime.Runtime, params *ConstructorParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
-	st, err := ConstructSCAState(adt.AsStore(rt), hierarchical.SubnetID(params.NetworkName))
+	st, err := ConstructSCAState(adt.AsStore(rt), params)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
 	rt.StateCreate(st)
 	return nil
@@ -87,20 +91,17 @@ func (a SubnetCoordActor) Constructor(rt runtime.Runtime, params *initactor.Cons
 // It registers a new subnet actor to the hierarchical consensus.
 // In order for the registering of a subnet to be successful, the transaction
 // needs to stake at least the minimum stake, if not it'll fail.
-func (a SubnetCoordActor) Register(rt runtime.Runtime, _ *abi.EmptyValue) *AddSubnetReturn {
+func (a SubnetCoordActor) Register(rt runtime.Runtime, _ *abi.EmptyValue) *SubnetIDParam {
 	// Register can only be called by an actor implementing the subnet actor interface.
 	rt.ValidateImmediateCallerType(actor.SubnetActorCodeID)
 	SubnetActorAddr := rt.Caller()
 
 	var st SCAState
-	var shcid cid.Cid
+	var shid address.SubnetID
 	rt.StateTransaction(&st, func() {
-		var err error
-		shid := hierarchical.NewSubnetID(st.NetworkName, SubnetActorAddr)
-		shcid, err = shid.Cid()
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed computing CID from subnetID")
+		shid = address.NewSubnetID(st.NetworkName, SubnetActorAddr)
 		// Check if the subnet with that ID already exists
-		if _, has, _ := st.GetSubnet(adt.AsStore(rt), shcid); has {
+		if _, has, _ := st.GetSubnet(adt.AsStore(rt), shid); has {
 			rt.Abortf(exitcode.ErrIllegalArgument, "can't register a subnet that has been already registered")
 		}
 		// Check if the transaction has enough funds to register the subnet.
@@ -109,31 +110,11 @@ func (a SubnetCoordActor) Register(rt runtime.Runtime, _ *abi.EmptyValue) *AddSu
 			rt.Abortf(exitcode.ErrIllegalArgument, "call to register doesn't include enough funds to stake")
 		}
 
-		// We always initialize in instantiated state
-		status := Active
-
-		// Instatiate the subnet state
-		emptyFundBalances, err := adt.StoreEmptyMap(adt.AsStore(rt), adt.BalanceTableBitwidth)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create empty funds balance table")
-
-		sh := &Subnet{
-			Cid:      shcid,
-			ID:       shid,
-			Parent:   st.Network,
-			ParentID: st.NetworkName,
-			Stake:    value,
-			Funds:    emptyFundBalances,
-			Status:   status,
-		}
-
-		// Increase the number of child subnets for the current network.
-		st.TotalSubnets++
-
-		// Flush subnet into subnetMap
-		sh.flushSubnet(rt, &st)
+		// Create the new subnet and register in SCA
+		st.registerSubnet(rt, shid, value)
 	})
 
-	return &AddSubnetReturn{Cid: shcid}
+	return &SubnetIDParam{ID: shid.String()}
 }
 
 // AddStake
@@ -167,6 +148,10 @@ func (a SubnetCoordActor) AddStake(rt runtime.Runtime, _ *abi.EmptyValue) *abi.E
 	return nil
 }
 
+type FundParams struct {
+	Value abi.TokenAmount
+}
+
 // ReleaseStake
 //
 // Request from the subnet actor to release part of the stake locked for subnet.
@@ -186,7 +171,7 @@ func (a SubnetCoordActor) ReleaseStake(rt runtime.Runtime, params *FundParams) *
 		sh, has, err := st.getSubnetFromActorAddr(adt.AsStore(rt), SubnetActorAddr)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching subnet state")
 		if !has {
-			rt.Abortf(exitcode.ErrIllegalArgument, "subnet for for actor hasn't been registered yet")
+			rt.Abortf(exitcode.ErrIllegalArgument, "subnet for actor hasn't been registered yet")
 		}
 
 		// Check if the subnet actor is allowed to release the amount of stake specified.
@@ -212,9 +197,157 @@ func (a SubnetCoordActor) ReleaseStake(rt runtime.Runtime, params *FundParams) *
 	return nil
 }
 
-// Kill
+// CheckpointParams handles in/out communication of checkpoints
+// To accommodate arbitrary schemas (and even if it introduces and overhead)
+// is easier to transmit a marshalled version of the checkpoint.
+// NOTE: Consider in the future if there is a better approach.
+type CheckpointParams struct {
+	Checkpoint []byte
+}
+
+// CommitChildCheckpoint accepts a checkpoint from a subnet for commitment.
 //
-// Unregisters a subnet from the hierarchical consensus
+// The subnet is responsible for running all the deep verifications about the checkpoint,
+// the SCA is only able to enforce some basic consistency verifications.
+func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *CheckpointParams) *abi.EmptyValue {
+	// Only subnet actors are allowed to commit a checkpoint after their
+	// verification and aggregation.
+	rt.ValidateImmediateCallerType(actor.SubnetActorCodeID)
+	commit := &schema.Checkpoint{}
+	err := commit.UnmarshalBinary(params.Checkpoint)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "error unmarshalling checkpoint in params")
+	subnetActorAddr := rt.Caller()
+
+	// Check the source of the checkpoint.
+	source, err := address.SubnetID(commit.Data.Source).Actor()
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "error getting checkpoint source")
+	if source != subnetActorAddr {
+		rt.Abortf(exitcode.ErrIllegalArgument, "checkpoint committed doesn't belong to source subnet")
+	}
+
+	// TODO: We could optionally check here if the checkpoint includes a valid signature. I don't
+	// think this makes sense as in its current implementation the subnet actor receives an
+	// independent signature for each miner and counts the number of "votes" for the checkpoint.
+	var st SCAState
+	// burnValue keeps track of the funds that are leaving the subnet in msgMeta and
+	// that need to be burnt.
+	burnValue := abi.NewTokenAmount(0)
+	rt.StateTransaction(&st, func() {
+		// Check that the subnet is registered and active
+		shid := address.NewSubnetID(st.NetworkName, subnetActorAddr)
+		// Check if the subnet for the actor exists
+		sh, has, err := st.GetSubnet(adt.AsStore(rt), shid)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching subnet state")
+		if !has {
+			rt.Abortf(exitcode.ErrIllegalArgument, "subnet for actor hasn't been registered yet")
+		}
+		// Check that it is active. Only active shards can commit checkpoints.
+		if sh.Status != Active {
+			rt.Abortf(exitcode.ErrIllegalState, "can't commit a checkpoint for a subnet that is not active")
+		}
+		// Get the checkpoint for the current window.
+		ch := st.currWindowCheckpoint(rt)
+
+		// Verify that the submitted checkpoint has higher epoch and is
+		// consistent with previous checkpoint before committing.
+		prevCom := sh.PrevCheckpoint
+
+		// If no previous checkpoint for child chain, it means this is the first one
+		// and we can add it without additional verifications.
+		if empty, _ := prevCom.IsEmpty(); empty {
+			// Apply cross messages from child checkpoint
+			burnValue = st.applyCheckMsgs(rt, sh, ch, commit)
+			// Append the new checkpoint to the list of childs.
+			err := ch.AddChild(commit)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error committing checkpoint to this epoch")
+			st.flushCheckpoint(rt, ch)
+			// Update previous checkpoint for child.
+			sh.PrevCheckpoint = *commit
+			st.flushSubnet(rt, sh)
+			return
+		}
+
+		// Check that the epoch is consistent.
+		if prevCom.Data.Epoch > commit.Data.Epoch {
+			rt.Abortf(exitcode.ErrIllegalArgument, "new checkpoint being committed belongs to the past")
+		}
+
+		// Check that the previous Cid is consistent with the committed one.
+		prevCid, err := prevCom.Cid()
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error computing checkpoint's Cid")
+		if pr, _ := commit.PreviousCheck(); prevCid != pr {
+			rt.Abortf(exitcode.ErrIllegalArgument, "new checkpoint not consistent with previous one")
+		}
+
+		// Apply cross messages from child checkpoint
+		burnValue = st.applyCheckMsgs(rt, sh, ch, commit)
+		// Checks passed, we can append the child.
+		err = ch.AddChild(commit)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error committing checkpoint to this epoch")
+		st.flushCheckpoint(rt, ch)
+		// Update previous checkpoint for child.
+		sh.PrevCheckpoint = *commit
+		st.flushSubnet(rt, sh)
+	})
+
+	// Burn funds leaving in metas the subnet
+	if burnValue.GreaterThan(abi.NewTokenAmount(0)) {
+		code := rt.Send(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, burnValue, &builtin.Discard{})
+		if !code.IsSuccess() {
+			rt.Abortf(exitcode.ErrIllegalState,
+				"failed to burn funds from msgmeta, code: %v", code)
+		}
+	}
+	return nil
+}
+
+// applyCheckMsgs prepares messages to trigger their execution or propagate cross-messages
+// coming from a checkpoint of a child subnet.
+func (st *SCAState) applyCheckMsgs(rt runtime.Runtime, sh *Subnet, windowCh *schema.Checkpoint, childCh *schema.Checkpoint) abi.TokenAmount {
+
+	burnValue := abi.NewTokenAmount(0)
+	// aux map[to]CrossMsg
+	aux := make(map[string][]schema.CrossMsgMeta)
+	for _, mm := range childCh.CrossMsgs() {
+		// if it is directed to this subnet, or another child of the subnet,
+		// add it to bottom-up messages
+		// for the consensus algorithm in the subnet to pick it up.
+		if mm.To == st.NetworkName.String() ||
+			!hierarchical.IsBottomUp(st.NetworkName, address.SubnetID(mm.To)) {
+			// Add to BottomUpMsgMeta
+			st.storeBottomUpMsgMeta(rt, mm)
+		} else {
+			// Check if it comes from a valid child, i.e. we are their parent.
+			if address.SubnetID(mm.From).Parent() != st.NetworkName {
+				// Someone is trying to forge a cross-msgs into the checkpoint
+				// from a network from which we are not a parent.
+				continue
+			}
+			// If not add to the aux structure to update the checkpoint when we've
+			// gone through all crossMsgs
+			_, ok := aux[mm.To]
+			if !ok {
+				aux[mm.To] = []schema.CrossMsgMeta{mm}
+			} else {
+				aux[mm.To] = append(aux[mm.To], mm)
+			}
+
+		}
+		// Value leaving in a crossMsgMeta needs to be burnt to update circ.supply
+		v, err := mm.GetValue()
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting value from meta")
+		burnValue = big.Add(burnValue, v)
+		st.releaseCircSupply(rt, sh, address.SubnetID(mm.From), v)
+	}
+
+	// Aggregate all the msgsMeta directed to other subnets in the hierarchy
+	// into the checkpoint
+	st.aggChildMsgMeta(rt, windowCh, aux)
+
+	return burnValue
+}
+
+// Kill unregisters a subnet from the hierarchical consensus
 func (a SubnetCoordActor) Kill(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	// Can only be called by an actor implementing the subnet actor interface.
 	rt.ValidateImmediateCallerType(actor.SubnetActorCodeID)
@@ -224,14 +357,13 @@ func (a SubnetCoordActor) Kill(rt runtime.Runtime, _ *abi.EmptyValue) *abi.Empty
 	var sh *Subnet
 	rt.StateTransaction(&st, func() {
 		var has bool
-		shid := hierarchical.NewSubnetID(st.NetworkName, SubnetActorAddr)
-		shcid, err := shid.Cid()
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed computing CID from subnetID")
+		shid := address.NewSubnetID(st.NetworkName, SubnetActorAddr)
 		// Check if the subnet for the actor exists
-		sh, has, err = st.GetSubnet(adt.AsStore(rt), shcid)
+		var err error
+		sh, has, err = st.GetSubnet(adt.AsStore(rt), shid)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching subnet state")
 		if !has {
-			rt.Abortf(exitcode.ErrIllegalArgument, "subnet for for actor hasn't been registered yet")
+			rt.Abortf(exitcode.ErrIllegalArgument, "subnet for actor hasn't been registered yet")
 		}
 
 		// This is a sanity check to ensure that there is enough balance in actor to return stakes
@@ -239,10 +371,17 @@ func (a SubnetCoordActor) Kill(rt runtime.Runtime, _ *abi.EmptyValue) *abi.Empty
 			rt.Abortf(exitcode.ErrIllegalState, "yikes! actor doesn't have enough balance to release these funds")
 		}
 
+		// TODO: We should prevent a subnet from being killed if it still has user funds in circulation.
+		// We haven't figured out how to handle this yet, so in the meantime we just prevent from being able to kill
+		// the subnet when there are pending funds
+		if sh.CircSupply.GreaterThan(big.Zero()) {
+			rt.Abortf(exitcode.ErrForbidden, "you can't kill a subnet where users haven't released their funds yet")
+		}
+
 		// Remove subnet from subnet registry.
 		subnets, err := adt.AsMap(adt.AsStore(rt), st.Subnets, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state for subnets")
-		err = subnets.Delete(abi.CidKey(shcid))
+		err = subnets.Delete(hierarchical.SubnetKey(shid))
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to remove miner stake in stake map")
 		// Flush stakes adding miner stake.
 		st.Subnets, err = subnets.Root()
@@ -258,31 +397,354 @@ func (a SubnetCoordActor) Kill(rt runtime.Runtime, _ *abi.EmptyValue) *abi.Empty
 	return nil
 }
 
-// addStake adds new funds to the stake of the subnet.
+// Fund injects new funds from an account of the parent chain to a subnet.
 //
-// This function also accepts negative values to substract, and checks
-// if the funds are enough for the subnet to be active.
-func (sh *Subnet) addStake(rt runtime.Runtime, st *SCAState, value abi.TokenAmount) {
-	// Add stake to the subnet
-	sh.Stake = big.Add(sh.Stake, value)
+// This functions receives a transaction with the FILs that want to be injected in the subnet.
+// - Funds injected are frozen.
+// - A new fund cross-message is created and stored to propagate it to the subnet. It will be
+// picked up by miners to include it in the next possible block.
+// - The cross-message nonce is updated.
+func (a SubnetCoordActor) Fund(rt runtime.Runtime, params *SubnetIDParam) *abi.EmptyValue {
+	// Only account actors can inject funds to a subnet (for now).
+	rt.ValidateImmediateCallerType(builtin.AccountActorCodeID)
 
-	// Check if subnet has still stake to be active
-	if sh.Stake.LessThan(st.MinStake) {
-		sh.Status = Inactive
+	// Check if the transaction includes funds
+	value := rt.ValueReceived()
+	if value.LessThanEqual(big.NewInt(0)) {
+		rt.Abortf(exitcode.ErrIllegalArgument, "no funds included in transaction")
 	}
 
-	// Flush subnet into subnetMap
-	sh.flushSubnet(rt, st)
+	// Get SECP/BLS publickey to know the specific actor ID in the target subnet to
+	// whom the funds need to be sent.
+	// Funds are sent to the ID that controls the actor account in the destination subnet.
+	secpAddr := SecpBLSAddr(rt, rt.Caller())
 
+	// Increment stake locked for subnet.
+	var st SCAState
+	rt.StateTransaction(&st, func() {
+		msg := fundMsg(rt, address.SubnetID(params.ID), secpAddr, value)
+		commitTopDownMsg(rt, &st, msg)
+
+	})
+	return nil
 }
 
-func (sh *Subnet) flushSubnet(rt runtime.Runtime, st *SCAState) {
-	// Update subnet in the list of subnets.
-	subnets, err := adt.AsMap(adt.AsStore(rt), st.Subnets, builtin.DefaultHamtBitwidth)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state for subnets")
-	err = subnets.Put(abi.CidKey(sh.Cid), sh)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put new subnet in subnet map")
-	// Flush subnets
-	st.Subnets, err = subnets.Root()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush subnets")
+func commitTopDownMsg(rt runtime.Runtime, st *SCAState, msg types.Message) {
+	sto, err := msg.To.Subnet()
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "error getting subnet from address")
+	sfrom, err := msg.From.Subnet()
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "error getting subnet from address")
+
+	// Get the next subnet to which the message needs to be sent.
+	sh, has, err := st.GetSubnet(adt.AsStore(rt), sto.Down(st.NetworkName))
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error fetching subnet state")
+	if !has {
+		// If the source is this subnet abort, if not send noop.
+		if sfrom == st.NetworkName {
+			rt.Abortf(exitcode.ErrIllegalArgument, "subnet for actor hasn't been registered yet")
+		} else {
+			ret := st.requireNoErrorWithNoop(rt, msg, exitcode.ErrIllegalArgument, xerrors.Errorf("subnet for actor hasn't been registered yet"), "error committing top-down message")
+			if ret {
+				return
+			}
+		}
+	}
+
+	// Set nonce for message
+	msg.Nonce = sh.Nonce
+
+	// Store in the list of cross messages.
+	sh.storeTopDownMsg(rt, &msg)
+
+	// Increase nonce.
+	incrementNonce(rt, &sh.Nonce)
+
+	// Increase circulating supply in subnet.
+	sh.CircSupply = big.Add(sh.CircSupply, msg.Value)
+
+	// Flush subnet.
+	st.flushSubnet(rt, sh)
+}
+
+// Release creates a new check message to release funds in parent chain
+//
+// This function burns the funds that will be released in the current subnet
+// and propagates a new checkpoint message to the parent chain to signal
+// the amount of funds that can be released for a specific address.
+func (a SubnetCoordActor) Release(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
+	// Only account actors can release funds from a subnet (for now).
+	rt.ValidateImmediateCallerType(builtin.AccountActorCodeID)
+
+	// Check if the transaction includes funds
+	value := rt.ValueReceived()
+	if value.LessThanEqual(big.NewInt(0)) {
+		rt.Abortf(exitcode.ErrIllegalArgument, "no funds included in transaction")
+	}
+
+	code := rt.Send(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, rt.ValueReceived(), &builtin.Discard{})
+	if !code.IsSuccess() {
+		rt.Abortf(exitcode.ErrIllegalState,
+			"failed to send release funds to the burnt funds actor, code: %v", code)
+	}
+
+	// Get SECP/BLS publickey to know the specific actor ID in the target subnet to
+	// whom the funds need to be sent.
+	// Funds are sent to the ID that controls the actor account in the destination subnet.
+	secpAddr := SecpBLSAddr(rt, rt.Caller())
+
+	var st SCAState
+	rt.StateTransaction(&st, func() {
+		// Create releaseMsg and include in currentwindow checkpoint
+		msg := st.releaseMsg(rt, value, secpAddr, st.Nonce)
+		commitBottomUpMsg(rt, &st, msg)
+	})
+	return nil
+}
+
+func commitBottomUpMsg(rt runtime.Runtime, st *SCAState, msg types.Message) {
+	// Store msg in registry, update msgMeta and include in checkpoint
+	sto, err := msg.To.Subnet()
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting subnet from address")
+	st.storeCheckMsg(rt, msg, st.NetworkName, sto)
+
+	// Increase nonce.
+	incrementNonce(rt, &st.Nonce)
+}
+
+func SecpBLSAddr(rt runtime.Runtime, raw address.Address) address.Address {
+	resolved, ok := rt.ResolveAddress(raw)
+	if !ok {
+		rt.Abortf(exitcode.ErrIllegalArgument, "unable to resolve address %v", raw)
+	}
+	var pubkey address.Address
+	code := rt.Send(resolved, builtin.MethodsAccount.PubkeyAddress, nil, big.Zero(), &pubkey)
+	builtin.RequireSuccess(rt, code, "failed to fetch account pubkey from %v", resolved)
+	return pubkey
+}
+
+// SendCross sends an arbitrary cross-message to other subnet in the hierarchy.
+//
+// If the message includes any funds they need to be burnt (like in Release)
+// before being propagated to the corresponding subnet.
+// The circulating supply in each subnet needs to be updated as the message passes through them.
+func (a SubnetCoordActor) SendCross(rt runtime.Runtime, params *CrossMsgParams) *abi.EmptyValue {
+	// FIXME: Only support account addresses to send cross-messages for now.
+	rt.ValidateImmediateCallerType(builtin.AccountActorCodeID)
+	msg := params.Msg
+	var err error
+
+	if params.Destination == address.UndefSubnetID {
+		rt.Abortf(exitcode.ErrIllegalArgument, "no desination subnet specified in cross-net message")
+	}
+	// Get SECP/BLS publickey to know the specific actor ID in the target subnet to
+	// whom the funds need to be sent.
+	// Funds are sent to the ID that controls the actor account in the destination subnet.
+	// FIXME: Additional processing may be required if we want to
+	// support cross-messages sent by actors.
+	secp := SecpBLSAddr(rt, rt.Caller())
+
+	var (
+		st SCAState
+		tp hierarchical.MsgType
+	)
+
+	rt.StateTransaction(&st, func() {
+		if params.Destination == address.UndefSubnetID {
+			rt.Abortf(exitcode.ErrIllegalArgument, "destination subnet is current one. You are better of sending a good ol' msg")
+		}
+		// Transform to hierarchical-supported addresses
+		// NOTE: There is no address translation in msg.To. We could add additional
+		// checks to see the type of address and handle it accordingly.
+		msg.To, err = address.NewHAddress(params.Destination, msg.To)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
+		msg.From, err = address.NewHAddress(st.NetworkName, secp)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
+
+		tp = st.sendCrossMsg(rt, msg)
+
+	})
+
+	// For bottom-up messages with value, we need to burn the funds before propagating.
+	if tp == hierarchical.BottomUp && msg.Value.GreaterThan(big.Zero()) {
+		code := rt.Send(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, rt.ValueReceived(), &builtin.Discard{})
+		if !code.IsSuccess() {
+			rt.Abortf(exitcode.ErrIllegalState,
+				"failed to send release funds to the burnt funds actor, code: %v", code)
+		}
+	}
+	return nil
+}
+
+func (st *SCAState) sendCrossMsg(rt runtime.Runtime, msg types.Message) hierarchical.MsgType {
+	tp := hierarchical.GetMsgType(&msg)
+	// Check the type of message.
+	switch tp {
+	case hierarchical.TopDown:
+		commitTopDownMsg(rt, st, msg)
+	case hierarchical.BottomUp:
+		// Burn the funds before doing anything else.
+		commitBottomUpMsg(rt, st, msg)
+	default:
+		rt.Abortf(exitcode.ErrIllegalArgument, "cross-message doesn't have the right type")
+	}
+	return tp
+}
+
+// CrossMsgParams determines the cross message to apply.
+type CrossMsgParams struct {
+	Msg         types.Message
+	Destination address.SubnetID
+}
+
+// ApplyMessage triggers the execution of a cross-subnet message validated through the consensus.
+//
+// This function can only be triggered using `ApplyImplicitMessage`, and the source needs to
+// be the SystemActor. Cross messages are applied similarly to how rewards are applied once
+// a block has been validated. This function:
+// - Determines the type of cross-message.
+// - Performs the corresponding state changes.
+// - And updated the latest nonce applied for future checks.
+func (a SubnetCoordActor) ApplyMessage(rt runtime.Runtime, params *CrossMsgParams) *abi.EmptyValue {
+	// Only system actor can trigger this function.
+	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
+
+	var st SCAState
+	rt.StateReadonly(&st)
+	buApply, err := hierarchical.ApplyAsBottomUp(st.NetworkName, &params.Msg)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error computing type of message to apply")
+
+	if buApply {
+		applyBottomUp(rt, params.Msg)
+		return nil
+	}
+
+	applyTopDown(rt, params.Msg)
+	return nil
+}
+
+// RequireNoErrorWithNoop sends a opposite cross-net mesasge to revert state changes if error
+func (st *SCAState) requireNoErrorWithNoop(rt runtime.Runtime, msg types.Message, code exitcode.ExitCode, err error, errmsg string) bool {
+	if err != nil {
+		noop(rt, st, msg, code, xerrors.Errorf("%s: %s", errmsg, err))
+		return true
+	}
+	return false
+}
+
+// RequireNoErrorWithNoop sends a opposite cross-net mesasge to revert state changes if message code is not successful.
+func requireSuccessWithNoop(rt runtime.Runtime, msg types.Message, code exitcode.ExitCode, errmsg string) bool {
+	if !code.IsSuccess() {
+		noopWithStateTransaction(rt, msg, code, xerrors.Errorf("%s", errmsg))
+		return true
+	}
+	return false
+}
+
+func (a SubnetCoordActor) InitAtomicExec(rt runtime.Runtime, params *AtomicExecParams) *atomic.LockedOutput {
+	rt.ValidateImmediateCallerType(builtin.AccountActorCodeID)
+	var (
+		st  SCAState
+		c   cid.Cid
+		err error
+	)
+	rt.StateTransaction(&st, func() {
+		c, err = params.Cid()
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "error computing cid for atomic exec params")
+		execMap, err := adt.AsMap(adt.AsStore(rt), st.AtomicExecRegistry, builtin.DefaultHamtBitwidth)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting exec map")
+		// Check if execution already exists.
+		_, found, err := getAtomicExec(execMap, c)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting exec map")
+		if found {
+			rt.Abortf(exitcode.ErrIllegalArgument, "execution with cid %s already initialized", c)
+		}
+
+		if len(params.Msgs) == 0 || len(params.Inputs) == 0 {
+			rt.Abortf(exitcode.ErrIllegalArgument, "no msgs or inputs provided for execution")
+		}
+
+		// sanity-check: verify that all messages have same method and are directed to the same actor.
+		method := params.Msgs[0].Method
+		to := params.Msgs[0].To
+		for i := 1; i < len(params.Msgs); i++ {
+			// FIXME: this requirement can probably be relaxed, but leaving it like that until
+			// the level of generalization has been tested with other actors.
+			if method != params.Msgs[i].Method || to != params.Msgs[i].To {
+				rt.Abortf(exitcode.ErrIllegalArgument, "atomic exec does not support messages to different actors and methods right now")
+			}
+		}
+		// Store new initialized execution
+		err = st.putExecWithCid(execMap, c, &AtomicExec{Params: *params, Submitted: make(map[string]cid.Cid), Status: ExecInitialized})
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error storing new atomic execution")
+	})
+
+	// Return cid that identifies the execution.
+	return &atomic.LockedOutput{Cid: c}
+}
+
+func (a SubnetCoordActor) SubmitAtomicExec(rt runtime.Runtime, params *SubmitExecParams) *SubmitOutput {
+	rt.ValidateImmediateCallerType(builtin.AccountActorCodeID)
+	var (
+		st   SCAState
+		exec *AtomicExec
+	)
+	rt.StateTransaction(&st, func() {
+		execMap, err := adt.AsMap(adt.AsStore(rt), st.AtomicExecRegistry, builtin.DefaultHamtBitwidth)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting exec map")
+		// Check if execution exists.
+		var found bool
+		execCid, err := cid.Decode(params.Cid)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "error getting exec map")
+		exec, found, err = getAtomicExec(execMap, execCid)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting exec map")
+		if !found {
+			rt.Abortf(exitcode.ErrIllegalArgument, "execution with cid %s not found", params.Cid)
+		}
+
+		// Check if the output has been aborted or succeeded.
+		if exec.Status != ExecInitialized {
+			rt.Abortf(exitcode.ErrIllegalState, "execution already aborted/succeeded. No need for additional submissions")
+		}
+		// Check if the user is involved in the execution.
+		_, ok := exec.Params.Inputs[rt.Caller().String()]
+		if !ok {
+			rt.Abortf(exitcode.ErrIllegalArgument, "caller not involved in the execution")
+		}
+		// Check if he already submitted the output.
+		_, ok = exec.Submitted[rt.Caller().String()]
+		if ok {
+			rt.Abortf(exitcode.ErrIllegalArgument, "caller already submitted an execution output")
+		}
+		// Check if this is an abort
+		if params.Abort {
+			exec.Status = ExecAborted
+			st.propagateExecResult(rt, exec, atomic.LockedState{}, params.Abort)
+			return
+		}
+		outputCid, err := params.Output.Cid()
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error computing Cid for output state")
+		// Append the output only if it matches the existing ones.
+		// NOTE: checking here the cid of the lockedState (including the lock), consider
+		// making the comparison without the lock if we face inconsistencies in the e2e protocol.
+		for _, o := range exec.Submitted {
+			// NOTE: checking one should be enough and we could make it more efficient
+			// like that, but checking all for now as a sanity-check.
+			if o != outputCid {
+				rt.Abortf(exitcode.ErrIllegalArgument, "outputs don't match")
+				// FIXME: Should we abort right-away if this happens.
+			}
+		}
+		exec.Submitted[rt.Caller().String()] = outputCid
+		err = st.putExecWithCid(execMap, execCid, exec)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error putting exec state")
+		// If it is the final output update state of the execution.
+		if len(exec.Submitted) == len(exec.Params.Inputs) {
+			exec.Status = ExecSuccess
+			st.propagateExecResult(rt, exec, params.Output, params.Abort)
+		}
+
+	})
+
+	// Return status of the execution
+	return &SubmitOutput{exec.Status}
 }

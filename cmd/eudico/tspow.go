@@ -1,41 +1,40 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"time"
 
 	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/lotus/chain/actors/adt"
-	"github.com/filecoin-project/lotus/chain/actors/builtin/system"
+	"github.com/filecoin-project/lotus/chain"
+	"github.com/filecoin-project/lotus/chain/beacon"
+	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
-	param "github.com/filecoin-project/lotus/chain/consensus/params"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/gen/slashfilter"
-	adt0 "github.com/filecoin-project/specs-actors/actors/util/adt"
-	"github.com/ipfs/go-cid"
-	cbor "github.com/ipfs/go-ipld-cbor"
+	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
+	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
 
-	bstore "github.com/filecoin-project/lotus/blockstore"
-	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/consensus"
 	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/filecoin-project/lotus/chain/vm"
 	"github.com/filecoin-project/lotus/chain/wallet"
 	lcli "github.com/filecoin-project/lotus/cli"
 	cliutil "github.com/filecoin-project/lotus/cli/util"
-	"github.com/filecoin-project/lotus/genesis"
-	"github.com/filecoin-project/lotus/journal"
 	"github.com/filecoin-project/lotus/node"
 )
+
+func NewRootTSPoWConsensus(sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
+	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
+	return tspow.NewTSPoWConsensus(sm, nil, beacon, r, verifier, genesis, netName)
+}
 
 var tpowCmd = &cli.Command{
 	Name:  "tspow",
@@ -45,14 +44,11 @@ var tpowCmd = &cli.Command{
 		tpowMinerCmd,
 
 		daemonCmd(node.Options(
-			node.Override(new(consensus.Consensus), tspow.NewTSPoWConsensus),
+			node.Override(new(consensus.Consensus), NewRootTSPoWConsensus),
 			node.Override(new(store.WeightFunc), tspow.Weight),
 			node.Unset(new(*slashfilter.SlashFilter)),
-			// TODO: This doesn't seem to be right, we should implement the right
-			// executor and upgradeSchedule for this consensus, we currently
-			// use of the delegated consensus.
-			node.Override(new(stmgr.Executor), tspow.TipSetExecutor()), //todo
-			node.Override(new(stmgr.UpgradeSchedule), tspow.DefaultUpgradeSchedule()),
+			node.Override(new(stmgr.Executor), common.RootTipSetExecutor),
+			node.Override(new(stmgr.UpgradeSchedule), common.DefaultUpgradeSchedule()),
 		)),
 	},
 }
@@ -63,7 +59,7 @@ var tpowGenesisCmd = &cli.Command{
 	ArgsUsage: "[outfile]",
 	Action: func(cctx *cli.Context) error {
 		if cctx.Args().Len() != 1 {
-			return xerrors.Errorf("expected 2 arguments")
+			return xerrors.Errorf("expected 1 argument")
 		}
 
 		memks := wallet.NewMemKeyStore()
@@ -88,7 +84,9 @@ var tpowGenesisCmd = &cli.Command{
 			return err
 		}
 
-		if err := subnet.WriteGenesis(hierarchical.RootSubnet, subnet.PoW, address.Undef, vreg, rem, uint64(time.Now().Unix()), f); err != nil {
+		// TODO: Make configurable
+		checkPeriod := sca.DefaultCheckpointPeriod
+		if err := subnet.WriteGenesis(address.RootSubnet, hierarchical.PoW, address.Undef, vreg, rem, checkPeriod, uint64(time.Now().Unix()), f); err != nil {
 			return xerrors.Errorf("write genesis car: %w", err)
 		}
 
@@ -121,100 +119,7 @@ var tpowMinerCmd = &cli.Command{
 			return xerrors.Errorf("no miner address specified to start mining")
 		}
 
-		log.Infow("Starting mining with miner", miner)
+		log.Infow("Starting mining with miner", "miner", miner)
 		return tspow.Mine(ctx, miner, api)
 	},
-}
-
-func MakePoWGenesisBlock(ctx context.Context, j journal.Journal, bs bstore.Blockstore, sys vm.SyscallBuilder, template genesis.Template) (*genesis2.GenesisBootstrap, error) {
-	if j == nil {
-		j = journal.NilJournal()
-	}
-	st, _, err := genesis2.MakeInitialStateTree(ctx, bs, template)
-	if err != nil {
-		return nil, xerrors.Errorf("make initial state tree failed: %w", err)
-	}
-
-	stateroot, err := st.Flush(ctx)
-	if err != nil {
-		return nil, xerrors.Errorf("flush state tree failed: %w", err)
-	}
-
-	// temp chainstore
-	//cs := store.NewChainStore(bs, bs, datastore.NewMapDatastore(), j)
-
-	/*	// Verify PreSealed Data
-		stateroot, err = VerifyPreSealedData(ctx, cs, sys, stateroot, template, keyIDs, template.NetworkVersion)
-		if err != nil {
-			return nil, xerrors.Errorf("failed to verify presealed data: %w", err)
-		}
-
-		stateroot, err = SetupStorageMiners(ctx, cs, sys, stateroot, template.Miners, template.NetworkVersion)
-		if err != nil {
-			return nil, xerrors.Errorf("setup miners failed: %w", err)
-		}*/
-
-	store := adt.WrapStore(ctx, cbor.NewCborStore(bs))
-	emptyroot, err := adt0.MakeEmptyArray(store).Root()
-	if err != nil {
-		return nil, xerrors.Errorf("amt build failed: %w", err)
-	}
-
-	mm := &types.MsgMeta{
-		BlsMessages:   emptyroot,
-		SecpkMessages: emptyroot,
-	}
-	mmb, err := mm.ToStorageBlock()
-	if err != nil {
-		return nil, xerrors.Errorf("serializing msgmeta failed: %w", err)
-	}
-	if err := bs.Put(mmb); err != nil {
-		return nil, xerrors.Errorf("putting msgmeta block to blockstore: %w", err)
-	}
-
-	log.Infof("Empty Genesis root: %s", emptyroot)
-
-	wtb, err := param.GenesisWorkTarget.Bytes()
-	if err != nil {
-		return nil, err
-	}
-
-	genesisticket := &types.Ticket{
-		VRFProof: wtb,
-	}
-
-	b := &types.BlockHeader{
-		Miner:                 system.Address,
-		Ticket:                genesisticket,
-		Parents:               []cid.Cid{},
-		Height:                0,
-		ParentWeight:          types.NewInt(0),
-		ParentStateRoot:       stateroot,
-		Messages:              mmb.Cid(),
-		ParentMessageReceipts: emptyroot,
-		BLSAggregate:          nil,
-		BlockSig:              nil,
-		Timestamp:             template.Timestamp,
-		ElectionProof:         new(types.ElectionProof),
-		BeaconEntries: []types.BeaconEntry{
-			{
-				Round: 0,
-				Data:  make([]byte, 32),
-			},
-		},
-		ParentBaseFee: abi.NewTokenAmount(build.InitialBaseFee),
-	}
-
-	sb, err := b.ToStorageBlock()
-	if err != nil {
-		return nil, xerrors.Errorf("serializing block header failed: %w", err)
-	}
-
-	if err := bs.Put(sb); err != nil {
-		return nil, xerrors.Errorf("putting header to blockstore: %w", err)
-	}
-
-	return &genesis2.GenesisBootstrap{
-		Genesis: b,
-	}, nil
 }

@@ -131,6 +131,7 @@ func (blk *BlockHeader) IsValidated() bool {
 type MsgMeta struct {
 	BlsMessages   cid.Cid
 	SecpkMessages cid.Cid
+	CrossMessages cid.Cid
 }
 
 func (mm *MsgMeta) Cid() cid.Cid {
