@@ -100,7 +100,7 @@ func WaitForBalance(ctx context.Context, addr addr.Address, balance uint64, api 
 }
 
 func SubnetPerformHeightCheckForBlocks(ctx context.Context, validatedBlocksNumber int, subnetAddr addr.SubnetID, api napi.FullNode) error {
-	subnetHeads, err := api.SubnetChainNotify(ctx, subnetAddr)
+	subnetHeads, err := getSubnetChainHead(ctx, subnetAddr, api)
 	if err != nil {
 		return err
 	}

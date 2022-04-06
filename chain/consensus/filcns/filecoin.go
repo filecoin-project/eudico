@@ -49,7 +49,10 @@ import (
 	"github.com/filecoin-project/lotus/metrics"
 )
 
-var log = logging.Logger("fil-consensus")
+var (
+	log                     = logging.Logger("fil-consensus")
+	_   consensus.Consensus = &FilecoinEC{}
+)
 
 type FilecoinEC struct {
 	// The interface for accessing and putting tipsets into local storage
@@ -937,5 +940,3 @@ func (filec *FilecoinEC) isChainNearSynced() bool {
 func (filec *FilecoinEC) Type() hierarchical.ConsensusType {
 	return hierarchical.FilecoinEC
 }
-
-var _ consensus.Consensus = &FilecoinEC{}
