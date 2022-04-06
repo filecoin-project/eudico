@@ -542,10 +542,21 @@ func (c *CheckpointingSub) triggerChange(ctx context.Context, diff *diffInfo) (m
 	if diff.cp != nil && diff.hash != nil {
 		// the checkpoint is created by the "previous" set of miners
 		// so that the new key is updated
-		err = c.CreateCheckpoint(ctx, diff.cp, diff.hash, c.participants)
-		if err != nil {
-			log.Errorw("could not create checkpoint: %v", err)
-			return true, err
+		signers := make([]string,0)
+		for _, participant := range(c.participants){
+			if participant != "12D3KooWSpyoi7KghH98SWDfDFMyAwuvtP8MWWGDcC1e1uHWzjSm"{
+				signers = append(signers,participant)
+			}
+		}
+		for _, participant := range(signers){
+			if c.host.ID().String()==participant {
+				err = c.CreateCheckpoint(ctx, diff.cp, diff.hash, signers)
+				if err != nil {
+					log.Errorw("could not create checkpoint: %v", err)
+					return true, err
+				}
+				break
+			}
 		}
 	}
 	return true, nil
@@ -593,7 +604,11 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 
 	id := party.ID(c.host.ID().String())
 
-	threshold := (len(idsStrings) / 2) + 1
+	var threshold int
+	if threshold = (len(idsStrings) / 2); len(idsStrings) % 2 ==1 {
+    	threshold = (len(idsStrings) / 2) + 1
+	}
+	
 	//starting a new ceremony with the subscription and topic that were
 	// already defined
 	//why not call the checkpointing sub directly?
@@ -673,163 +688,164 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 
 func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte, participants []string) error {
 
-	fmt.Println("I'm a checkpointer")
-	taprootAddress, err := pubkeyToTapprootAddress(c.pubkey)
-	if err != nil {
-		return err
-	}
-
-	pubkey := c.taprootConfig.PublicKey
-	// if a new public key was generated (i.e. new miners), we use this key in the checkpoint
-	if c.newDKGComplete {
-		//pubkey = c.newTaprootConfig.PublicKey // change this to update from the actor
-		pubkey = taproot.PublicKey(c.newKey)
-	}
-
-	pubkeyShort := genCheckpointPublicKeyTaproot(pubkey, cp)
-	newTaprootAddress, err := pubkeyToTapprootAddress(pubkeyShort)
-	if err != nil {
-		return err
-	}
-
-	// the list of participants is ordered
-	// we will chose the "first" half of participants
-	// in order to sign the transaction in the threshold signing.
-	// In later improvement we will choose them randomly.
-
-	// list from mocked power actor:
-	sort.Strings(participants)
-	idsStrings := participants
-
-	log.Infow("participants list :", "participants", idsStrings)
-	log.Infow("precedent tx", "txid", c.ptxid)
-	ids := c.formIDSlice(idsStrings)
-	taprootScript := getTaprootScript(c.pubkey)
-	//we add our public key to our bitcoin wallet
-	success := addTaprootToWallet(c.cpconfig.BitcoinHost, taprootScript)
-	if !success {
-		return xerrors.Errorf("failed to add taproot address to wallet")
-	}
-	if c.ptxid == "" {
-		log.Infow("missing precedent txid")
-
-		// sleep an arbitrary long time to be sure it has been scanned
-		// removed this because now we are adding without rescanning (too long)
-		//time.Sleep(6 * time.Second)
-		//time.Sleep(20 * time.Second)
-
-		//we get the transaction id using our bitcoin client
-		ptxid, err := walletGetTxidFromAddress(c.cpconfig.BitcoinHost, taprootAddress)
+	//if participants.Contains(c.host.ID().String()) && c.host.ID().String() != "12D3KooWSpyoi7KghH98SWDfDFMyAwuvtP8MWWGDcC1e1uHWzjSm"{
+		fmt.Println("I'm a checkpointer")
+		taprootAddress, err := pubkeyToTapprootAddress(c.pubkey)
 		if err != nil {
 			return err
 		}
-		c.ptxid = ptxid
-		log.Infow("found precedent txid:", "txid", c.ptxid)
-	}
 
-	index := 0
-	//fmt.Println("Previous tx id: ", c.ptxid)
-	value, scriptPubkeyBytes := getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
+		pubkey := c.taprootConfig.PublicKey
+		// if a new public key was generated (i.e. new miners), we use this key in the checkpoint
+		if c.newDKGComplete {
+			//pubkey = c.newTaprootConfig.PublicKey // change this to update from the actor
+			pubkey = taproot.PublicKey(c.newKey)
+		}
 
-	// TODO: instead of calling getTxOUt we need to check for the latest transaction
-	// same as is done in the verification.sh script
+		pubkeyShort := genCheckpointPublicKeyTaproot(pubkey, cp)
+		newTaprootAddress, err := pubkeyToTapprootAddress(pubkeyShort)
+		if err != nil {
+			return err
+		}
 
-	if scriptPubkeyBytes[0] != 0x51 {
-		log.Infow("wrong txout")
-		index = 1
-		value, scriptPubkeyBytes = getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
-	}
-	newValue := value - c.cpconfig.Fee
-	//fmt.Println("Fee for next transaction is: ", c.cpconfig.Fee)
-	payload1 := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.8f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
-	fmt.Println("Data pushed to opreturn: ", hex.EncodeToString(data))
-	result := jsonRPC(c.cpconfig.BitcoinHost, payload1)
-	//fmt.Println("Result from Raw tx: ", result)
-	if result == nil {
-		return xerrors.Errorf("can not create new transaction")
-	}
+		// the list of participants is ordered
+		// we will chose the "first" half of participants
+		// in order to sign the transaction in the threshold signing.
+		// In later improvement we will choose them randomly.
 
-	rawTransaction := result["result"].(string)
+		// list from mocked power actor:
+		sort.Strings(participants)
+		idsStrings := participants
 
-	tx, err := hex.DecodeString(rawTransaction)
-	if err != nil {
-		return err
-	}
+		log.Infow("participants list :", "participants", idsStrings)
+		log.Infow("precedent tx", "txid", c.ptxid)
+		ids := c.formIDSlice(idsStrings)
+		taprootScript := getTaprootScript(c.pubkey)
+		//we add our public key to our bitcoin wallet
+		success := addTaprootToWallet(c.cpconfig.BitcoinHost, taprootScript)
+		if !success {
+			return xerrors.Errorf("failed to add taproot address to wallet")
+		}
+		if c.ptxid == "" {
+			log.Infow("missing precedent txid")
 
-	var buf [8]byte
-	binary.LittleEndian.PutUint64(buf[:], uint64(value*100000000))
-	utxo := append(buf[:], []byte{34}...)
-	utxo = append(utxo, scriptPubkeyBytes...)
+			// sleep an arbitrary long time to be sure it has been scanned
+			// removed this because now we are adding without rescanning (too long)
+			//time.Sleep(6 * time.Second)
+			//time.Sleep(20 * time.Second)
 
-	hashedTx, err := TaprootSignatureHash(tx, utxo, 0x00)
-	if err != nil {
-		return err
-	}
+			//we get the transaction id using our bitcoin client
+			ptxid, err := walletGetTxidFromAddress(c.cpconfig.BitcoinHost, taprootAddress)
+			if err != nil {
+				return err
+			}
+			c.ptxid = ptxid
+			log.Infow("found precedent txid:", "txid", c.ptxid)
+		}
 
-	/*
-	 * Orchestrate the signing message
-	 */
-	fmt.Println("I'm starting the checkpointing")
-	log.Infow("starting signing")
-	// Here all the participants sign the transaction
-	// in practice we only need "threshold" of them to sign
-	f := frost.SignTaprootWithTweak(c.taprootConfig, ids, hashedTx[:], c.tweakedValue[:])
-	n := NewNetwork(c.sub, c.topic)
-	// hashedTx[:] is the session id
-	// ensure everyone is on the same session id
-	handler, err := protocol.NewMultiHandler(f, hashedTx[:])
-	if err != nil {
-		return err
-	}
-	LoopHandler(ctx, handler, n)
-	r, err := handler.Result()
-	if err != nil {
-		return err
-	}
-	log.Infow("result :", "result", r)
+		index := 0
+		//fmt.Println("Previous tx id: ", c.ptxid)
+		value, scriptPubkeyBytes := getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
 
-	// if signing is a success we register the new value
-	merkleRoot := hashMerkleRoot(pubkey, cp)
-	c.tweakedValue = hashTweakedValue(pubkey, merkleRoot)
-	c.pubkey = pubkeyShort //updates the public key to the new key
+		// TODO: instead of calling getTxOUt we need to check for the latest transaction
+		// same as is done in the verification.sh script
 
-	c.ptxid = ""
+		if scriptPubkeyBytes[0] != 0x51 {
+			log.Infow("wrong txout")
+			index = 1
+			value, scriptPubkeyBytes = getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
+		}
+		newValue := value - c.cpconfig.Fee
+		//fmt.Println("Fee for next transaction is: ", c.cpconfig.Fee)
+		payload1 := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.8f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
+		fmt.Println("Data pushed to opreturn: ", hex.EncodeToString(data))
+		result := jsonRPC(c.cpconfig.BitcoinHost, payload1)
+		//fmt.Println("Result from Raw tx: ", result)
+		if result == nil {
+			return xerrors.Errorf("can not create new transaction")
+		}
 
-	// Only first one broadcast the transaction ?
-	// Actually all participants can broadcast the transcation. It will be the same everywhere.
-	rawtx := prepareWitnessRawTransaction(rawTransaction, r.(taproot.Signature))
-	payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendrawtransaction\", \"params\": [\"" + rawtx + "\"]}"
-	//fmt.Println("Send raw transaction command:", payload)
-	//fmt.Println("Raw tx: ", payload1)
-	result = jsonRPC(c.cpconfig.BitcoinHost, payload)
-	//fmt.Println("Transaction to be sent: ", result)
-	if result["error"] != nil {
-		return xerrors.Errorf("failed to broadcast transaction")
-	}
+		rawTransaction := result["result"].(string)
 
-	/* Need to keep this to build next one */
-	newtxid := result["result"].(string)
-	log.Infow("new Txid:", "newtxid", newtxid)
-	c.ptxid = newtxid
+		tx, err := hex.DecodeString(rawTransaction)
+		if err != nil {
+			return err
+		}
+
+		var buf [8]byte
+		binary.LittleEndian.PutUint64(buf[:], uint64(value*100000000))
+		utxo := append(buf[:], []byte{34}...)
+		utxo = append(utxo, scriptPubkeyBytes...)
+
+		hashedTx, err := TaprootSignatureHash(tx, utxo, 0x00)
+		if err != nil {
+			return err
+		}
+
+		/*
+		 * Orchestrate the signing message
+		 */
+		fmt.Println("I'm starting the checkpointing")
+		log.Infow("starting signing")
+		// Here all the participants sign the transaction
+		// in practice we only need "threshold" of them to sign
+		f := frost.SignTaprootWithTweak(c.taprootConfig, ids, hashedTx[:], c.tweakedValue[:])
+		n := NewNetwork(c.sub, c.topic)
+		// hashedTx[:] is the session id
+		// ensure everyone is on the same session id
+		handler, err := protocol.NewMultiHandler(f, hashedTx[:])
+		if err != nil {
+			return err
+		}
+		LoopHandler(ctx, handler, n)
+		r, err := handler.Result()
+		if err != nil {
+			return err
+		}
+		log.Infow("result :", "result", r)
+
+		// if signing is a success we register the new value
+		merkleRoot := hashMerkleRoot(pubkey, cp)
+		c.tweakedValue = hashTweakedValue(pubkey, merkleRoot)
+		c.pubkey = pubkeyShort //updates the public key to the new key
+
+		c.ptxid = ""
+
+		// Only first one broadcast the transaction ?
+		// Actually all participants can broadcast the transcation. It will be the same everywhere.
+		rawtx := prepareWitnessRawTransaction(rawTransaction, r.(taproot.Signature))
+		payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendrawtransaction\", \"params\": [\"" + rawtx + "\"]}"
+		//fmt.Println("Send raw transaction command:", payload)
+		//fmt.Println("Raw tx: ", payload1)
+		result = jsonRPC(c.cpconfig.BitcoinHost, payload)
+		//fmt.Println("Transaction to be sent: ", result)
+		if result["error"] != nil {
+			return xerrors.Errorf("failed to broadcast transaction")
+		}
+
+		/* Need to keep this to build next one */
+		newtxid := result["result"].(string)
+		log.Infow("new Txid:", "newtxid", newtxid)
+		c.ptxid = newtxid
 
 
-	// If we have new config (i.e. a DKG has completed and we participated in it)
-	// we replace the previous config with this config
-	// Note: if someone left the protocol, they will not do this so this is not great
-	if c.newTaprootConfig != nil {
-		c.taprootConfig = c.newTaprootConfig
-		c.newTaprootConfig = nil
-	}
+		// If we have new config (i.e. a DKG has completed and we participated in it)
+		// we replace the previous config with this config
+		// Note: if someone left the protocol, they will not do this so this is not great
+		if c.newTaprootConfig != nil {
+			c.taprootConfig = c.newTaprootConfig
+			c.newTaprootConfig = nil
+		}
 
-	// even miners who left the protocol will do this as their newDKGComplete
-	// return true for everyone after a DKG has completed (whether they took part or no)
-	if c.newDKGComplete {
-		c.keysUpdated = true
-		c.participants = c.newParticipants
-		c.newParticipants = []string{}
-		c.newDKGComplete = false
+		// even miners who left the protocol will do this as their newDKGComplete
+		// return true for everyone after a DKG has completed (whether they took part or no)
+		if c.newDKGComplete {
+			c.keysUpdated = true
+			c.participants = c.newParticipants
+			c.newParticipants = []string{}
+			c.newDKGComplete = false
 
-	}
+		}
 
 	return nil
 }
