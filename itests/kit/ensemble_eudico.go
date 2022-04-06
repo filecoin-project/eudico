@@ -135,45 +135,6 @@ type EudicoEnsemble struct {
 	tendermintAppServer   service.Service
 }
 
-func EudicoMiners(t *testing.T, opts ...interface{}) (
-	rootMiner func(ctx context.Context, addr address.Address, api v1api.FullNode) error,
-	subnetMinerType hierarchical.ConsensusType) {
-
-	eopts, _ := siftOptions(t, opts)
-
-	options := DefaultEnsembleOpts
-	for _, o := range eopts {
-		err := o(&options)
-		require.NoError(t, err)
-	}
-
-	switch options.rootConsensus {
-	case hierarchical.Tendermint:
-		rootMiner = tendermint.Mine
-	case hierarchical.PoW:
-		rootMiner = tspow.Mine
-	case hierarchical.Delegated:
-		rootMiner = delegcns.Mine
-	case hierarchical.FilecoinEC:
-		break
-	default:
-		t.Fatalf("root consensus %d not supported", options.rootConsensus)
-	}
-
-	switch options.subnetConsensus {
-	case hierarchical.Tendermint:
-		subnetMinerType = hierarchical.Tendermint
-	case hierarchical.PoW:
-		subnetMinerType = hierarchical.PoW
-	case hierarchical.Delegated:
-		subnetMinerType = hierarchical.Delegated
-	default:
-		t.Fatalf("subnet consensus %d not supported", options.subnetConsensus)
-	}
-
-	return
-}
-
 // NewEudicoEnsemble instantiates a new blank EudicoEnsemble.
 func NewEudicoEnsemble(t *testing.T, opts ...EnsembleOpt) *EudicoEnsemble {
 	options := DefaultEnsembleOpts
@@ -1007,6 +968,7 @@ func (n *EudicoEnsemble) startTendermint() error {
 	n.tendermintContainerID = tm.ID
 	return nil
 }
+
 func (n *EudicoEnsemble) removeTendermintFiles() error {
 	if err := os.RemoveAll(TendermintConsensusTestDir + "/config"); err != nil {
 		return err
@@ -1056,7 +1018,69 @@ func EudicoEnsembleMinimal(t *testing.T, opts ...interface{}) (*TestFullNode, *T
 	return &full, &miner, ens
 }
 
-// EudicoEnsembleFullNodeOnly creates and starts an EudicoEnsemble with a single full node.
+type EudicoRootMiner func(ctx context.Context, addr address.Address, api v1api.FullNode) error
+
+// EudicoEnsembleTwoMiners creates types for root miner and subnet miner that can be used to spawn real miners.
+// The main reason why this hask is used is that the Filecon consensus and Eudico consensus protocol have different implementations.
+// For example, the Filecoin consensus doesn't have a single Mine() function that implements mining.
+func EudicoEnsembleTwoMiners(t *testing.T, opts ...interface{}) (*TestFullNode, interface{}, hierarchical.ConsensusType, *EudicoEnsemble) {
+	opts = append(opts, WithAllSubsystems())
+
+	eopts, nopts := siftOptions(t, opts)
+
+	var (
+		full  TestFullNode
+		miner TestMiner
+	)
+
+	options := DefaultEnsembleOpts
+	for _, o := range eopts {
+		err := o(&options)
+		require.NoError(t, err)
+	}
+
+	var rootMiner EudicoRootMiner
+
+	switch options.rootConsensus {
+	case hierarchical.Tendermint:
+		rootMiner = tendermint.Mine
+	case hierarchical.PoW:
+		rootMiner = tspow.Mine
+	case hierarchical.Delegated:
+		rootMiner = delegcns.Mine
+	case hierarchical.FilecoinEC:
+		// Filecoin miner is created below within itests approach.
+		break
+	default:
+		t.Fatalf("root consensus %d not supported", options.rootConsensus)
+	}
+
+	var subnetMinerType hierarchical.ConsensusType
+
+	switch options.subnetConsensus {
+	case hierarchical.Tendermint:
+		subnetMinerType = hierarchical.Tendermint
+	case hierarchical.PoW:
+		subnetMinerType = hierarchical.PoW
+	case hierarchical.Delegated:
+		subnetMinerType = hierarchical.Delegated
+	default:
+		t.Fatalf("subnet consensus %d not supported", options.subnetConsensus)
+	}
+
+	var ens *EudicoEnsemble
+
+	if options.rootConsensus == hierarchical.FilecoinEC {
+		ens = NewEudicoEnsemble(t, eopts...).FullNode(&full, nopts...).Miner(&miner, &full, nopts...).Start()
+		return &full, &miner, subnetMinerType, ens
+	} else {
+		ens = NewEudicoEnsemble(t, eopts...).FullNode(&full, nopts...).Start()
+		return &full, rootMiner, subnetMinerType, ens
+	}
+}
+
+// EudicoEnsembleFullNodeOnly creates and starts a EudicoEnsemble with a single full node.
+// It is used with Eudico consensus protocols that implementation is different from Filecoin one.
 func EudicoEnsembleFullNodeOnly(t *testing.T, opts ...interface{}) (*TestFullNode, *EudicoEnsemble) {
 	opts = append(opts, WithAllSubsystems())
 
@@ -1067,6 +1091,45 @@ func EudicoEnsembleFullNodeOnly(t *testing.T, opts ...interface{}) (*TestFullNod
 	)
 	ens := NewEudicoEnsemble(t, eopts...).FullNode(&full, nopts...).Start()
 	return &full, ens
+}
+
+func EudicoMiners(t *testing.T, opts ...interface{}) (
+	rootMiner func(ctx context.Context, addr address.Address, api v1api.FullNode) error,
+	subnetMinerType hierarchical.ConsensusType) {
+
+	eopts, _ := siftOptions(t, opts)
+
+	options := DefaultEnsembleOpts
+	for _, o := range eopts {
+		err := o(&options)
+		require.NoError(t, err)
+	}
+
+	switch options.rootConsensus {
+	case hierarchical.Tendermint:
+		rootMiner = tendermint.Mine
+	case hierarchical.PoW:
+		rootMiner = tspow.Mine
+	case hierarchical.Delegated:
+		rootMiner = delegcns.Mine
+	case hierarchical.FilecoinEC:
+		break
+	default:
+		t.Fatalf("root consensus %d not supported", options.rootConsensus)
+	}
+
+	switch options.subnetConsensus {
+	case hierarchical.Tendermint:
+		subnetMinerType = hierarchical.Tendermint
+	case hierarchical.PoW:
+		subnetMinerType = hierarchical.PoW
+	case hierarchical.Delegated:
+		subnetMinerType = hierarchical.Delegated
+	default:
+		t.Fatalf("subnet consensus %d not supported", options.subnetConsensus)
+	}
+
+	return
 }
 
 func EudicoEnsembleWithMinerAndMarketNodes(t *testing.T, opts ...interface{}) (*TestFullNode, *TestMiner, *TestMiner, *EudicoEnsemble) {

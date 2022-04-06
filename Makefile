@@ -107,7 +107,7 @@ BINS+=eudico
 # Run integration tests for Eudico
 eudico-subnet-test: GOFLAGS+=-tags=2k
 eudico-subnet-test:
-	go test $(GOFLAGS) -count=1 -timeout=0 -run TestEudicoSubnetConsensus ./itests
+	go test $(GOFLAGS) -count=1 -timeout=0 -run TestEudicoSubnet ./itests
 .PHONY: eudico-subnet-test
 
 eudico-consensus-test: GOFLAGS+=-tags=2k

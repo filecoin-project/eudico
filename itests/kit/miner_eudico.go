@@ -9,8 +9,10 @@ import (
 
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/lotus/api"
 	napi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/types"
+	lcli "github.com/filecoin-project/lotus/cli"
 )
 
 const (
@@ -132,4 +134,52 @@ func SubnetPerformHeightCheckForBlocks(ctx context.Context, validatedBlocksNumbe
 	}
 
 	return nil
+}
+
+// MessageForSend send the message
+// TODO: use MessageForSend from cli package.
+func MessageForSend(ctx context.Context, s api.FullNode, params lcli.SendParams) (*api.MessagePrototype, error) {
+	if params.From == addr.Undef {
+		defaddr, err := s.WalletDefaultAddress(ctx)
+		if err != nil {
+			return nil, err
+		}
+		params.From = defaddr
+	}
+
+	msg := types.Message{
+		From:  params.From,
+		To:    params.To,
+		Value: params.Val,
+
+		Method: params.Method,
+		Params: params.Params,
+	}
+
+	if params.GasPremium != nil {
+		msg.GasPremium = *params.GasPremium
+	} else {
+		msg.GasPremium = types.NewInt(0)
+	}
+	if params.GasFeeCap != nil {
+		msg.GasFeeCap = *params.GasFeeCap
+	} else {
+		msg.GasFeeCap = types.NewInt(0)
+	}
+	if params.GasLimit != nil {
+		msg.GasLimit = *params.GasLimit
+	} else {
+		msg.GasLimit = 0
+	}
+	validNonce := false
+	if params.Nonce != nil {
+		msg.Nonce = *params.Nonce
+		validNonce = true
+	}
+
+	prototype := &api.MessagePrototype{
+		Message:    msg,
+		ValidNonce: validNonce,
+	}
+	return prototype, nil
 }
