@@ -544,15 +544,9 @@ func (c *CheckpointingSub) triggerChange(ctx context.Context, diff *diffInfo) (m
 	if diff.cp != nil && diff.hash != nil {
 		// the checkpoint is created by the "previous" set of miners
 		// so that the new key is updated
-		signers := make([]string,0)
 		for _, participant := range(c.participants){
-			if participant != "12D3KooWSpyoi7KghH98SWDfDFMyAwuvtP8MWWGDcC1e1uHWzjSm"{
-				signers = append(signers,participant)
-			}
-		}
-		for _, participant := range(signers){
 			if c.host.ID().String()==participant {
-				err = c.CreateCheckpoint(ctx, diff.cp, diff.hash, signers)
+				err = c.CreateCheckpoint(ctx, diff.cp, diff.hash, c.participants)
 				if err != nil {
 					log.Errorw("could not create checkpoint: %v", err)
 					return true, err
@@ -606,10 +600,11 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 
 	id := party.ID(c.host.ID().String())
 
-	var threshold int
-	if threshold = (len(idsStrings) / 2); len(idsStrings) % 2 ==1 {
-    	threshold = (len(idsStrings) / 2) + 1
-	}
+	// var threshold int
+	// if threshold = (len(idsStrings) / 2); len(idsStrings) % 2 ==1 {
+ //    	threshold = (len(idsStrings) / 2) + 1
+	// }
+	threshold := (len(idsStrings) / 2) // we need threshold +1 parties to sign
 	
 	//starting a new ceremony with the subscription and topic that were
 	// already defined
@@ -644,6 +639,11 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	}
 	c.newDKGComplete = true
 	c.newKey = []byte(c.newTaprootConfig.PublicKey)
+	c.newParticipants = make([]string,0)
+	for  participant,_ := range(c.newTaprootConfig.VerificationShares){
+		//if participant != "12D3KooWSpyoi7KghH98SWDfDFMyAwuvtP8MWWGDcC1e1uHWzjSm"{
+		c.newParticipants = append(c.newParticipants,string(participant))
+	}
 
 	// we need to update the taproot public key in the mocked actor
 	// this is done by sending a transaction with method 4 (which
