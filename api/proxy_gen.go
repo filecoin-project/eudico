@@ -591,6 +591,8 @@ type HierarchicalCnsStruct struct {
 
 		ListCheckpoints func(p0 context.Context, p1 address.SubnetID, p2 int) ([]*schema.Checkpoint, error) `perm:"read"`
 
+		ListSubnets func(p0 context.Context, p1 address.SubnetID) ([]sca.Subnet, error) `perm:"read"`
+
 		LockState func(p0 context.Context, p1 address.Address, p2 address.Address, p3 address.SubnetID, p4 abi.MethodNum) (cid.Cid, error) `perm:"write"`
 
 		MineSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 bool) error `perm:"read"`
@@ -3677,6 +3679,17 @@ func (s *HierarchicalCnsStruct) ListCheckpoints(p0 context.Context, p1 address.S
 
 func (s *HierarchicalCnsStub) ListCheckpoints(p0 context.Context, p1 address.SubnetID, p2 int) ([]*schema.Checkpoint, error) {
 	return *new([]*schema.Checkpoint), ErrNotSupported
+}
+
+func (s *HierarchicalCnsStruct) ListSubnets(p0 context.Context, p1 address.SubnetID) ([]sca.Subnet, error) {
+	if s.Internal.ListSubnets == nil {
+		return *new([]sca.Subnet), ErrNotSupported
+	}
+	return s.Internal.ListSubnets(p0, p1)
+}
+
+func (s *HierarchicalCnsStub) ListSubnets(p0 context.Context, p1 address.SubnetID) ([]sca.Subnet, error) {
+	return *new([]sca.Subnet), ErrNotSupported
 }
 
 func (s *HierarchicalCnsStruct) LockState(p0 context.Context, p1 address.Address, p2 address.Address, p3 address.SubnetID, p4 abi.MethodNum) (cid.Cid, error) {

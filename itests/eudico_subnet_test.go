@@ -6,15 +6,12 @@ import (
 	"testing"
 	"time"
 
-	cbor "github.com/ipfs/go-ipld-cbor"
 	"github.com/stretchr/testify/require"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
-	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/chain/actors"
-	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
@@ -23,6 +20,12 @@ import (
 	"github.com/filecoin-project/lotus/itests/kit"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
+
+func TestEudicoSubnetFast(t *testing.T) {
+	t.Run("/root/filcns-/subnet/delegated", func(t *testing.T) {
+		runSubnetTests(t, kit.ThroughRPC(), kit.RootFilcns(), kit.SubnetDelegated())
+	})
+}
 
 func TestEudicoSubnet(t *testing.T) {
 	// Filecoin consensus in root
@@ -154,19 +157,11 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	t1 := time.Now()
 	c, err := full.StateWaitMsg(ctx, sc, 1, 100, false)
 	require.NoError(t, err)
-	t.Logf("the message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
+	t.Logf("[*] the message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
 
 	// AddSubnet only deploys the subnet actor. The subnet will only be listed after joining the subnet
 
-	var st sca.SCAState
-	act, err := full.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, types.EmptyTSK)
-	require.NoError(t, err)
-	bs := blockstore.NewAPIBlockstore(full)
-	cst := cbor.NewCborStore(bs)
-	s := adt.WrapStore(ctx, cst)
-	err = cst.Get(ctx, act.Head, &st)
-	require.NoError(t, err)
-	sn, err := sca.ListSubnets(s, st)
+	sn, err := full.ListSubnets(ctx, address.RootSubnet)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(sn))
 	require.NotEqual(t, 0, sn[0].Status)
@@ -216,7 +211,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	t1 = time.Now()
 	c, err = full.StateWaitMsg(ctx, msg.Cid(), 1, 100, false)
 	require.NoError(t, err)
-	t.Logf("the cross message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
+	t.Logf(" [*] the cross message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
 
 	msg, err = full.MpoolPushMessage(ctx, &types.Message{
 		To:    newAddr,
@@ -228,21 +223,21 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	t1 = time.Now()
 	c, err = full.StateWaitMsg(ctx, msg.Cid(), 1, 100, false)
 	require.NoError(t, err)
-	t.Logf("the message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
+	t.Logf("[*] the message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
 
 	t1 = time.Now()
 	bl, err := kit.WaitSubnetActorBalance(ctx, subnetAddr, addr, injectedFils, 100, full)
 	require.NoError(t, err)
-	t.Logf("sent funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
+	t.Logf(" [*] Sent funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
 
 	a, err := full.SubnetStateGetActor(ctx, subnetAddr, addr, types.EmptyTSK)
 	require.NoError(t, err)
-	t.Logf("%s addr balance: %d", addr, a.Balance)
+	t.Logf("[*] %s addr balance: %d", addr, a.Balance)
 	require.Equal(t, 0, big.Cmp(injectedFils, a.Balance))
 
 	a, err = full.SubnetStateGetActor(ctx, subnetAddr, newAddr, types.EmptyTSK)
 	require.NoError(t, err)
-	t.Logf("%s new addr balance: %d", newAddr, a.Balance)
+	t.Logf("[*] %s new addr balance: %d", newAddr, a.Balance)
 	require.Equal(t, 0, big.Cmp(sentFils, a.Balance))
 
 	// Release funds
@@ -254,12 +249,12 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 
 	c, err = full.SubnetStateWaitMsg(ctx, subnetAddr, releaseCid, 1, 100, false)
 	require.NoError(t, err)
-	t.Logf("the release message was found in %d epoch of subnet", c.Height)
+	t.Logf("[*] The release message was found in %d epoch of subnet", c.Height)
 
 	t1 = time.Now()
 	bl, err = kit.WaitSubnetActorBalance(ctx, parent, newAddr, big.Add(sentFils, releasedFils), 100, full)
 	require.NoError(t, err)
-	t.Logf("released funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
+	t.Logf("[*] Released funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
 
 	a, err = full.StateGetActor(ctx, newAddr, types.EmptyTSK)
 	require.NoError(t, err)
@@ -293,9 +288,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	_, err = full.LeaveSubnet(ctx, addr, subnetAddr)
 	require.NoError(t, err)
 
-	err = cst.Get(ctx, act.Head, &st)
-	require.NoError(t, err)
-	sn, err = sca.ListSubnets(s, st)
+	sn, err = full.ListSubnets(ctx, address.RootSubnet)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(sn))
 	require.NotEqual(t, 0, sn[0].Status)
@@ -303,5 +296,5 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	err = ens.Stop()
 	require.NoError(t, err)
 
-	t.Logf("Test time: %v\n", time.Since(startTime).Seconds())
+	t.Logf("[*] Test time: %v\n", time.Since(startTime).Seconds())
 }

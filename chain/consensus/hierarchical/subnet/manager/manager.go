@@ -13,7 +13,7 @@ import (
 	cbor "github.com/ipfs/go-ipld-cbor"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p-core/host"
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
@@ -26,6 +26,7 @@ import (
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/actors"
+	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/beacon"
 	act "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
@@ -609,6 +610,33 @@ func (s *SubnetMgr) LeaveSubnet(
 	}
 
 	return smsg.Cid(), nil
+}
+
+func (s *SubnetMgr) ListSubnets(ctx context.Context, id address.SubnetID) ([]sca.Subnet, error) {
+	sapi, err := s.GetSubnetAPI(id)
+	if err != nil {
+		return nil, err
+	}
+	actor, err := sapi.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, types.EmptyTSK)
+	if err != nil {
+		return nil, err
+	}
+
+	bs := blockstore.NewAPIBlockstore(sapi)
+	cst := cbor.NewCborStore(bs)
+	ws := adt.WrapStore(ctx, cst)
+
+	var st sca.SCAState
+	err = cst.Get(ctx, actor.Head, &st)
+	if err != nil {
+		return nil, err
+	}
+
+	list, err := sca.ListSubnets(ws, st)
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
 }
 
 func (s *SubnetMgr) KillSubnet(
