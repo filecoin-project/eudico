@@ -1,5 +1,9 @@
 #! /bin/bash
-
+rm -rf data/
+cp -R ../testnet-data/data ./
+export LOTUS_SKIP_GENESIS_CHECK=_yes_
+./eudico delegated genesis t1d2xrzcslx7xlbbylc5c3d5lvandqw4iwl6epxba gen.gen
+./scripts/data-permissions.sh
 # the creation of the wallet must be done priorly as the address needs
 # to be funded using the bitcoin faucet
 ## create Bitcoin wallet

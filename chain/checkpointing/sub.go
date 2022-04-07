@@ -53,9 +53,9 @@ var log = logging.Logger("checkpointing")
 
 
 //update this value with the amount you want to send to the initial aggregated key (for testing purpose)
-const initialValueInWallet = 50
+//const initialValueInWallet = 50
 // for testnet I recommend using 0.002
-//const initialValueInWallet = 0.002
+const initialValueInWallet = 0.002
 
 // change this to true to alternatively send all the amount from our wallet
 var sendall = false
@@ -64,7 +64,7 @@ var sendall = false
 const checkpointFrequency = 25
 
 //change to true if regtest is used
-const Regtest = true
+const Regtest = false
 
 // struct used to propagate detected changes.
 type diffInfo struct {
@@ -519,6 +519,7 @@ func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *ty
 			} 
 			//Push data to everyone
 			c.r.PushCheckpointMsgs(*msgs,false)
+			fmt.Println("Data pushed to KVS: ",[]byte(minersConfig))
 		}
 
 		return true, nil
@@ -828,6 +829,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		/* Need to keep this to build next one */
 		newtxid := result["result"].(string)
 		log.Infow("new Txid:", "newtxid", newtxid)
+		fmt.Println("new Txid:", "newtxid", newtxid)
 		c.ptxid = newtxid
 
 
