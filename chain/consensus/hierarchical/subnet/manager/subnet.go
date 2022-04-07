@@ -280,6 +280,7 @@ func (sh *Subnet) stopMining(ctx context.Context) error {
 	if sh.miningCncl != nil {
 		log.Infow("Stop mining in subnet", "subnetID", sh.ID)
 		sh.miningCncl()
+		sh.miningCtx = nil
 		return nil
 	}
 	return xerrors.Errorf("Currently not mining in subnet")
