@@ -612,13 +612,17 @@ func (s *SubnetMgr) LeaveSubnet(
 	return smsg.Cid(), nil
 }
 
-func (s *SubnetMgr) ListSubnets(ctx context.Context) ([]sca.Subnet, error) {
-	actor, err := s.api.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, types.EmptyTSK)
+func (s *SubnetMgr) ListSubnets(ctx context.Context, id address.SubnetID) ([]sca.Subnet, error) {
+	sapi, err := s.GetSubnetAPI(id)
+	if err != nil {
+		return nil, err
+	}
+	actor, err := sapi.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, types.EmptyTSK)
 	if err != nil {
 		return nil, err
 	}
 
-	bs := blockstore.NewAPIBlockstore(s.api)
+	bs := blockstore.NewAPIBlockstore(sapi)
 	cst := cbor.NewCborStore(bs)
 	ws := adt.WrapStore(ctx, cst)
 

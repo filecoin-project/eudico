@@ -52,8 +52,8 @@ func (a *HierarchicalAPI) LeaveSubnet(ctx context.Context, wallet address.Addres
 	return a.Sub.LeaveSubnet(ctx, wallet, id)
 }
 
-func (a *HierarchicalAPI) ListSubnets(ctx context.Context) ([]sca.Subnet, error) {
-	return a.Sub.ListSubnets(ctx)
+func (a *HierarchicalAPI) ListSubnets(ctx context.Context, id address.SubnetID) ([]sca.Subnet, error) {
+	return a.Sub.ListSubnets(ctx, id)
 }
 
 func (a *HierarchicalAPI) KillSubnet(ctx context.Context, wallet address.Address,

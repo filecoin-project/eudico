@@ -48,6 +48,12 @@ var subnetCmds = &cli.Command{
 var listSubnetsCmd = &cli.Command{
 	Name:  "list-subnets",
 	Usage: "list all subnets in the current network",
+	Flags: []cli.Flag{&cli.StringFlag{
+		Name:  "subnet",
+		Usage: "specify the id of the subnet to join",
+		Value: address.RootSubnet.String(),
+	},
+	},
 	Action: func(cctx *cli.Context) error {
 		api, closer, err := lcli.GetFullNodeAPI(cctx)
 		if err != nil {
@@ -57,7 +63,8 @@ var listSubnetsCmd = &cli.Command{
 
 		ctx := lcli.ReqContext(cctx)
 
-		subnets, err := api.ListSubnets(ctx)
+		subnet := cctx.String("subnet")
+		subnets, err := api.ListSubnets(ctx, address.SubnetID(subnet))
 		if err != nil {
 			return xerrors.Errorf("error getting list of subnets: %w", err)
 		}

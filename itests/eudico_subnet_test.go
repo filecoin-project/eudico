@@ -161,7 +161,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 
 	// AddSubnet only deploys the subnet actor. The subnet will only be listed after joining the subnet
 
-	sn, err := full.ListSubnets(ctx)
+	sn, err := full.ListSubnets(ctx, address.RootSubnet)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(sn))
 	require.NotEqual(t, 0, sn[0].Status)
@@ -288,7 +288,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	_, err = full.LeaveSubnet(ctx, addr, subnetAddr)
 	require.NoError(t, err)
 
-	sn, err = full.ListSubnets(ctx)
+	sn, err = full.ListSubnets(ctx, address.RootSubnet)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(sn))
 	require.NotEqual(t, 0, sn[0].Status)
