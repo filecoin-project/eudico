@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/ipfs/go-cid"
-	cbor "github.com/ipfs/go-ipld-cbor"
 	"github.com/urfave/cli/v2"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"golang.org/x/xerrors"
@@ -14,10 +13,8 @@ import (
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
-	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors"
-	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
@@ -60,22 +57,9 @@ var listSubnetsCmd = &cli.Command{
 
 		ctx := lcli.ReqContext(cctx)
 
-		var st sca.SCAState
-
-		act, err := api.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, types.EmptyTSK)
+		subnets, err := api.ListSubnets(ctx)
 		if err != nil {
-			return xerrors.Errorf("error getting actor state: %w", err)
-		}
-		bs := blockstore.NewAPIBlockstore(api)
-		cst := cbor.NewCborStore(bs)
-		s := adt.WrapStore(ctx, cst)
-		if err := cst.Get(ctx, act.Head, &st); err != nil {
-			return xerrors.Errorf("error getting subnet state: %w", err)
-		}
-
-		subnets, err := sca.ListSubnets(s, st)
-		if err != nil {
-			xerrors.Errorf("error getting list of subnets: %w", err)
+			return xerrors.Errorf("error getting list of subnets: %w", err)
 		}
 		for _, sh := range subnets {
 			status := "Active"
