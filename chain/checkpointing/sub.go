@@ -921,7 +921,7 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 	fmt.Println("My id: ",c.host.ID())
 	err = c.r.HandleMsgs(ctx)
 	if err != nil {
-		log.Errorf("error initializing cross-msg resolver: %s", err)
+		log.Errorf("error initializing KVS resolver: %s", err)
 		return
 	}
 
