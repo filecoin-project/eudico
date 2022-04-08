@@ -1,9 +1,12 @@
-Treshold=2
+# Pre-generated keys; result of FROST DKG;
+
+Threshold=2
 PrivateShare="0fac81c461206928dcddcebe8c77343ddb3adba0f74f47dcf2d8d0461796df40"
 PublicKey="66a554b8af6719851a936b0afc29dc59c3678f0e3f0b7bb081c57c5b77ad48ff"
 
 [VerificationShares]
 
+# VerificationShares.<libp2p cid of share owner>
 [VerificationShares.12D3KooWMBbLLKTM9Voo89TXLd98w4MjkJUych6QvECptousGtR4]
 Share="02de7b1922283afa65adbacf74e543c0841fd84d948911d668d10835df07f5c203"
 
