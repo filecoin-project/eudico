@@ -120,7 +120,6 @@ func waitTimeOut(ctx context.Context, h protocol.Handler, network *Network, over
 		default:
 			h.TimeOutExpired()
 		}
-
 	}
 }
 func LoopHandlerDKG(ctx context.Context, h protocol.Handler, network *Network) {
