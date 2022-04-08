@@ -53,9 +53,9 @@ var log = logging.Logger("checkpointing")
 
 
 //update this value with the amount you want to send to the initial aggregated key (for testing purpose)
-//const initialValueInWallet = 50
+const initialValueInWallet = 50
 // for testnet I recommend using 0.002
-const initialValueInWallet = 0.002
+//const initialValueInWallet = 0.002
 
 // change this to true to alternatively send all the amount from our wallet
 var sendall = false
@@ -64,7 +64,7 @@ var sendall = false
 const checkpointFrequency = 25
 
 //change to true if regtest is used
-const Regtest = false
+const Regtest = true
 
 // struct used to propagate detected changes.
 type diffInfo struct {
