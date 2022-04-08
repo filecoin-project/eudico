@@ -891,7 +891,7 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 	success := bitcoindPing(c.cpconfig.BitcoinHost)
 	if !success {
 		log.Errorf("bitcoin node not available")
-		return
+		//return
 	}
 
 	log.Infow("successfully pinged bitcoind")
@@ -993,7 +993,7 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 
 	if err != nil {
 		log.Errorf("could not get last checkpoint from Bitcoin: %v", err)
-		return
+		//return
 	} else {
 		log.Infow("Got last checkpoint from Bitcoin node")
 		fmt.Println(btccp)
