@@ -6,12 +6,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/ipfs/go-cid"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"time"
 
 	secp "github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/ipfs/go-cid"
 	abci "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/crypto"
 	tmcrypto "github.com/tendermint/tendermint/crypto"
@@ -72,7 +73,7 @@ func parseTx(tx []byte) (interface{}, uint32, error) {
 	ln := len(tx)
 	// This is very simple input validation to be protected against invalid messages.
 	if ln <= 2 {
-		return nil, codeBadRequest, fmt.Errorf("tx len %d is too small", ln)
+		return nil, http.StatusBadRequest, fmt.Errorf("tx len %d is too small", ln)
 	}
 
 	var err error
@@ -91,7 +92,7 @@ func parseTx(tx []byte) (interface{}, uint32, error) {
 	}
 
 	if err != nil {
-		return nil, codeBadRequest, err
+		return nil, http.StatusBadRequest, err
 	}
 
 	return msg, abci.CodeTypeOK, nil
@@ -219,7 +220,8 @@ func registerNetworkViaTxSync(
 	timeout := time.After(30 * time.Second)
 
 	try := true
-	var resq *coretypes.ResultABCIQuery
+	var resultQuery *coretypes.ResultABCIQuery
+
 	for try {
 		select {
 		case <-ctx.Done():
@@ -231,28 +233,32 @@ func registerNetworkViaTxSync(
 				return nil, xerrors.Errorf("unable to create a registration message: %s", err)
 			}
 
-			_, berr := c.BroadcastTxSync(ctx, regMsg)
+			resultBroadcast, berr := c.BroadcastTxSync(ctx, regMsg)
 			if berr != nil {
 				return nil, xerrors.Errorf("unable to broadcast a registration request: %s", err)
 			}
-			log.Info("broadcasted a reg message: ", regMsg)
+			if resultBroadcast.Code == http.StatusConflict {
+				return nil, xerrors.New(resultBroadcast.Log)
+			}
 
-			resq, err = c.ABCIQuery(ctx, "/reg", []byte(subnetID))
+			resultQuery, err = c.ABCIQuery(ctx, "/reg", []byte(subnetID))
 			if err != nil {
 				return nil, xerrors.Errorf("unable to query Tendermint %s", err)
 			}
-			if resq.Response.Code != 0 {
-				log.Info(resq.Response.Log)
+			if resultQuery.Response.Code == http.StatusAlreadyReported {
+				return nil, xerrors.New(resultQuery.Response.Log)
+			}
+			if resultQuery.Response.Code != 0 {
+				log.Info(resultQuery.Response.Log)
 				continue
 			}
-
 			try = false
 		case <-timeout:
-			return nil, xerrors.New("time exceeded")
+			return nil, xerrors.New("registration network time exceeded")
 		}
 	}
 
-	regSubnetMsg, err := DecodeRegistrationMessageResponse(resq.Response.Value)
+	regSubnetMsg, err := DecodeRegistrationMessageResponse(resultQuery.Response.Value)
 	if err != nil {
 		return nil, xerrors.Errorf("unable to decode registration response: %w", err)
 	}

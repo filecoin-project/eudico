@@ -51,7 +51,7 @@ func New(
 	case hierarchical.PoW:
 		return tspow.NewTSPoWConsensus(ctx, sm, snMgr, beacon, r, verifier, genesis, netName), nil
 	case hierarchical.Tendermint:
-		return tendermint.NewConsensus(ctx, sm, snMgr, beacon, r, verifier, genesis, netName), nil
+		return tendermint.NewConsensus(ctx, sm, snMgr, beacon, r, verifier, genesis, netName)
 	default:
 		return nil, xerrors.New("consensus type not supported")
 	}

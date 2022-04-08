@@ -34,7 +34,7 @@ import (
 )
 
 func NewRootTendermintConsensus(ctx context.Context, sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
-	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
+	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) (consensus.Consensus, error) {
 	return tendermint.NewConsensus(ctx, sm, nil, beacon, r, verifier, genesis, netName)
 }
 
