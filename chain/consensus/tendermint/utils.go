@@ -14,7 +14,6 @@ import (
 	secp "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/ipfs/go-cid"
 	abci "github.com/tendermint/tendermint/abci/types"
-	"github.com/tendermint/tendermint/crypto"
 	tmcrypto "github.com/tendermint/tendermint/crypto"
 	tmsecp "github.com/tendermint/tendermint/crypto/secp256k1"
 	tmjson "github.com/tendermint/tendermint/libs/json"
@@ -115,7 +114,7 @@ func GetTendermintID(ctx context.Context) (address.Address, error) {
 	return addr, nil
 }
 
-func findValidatorPubKeyByAddress(validators []*tmtypes.Validator, addr crypto.Address) []byte {
+func findValidatorPubKeyByAddress(validators []*tmtypes.Validator, addr tmcrypto.Address) []byte {
 	for _, v := range validators {
 		if bytes.Equal(v.Address.Bytes(), addr.Bytes()) {
 			return v.PubKey.Bytes()
@@ -182,28 +181,6 @@ func getValidatorsInfo(ctx context.Context, c *tmclient.HTTP) (string, []byte, a
 	}
 
 	return validatorAddress, validatorPubKey, clientAddress, nil
-}
-
-// registerNetworkViaTxCommit registers a new network using the BroadcastTxCommit method that is unrecommended.
-func registerNetworkViaTxCommit(
-	ctx context.Context,
-	c *tmclient.HTTP,
-	regReq []byte,
-) (*RegistrationMessageResponse, error) {
-	// TODO: explore whether we need to remove registration functionality or improve it
-	// https://github.com/tendermint/tendermint/issues/7678
-	// https://github.com/tendermint/tendermint/issues/3414
-
-	regResp, err := c.BroadcastTxCommit(ctx, regReq)
-	if err != nil {
-		return nil, xerrors.Errorf("unable to broadcast registration request: %s", err)
-	}
-
-	regSubnetMsg, err := DecodeRegistrationMessageResponse(regResp.DeliverTx.Data)
-	if err != nil {
-		return nil, xerrors.Errorf("unable to decode registration response: %w", err)
-	}
-	return regSubnetMsg, nil
 }
 
 // registerNetworkViaTxSync registers a new network using the BroadcastTxSync method.
