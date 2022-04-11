@@ -221,6 +221,10 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 		log.Errorw("Error creating state manager for subnet", "subnetID", id, "err", err)
 		return err
 	}
+	err = sh.ch.Load(ctx)
+	if err != nil {
+		return xerrors.Errorf("Error loading chain from disk: %w", err)
+	}
 	// Start state manager.
 	sh.sm.Start(ctx)
 
