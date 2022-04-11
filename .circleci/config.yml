@@ -773,19 +773,15 @@ workflows:
       - gofmt
       - gen-check
       - test:
-          name: test-itest-api
-          suite: hierarchical-unit-tests
-          target: "./chain/consensus/...
+          name: hierarchical-unit-tests
+          suite: hierarchical-consensus
+          target: "./chain/consensus/..."
       - test:
-          name: test-itest-api
-          suite: hierarchical-subnet-test
+          name: hierarchical-test-subnets
+          suite: hierarchical-consensus
           target: "./itests/eudico_subnet_test.go"
       - test:
-          name: test-itest-api
-          suite: hierarchical-consensus
-          target: "./itests/eudico_consensus_test.go"
-      - test:
-          name: test-itest-api
+          name: hierarchical-test-consensus
           suite: hierarchical-consensus
           target: "./itests/eudico_consensus_test.go"
       # FIXME: Uncomment when Eudico is stable and ready for production.
