@@ -70,12 +70,12 @@ var listSubnetsCmd = &cli.Command{
 		}
 		for _, sh := range subnets {
 			status := "Active"
-			if sh.Status != 0 {
+			if sh.Subnet.Status != 0 {
 				status = "Inactive"
 			}
 			fmt.Printf("%s: status=%v, stake=%v, circulating supply=%v\n, consensus=%s",
-				sh.ID, status, types.FIL(sh.Stake),
-				types.FIL(sh.CircSupply),
+				sh.Subnet.ID, status, types.FIL(sh.Subnet.Stake),
+				types.FIL(sh.Subnet.CircSupply),
 				hierarchical.ConsensusName(sh.Consensus),
 			)
 		}

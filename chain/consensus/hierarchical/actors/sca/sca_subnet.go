@@ -1,6 +1,7 @@
 package sca
 
 import (
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
 
@@ -8,7 +9,6 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	ltypes "github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
@@ -30,7 +30,11 @@ type Subnet struct {
 	// overall behavior of check commitment by just keeping the information
 	// required for verification (prevCheck cid and epoch).
 	PrevCheckpoint schema.Checkpoint
-	Consensus      hierarchical.ConsensusType
+}
+
+type SubnetOutput struct {
+	Subnet    Subnet
+	Consensus hierarchical.ConsensusType
 }
 
 // addStake adds new funds to the stake of the subnet.

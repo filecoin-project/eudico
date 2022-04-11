@@ -616,7 +616,7 @@ func (s *SubnetMgr) LeaveSubnet(
 	return smsg.Cid(), nil
 }
 
-func (s *SubnetMgr) ListSubnets(ctx context.Context, id address.SubnetID) ([]sca.Subnet, error) {
+func (s *SubnetMgr) ListSubnets(ctx context.Context, id address.SubnetID) ([]sca.SubnetOutput, error) {
 	sapi, err := s.GetSubnetAPI(id)
 	if err != nil {
 		return nil, err
@@ -637,13 +637,14 @@ func (s *SubnetMgr) ListSubnets(ctx context.Context, id address.SubnetID) ([]sca
 		return nil, err
 	}
 
-	list, err := sca.ListSubnets(ws, &st)
+	subnets, err := sca.ListSubnets(ws, &st)
 	if err != nil {
 		return nil, err
 	}
 
-	for i, _ := range list {
-		sn := &list[i]
+	var output []sca.SubnetOutput
+
+	for _, sn := range subnets {
 		act, err := sn.ID.Actor()
 		if err != nil {
 			return nil, err
@@ -661,9 +662,12 @@ func (s *SubnetMgr) ListSubnets(ctx context.Context, id address.SubnetID) ([]sca
 		if err != nil {
 			return nil, err
 		}
-		sn.Consensus = st.Consensus
+		o := sca.SubnetOutput{
+			Subnet: sn, Consensus: st.Consensus,
+		}
+		output = append(output, o)
 	}
-	return list, nil
+	return output, nil
 }
 
 func (s *SubnetMgr) KillSubnet(

@@ -175,7 +175,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	sn, err := full.ListSubnets(ctx, address.RootSubnet)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(sn))
-	require.NotEqual(t, 0, sn[0].Status)
+	require.NotEqual(t, 0, sn[0].Subnet.Status)
 	require.Equal(t, subnetMinerType, sn[0].Consensus)
 
 	go full.MineSubnet(ctx, addr, subnetAddr, false)
@@ -303,7 +303,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	sn, err = full.ListSubnets(ctx, address.RootSubnet)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(sn))
-	require.NotEqual(t, 0, sn[0].Status)
+	require.NotEqual(t, 0, sn[0].Subnet.Status)
 
 	err = ens.Stop()
 	require.NoError(t, err)
