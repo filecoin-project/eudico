@@ -58,6 +58,8 @@ import (
 	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 )
 
+var _ subiface.SubnetMgr = &SubnetMgr{}
+
 var log = logging.Logger("subnetMgr")
 
 // SubnetMgr is the subneting manager in the root chain
@@ -126,7 +128,6 @@ func NewSubnetMgr(
 	j journal.Journal) (*SubnetMgr, error) {
 
 	ctx := helpers.LifecycleCtx(mctx, lc)
-	var err error
 
 	s := &SubnetMgr{
 		ctx:          ctx,
@@ -166,6 +167,7 @@ func NewSubnetMgr(
 	}
 
 	// Starting subnetSub to listen to events in the root chain.
+	var err error
 	s.events, err = events.NewEvents(ctx, s.api)
 	if err != nil {
 		return nil, err
@@ -177,7 +179,6 @@ func NewSubnetMgr(
 func (s *SubnetMgr) startSubnet(id address.SubnetID,
 	parentAPI *API, consensus hierarchical.ConsensusType,
 	genesis []byte) error {
-	var err error
 	// Subnets inherit the context from the SubnetManager.
 	ctx, cancel := context.WithCancel(s.ctx)
 
@@ -343,7 +344,6 @@ func BuildSubnetMgr(mctx helpers.MetricsCtx, lc fx.Lifecycle, s *SubnetMgr) {
 			return s.Close(ctx)
 		},
 	})
-
 }
 
 func (s *SubnetMgr) AddSubnet(
@@ -621,6 +621,7 @@ func (s *SubnetMgr) ListSubnets(ctx context.Context, id address.SubnetID) ([]sca
 	if err != nil {
 		return nil, err
 	}
+
 	actor, err := sapi.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, types.EmptyTSK)
 	if err != nil {
 		return nil, err
@@ -636,9 +637,31 @@ func (s *SubnetMgr) ListSubnets(ctx context.Context, id address.SubnetID) ([]sca
 		return nil, err
 	}
 
-	list, err := sca.ListSubnets(ws, st)
+	list, err := sca.ListSubnets(ws, &st)
 	if err != nil {
 		return nil, err
+	}
+
+	for i, _ := range list {
+		sn := &list[i]
+		act, err := sn.ID.Actor()
+		if err != nil {
+			return nil, err
+		}
+		snAct, err := sapi.StateGetActor(ctx, act, types.EmptyTSK)
+		if err != nil {
+			return nil, err
+		}
+
+		bs := blockstore.NewAPIBlockstore(sapi)
+		cst := cbor.NewCborStore(bs)
+
+		var st subnet.SubnetState
+		err = cst.Get(ctx, snAct.Head, &st)
+		if err != nil {
+			return nil, err
+		}
+		sn.Consensus = st.Consensus
 	}
 	return list, nil
 }
@@ -778,5 +801,3 @@ func (s *SubnetMgr) SubnetStateWaitMsg(ctx context.Context, id address.SubnetID,
 	}
 	return api.StateWaitMsg(ctx, cid, confidence, limit, allowReplaced)
 }
-
-var _ subiface.SubnetMgr = &SubnetMgr{}

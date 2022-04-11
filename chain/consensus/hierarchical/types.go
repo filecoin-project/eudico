@@ -5,12 +5,12 @@ import (
 
 	"golang.org/x/xerrors"
 
-	address "github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
-// ConsensusType for subnet
+// ConsensusType for subnet.
 type ConsensusType uint64
 
 // List of supported/implemented consensus for subnets.
@@ -21,20 +21,35 @@ const (
 	FilecoinEC
 )
 
-// MsgType of cross message
+// ConsensusName returns the consensus algorithm name.
+func ConsensusName(alg ConsensusType) string {
+	switch alg {
+	case Delegated:
+		return "Delegated"
+	case PoW:
+		return "PoW"
+	case Tendermint:
+		return "Tendermint"
+	case FilecoinEC:
+		return "FilecoinEC"
+	default:
+		return "unknown"
+	}
+}
+
+// MsgType of cross message.
 type MsgType uint64
 
-// List of cross messages supported
+// List of cross messages supported.
 const (
 	Unknown MsgType = iota
 	BottomUp
 	TopDown
 )
 
-// MsgType returns the
+// GetMsgType returns the MsgType of the message.
 func GetMsgType(msg *types.Message) MsgType {
 	t := Unknown
-
 	sto, err := msg.To.Subnet()
 	if err != nil {
 		return t
@@ -49,11 +64,7 @@ func GetMsgType(msg *types.Message) MsgType {
 	return TopDown
 }
 
-// SubnetCoordActorAddr is the address of the SCA actor
-// in a subnet.
-//
-// It is initialized in genesis with the
-// address t064
+// SubnetCoordActorAddr is the address of the SCA actor in a subnet. It is initialized in genesis with the address t064.
 var SubnetCoordActorAddr = func() address.Address {
 	a, err := address.NewIDAddress(64)
 	if err != nil {
@@ -62,8 +73,7 @@ var SubnetCoordActorAddr = func() address.Address {
 	return a
 }()
 
-// Implement keyer interface so it can be used as a
-// key for maps
+// SubnetKey implements Keyer interface, so it can be used as a key for maps.
 type SubnetKey address.SubnetID
 
 var _ abi.Keyer = SubnetKey("")
@@ -78,10 +88,8 @@ func IsBottomUp(from, to address.SubnetID) bool {
 	return len(sfrom)-1 > l
 }
 
-// ApplyAsBottomUp is used to determine if a cross-message in
-// the current subnet needs to be applied as a top-down or
-// bottom-up message according to the path its following (i.e.
-// we process a message or a msgMeta).
+// ApplyAsBottomUp is used to determine if a cross-message in the current subnet needs to be applied as a top-down or
+// bottom-up message according to the path its following (i.e. we process a message or a msgMeta).
 func ApplyAsBottomUp(curr address.SubnetID, msg *types.Message) (bool, error) {
 	sto, err := msg.To.Subnet()
 	if err != nil {
@@ -96,5 +104,4 @@ func ApplyAsBottomUp(curr address.SubnetID, msg *types.Message) (bool, error) {
 	cpcurr, _ := curr.CommonParent(sto)
 	cpfrom, _ := sfrom.CommonParent(sto)
 	return mt == BottomUp && cpcurr == cpfrom, nil
-
 }

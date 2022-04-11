@@ -73,9 +73,12 @@ var listSubnetsCmd = &cli.Command{
 			if sh.Status != 0 {
 				status = "Inactive"
 			}
-			fmt.Printf("%s: status=%v, stake=%v, circulating supply=%v\n", sh.ID, status, types.FIL(sh.Stake), types.FIL(sh.CircSupply))
+			fmt.Printf("%s: status=%v, stake=%v, circulating supply=%v\n, consensus=%s",
+				sh.ID, status, types.FIL(sh.Stake),
+				types.FIL(sh.CircSupply),
+				hierarchical.ConsensusName(sh.Consensus),
+			)
 		}
-
 		return nil
 	},
 }
@@ -276,7 +279,7 @@ var syncCmd = &cli.Command{
 
 var mineCmd = &cli.Command{
 	Name:      "mine",
-	Usage:     "Start mining in a subnet",
+	Usage:     "Start/stop mining in a subnet",
 	ArgsUsage: "[]",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
@@ -325,7 +328,11 @@ var mineCmd = &cli.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cctx.App.Writer, "Successfully started/stopped mining in subnet: %s\n", subnet)
+		if cctx.Bool("stop") {
+			fmt.Fprintf(cctx.App.Writer, "Successfully stopped mining in subnet: %s\n", subnet)
+		} else {
+			fmt.Fprintf(cctx.App.Writer, "Successfully started mining in subnet: %s\n", subnet)
+		}
 		return nil
 	},
 }
