@@ -26,6 +26,17 @@ func TestEudicoSubnetFast(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootFilcns(), kit.SubnetDelegated())
 	})
 }
+func TestEudicoSubnetFastFilcnsTendermint(t *testing.T) {
+	t.Run("/root/filcns-/subnet/tendermint", func(t *testing.T) {
+		runSubnetTests(t, kit.ThroughRPC(), kit.RootFilcns(), kit.SubnetTendermint())
+	})
+}
+
+func TestEudicoSubnetFastTendermintDelegated(t *testing.T) {
+	t.Run("/root/tendermint-/subnet/delegated", func(t *testing.T) {
+		runSubnetTests(t, kit.ThroughRPC(), kit.RootTendermint(), kit.SubnetDelegated())
+	})
+}
 
 func TestEudicoSubnet(t *testing.T) {
 	// Filecoin consensus in root

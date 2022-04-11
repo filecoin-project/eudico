@@ -142,7 +142,7 @@ func BlockSanityChecks(ctype hierarchical.ConsensusType, h *types.BlockHeader) e
 		}
 	case hierarchical.Tendermint:
 		if h.Ticket == nil {
-			return xerrors.Errorf("Tendermint-backed block must have a ticket: ", h.Ticket)
+			return xerrors.Errorf("Tendermint-backed block must have a ticket")
 		}
 	default:
 		// FIXME: We currently support PoW and delegated, thus the

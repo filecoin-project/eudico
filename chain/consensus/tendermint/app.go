@@ -4,15 +4,11 @@ package tendermint
 // The reference implementation can be found here - https://github.com/tendermint/tendermint/tree/master/abci/example.
 
 import (
+	"net/http"
 	"time"
 
 	abci "github.com/tendermint/tendermint/abci/types"
 	logger "github.com/tendermint/tendermint/libs/log"
-)
-
-const (
-	codeBadRequest   = 513
-	codeStateFailure = 514
 )
 
 var (
@@ -49,10 +45,17 @@ func (a *Application) Query(req abci.RequestQuery) (resp abci.ResponseQuery) {
 	switch req.Path {
 	case "/reg":
 		subnetID := req.Data
+		_, existedSubnet := a.consensus.GetSubnetOffset(subnetID)
+		if a.consensus.IsSubnetSet() && !existedSubnet {
+			return abci.ResponseQuery{
+				Code: http.StatusAlreadyReported,
+				Log:  "a subnet has been registered in Tendermint",
+			}
+		}
 		height, ok := a.consensus.GetSubnetOffset(subnetID)
 		if !ok {
 			return abci.ResponseQuery{
-				Code: codeStateFailure,
+				Code: http.StatusContinue,
 				Log:  "subnet offset hasn't been set yet",
 			}
 		}
@@ -65,7 +68,7 @@ func (a *Application) Query(req abci.RequestQuery) (resp abci.ResponseQuery) {
 		data, err := regResp.Serialize()
 		if err != nil {
 			return abci.ResponseQuery{
-				Code: codeBadRequest,
+				Code: http.StatusInternalServerError,
 				Log:  err.Error(),
 			}
 		}
@@ -117,7 +120,7 @@ func (a *Application) DeliverTx(req abci.RequestDeliverTx) (resp abci.ResponseDe
 		_, existedSubnet := a.consensus.GetSubnetOffset(subnet.Name)
 		if a.consensus.IsSubnetSet() && !existedSubnet {
 			return abci.ResponseDeliverTx{
-				Code: codeStateFailure,
+				Code: http.StatusConflict,
 				Log:  "only one subnet can be registered",
 			}
 		}
@@ -130,7 +133,7 @@ func (a *Application) DeliverTx(req abci.RequestDeliverTx) (resp abci.ResponseDe
 		data, err := regResp.Serialize()
 		if err != nil {
 			return abci.ResponseDeliverTx{
-				Code: codeBadRequest,
+				Code: http.StatusInternalServerError,
 				Log:  err.Error(),
 			}
 		}
