@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
+	"os"
 
 	"github.com/sa8/multi-party-sig/pkg/math/curve"
 	"github.com/btcsuite/btcutil/bech32"
@@ -298,4 +300,11 @@ func sameStringSlice(x, y []string) bool {
 		}
 	}
 	return len(diff) == 0
+}
+
+func timeTrack(start time.Time, name string, file *os.File) {
+    elapsed := time.Since(start)
+   // fmt.Println("%s took %s", name, elapsed)
+   //fmt.Println(name," took", elapsed)
+   fmt.Fprintf(file, "%s took %s \n", name, elapsed)
 }

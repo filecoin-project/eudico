@@ -138,6 +138,9 @@ type CheckpointingSub struct {
 	// KVS
 	r *Resolver
 	ds  dtypes.MetadataDS
+
+	// file to write measurements
+	file *os.File
 }
 
 /*
@@ -624,7 +627,7 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	if err != nil {
 		return err
 	}
-	LoopHandlerDKG(ctx, handler, n) //use the new network, could be re-written
+	LoopHandlerDKG(ctx, handler, n, c.file) //use the new network, could be re-written
 	r, err := handler.Result()
 	if err != nil {
 		// if a participant is mibehaving the DKG entirely fail (no fallback)
@@ -800,7 +803,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		if err != nil {
 			return err
 		}
-		LoopHandler(ctx, handler, n)
+		LoopHandler(ctx, handler, n, c.file)
 		r, err := handler.Result()
 		if err != nil {
 			return err
@@ -1031,6 +1034,10 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 		merkleRoot := hashMerkleRoot(c.taprootConfig.PublicKey, cidBytes)
 		c.tweakedValue = hashTweakedValue(c.taprootConfig.PublicKey, merkleRoot)
 	}
+	c.file, err = os.Create(c.host.ID().String()+"data.txt")
+    if err != nil {
+        log.Fatal(err)
+    }
 
 	// Start the checkpoint module
 	err = c.Start(ctx)

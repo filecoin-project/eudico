@@ -3,6 +3,8 @@ package checkpointing
 import (
 	"context"
 	"fmt"
+	"time"
+	"os"
 
 	"github.com/sa8/multi-party-sig/pkg/protocol"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -99,7 +101,8 @@ func waitingMessages(ctx context.Context, h protocol.Handler, network *Network, 
 // This could be simplified
 // next and send very similar to next and publish in libp2p
 // the code could be simplified to use next and publish.s
-func LoopHandler(ctx context.Context, h protocol.Handler, network *Network) {
+func LoopHandler(ctx context.Context, h protocol.Handler, network *Network, file *os.File) {
+	defer timeTrack(time.Now(), "Signing", file)
 	over := make(chan bool)
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -111,6 +114,7 @@ func LoopHandler(ctx context.Context, h protocol.Handler, network *Network) {
 	<-over
 
 	fmt.Println("We are done")
+	//file.Close()
 }
 func waitTimeOut(ctx context.Context, h protocol.Handler, network *Network, over chan bool) {
 	for {
@@ -122,7 +126,8 @@ func waitTimeOut(ctx context.Context, h protocol.Handler, network *Network, over
 		}
 	}
 }
-func LoopHandlerDKG(ctx context.Context, h protocol.Handler, network *Network) {
+func LoopHandlerDKG(ctx context.Context, h protocol.Handler, network *Network, file *os.File) {
+	defer timeTrack(time.Now(), "DKG", file)
 	over := make(chan bool)
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -169,3 +174,56 @@ func LoopHandlerDKG(ctx context.Context, h protocol.Handler, network *Network) {
 // 		}
 // 	}
 // }
+
+
+// func LoopHandlerDKG(ctx context.Context, h protocol.Handler, network *Network) {
+// 	over := make(chan bool)
+// 	for {
+// 		select {
+
+// 		// outgoing messages
+// 		case msg, ok := <-h.Listen():
+// 			if !ok {
+// 				close(over)
+// 				// the channel was closed, indicating that the protocol is done executing.
+// 				return
+// 			}
+// 			go network.Send(ctx,msg)
+
+// 		// incoming messages
+// 		case msg := <- network.Next(ctx):
+// 			h.Accept(msg)
+
+// 		// timeout case
+// 		default: //timeout done
+// 			h.TimeOutExpired()
+// 		}
+// 	}
+
+// 	fmt.Println("We are done")
+// }
+
+// // HandlerLoop blocks until the handler has finished. The result of the execution is given by Handler.Result().
+// func LoopHandler(ctx context.Context, h protocol.Handler, network *Network) {
+// 	over := make(chan bool)
+// 	for {
+// 		select {
+
+// 		// outgoing messages
+// 		case msg, ok := <-h.Listen():
+// 			if !ok {
+// 				close(over)
+// 				// the channel was closed, indicating that the protocol is done executing.
+// 				return
+// 			}
+// 			go network.Send(ctx,msg)
+
+// 		// incoming messages
+// 		case msg1 := <- network.Next(ctx):
+// 			h.Accept(msg1)
+// 		}
+// 	}
+
+// 	fmt.Println("We are done")
+// }
+
