@@ -6,7 +6,6 @@ import (
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/specs-actors/actors/util/adt"
-	"github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
 	"golang.org/x/xerrors"
 
@@ -31,7 +30,6 @@ const FinalityThreshold = 5
 // struct used to propagate detected changes.
 type diffInfo struct {
 	checkToSign *signInfo
-	childChecks map[string][]cid.Cid
 }
 
 // signInfo propagates signing inforamtion.
@@ -48,7 +46,6 @@ type signInfo struct {
 // * New checkpoints for child chains committed in SCA of the subnet.
 func (s *SubnetMgr) listenSubnetEvents(ctx context.Context, sh *Subnet) {
 	evs := s.events
-	api := s.api
 	id := address.RootSubnet
 	root := true
 
@@ -58,7 +55,6 @@ func (s *SubnetMgr) listenSubnetEvents(ctx context.Context, sh *Subnet) {
 	if sh != nil {
 		root = false
 		id = sh.ID
-		api = sh.api
 		evs = sh.events
 		sh.resetSigState(abi.ChainEpoch(0))
 	}
@@ -99,15 +95,7 @@ func (s *SubnetMgr) listenSubnetEvents(ctx context.Context, sh *Subnet) {
 			}
 		}
 
-		// Every subnet listents to its SCA contract to check when new child checkpoints have
-		// been committed.
-		change2, err := s.matchSCAChildCommit(ctx, api, oldTs, newTs, diff)
-		if err != nil {
-			log.Errorw("Error checking checkpoints to sign in subnet", "subnetID", id, "err", err)
-			return false, nil, err
-		}
-
-		return change || change2, diff, nil
+		return change, diff, nil
 
 	}
 
@@ -115,85 +103,6 @@ func (s *SubnetMgr) listenSubnetEvents(ctx context.Context, sh *Subnet) {
 	if err != nil {
 		return
 	}
-}
-
-func (s *SubnetMgr) matchSCAChildCommit(ctx context.Context, api *API, oldTs, newTs *types.TipSet, diff *diffInfo) (bool, error) {
-	oldAct, err := api.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, oldTs.Key())
-	if err != nil {
-		return false, err
-	}
-	newAct, err := api.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, newTs.Key())
-	if err != nil {
-		return false, err
-	}
-
-	var oldSt, newSt sca.SCAState
-	diff.childChecks = make(map[string][]cid.Cid)
-
-	bs := blockstore.NewAPIBlockstore(api)
-	cst := cbor.NewCborStore(bs)
-	if err := cst.Get(ctx, oldAct.Head, &oldSt); err != nil {
-		return false, err
-	}
-	if err := cst.Get(ctx, newAct.Head, &newSt); err != nil {
-		return false, err
-	}
-
-	// If no changes in checkpoints
-	if oldSt.Checkpoints == newSt.Checkpoints {
-		return false, nil
-	}
-
-	store := adt.WrapStore(ctx, cst)
-	// Get checkpoints being populated in current window.
-	oldCheck, err := oldSt.CurrWindowCheckpoint(store, oldTs.Height())
-	if err != nil {
-		return false, err
-	}
-	newCheck, err := newSt.CurrWindowCheckpoint(store, newTs.Height())
-	if err != nil {
-		return false, err
-	}
-
-	// Even if there is change, if newCheck is zero we are in
-	// a window change.
-	if oldCheck.LenChilds() > newCheck.LenChilds() {
-		return false, err
-	}
-
-	oldChilds := oldCheck.GetChilds()
-	newChilds := newCheck.GetChilds()
-
-	// Check changes in child changes
-	chngChilds := make(map[string][][]byte)
-	for _, ch := range newChilds {
-		chngChilds[ch.Source] = ch.Checks
-	}
-
-	for _, ch := range oldChilds {
-		cs, ok := chngChilds[ch.Source]
-		// If found in new and old and same length
-		if ok && len(cs) == len(ch.Checks) {
-			delete(chngChilds, ch.Source)
-		} else if ok {
-			// If found but not the same size it means there is some child there
-			// We delete all
-			i := chngChilds[ch.Source][len(chngChilds[ch.Source])-1]
-			delete(chngChilds, ch.Source)
-			// And just add the last one added
-			chngChilds[ch.Source] = [][]byte{i}
-		}
-	}
-
-	for k, out := range chngChilds {
-		cs, err := schema.ByteSliceToCidList(out)
-		if err != nil {
-			return false, err
-		}
-		diff.childChecks[k] = cs
-	}
-
-	return len(diff.childChecks) > 0, nil
 }
 
 func (s *SubnetMgr) matchCheckpointSignature(ctx context.Context, sh *Subnet, newTs *types.TipSet, diff *diffInfo) (bool, error) {
@@ -324,14 +233,6 @@ func (s *SubnetMgr) triggerChange(ctx context.Context, sh *Subnet, diff *diffInf
 		log.Infow("Success signing checkpoint in subnet", "subnetID", sh.ID.String())
 	}
 
-	// If some child checkpoint committed in SCA
-	if len(diff.childChecks) != 0 {
-		err := s.childCheckDetected(ctx, diff.childChecks)
-		if err != nil {
-			log.Errorw("Error when detecting child checkpoint in SCA", "subnetID", sh.ID, "err", err)
-			return true, err
-		}
-	}
 	return true, nil
 }
 
@@ -363,12 +264,4 @@ func (s *SubnetMgr) signAndSubmitCheckpoint(ctx context.Context, sh *Subnet, inf
 
 	// Pushing cross-msg in checkpoint to corresponding subnets.
 	return sh.r.PushMsgFromCheckpoint(info.checkpoint, st, store)
-}
-
-func (s *SubnetMgr) childCheckDetected(ctx context.Context, info map[string][]cid.Cid) error {
-	for k, c := range info {
-		log.Infof("Child checkpoint from %s committed in %s: %s", k, s.api.NetName, c)
-	}
-	return nil
-
 }
