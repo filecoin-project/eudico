@@ -254,17 +254,17 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 	rt.SetEpoch(epoch)
 	ch := newCheckpoint(sh.ID, epoch+9)
 	// Add msgMeta directed to other subnets
-	addMsgMeta(ch, sh.ID, address.SubnetID("/root/f0102/child1"), "rand1", big.Zero())
+	addMsgMeta(t, ch, sh.ID, address.SubnetID("/root/f0102/child1"), "rand1", big.Zero())
 	// By not adding a random string we are checking that nothing fails when to MsgMeta
 	// for different subnets are propagating the same CID. This will probably never be the
 	// case for honest peers, but it is an attack vector.
-	addMsgMeta(ch, sh.ID, address.SubnetID("/root/f0102/child2"), "", big.Zero())
-	addMsgMeta(ch, sh.ID, address.SubnetID("/root/f0102/child3"), "", big.Zero())
+	addMsgMeta(t, ch, sh.ID, address.SubnetID("/root/f0102/child2"), "", big.Zero())
+	addMsgMeta(t, ch, sh.ID, address.SubnetID("/root/f0102/child3"), "", big.Zero())
 	// And to this subnet
-	addMsgMeta(ch, sh.ID, address.SubnetID(netName), "", big.Zero())
-	addMsgMeta(ch, sh.ID, address.SubnetID(netName), "rand", big.Zero())
+	addMsgMeta(t, ch, sh.ID, address.SubnetID(netName), "", big.Zero())
+	addMsgMeta(t, ch, sh.ID, address.SubnetID(netName), "rand", big.Zero())
 	// And to a child from other branch (with cross-net messages)
-	addMsgMeta(ch, sh.ID, address.SubnetID(netName+"/f02"), "rand", big.Zero())
+	addMsgMeta(t, ch, sh.ID, address.SubnetID(netName+"/f02"), "rand", big.Zero())
 	prevcid, _ := ch.Cid()
 
 	b, err := ch.MarshalBinary()
@@ -312,8 +312,8 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 	rt.SetEpoch(epoch)
 	ch = newCheckpoint(sh.ID, epoch+6)
 	// Msgs to this subnet
-	addMsgMeta(ch, sh.ID, address.SubnetID(netName), "r2", big.Zero())
-	addMsgMeta(ch, sh.ID, address.SubnetID(netName), "r3", big.Zero())
+	addMsgMeta(t, ch, sh.ID, address.SubnetID(netName), "r2", big.Zero())
+	addMsgMeta(t, ch, sh.ID, address.SubnetID(netName), "r3", big.Zero())
 	ch.SetPrevious(prevcid)
 	prevcid, _ = ch.Cid()
 
@@ -344,10 +344,10 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 	ch = newCheckpoint(sh.ID, epoch+9)
 	ch.SetPrevious(prevcid)
 	// Add msgMeta directed to other subnets
-	addMsgMeta(ch, sh.ID, address.SubnetID("/root/f0102/child1"), "", big.Zero())
-	addMsgMeta(ch, sh.ID, address.SubnetID("/root/f0102/child2"), "", big.Zero())
-	addMsgMeta(ch, sh.ID, address.SubnetID("/root/f0102/child3"), "", abi.NewTokenAmount(100))
-	addMsgMeta(ch, sh.ID, address.SubnetID("/root/f0102/child4"), "", abi.NewTokenAmount(100))
+	addMsgMeta(t, ch, sh.ID, address.SubnetID("/root/f0102/child1"), "", big.Zero())
+	addMsgMeta(t, ch, sh.ID, address.SubnetID("/root/f0102/child2"), "", big.Zero())
+	addMsgMeta(t, ch, sh.ID, address.SubnetID("/root/f0102/child3"), "", abi.NewTokenAmount(100))
+	addMsgMeta(t, ch, sh.ID, address.SubnetID("/root/f0102/child4"), "", abi.NewTokenAmount(100))
 
 	b, err = ch.MarshalBinary()
 	require.NoError(t, err)

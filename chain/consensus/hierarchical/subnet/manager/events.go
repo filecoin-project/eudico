@@ -255,7 +255,7 @@ func (s *SubnetMgr) signAndSubmitCheckpoint(ctx context.Context, sh *Subnet, inf
 	log.Infow("Pushing cross-msgs from checkpoint", "subnetID", info.checkpoint.Source().String())
 	subAPI := s.getAPI(sh.ID)
 	if subAPI == nil {
-		xerrors.Errorf("Not listening to subnet")
+		return xerrors.Errorf("Not listening to subnet")
 	}
 	st, store, err := s.GetSCAState(ctx, sh.ID)
 	if err != nil {

@@ -3,6 +3,7 @@ package itests
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -26,9 +27,11 @@ func TestEudicoConsensus(t *testing.T) {
 		runDelegatedConsensusTests(t, kit.ThroughRPC(), kit.RootDelegated())
 	})
 
-	t.Run("tendermint", func(t *testing.T) {
-		runTendermintConsensusTests(t, kit.ThroughRPC(), kit.RootTendermint())
-	})
+	if os.Getenv("TENDERMINT_ITESTS") != "" {
+		t.Run("tendermint", func(t *testing.T) {
+			runTendermintConsensusTests(t, kit.ThroughRPC(), kit.RootTendermint())
+		})
+	}
 
 	t.Run("filcns", func(t *testing.T) {
 		runFilcnsConsensusTests(t, kit.ThroughRPC(), kit.RootFilcns())

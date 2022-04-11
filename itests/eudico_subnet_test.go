@@ -3,6 +3,7 @@ package itests
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -33,6 +34,10 @@ func TestEudicoSubnetFastFilcnsTendermint(t *testing.T) {
 }
 
 func TestEudicoSubnetFastTendermintDelegated(t *testing.T) {
+	if os.Getenv("TENDERMINT_ITESTS") == "" {
+		t.Skip("Skipping Tendermint tests")
+	}
+
 	t.Run("/root/tendermint-/subnet/delegated", func(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootTendermint(), kit.SubnetDelegated())
 	})
@@ -48,9 +53,11 @@ func TestEudicoSubnet(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootFilcns(), kit.SubnetTSPoW())
 	})
 
-	t.Run("/root/filcns-/subnet/tendermint", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootFilcns(), kit.SubnetTendermint())
-	})
+	if os.Getenv("TENDERMINT_ITESTS") != "" {
+		t.Run("/root/filcns-/subnet/tendermint", func(t *testing.T) {
+			runSubnetTests(t, kit.ThroughRPC(), kit.RootFilcns(), kit.SubnetTendermint())
+		})
+	}
 
 	// PoW in Root
 
@@ -62,9 +69,11 @@ func TestEudicoSubnet(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTendermint())
 	})
 
-	t.Run("/root/pow-/subnet/delegated", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetDelegated())
-	})
+	if os.Getenv("TENDERMINT_ITESTS") != "" {
+		t.Run("/root/pow-/subnet/delegated", func(t *testing.T) {
+			runSubnetTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetDelegated())
+		})
+	}
 
 	// Delegated consensus in root
 
@@ -76,23 +85,27 @@ func TestEudicoSubnet(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetTSPoW())
 	})
 
-	t.Run("/root/delegated-/subnet/tendermint", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetTendermint())
-	})
+	if os.Getenv("TENDERMINT_ITESTS") != "" {
+		t.Run("/root/delegated-/subnet/tendermint", func(t *testing.T) {
+			runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetTendermint())
+		})
+	}
 
 	// Tendermint in root
 
-	t.Run("/root/delegated-/subnet/delegated", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootTendermint(), kit.SubnetDelegated())
-	})
+	if os.Getenv("TENDERMINT_ITESTS") != "" {
+		t.Run("/root/delegated-/subnet/delegated", func(t *testing.T) {
+			runSubnetTests(t, kit.ThroughRPC(), kit.RootTendermint(), kit.SubnetDelegated())
+		})
 
-	t.Run("/root/tendermint-/subnet/delegated", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootTendermint(), kit.SubnetDelegated())
-	})
+		t.Run("/root/tendermint-/subnet/delegated", func(t *testing.T) {
+			runSubnetTests(t, kit.ThroughRPC(), kit.RootTendermint(), kit.SubnetDelegated())
+		})
 
-	t.Run("/root/tendermint-/subnet/pow", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootTendermint(), kit.SubnetTSPoW())
-	})
+		t.Run("/root/tendermint-/subnet/pow", func(t *testing.T) {
+			runSubnetTests(t, kit.ThroughRPC(), kit.RootTendermint(), kit.SubnetTSPoW())
+		})
+	}
 
 }
 

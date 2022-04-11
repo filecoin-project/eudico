@@ -2,7 +2,6 @@ package lp2p
 
 import (
 	"context"
-	"encoding/json"
 	"net"
 	"time"
 
@@ -62,16 +61,16 @@ type GossipIn struct {
 	Dr   dtypes.DrandSchedule
 }
 
-func getDrandTopic(chainInfoJSON string) (string, error) {
-	var drandInfo = struct {
-		Hash string `json:"hash"`
-	}{}
-	err := json.Unmarshal([]byte(chainInfoJSON), &drandInfo)
-	if err != nil {
-		return "", xerrors.Errorf("could not unmarshal drand chain info: %w", err)
-	}
-	return "/drand/pubsub/v0.0.0/" + drandInfo.Hash, nil
-}
+// func getDrandTopic(chainInfoJSON string) (string, error) {
+//         var drandInfo = struct {
+//                 Hash string `json:"hash"`
+//         }{}
+//         err := json.Unmarshal([]byte(chainInfoJSON), &drandInfo)
+//         if err != nil {
+//                 return "", xerrors.Errorf("could not unmarshal drand chain info: %w", err)
+//         }
+//         return "/drand/pubsub/v0.0.0/" + drandInfo.Hash, nil
+// }
 
 func GossipSub(in GossipIn) (service *pubsub.PubSub, err error) {
 	bootstrappers := make(map[peer.ID]struct{})

@@ -271,7 +271,7 @@ func TestApplyMsg(t *testing.T) {
 		ch := newCheckpoint(h.sn, abi.ChainEpoch(9))
 		v := big.Mul(big.NewInt(2), init)
 		rt.SetBalance(init)
-		addMsgMeta(ch, h.sn, address.RootSubnet, "rand", v)
+		addMsgMeta(t, ch, h.sn, address.RootSubnet, "rand", v)
 		b, err := ch.MarshalBinary()
 		require.NoError(t, err)
 		rt.ExpectSend(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, v, nil, exitcode.Ok)
