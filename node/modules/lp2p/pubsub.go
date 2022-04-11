@@ -85,35 +85,6 @@ func GossipSub(in GossipIn) (service *pubsub.PubSub, err error) {
 
 	isBootstrapNode := in.Cfg.Bootstrapper
 
-	drandTopicParams := &pubsub.TopicScoreParams{
-		// expected 2 beaconsn/min
-		TopicWeight: 0.5, // 5x block topic; max cap is 62.5
-
-		// 1 tick per second, maxes at 1 after 1 hour
-		TimeInMeshWeight:  0.00027, // ~1/3600
-		TimeInMeshQuantum: time.Second,
-		TimeInMeshCap:     1,
-
-		// deliveries decay after 1 hour, cap at 25 beacons
-		FirstMessageDeliveriesWeight: 5, // max value is 125
-		FirstMessageDeliveriesDecay:  pubsub.ScoreParameterDecay(time.Hour),
-		FirstMessageDeliveriesCap:    25, // the maximum expected in an hour is ~26, including the decay
-
-		// Mesh Delivery Failure is currently turned off for beacons
-		// This is on purpose as
-		// - the traffic is very low for meaningful distribution of incoming edges.
-		// - the reaction time needs to be very slow -- in the order of 10 min at least
-		//   so we might as well let opportunistic grafting repair the mesh on its own
-		//   pace.
-		// - the network is too small, so large asymmetries can be expected between mesh
-		//   edges.
-		// We should revisit this once the network grows.
-
-		// invalid messages decay after 1 hour
-		InvalidMessageDeliveriesWeight: -1000,
-		InvalidMessageDeliveriesDecay:  pubsub.ScoreParameterDecay(time.Hour),
-	}
-
 	topicParams := map[string]*pubsub.TopicScoreParams{
 		build.BlocksTopic(in.Nn): {
 			// expected 10 blocks/min
@@ -324,6 +295,34 @@ func GossipSub(in GossipIn) (service *pubsub.PubSub, err error) {
 	// // prefix.
 	// // See: https://github.com/filecoin-project/eudico/issues/24
 	//
+	// drandTopicParams := &pubsub.TopicScoreParams{
+	//         // expected 2 beaconsn/min
+	//         TopicWeight: 0.5, // 5x block topic; max cap is 62.5
+	//
+	//         // 1 tick per second, maxes at 1 after 1 hour
+	//         TimeInMeshWeight:  0.00027, // ~1/3600
+	//         TimeInMeshQuantum: time.Second,
+	//         TimeInMeshCap:     1,
+	//
+	//         // deliveries decay after 1 hour, cap at 25 beacons
+	//         FirstMessageDeliveriesWeight: 5, // max value is 125
+	//         FirstMessageDeliveriesDecay:  pubsub.ScoreParameterDecay(time.Hour),
+	//         FirstMessageDeliveriesCap:    25, // the maximum expected in an hour is ~26, including the decay
+	//
+	//         // Mesh Delivery Failure is currently turned off for beacons
+	//         // This is on purpose as
+	//         // - the traffic is very low for meaningful distribution of incoming edges.
+	//         // - the reaction time needs to be very slow -- in the order of 10 min at least
+	//         //   so we might as well let opportunistic grafting repair the mesh on its own
+	//         //   pace.
+	//         // - the network is too small, so large asymmetries can be expected between mesh
+	//         //   edges.
+	//         // We should revisit this once the network grows.
+	//
+	//         // invalid messages decay after 1 hour
+	//         InvalidMessageDeliveriesWeight: -1000,
+	//         InvalidMessageDeliveriesDecay:  pubsub.ScoreParameterDecay(time.Hour),
+	// }
 	// var drandTopics []string
 	// for _, d := range in.Dr {
 	//         topic, err := getDrandTopic(d.Config.ChainInfoJSON)
