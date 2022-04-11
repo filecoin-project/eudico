@@ -3,18 +3,14 @@ package mirbft
 import (
 	"fmt"
 
+	"github.com/gogo/protobuf/proto"
 	"github.com/hyperledger-labs/mirbft/pkg/modules"
 	"github.com/hyperledger-labs/mirbft/pkg/pb/requestpb"
 )
 
 type Application struct {
-
-	// The only state of the application is the chat message history,
-	// to which each delivered request appends one message.
 	messages []string
-
-	// The request store module (also passed to the MirBFT library at startup)
-	// is used for accessing the request payloads containing the chat message data.
+	
 	reqStore modules.RequestStore
 }
 
@@ -26,20 +22,20 @@ func NewApplication(reqStore modules.RequestStore) *Application {
 	return &app
 }
 
-func (chat *Application) Apply(batch *requestpb.Batch) error {
+func (app *Application) Apply(batch *requestpb.Batch) error {
 
 	// For each request in the batch
 	for _, reqRef := range batch.Requests {
 
 		// Extract request data from the request store and construct a printable chat message.
-		reqData, err := chat.reqStore.GetRequest(reqRef)
+		reqData, err := app.reqStore.GetRequest(reqRef)
 		if err != nil {
 			return err
 		}
 		chatMessage := fmt.Sprintf("Client %d: %s", reqRef.ClientId, string(reqData))
 
 		// Append the received chat message to the chat history.
-		chat.messages = append(chat.messages, chatMessage)
+		app.messages = append(app.messages, chatMessage)
 
 		// Print received chat message.
 		fmt.Println(chatMessage)
@@ -52,11 +48,11 @@ func (chat *Application) Apply(batch *requestpb.Batch) error {
 // At the time of writing this comment, the MirBFT library does not support state transfer
 // and Snapshot is never actually called.
 // We include its implementation for completeness.
-func (chat *Application) Snapshot() ([]byte, error) {
+func (app *Application) Snapshot() ([]byte, error) {
 
 	// We use protocol buffers to serialize the application state.
 	state := &AppState{
-		Messages: chat.messages,
+		Messages: app.messages,
 	}
 	return proto.Marshal(state)
 }
@@ -65,21 +61,5 @@ func (chat *Application) Snapshot() ([]byte, error) {
 // The argument is a binary representation of the application state returned from Snapshot().
 // After the chat history is restored, RestoreState prints the whole chat history to stdout.
 func (chat *Application) RestoreState(snapshot []byte) error {
-
-	// Unmarshal the protobuf message from its binary form.
-	state := &AppState{}
-	if err := proto.Unmarshal(snapshot, state); err != nil {
-		return err
-	}
-
-	// Restore internal state
-	chat.messages = state.Messages
-
-	// Print new state
-	fmt.Println("\n CHAT STATE RESTORED. SHOWING ALL CHAT HISTORY FROM THE BEGINNING.\n")
-	for _, message := range chat.messages {
-		fmt.Println(message)
-	}
-
-	return nil
+	panic("RestoreState not implemented")
 }

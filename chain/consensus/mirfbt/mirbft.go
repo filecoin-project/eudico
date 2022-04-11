@@ -35,6 +35,9 @@ import (
 )
 
 const (
+	mirbftRPCAddressEnv     = "EUDICO_MIRBFT_RPC"
+	defaultMirBFTRPCAddress = "http://127.0.0.1:26657"
+
 	MaxHeightDrift = 5
 )
 
@@ -71,6 +74,9 @@ func NewConsensus(
 	n, err := NewNode(uint64(0))
 	if err != nil {
 		return nil, err
+	}
+	if err := n.Serve(ctx); err != nil {
+		return nil, xerrors.Errorf("unable to run MirBFT node: %s", err)
 	}
 
 	return &MirBFT{

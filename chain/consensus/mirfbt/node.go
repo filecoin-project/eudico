@@ -50,11 +50,6 @@ func NewNode(id uint64) (*Node, error) {
 		nodeAddrs[i] = fmt.Sprintf("127.0.0.1:%d", nodeBasePort+i)
 	}
 
-	reqReceiverAddrs := make(map[t.NodeID]string)
-	for _, i := range nodeIds {
-		reqReceiverAddrs[i] = fmt.Sprintf("127.0.0.1:%d", reqReceiverBasePort+i)
-	}
-
 	walPath := path.Join("chat-demo-wal", fmt.Sprintf("%d", id))
 	wal, err := simplewal.Open(walPath)
 	if err != nil {
