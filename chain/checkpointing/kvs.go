@@ -236,7 +236,6 @@ func (v *Validator) Validate(ctx context.Context, pid peer.ID, msg *pubsub.Messa
 		return pubsub.ValidationReject
 	}
 	log.Infof("Received kvs resolution message of type: %v, from %v", rmsg.Type, pid.String())
-	log.Warnf("trying to warn you")
 	//fmt.Println("Message id: ", msg.Cid)
 	// Check the CID and messages sent are correct for push messages
 	if rmsg.Type == Push {
