@@ -38,6 +38,7 @@ import (
 	apitypes "github.com/filecoin-project/lotus/api/types"
 	"github.com/filecoin-project/lotus/api/v0api"
 	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
 	"github.com/filecoin-project/lotus/extern/sector-storage/stores"
@@ -96,6 +97,11 @@ func init() {
 	apiSelExample := api.Selector("Links/21/Hash/Links/42/Hash")
 	clientEvent := retrievalmarket.ClientEventDealAccepted
 
+	addExample(address.RootSubnet)
+	addExample(sca.ExecStatus(1))
+	addExample(map[string]sca.LockedState{})
+	addExample(map[string]sca.OutputCid{})
+	addExample(sca.Active)
 	addExample(bitfield.NewFromSet([]uint64{5}))
 	addExample(abi.RegisteredSealProof_StackedDrg32GiBV1_1)
 	addExample(abi.RegisteredPoStProof_StackedDrgWindow32GiBV1)
