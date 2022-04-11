@@ -52,6 +52,7 @@ type MirBFT struct {
 	subMgr   subnet.SubnetMgr
 	netName  address.SubnetID
 	resolver *resolver.Resolver
+	node     *Node
 }
 
 func NewConsensus(
@@ -63,9 +64,14 @@ func NewConsensus(
 	v ffiwrapper.Verifier,
 	g chain.Genesis,
 	netName dtypes.NetworkName,
-) consensus.Consensus {
+) (consensus.Consensus, error) {
 	subnetID := address.SubnetID(netName)
 	log.Infof("New MirBFT consensus for %s subnet", subnetID)
+
+	n, err := NewNode(uint64(0))
+	if err != nil {
+		return nil, err
+	}
 
 	return &MirBFT{
 		store:    sm.ChainStore(),
@@ -76,7 +82,8 @@ func NewConsensus(
 		subMgr:   submgr,
 		netName:  subnetID,
 		resolver: r,
-	}
+		node:     n,
+	}, nil
 }
 
 func (m *MirBFT) ValidateBlock(ctx context.Context, b *types.FullBlock) (err error) {
