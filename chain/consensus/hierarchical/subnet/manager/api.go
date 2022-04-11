@@ -59,14 +59,14 @@ type API struct {
 	*SubnetMgr
 }
 
-func (a *API) getActorState(ctx context.Context, SubnetActor address.Address) (*subnet.SubnetState, error) {
-	act, err := a.StateGetActor(ctx, SubnetActor, types.EmptyTSK)
+func (n *API) getActorState(ctx context.Context, SubnetActor address.Address) (*subnet.SubnetState, error) {
+	act, err := n.StateGetActor(ctx, SubnetActor, types.EmptyTSK)
 	if err != nil {
 		return nil, err
 	}
 
 	var st subnet.SubnetState
-	bs := blockstore.NewAPIBlockstore(a)
+	bs := blockstore.NewAPIBlockstore(n)
 	cst := cbor.NewCborStore(bs)
 	if err := cst.Get(ctx, act.Head, &st); err != nil {
 		return nil, err
@@ -267,7 +267,7 @@ func (n *API) NodeStatus(ctx context.Context, inclChainStatus bool) (status api.
 	return status, nil
 }
 
-// The next two fucntions are exact copies from node/rpc.go to be able to handle subnet APIs
+// The next two functions are exact copies from node/rpc.go to be able to handle subnet APIs
 // as if they were FullNode API implementations.
 // FullNodeHandler returns a full node handler, to be mounted as-is on the server.
 func FullNodeHandler(prefix string, a v1api.FullNode, permissioned bool, opts ...jsonrpc.ServerOption) (http.Handler, error) {

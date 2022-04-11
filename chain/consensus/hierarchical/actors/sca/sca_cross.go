@@ -53,7 +53,7 @@ func (cm *CrossMsgs) Cid() (cid.Cid, error) {
 	for i, m := range cm.Metas {
 		// NOTE: Instead of using the metaCID to compute CID of msgMeta
 		// we use from/to to de-duplicate between Cids of different msgMeta.
-		// This may be deemed unecessary, but it is a sanity-check for the case
+		// This may be deemed unnecessary, but it is a sanity-check for the case
 		// where a subnet may try to push the same Cid of MsgMeta of other subnets
 		// and thus remove previously stored msgMetas.
 		// _, mc, err := cid.CidFromBytes(m.MsgsCid)
@@ -254,7 +254,8 @@ func (st *SCAState) aggChildMsgMeta(rt runtime.Runtime, ch *schema.Checkpoint, a
 			metaCid := st.appendMetasToMeta(rt, prevMetaCid, mm)
 			// Update msgMeta in checkpoint
 			ch.SetMsgMetaCid(metaIndex, metaCid)
-			ch.AddValueMetaCid(metaIndex, value)
+			err = ch.AddValueMetaCid(metaIndex, value)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error adding aggregated value in meta")
 		} else {
 			// if not populate a new one
 			meta := &CrossMsgs{Metas: mm}
@@ -267,7 +268,8 @@ func (st *SCAState) aggChildMsgMeta(rt runtime.Runtime, ch *schema.Checkpoint, a
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush msgMeta registry")
 			// Append msgMeta to registry
 			msgMeta.MsgsCid = metaCid.Bytes()
-			msgMeta.AddValue(value)
+			err = msgMeta.AddValue(value)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error adding aggregated value in meta")
 			ch.AppendMsgMeta(msgMeta)
 		}
 	}
@@ -289,7 +291,8 @@ func (st *SCAState) storeCheckMsg(rt runtime.Runtime, msg ltypes.Message, from, 
 		metaCid := st.appendMsgToMeta(rt, prevMetaCid, msg)
 		// Update msgMeta in checkpoint
 		ch.SetMsgMetaCid(metaIndex, metaCid)
-		ch.AddValueMetaCid(metaIndex, msg.Value)
+		err = ch.AddValueMetaCid(metaIndex, msg.Value)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error adding aggregated value in meta")
 	} else {
 		// if not populate a new one
 		meta := &CrossMsgs{Msgs: []ltypes.Message{msg}}
@@ -302,7 +305,8 @@ func (st *SCAState) storeCheckMsg(rt runtime.Runtime, msg ltypes.Message, from, 
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush msgMeta registry")
 		// Append msgMeta to registry
 		msgMeta.MsgsCid = metaCid.Bytes()
-		msgMeta.AddValue(msg.Value)
+		err = msgMeta.AddValue(msg.Value)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error adding aggregated value in meta")
 		ch.AppendMsgMeta(msgMeta)
 	}
 

@@ -169,7 +169,7 @@ var addCmd = &cli.Command{
 			return err
 		}
 
-		fmt.Printf("[*] subnet actor deployed as %v and new subnet availabe with ID=%v\n\n", actorAddr, address.NewSubnetID(parent, actorAddr))
+		fmt.Printf("[*] subnet actor deployed as %v and new subnet available with ID=%v\n\n", actorAddr, address.NewSubnetID(parent, actorAddr))
 		fmt.Printf("remember to join and register your subnet for it to be discoverable\n")
 		return nil
 	},

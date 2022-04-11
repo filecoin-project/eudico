@@ -405,7 +405,13 @@ func (c *Checkpoint) Cid() (cid.Cid, error) {
 // AddListChilds adds a list of child checkpoints into the checkpoint.
 func (c *Checkpoint) AddListChilds(childs []*Checkpoint) {
 	for _, ch := range childs {
-		c.AddChild(ch)
+		err := c.AddChild(ch)
+		// Do not add child if error computing Cid
+		// (this shouldn't be the case)
+		// TODO: Consider returning the error?
+		if err != nil {
+			continue
+		}
 	}
 }
 

@@ -197,17 +197,6 @@ func GossipSub(in GossipIn) (service *pubsub.PubSub, err error) {
 		build.MessagesTopic(in.Nn): 1,
 	}
 
-	var drandTopics []string
-	for _, d := range in.Dr {
-		topic, err := getDrandTopic(d.Config.ChainInfoJSON)
-		if err != nil {
-			return nil, err
-		}
-		topicParams[topic] = drandTopicParams
-		pgTopicWeights[topic] = 5
-		drandTopics = append(drandTopics, topic)
-	}
-
 	// IP colocation whitelist
 	var ipcoloWhitelist []*net.IPNet
 	for _, cidr := range in.Cfg.IPColocationWhitelist {
@@ -330,20 +319,32 @@ func GossipSub(in GossipIn) (service *pubsub.PubSub, err error) {
 
 	options = append(options, pubsub.WithPeerGater(pgParams))
 
-	/* TODO: Find a way to allow pubsub topics for subnets.
-	This may need something to start allowing topics with a specific
-	prefix.
-		allowTopics := []string{
-			build.BlocksTopic(in.Nn),
-			build.MessagesTopic(in.Nn),
-		}
-		allowTopics = append(allowTopics, drandTopics...)
-		options = append(options,
-			pubsub.WithSubscriptionFilter(
-				pubsub.WrapLimitSubscriptionFilter(
-					pubsub.NewAllowlistSubscriptionFilter(allowTopics...),
-					100)))
-	*/
+	// // FIXME: Find a way to allow pubsub topics for subnets.
+	// // This may need something to start allowing topics with a specific
+	// // prefix.
+	// // See: https://github.com/filecoin-project/eudico/issues/24
+	//
+	// var drandTopics []string
+	// for _, d := range in.Dr {
+	//         topic, err := getDrandTopic(d.Config.ChainInfoJSON)
+	//         if err != nil {
+	//                 return nil, err
+	//         }
+	//         topicParams[topic] = drandTopicParams
+	//         pgTopicWeights[topic] = 5
+	//         drandTopics = append(drandTopics, topic)
+	// }
+	//
+	// allowTopics := []string{
+	//         build.BlocksTopic(in.Nn),
+	//         build.MessagesTopic(in.Nn),
+	// }
+	// allowTopics = append(allowTopics, drandTopics...)
+	// options = append(options,
+	//         pubsub.WithSubscriptionFilter(
+	//                 pubsub.WrapLimitSubscriptionFilter(
+	//                         pubsub.NewAllowlistSubscriptionFilter(allowTopics...),
+	//                         100)))
 
 	// tracer
 	if in.Cfg.RemoteTracer != "" {

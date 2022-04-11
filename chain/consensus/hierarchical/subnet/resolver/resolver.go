@@ -367,7 +367,7 @@ func (r *Resolver) processPullLocked(submgr subnet.SubnetMgr, rmsg *ResolveMsg) 
 	// FIXME: Make this configurable
 	lstate, found, err := r.getLockedStateFromActor(context.TODO(), submgr, rmsg)
 	if err != nil {
-		return pubsub.ValidationIgnore, xerrors.Errorf("error geting locked state from actor: %s", err)
+		return pubsub.ValidationIgnore, xerrors.Errorf("error getting locked state from actor: %s", err)
 	}
 	if !found {
 		// Reject instead of ignore. Someone may be trying to spam us with

@@ -522,6 +522,6 @@ func ImportChain(ctx context.Context, r repo.Repo, fname string, snapshot bool) 
 	if err := cst.ForceHeadSilent(ctx, ts); err != nil {
 		return err
 	}
-	*/
 	return nil
+	*/
 }

@@ -458,7 +458,7 @@ func (h *shActorHarness) constructAndVerify(t *testing.T, rt *mock.Runtime) {
 }
 
 // Check what happens if we set a check period equal to zero.
-// We should be assigning the defualt period.
+// We should be assigning the default period.
 func (h *shActorHarness) constructAndVerifyZeroCheck(t *testing.T, rt *mock.Runtime) {
 	rt.ExpectValidateCallerType(builtin.InitActorCodeID)
 	ret := rt.Call(h.SubnetActor.Constructor,
