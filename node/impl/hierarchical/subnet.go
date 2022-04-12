@@ -29,7 +29,6 @@ func (a *HierarchicalAPI) AddSubnet(
 	consensus uint64, minerStake abi.TokenAmount,
 	checkPeriod abi.ChainEpoch,
 	delegminer address.Address) (address.Address, error) {
-
 	return a.Sub.AddSubnet(ctx, wallet, parent, name, consensus, minerStake, checkPeriod, delegminer)
 }
 
@@ -52,7 +51,7 @@ func (a *HierarchicalAPI) LeaveSubnet(ctx context.Context, wallet address.Addres
 	return a.Sub.LeaveSubnet(ctx, wallet, id)
 }
 
-func (a *HierarchicalAPI) ListSubnets(ctx context.Context, id address.SubnetID) ([]sca.Subnet, error) {
+func (a *HierarchicalAPI) ListSubnets(ctx context.Context, id address.SubnetID) ([]sca.SubnetOutput, error) {
 	return a.Sub.ListSubnets(ctx, id)
 }
 

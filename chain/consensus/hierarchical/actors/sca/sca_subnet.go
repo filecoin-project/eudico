@@ -1,18 +1,19 @@
 package sca
 
 import (
-	address "github.com/filecoin-project/go-address"
-	abi "github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/ipfs/go-cid"
+	"golang.org/x/xerrors"
+
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
+	ltypes "github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
-	cid "github.com/ipfs/go-cid"
-	xerrors "golang.org/x/xerrors"
-
-	schema "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
-	ltypes "github.com/filecoin-project/lotus/chain/types"
 )
 
 type Subnet struct {
@@ -20,7 +21,7 @@ type Subnet struct {
 	ParentID    address.SubnetID
 	Stake       abi.TokenAmount
 	TopDownMsgs cid.Cid // AMT[ltypes.Messages] of cross top-down messages to subnet.
-	// NOTE: We can avoid explitly storing the Nonce here and use CrossMsgs length
+	// NOTE: We can avoid explicitly storing the Nonce here and use CrossMsgs length
 	// to determine the nonce. Deferring that for future iterations.
 	Nonce      uint64          // Latest nonce of cross message submitted to subnet.
 	CircSupply abi.TokenAmount // Circulating supply of FIL in subnet.
@@ -29,6 +30,11 @@ type Subnet struct {
 	// overall behavior of check commitment by just keeping the information
 	// required for verification (prevCheck cid and epoch).
 	PrevCheckpoint schema.Checkpoint
+}
+
+type SubnetOutput struct {
+	Subnet    Subnet
+	Consensus hierarchical.ConsensusType
 }
 
 // addStake adds new funds to the stake of the subnet.
@@ -50,7 +56,6 @@ func (sh *Subnet) addStake(rt runtime.Runtime, st *SCAState, value abi.TokenAmou
 }
 
 func fundMsg(rt runtime.Runtime, id address.SubnetID, secp address.Address, value big.Int) ltypes.Message {
-
 	// Transform To and From to HAddresses
 	to, err := address.NewHAddress(id, secp)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
@@ -65,7 +70,7 @@ func fundMsg(rt runtime.Runtime, id address.SubnetID, secp address.Address, valu
 		From:       from,
 		Value:      value,
 		Method:     builtin.MethodSend,
-		GasLimit:   1 << 30, // This is will be applied as an implicit msg, add enough gas
+		GasLimit:   1 << 30, // This will be applied as an implicit msg, add enough gas
 		GasFeeCap:  ltypes.NewInt(0),
 		GasPremium: ltypes.NewInt(0),
 		Params:     nil,

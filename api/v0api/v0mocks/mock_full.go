@@ -1150,10 +1150,10 @@ func (mr *MockFullNodeMockRecorder) ListCheckpoints(arg0, arg1, arg2 interface{}
 }
 
 // ListSubnets mocks base method.
-func (m *MockFullNode) ListSubnets(arg0 context.Context, arg1 address.SubnetID) ([]sca.Subnet, error) {
+func (m *MockFullNode) ListSubnets(arg0 context.Context, arg1 address.SubnetID) ([]sca.SubnetOutput, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListSubnets", arg0, arg1)
-	ret0, _ := ret[0].([]sca.Subnet)
+	ret0, _ := ret[0].([]sca.SubnetOutput)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

@@ -105,7 +105,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	full, rootMiner, subnetMiner, ens := kit.EudicoEnsembleTwoMiners(t, ts.opts...)
+	full, rootMiner, subnetMinerType, ens := kit.EudicoEnsembleTwoMiners(t, ts.opts...)
 
 	addr, err := full.WalletDefaultAddress(ctx)
 	require.NoError(t, err)
@@ -143,7 +143,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("[*] %s balance: %d", addr, balance)
 
-	actorAddr, err := full.AddSubnet(ctx, addr, parent, subnetName, uint64(subnetMiner), minerStake, checkPeriod, addr)
+	actorAddr, err := full.AddSubnet(ctx, addr, parent, subnetName, uint64(subnetMinerType), minerStake, checkPeriod, addr)
 	require.NoError(t, err)
 
 	subnetAddr := address.NewSubnetID(parent, actorAddr)
@@ -168,11 +168,12 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	t.Logf("[*] the message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
 
 	// AddSubnet only deploys the subnet actor. The subnet will only be listed after joining the subnet
-
+	t.Log("[*] Listing subnets")
 	sn, err := full.ListSubnets(ctx, address.RootSubnet)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(sn))
-	require.NotEqual(t, 0, sn[0].Status)
+	require.NotEqual(t, 0, sn[0].Subnet.Status)
+	require.Equal(t, subnetMinerType, sn[0].Consensus)
 
 	go func() {
 		err = full.MineSubnet(ctx, addr, subnetAddr, false)
@@ -302,7 +303,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	sn, err = full.ListSubnets(ctx, address.RootSubnet)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(sn))
-	require.NotEqual(t, 0, sn[0].Status)
+	require.NotEqual(t, 0, sn[0].Subnet.Status)
 
 	err = ens.Stop()
 	require.NoError(t, err)
