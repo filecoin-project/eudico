@@ -302,9 +302,9 @@ func sameStringSlice(x, y []string) bool {
 	return len(diff) == 0
 }
 
-func timeTrack(start time.Time, name string, file *os.File) {
+func timeTrack(start time.Time, name string, number int, file *os.File) {
     elapsed := time.Since(start)
    // fmt.Println("%s took %s", name, elapsed)
    //fmt.Println(name," took", elapsed)
-   fmt.Fprintf(file, "%s took %s \n", name, elapsed)
+   fmt.Fprintf(file, "%s,%d,%s \n", name, number, elapsed)
 }

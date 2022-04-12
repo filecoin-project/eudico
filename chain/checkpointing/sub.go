@@ -627,7 +627,7 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	if err != nil {
 		return err
 	}
-	LoopHandlerDKG(ctx, handler, n, c.file) //use the new network, could be re-written
+	LoopHandlerDKG(ctx, handler, n, len(idsStrings),c.file,) //use the new network, could be re-written
 	r, err := handler.Result()
 	if err != nil {
 		// if a participant is mibehaving the DKG entirely fail (no fallback)
@@ -803,7 +803,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		if err != nil {
 			return err
 		}
-		LoopHandler(ctx, handler, n, c.file)
+		LoopHandler(ctx, handler, n, len(idsStrings), c.file)
 		r, err := handler.Result()
 		if err != nil {
 			return err

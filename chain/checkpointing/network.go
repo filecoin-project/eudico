@@ -101,8 +101,8 @@ func waitingMessages(ctx context.Context, h protocol.Handler, network *Network, 
 // This could be simplified
 // next and send very similar to next and publish in libp2p
 // the code could be simplified to use next and publish.s
-func LoopHandler(ctx context.Context, h protocol.Handler, network *Network, file *os.File) {
-	defer timeTrack(time.Now(), "Signing", file)
+func LoopHandler(ctx context.Context, h protocol.Handler, network *Network, num int, file *os.File) {
+	defer timeTrack(time.Now(), "Signing", num, file)
 	over := make(chan bool)
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -126,8 +126,8 @@ func waitTimeOut(ctx context.Context, h protocol.Handler, network *Network, over
 		}
 	}
 }
-func LoopHandlerDKG(ctx context.Context, h protocol.Handler, network *Network, file *os.File) {
-	defer timeTrack(time.Now(), "DKG", file)
+func LoopHandlerDKG(ctx context.Context, h protocol.Handler, network *Network, num int, file *os.File) {
+	defer timeTrack(time.Now(), "DKG", num, file)
 	over := make(chan bool)
 
 	ctx, cancel := context.WithCancel(ctx)
