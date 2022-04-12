@@ -13,7 +13,7 @@ import (
 	cbor "github.com/ipfs/go-ipld-cbor"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p-core/host"
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
@@ -26,7 +26,7 @@ import (
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/actors"
-	"github.com/filecoin-project/lotus/chain/beacon"
+	"github.com/filecoin-project/lotus/chain/actors/adt"
 	act "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
@@ -57,6 +57,8 @@ import (
 	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 )
 
+var _ subiface.SubnetMgr = &SubnetMgr{}
+
 var log = logging.Logger("subnetMgr")
 
 // SubnetMgr is the subneting manager in the root chain
@@ -73,7 +75,6 @@ type SubnetMgr struct {
 	pubsub *pubsub.PubSub
 	// Root ds
 	ds           dtypes.MetadataDS
-	beacon       beacon.Schedule
 	syscalls     vm.SyscallBuilder
 	us           stmgr.UpgradeSchedule
 	verifier     ffiwrapper.Verifier
@@ -100,7 +101,6 @@ func NewSubnetMgr(
 	pubsub *pubsub.PubSub,
 	ds dtypes.MetadataDS,
 	host host.Host,
-	beacon beacon.Schedule,
 	syscalls vm.SyscallBuilder,
 	us stmgr.UpgradeSchedule,
 	nodeServer api.FullNodeServer,
@@ -125,7 +125,6 @@ func NewSubnetMgr(
 	j journal.Journal) (*SubnetMgr, error) {
 
 	ctx := helpers.LifecycleCtx(mctx, lc)
-	var err error
 
 	s := &SubnetMgr{
 		ctx:          ctx,
@@ -165,6 +164,7 @@ func NewSubnetMgr(
 	}
 
 	// Starting subnetSub to listen to events in the root chain.
+	var err error
 	s.events, err = events.NewEvents(ctx, s.api)
 	if err != nil {
 		return nil, err
@@ -176,7 +176,6 @@ func NewSubnetMgr(
 func (s *SubnetMgr) startSubnet(id address.SubnetID,
 	parentAPI *API, consensus hierarchical.ConsensusType,
 	genesis []byte) error {
-	var err error
 	// Subnets inherit the context from the SubnetManager.
 	ctx, cancel := context.WithCancel(s.ctx)
 
@@ -214,14 +213,22 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 		return err
 	}
 
+	beacon := s.api.BeaconAPI.Beacon
 	sh.ch = store.NewChainStore(sh.bs, sh.bs, sh.ds, weight, s.j)
-	sh.sm, err = stmgr.NewStateManager(sh.ch, tsExec, sh.r, s.syscalls, s.us, s.beacon)
+	sh.sm, err = stmgr.NewStateManager(sh.ch, tsExec, sh.r, s.syscalls, s.us, beacon)
 	if err != nil {
 		log.Errorw("Error creating state manager for subnet", "subnetID", id, "err", err)
 		return err
 	}
+	err = sh.ch.Load(ctx)
+	if err != nil {
+		return xerrors.Errorf("Error loading chain from disk: %w", err)
+	}
 	// Start state manager.
-	sh.sm.Start(ctx)
+	err = sh.sm.Start(ctx)
+	if err != nil {
+		return xerrors.Errorf("error starting sm for subnet %s: %s", sh.ID, err)
+	}
 
 	gen, err := sh.LoadGenesis(ctx, genesis)
 	if err != nil {
@@ -229,7 +236,7 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 		return err
 	}
 	// Instantiate consensus
-	sh.cons, err = subcns.New(ctx, consensus, sh.sm, s, s.beacon, sh.r, s.verifier, gen, dtypes.NetworkName(id))
+	sh.cons, err = subcns.New(ctx, consensus, sh.sm, s, beacon, sh.r, s.verifier, gen, dtypes.NetworkName(id))
 	if err != nil {
 		log.Errorw("Error creating consensus", "subnetID", id, "err", err)
 		return err
@@ -241,7 +248,7 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 	// We are passing to the syncer a new exchange client for the subnet to enable
 	// peers to catch up with the subnet chain.
 	// NOTE: We reuse the same peer manager from the root chain.
-	sh.syncer, err = chain.NewSyncer(sh.ds, sh.sm, sh.exchangeClient(ctx), chain.NewSyncManager, s.host.ConnManager(), s.host.ID(), s.beacon, gen, sh.cons)
+	sh.syncer, err = chain.NewSyncer(sh.ds, sh.sm, sh.exchangeClient(ctx), chain.NewSyncManager, s.host.ConnManager(), s.host.ID(), beacon, gen, sh.cons)
 	if err != nil {
 		log.Errorw("Error creating syncer for subnet", "subnetID", id, "err", err)
 		return err
@@ -251,7 +258,10 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 	// Hello protocol needs to run after the syncer is intialized and the genesis
 	// is created but before we set-up the gossipsub topics to listen for
 	// new blocks and messages.
-	sh.runHello(ctx)
+	err = sh.runHello(ctx)
+	if err != nil {
+		return xerrors.Errorf("Error starting hello protocol for subnet %s: %s", sh.ID, err)
+	}
 
 	// FIXME: Consider inheriting Bitswap ChainBlockService instead of using
 	// offline.Exchange here. See builder_chain to undertand how is built.
@@ -338,7 +348,6 @@ func BuildSubnetMgr(mctx helpers.MetricsCtx, lc fx.Lifecycle, s *SubnetMgr) {
 			return s.Close(ctx)
 		},
 	})
-
 }
 
 func (s *SubnetMgr) AddSubnet(
@@ -611,6 +620,60 @@ func (s *SubnetMgr) LeaveSubnet(
 	return smsg.Cid(), nil
 }
 
+func (s *SubnetMgr) ListSubnets(ctx context.Context, id address.SubnetID) ([]sca.SubnetOutput, error) {
+	sapi, err := s.GetSubnetAPI(id)
+	if err != nil {
+		return nil, err
+	}
+
+	actor, err := sapi.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, types.EmptyTSK)
+	if err != nil {
+		return nil, err
+	}
+
+	bs := blockstore.NewAPIBlockstore(sapi)
+	cst := cbor.NewCborStore(bs)
+	ws := adt.WrapStore(ctx, cst)
+
+	var st sca.SCAState
+	err = cst.Get(ctx, actor.Head, &st)
+	if err != nil {
+		return nil, err
+	}
+
+	subnets, err := sca.ListSubnets(ws, &st)
+	if err != nil {
+		return nil, err
+	}
+
+	var output []sca.SubnetOutput
+
+	for _, sn := range subnets {
+		act, err := sn.ID.Actor()
+		if err != nil {
+			return nil, err
+		}
+		snAct, err := sapi.StateGetActor(ctx, act, types.EmptyTSK)
+		if err != nil {
+			return nil, err
+		}
+
+		bs := blockstore.NewAPIBlockstore(sapi)
+		cst := cbor.NewCborStore(bs)
+
+		var st subnet.SubnetState
+		err = cst.Get(ctx, snAct.Head, &st)
+		if err != nil {
+			return nil, err
+		}
+		o := sca.SubnetOutput{
+			Subnet: sn, Consensus: st.Consensus,
+		}
+		output = append(output, o)
+	}
+	return output, nil
+}
+
 func (s *SubnetMgr) KillSubnet(
 	ctx context.Context, wallet address.Address,
 	id address.SubnetID) (cid.Cid, error) {
@@ -746,5 +809,3 @@ func (s *SubnetMgr) SubnetStateWaitMsg(ctx context.Context, id address.SubnetID,
 	}
 	return api.StateWaitMsg(ctx, cid, confidence, limit, allowReplaced)
 }
-
-var _ subiface.SubnetMgr = &SubnetMgr{}

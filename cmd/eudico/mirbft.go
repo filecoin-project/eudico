@@ -29,7 +29,7 @@ import (
 )
 
 func NewRootMirConsensus(ctx context.Context, sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
-	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
+	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) (consensus.Consensus, error) {
 	return mirbft.NewConsensus(ctx, sm, nil, beacon, r, verifier, genesis, netName)
 }
 

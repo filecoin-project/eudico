@@ -55,27 +55,29 @@ func New(
 	case hierarchical.PoW:
 		return tspow.NewTSPoWConsensus(ctx, sm, snMgr, beacon, r, verifier, genesis, netName), nil
 	case hierarchical.Tendermint:
-		return tendermint.NewConsensus(ctx, sm, snMgr, beacon, r, verifier, genesis, netName), nil
+		return tendermint.NewConsensus(ctx, sm, snMgr, beacon, r, verifier, genesis, netName)
 	case hierarchical.MirBFT:
-		return mirbft.NewConsensus(ctx, sm, snMgr, beacon, r, verifier, genesis, netName), nil
+		return mirbft.NewConsensus(ctx, sm, snMgr, beacon, r, verifier, genesis, netName)
 	default:
 		return nil, xerrors.New("consensus type not supported")
 	}
 }
 
 func Mine(ctx context.Context, api v1api.FullNode, wallet address.Address, cnsType hierarchical.ConsensusType) error {
-	// TODO: We should check if these processes throw an error
-	switch cnsType {
-	case hierarchical.Delegated:
-		go delegcns.Mine(ctx, wallet, api)
-	case hierarchical.PoW:
-		go tspow.Mine(ctx, wallet, api)
-	case hierarchical.Tendermint:
-		go tendermint.Mine(ctx, wallet, api)
-	case hierarchical.MirBFT:
-		go mirbft.Mine(ctx, wallet, api)
-	default:
-		return xerrors.New("consensus type not supported")
-	}
-	return nil
+	var err error
+	go func() {
+		switch cnsType {
+		case hierarchical.Delegated:
+			err = delegcns.Mine(ctx, wallet, api)
+		case hierarchical.PoW:
+			err = tspow.Mine(ctx, wallet, api)
+		case hierarchical.Tendermint:
+			err = tendermint.Mine(ctx, wallet, api)
+		case hierarchical.MirBFT:
+			err = mirbft.Mine(ctx, wallet, api)
+		default:
+			err = xerrors.New("consensus type not supported")
+		}
+	}()
+	return err
 }

@@ -93,14 +93,6 @@ func SubnetTendermint() EnsembleOpt {
 	}
 }
 
-// SubnetFilcns activates Filcns consensus protocol for the subnet in Eudico.
-func SubnetFilcns() EnsembleOpt {
-	return func(opts *ensembleOpts) error {
-		opts.subnetConsensus = hierarchical.FilecoinEC
-		return nil
-	}
-}
-
 // MockProofs activates mock proofs for the entire ensemble.
 func MockProofs() EnsembleOpt {
 	return func(opts *ensembleOpts) error {

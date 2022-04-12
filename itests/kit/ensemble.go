@@ -289,8 +289,10 @@ func (n *Ensemble) Start() *Ensemble {
 		r := repo.NewMemory(nil)
 		opts := []node.Option{
 			node.FullAPI(&full.FullNode, node.Lite(full.options.lite)),
+
 			node.Base(),
 			node.Repo(r),
+
 			node.MockHost(n.mn),
 			node.Test(),
 

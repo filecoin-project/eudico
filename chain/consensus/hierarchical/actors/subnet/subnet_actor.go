@@ -450,7 +450,7 @@ func (st *SubnetState) rmStake(rt runtime.Runtime, sourceAddr address.Address, s
 
 	// Remove from stakes
 	err := stakes.MustSubtract(sourceAddr, minerStake)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed substracting ablanace for miner")
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed subtracting ablanace for miner")
 	// Flush stakes adding miner stake.
 	st.Stake, err = stakes.Root()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flust stakes")

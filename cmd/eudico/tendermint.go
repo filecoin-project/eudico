@@ -34,7 +34,7 @@ import (
 )
 
 func NewRootTendermintConsensus(ctx context.Context, sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
-	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
+	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) (consensus.Consensus, error) {
 	return tendermint.NewConsensus(ctx, sm, nil, beacon, r, verifier, genesis, netName)
 }
 
@@ -143,12 +143,14 @@ var tendermintApplicationCmd = &cli.Command{
 		if err := server.Start(); err != nil {
 			return err
 		}
-		defer server.Stop()
+		defer func() {
+			err = server.Stop()
+		}()
 
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 		<-c
 		os.Exit(0)
-		return nil
+		return err
 	},
 }

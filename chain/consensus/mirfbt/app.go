@@ -1,45 +1,54 @@
 package mirbft
 
 import (
-	"fmt"
+	"sync"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/hyperledger-labs/mirbft/pkg/modules"
 	"github.com/hyperledger-labs/mirbft/pkg/pb/requestpb"
 )
 
+type Tx []byte
+
 type Application struct {
-	messages []string
-	
+	mu sync.Mutex
+
+	db       map[uint64][]Tx
 	reqStore modules.RequestStore
+	height   uint64
 }
 
 func NewApplication(reqStore modules.RequestStore) *Application {
 	app := Application{
-		messages: make([]string, 0),
+		db:       make(map[uint64][]Tx),
 		reqStore: reqStore,
+		height:   0,
 	}
 	return &app
 }
 
+func (app *Application) Block(i uint64) []Tx {
+	app.mu.Lock()
+	defer app.mu.Unlock()
+
+	return app.db[i]
+}
+
 func (app *Application) Apply(batch *requestpb.Batch) error {
+	app.mu.Lock()
+	defer app.mu.Unlock()
 
-	// For each request in the batch
+	var txs []Tx
+
 	for _, reqRef := range batch.Requests {
-
-		// Extract request data from the request store and construct a printable chat message.
-		reqData, err := app.reqStore.GetRequest(reqRef)
+		msg, err := app.reqStore.GetRequest(reqRef)
 		if err != nil {
 			return err
 		}
-		chatMessage := fmt.Sprintf("Client %d: %s", reqRef.ClientId, string(reqData))
-
-		// Append the received chat message to the chat history.
-		app.messages = append(app.messages, chatMessage)
-
-		// Print received chat message.
-		fmt.Println(chatMessage)
+		txs = append(txs, msg)
 	}
+
+	app.height++
+	app.db[app.height] = txs
 	return nil
 }
 
@@ -49,17 +58,12 @@ func (app *Application) Apply(batch *requestpb.Batch) error {
 // and Snapshot is never actually called.
 // We include its implementation for completeness.
 func (app *Application) Snapshot() ([]byte, error) {
-
-	// We use protocol buffers to serialize the application state.
-	state := &AppState{
-		Messages: app.messages,
-	}
-	return proto.Marshal(state)
+	return nil, nil
 }
 
 // RestoreState restores the application's state to the one represented by the passed argument.
 // The argument is a binary representation of the application state returned from Snapshot().
 // After the chat history is restored, RestoreState prints the whole chat history to stdout.
-func (chat *Application) RestoreState(snapshot []byte) error {
-	panic("RestoreState not implemented")
+func (app *Application) RestoreState(snapshot []byte) error {
+	return nil
 }

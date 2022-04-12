@@ -7,8 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -21,6 +19,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/ipfs/go-datastore"
 	libp2pcrypto "github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
@@ -30,21 +29,31 @@ import (
 	tmlogger "github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/libs/service"
 	"go.uber.org/fx"
+	"go.uber.org/multierr"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-jsonrpc"
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-state-types/exitcode"
 	"github.com/filecoin-project/go-state-types/network"
+	"github.com/filecoin-project/go-storedcounter"
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
+	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain"
+	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
+	"github.com/filecoin-project/lotus/chain/actors/builtin/power"
 	"github.com/filecoin-project/lotus/chain/beacon"
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
 	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	snmgr "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/manager"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/consensus/tendermint"
@@ -59,17 +68,23 @@ import (
 	"github.com/filecoin-project/lotus/chain/vm"
 	"github.com/filecoin-project/lotus/chain/wallet"
 	"github.com/filecoin-project/lotus/cmd/lotus-seed/seed"
+	sectorstorage "github.com/filecoin-project/lotus/extern/sector-storage"
 	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
 	"github.com/filecoin-project/lotus/extern/sector-storage/mock"
 	"github.com/filecoin-project/lotus/genesis"
 	"github.com/filecoin-project/lotus/lib/peermgr"
+	lotusminer "github.com/filecoin-project/lotus/miner"
 	"github.com/filecoin-project/lotus/node"
+	"github.com/filecoin-project/lotus/node/config"
 	"github.com/filecoin-project/lotus/node/impl"
 	"github.com/filecoin-project/lotus/node/modules"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/modules/helpers"
+	testing2 "github.com/filecoin-project/lotus/node/modules/testing"
 	"github.com/filecoin-project/lotus/node/repo"
 	"github.com/filecoin-project/lotus/storage/mockstorage"
+	miner2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/miner"
+	power2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/power"
 )
 
 const (
@@ -119,39 +134,6 @@ type EudicoEnsemble struct {
 
 	tendermintContainerID string
 	tendermintAppServer   service.Service
-}
-
-func EudicoMiners(t *testing.T, opts ...interface{}) (
-	rootMiner func(ctx context.Context, addr address.Address, api v1api.FullNode) error,
-	subnetMinerType hierarchical.ConsensusType) {
-
-	eopts, _ := siftOptions(t, opts)
-
-	options := DefaultEnsembleOpts
-	for _, o := range eopts {
-		err := o(&options)
-		require.NoError(t, err)
-	}
-
-	switch options.rootConsensus {
-	case hierarchical.Tendermint:
-		rootMiner = tendermint.Mine
-	case hierarchical.PoW:
-		rootMiner = tspow.Mine
-	case hierarchical.Delegated:
-		rootMiner = delegcns.Mine
-	}
-
-	switch options.subnetConsensus {
-	case hierarchical.Tendermint:
-		subnetMinerType = hierarchical.Tendermint
-	case hierarchical.PoW:
-		subnetMinerType = hierarchical.PoW
-	case hierarchical.Delegated:
-		subnetMinerType = hierarchical.Delegated
-	}
-
-	return
 }
 
 // NewEudicoEnsemble instantiates a new blank EudicoEnsemble.
@@ -242,7 +224,6 @@ func (n *EudicoEnsemble) Miner(minerNode *TestMiner, full *TestFullNode, opts ..
 	}
 
 	ownerKey := options.ownerKey
-
 	if !n.bootstrapped {
 		var (
 			sectors = options.sectors
@@ -255,7 +236,6 @@ func (n *EudicoEnsemble) Miner(minerNode *TestMiner, full *TestFullNode, opts ..
 		require.NoError(n.t, err)
 
 		// Create the preseal commitment.
-
 		if n.options.mockProofs {
 			genm, k, err = mockstorage.PreSeal(proofType, actorAddr, sectors)
 		} else {
@@ -264,10 +244,10 @@ func (n *EudicoEnsemble) Miner(minerNode *TestMiner, full *TestFullNode, opts ..
 		require.NoError(n.t, err)
 
 		genm.PeerId = peerId
-		_ = k
 
 		// create an owner key, and assign it some FIL.
-		ownerKey, err = wallet.GenerateKey(types.KTSecp256k1)
+		ownerKey, err = wallet.NewKey(*k)
+		require.NoError(n.t, err)
 
 		genacc := genesis.Actor{
 			Type:    genesis.TAccount,
@@ -313,7 +293,7 @@ func NewRootDelegatedConsensus(ctx context.Context, sm *stmgr.StateManager, beac
 }
 
 func NewRootTendermintConsensus(ctx context.Context, sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
-	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
+	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) (consensus.Consensus, error) {
 	return tendermint.NewConsensus(ctx, sm, nil, beacon, r, verifier, genesis, netName)
 }
 
@@ -350,7 +330,6 @@ func (n *EudicoEnsemble) Stop() error {
 
 // Start starts all enrolled nodes.
 func (n *EudicoEnsemble) Start() *EudicoEnsemble {
-	n.t.Log(">>>>> start Eudico ensemble")
 	ctx := context.Background()
 
 	var gtempl *genesis.Template
@@ -391,7 +370,6 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 				return fmt.Errorf("failed to instantiate rpc handler: %s", err)
 			}
 		}
-		n.t.Log(">>>>> [*] serve new subnet API", pp)
 		subnetMux.NewRoute().PathPrefix(pp).Handler(h)
 		return nil
 	}
@@ -445,6 +423,9 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 			node.MockHost(n.mn),
 			node.Test(),
 
+			// so that we subscribe to pubsub topics immediately
+			node.Override(new(dtypes.Bootstrapper), dtypes.Bootstrapper(true)),
+
 			node.Override(new(dtypes.NetworkName), NetworkName),
 			node.Override(new(consensus.Consensus), rootConsensusConstructor),
 			node.Override(new(store.WeightFunc), rootConsensusWeight),
@@ -452,12 +433,7 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 			node.Override(new(stmgr.Executor), common.RootTipSetExecutor),
 			node.Override(new(stmgr.UpgradeSchedule), common.DefaultUpgradeSchedule()),
 			node.Override(new(*resolver.Resolver), resolver.NewRootResolver),
-
-			// so that we subscribe to pubsub topics immediately
-			node.Override(new(dtypes.Bootstrapper), dtypes.Bootstrapper(true)),
-
 			node.Override(new(api.FullNodeServer), serveNamedApi),
-
 			node.Override(node.SetApiEndpointKey, func(lr repo.LockedRepo) error {
 				apima, err := multiaddr.NewMultiaddr("/ip4/127.0.0.1/tcp/1234")
 				if err != nil {
@@ -491,18 +467,21 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 			require.NoError(n.t, cerr)
 			rootGenesisBytes, gferr = ioutil.ReadFile(TendermintConsensusGenesisTestFile)
 		case hierarchical.FilecoinEC:
-			rootGenesisBytes, gferr = ioutil.ReadFile(FilcnsConsensusGenesisTestFile)
 		default:
 			n.t.Fatalf("unknown consensus genesis file %d", n.options.rootConsensus)
 		}
 		require.NoError(n.t, gferr)
 
+		gtempl.NetworkName = "/root"
+
+		//TODO: compare with original itests and fix
 		// Either generate the genesis or inject it.
-		if i == 0 && !n.bootstrapped {
-			//TODO: compare with original itests and fix
-			opts = append(opts, node.Override(new(modules.Genesis), modules.LoadGenesis(rootGenesisBytes)))
-			_ = gtempl
-			//opts = append(opts, node.Override(new(modules.Genesis), testing2.MakeGenesisMem(&n.genesisBlock, *gtempl)))
+		if n.options.rootConsensus == hierarchical.FilecoinEC {
+			if i == 0 && !n.bootstrapped {
+				opts = append(opts, node.Override(new(modules.Genesis), testing2.MakeGenesisMem(&n.genesisBlock, *gtempl)))
+			} else {
+				opts = append(opts, node.Override(new(modules.Genesis), modules.LoadGenesis(n.genesisBlock.Bytes())))
+			}
 		} else {
 			opts = append(opts, node.Override(new(modules.Genesis), modules.LoadGenesis(rootGenesisBytes)))
 		}
@@ -539,6 +518,8 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 			require.NoError(n.t, err)
 			addr, err = full.WalletImport(ctx, ki)
 			require.NoError(n.t, err)
+		case hierarchical.FilecoinEC:
+			addr, err = full.WalletImport(ctx, &full.DefaultKey.KeyInfo)
 		default:
 			n.t.Fatalf("unknown consensus type %d", n.options.rootConsensus)
 		}
@@ -561,6 +542,263 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 	// If we are here, we have processed all inactive fullnodes and moved them
 	// to active, so clear the slice.
 	n.inactive.fullnodes = n.inactive.fullnodes[:0]
+
+	// ---------------------
+	//  MINERS
+	// ---------------------
+
+	// Create all inactive miners.
+	for i, m := range n.inactive.miners {
+		if n.bootstrapped {
+			if m.options.mainMiner == nil {
+				// this is a miner created after genesis, so it won't have a preseal.
+				// we need to create it on chain.
+
+				// we get the proof type for the requested sector size, for
+				// the current network version.
+				nv, err := m.FullNode.FullNode.StateNetworkVersion(ctx, types.EmptyTSK)
+				require.NoError(n.t, err)
+
+				proofType, err := miner.SealProofTypeFromSectorSize(m.options.sectorSize, nv)
+				require.NoError(n.t, err)
+
+				params, aerr := actors.SerializeParams(&power2.CreateMinerParams{
+					Owner:         m.OwnerKey.Address,
+					Worker:        m.OwnerKey.Address,
+					SealProofType: proofType,
+					Peer:          abi.PeerID(m.Libp2p.PeerID),
+				})
+				require.NoError(n.t, aerr)
+
+				createStorageMinerMsg := &types.Message{
+					From:  m.OwnerKey.Address,
+					To:    power.Address,
+					Value: big.Zero(),
+
+					Method: power.Methods.CreateMiner,
+					Params: params,
+				}
+				signed, err := m.FullNode.FullNode.MpoolPushMessage(ctx, createStorageMinerMsg, nil)
+				require.NoError(n.t, err)
+
+				mw, err := m.FullNode.FullNode.StateWaitMsg(ctx, signed.Cid(), build.MessageConfidence, api.LookbackNoLimit, true)
+				require.NoError(n.t, err)
+				require.Equal(n.t, exitcode.Ok, mw.Receipt.ExitCode)
+
+				var retval power2.CreateMinerReturn
+				err = retval.UnmarshalCBOR(bytes.NewReader(mw.Receipt.Return))
+				require.NoError(n.t, err, "failed to create miner")
+
+				m.ActorAddr = retval.IDAddress
+			} else {
+				params, err := actors.SerializeParams(&miner2.ChangePeerIDParams{NewID: abi.PeerID(m.Libp2p.PeerID)})
+				require.NoError(n.t, err)
+
+				msg := &types.Message{
+					To:     m.options.mainMiner.ActorAddr,
+					From:   m.options.mainMiner.OwnerKey.Address,
+					Method: miner.Methods.ChangePeerID,
+					Params: params,
+					Value:  types.NewInt(0),
+				}
+
+				signed, err2 := m.FullNode.FullNode.MpoolPushMessage(ctx, msg, nil)
+				require.NoError(n.t, err2)
+
+				mw, err2 := m.FullNode.FullNode.StateWaitMsg(ctx, signed.Cid(), build.MessageConfidence, api.LookbackNoLimit, true)
+				require.NoError(n.t, err2)
+				require.Equal(n.t, exitcode.Ok, mw.Receipt.ExitCode)
+			}
+		}
+
+		has, err := m.FullNode.WalletHas(ctx, m.OwnerKey.Address)
+		require.NoError(n.t, err)
+
+		// Only import the owner's full key into our companion full node, if we
+		// don't have it still.
+		if !has {
+			_, err = m.FullNode.WalletImport(ctx, &m.OwnerKey.KeyInfo)
+			require.NoError(n.t, err)
+		}
+
+		// // Set it as the default address.
+		// err = m.FullNode.WalletSetDefault(ctx, m.OwnerAddr.Address)
+		// require.NoError(n.t, err)
+
+		r := repo.NewMemory(nil)
+
+		lr, err := r.Lock(repo.StorageMiner)
+		require.NoError(n.t, err)
+
+		c, err := lr.Config()
+		require.NoError(n.t, err)
+
+		cfg, ok := c.(*config.StorageMiner)
+		if !ok {
+			n.t.Fatalf("invalid config from repo, got: %T", c)
+		}
+		cfg.Common.API.RemoteListenAddress = m.RemoteListener.Addr().String()
+		cfg.Subsystems.EnableMarkets = m.options.subsystems.Has(SMarkets)
+		cfg.Subsystems.EnableMining = m.options.subsystems.Has(SMining)
+		cfg.Subsystems.EnableSealing = m.options.subsystems.Has(SSealing)
+		cfg.Subsystems.EnableSectorStorage = m.options.subsystems.Has(SSectorStorage)
+		cfg.Dealmaking.MaxStagingDealsBytes = m.options.maxStagingDealsBytes
+
+		if m.options.mainMiner != nil {
+			token, err := m.options.mainMiner.FullNode.AuthNew(ctx, api.AllPermissions)
+			require.NoError(n.t, err)
+
+			cfg.Subsystems.SectorIndexApiInfo = fmt.Sprintf("%s:%s", token, m.options.mainMiner.ListenAddr)
+			cfg.Subsystems.SealerApiInfo = fmt.Sprintf("%s:%s", token, m.options.mainMiner.ListenAddr)
+
+			fmt.Println("config for market node, setting SectorIndexApiInfo to: ", cfg.Subsystems.SectorIndexApiInfo)
+			fmt.Println("config for market node, setting SealerApiInfo to: ", cfg.Subsystems.SealerApiInfo)
+		}
+
+		err = lr.SetConfig(func(raw interface{}) {
+			rcfg := raw.(*config.StorageMiner)
+			*rcfg = *cfg
+		})
+		require.NoError(n.t, err)
+
+		ks, err := lr.KeyStore()
+		require.NoError(n.t, err)
+
+		pk, err := libp2pcrypto.MarshalPrivateKey(m.Libp2p.PrivKey)
+		require.NoError(n.t, err)
+
+		err = ks.Put("libp2p-host", types.KeyInfo{
+			Type:       "libp2p-host",
+			PrivateKey: pk,
+		})
+		require.NoError(n.t, err)
+
+		ds, err := lr.Datastore(context.TODO(), "/metadata")
+		require.NoError(n.t, err)
+
+		err = ds.Put(ctx, datastore.NewKey("miner-address"), m.ActorAddr.Bytes())
+		require.NoError(n.t, err)
+
+		nic := storedcounter.New(ds, datastore.NewKey(modules.StorageCounterDSPrefix))
+		for i := 0; i < m.options.sectors; i++ {
+			_, err := nic.Next()
+			require.NoError(n.t, err)
+		}
+		_, err = nic.Next()
+		require.NoError(n.t, err)
+
+		err = lr.Close()
+		require.NoError(n.t, err)
+
+		if m.options.mainMiner == nil {
+			enc, err := actors.SerializeParams(&miner2.ChangePeerIDParams{NewID: abi.PeerID(m.Libp2p.PeerID)})
+			require.NoError(n.t, err)
+
+			msg := &types.Message{
+				From:   m.OwnerKey.Address,
+				To:     m.ActorAddr,
+				Method: miner.Methods.ChangePeerID,
+				Params: enc,
+				Value:  types.NewInt(0),
+			}
+
+			_, err2 := m.FullNode.MpoolPushMessage(ctx, msg, nil)
+			require.NoError(n.t, err2)
+		}
+
+		var mineBlock = make(chan lotusminer.MineReq)
+		opts := []node.Option{
+			node.StorageMiner(&m.StorageMiner, cfg.Subsystems),
+			node.Base(),
+			node.Repo(r),
+			node.Test(),
+
+			node.If(!m.options.disableLibp2p, node.MockHost(n.mn)),
+
+			node.Override(new(v1api.FullNode), m.FullNode.FullNode),
+			node.Override(new(*lotusminer.Miner), lotusminer.NewTestMiner(mineBlock, m.ActorAddr)),
+
+			// disable resource filtering so that local worker gets assigned tasks
+			// regardless of system pressure.
+			node.Override(new(sectorstorage.SealerConfig), func() sectorstorage.SealerConfig {
+				scfg := config.DefaultStorageMiner()
+				scfg.Storage.ResourceFiltering = sectorstorage.ResourceFilteringDisabled
+				return scfg.Storage
+			}),
+
+			// upgrades
+			node.Override(new(stmgr.UpgradeSchedule), n.options.upgradeSchedule),
+		}
+
+		// append any node builder options.
+		opts = append(opts, m.options.extraNodeOpts...)
+
+		idAddr, err := address.IDFromAddress(m.ActorAddr)
+		require.NoError(n.t, err)
+
+		// preload preseals if the network still hasn't bootstrapped.
+		var presealSectors []abi.SectorID
+		if !n.bootstrapped {
+			sectors := n.genesis.miners[i].Sectors
+			for _, sector := range sectors {
+				presealSectors = append(presealSectors, abi.SectorID{
+					Miner:  abi.ActorID(idAddr),
+					Number: sector.SectorID,
+				})
+			}
+		}
+
+		if n.options.mockProofs {
+			opts = append(opts,
+				node.Override(new(*mock.SectorMgr), func() (*mock.SectorMgr, error) {
+					return mock.NewMockSectorMgr(presealSectors), nil
+				}),
+				node.Override(new(sectorstorage.SectorManager), node.From(new(*mock.SectorMgr))),
+				node.Override(new(sectorstorage.Unsealer), node.From(new(*mock.SectorMgr))),
+				node.Override(new(sectorstorage.PieceProvider), node.From(new(*mock.SectorMgr))),
+
+				node.Override(new(ffiwrapper.Verifier), mock.MockVerifier),
+				node.Override(new(ffiwrapper.Prover), mock.MockProver),
+				node.Unset(new(*sectorstorage.Manager)),
+			)
+		}
+
+		// start node
+		stop, err := node.New(ctx, opts...)
+		require.NoError(n.t, err)
+
+		// using real proofs, therefore need real sectors.
+		if !n.bootstrapped && !n.options.mockProofs {
+			err := m.StorageAddLocal(ctx, m.PresealDir)
+			require.NoError(n.t, err)
+		}
+
+		n.t.Cleanup(func() { _ = stop(context.Background()) })
+
+		// Are we hitting this node through its RPC?
+		if m.options.rpc {
+			withRPC := minerRpc(n.t, m)
+			n.inactive.miners[i] = withRPC
+		}
+
+		mineOne := func(ctx context.Context, req lotusminer.MineReq) error {
+			select {
+			case mineBlock <- req:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+
+		m.MineOne = mineOne
+		m.Stop = stop
+
+		n.active.miners = append(n.active.miners, m)
+	}
+
+	// If we are here, we have processed all inactive miners and moved them
+	// to active, so clear the slice.
+	n.inactive.miners = n.inactive.miners[:0]
 
 	// Link all the nodes.
 	err = n.mn.LinkAll()
@@ -730,6 +968,7 @@ func (n *EudicoEnsemble) startTendermint() error {
 	n.tendermintContainerID = tm.ID
 	return nil
 }
+
 func (n *EudicoEnsemble) removeTendermintFiles() error {
 	if err := os.RemoveAll(TendermintConsensusTestDir + "/config"); err != nil {
 		return err
@@ -753,12 +992,12 @@ func (n *EudicoEnsemble) stopTendermint() error {
 		return xerrors.New("tendermint container ID is not set")
 	}
 
-	StopContainer(n.tendermintContainerID)
-
-	if err := n.removeTendermintFiles(); err != nil {
-		return err
-	}
-	return nil
+	err1 := StopContainer(n.tendermintContainerID)
+	err2 := n.removeTendermintFiles()
+	return multierr.Combine(
+		err1,
+		err2,
+	)
 }
 
 // EudicoEnsembleMinimal creates and starts an EudicoEnsemble with a single full node and a single miner.
@@ -777,6 +1016,119 @@ func EudicoEnsembleMinimal(t *testing.T, opts ...interface{}) (*TestFullNode, *T
 	)
 	ens := NewEudicoEnsemble(t, eopts...).FullNode(&full, nopts...).Miner(&miner, &full, nopts...).Start()
 	return &full, &miner, ens
+}
+
+type EudicoRootMiner func(ctx context.Context, addr address.Address, api v1api.FullNode) error
+
+// EudicoEnsembleTwoMiners creates types for root miner and subnet miner that can be used to spawn real miners.
+// The main reason why this hask is used is that the Filecon consensus and Eudico consensus protocol have different implementations.
+// For example, the Filecoin consensus doesn't have a single Mine() function that implements mining.
+func EudicoEnsembleTwoMiners(t *testing.T, opts ...interface{}) (*TestFullNode, interface{}, hierarchical.ConsensusType, *EudicoEnsemble) {
+	opts = append(opts, WithAllSubsystems())
+
+	eopts, nopts := siftOptions(t, opts)
+
+	var (
+		full  TestFullNode
+		miner TestMiner
+	)
+
+	options := DefaultEnsembleOpts
+	for _, o := range eopts {
+		err := o(&options)
+		require.NoError(t, err)
+	}
+
+	var rootMiner EudicoRootMiner
+
+	switch options.rootConsensus {
+	case hierarchical.Tendermint:
+		rootMiner = tendermint.Mine
+	case hierarchical.PoW:
+		rootMiner = tspow.Mine
+	case hierarchical.Delegated:
+		rootMiner = delegcns.Mine
+	case hierarchical.FilecoinEC:
+		// Filecoin miner is created below within itests approach.
+		break
+	default:
+		t.Fatalf("root consensus %d not supported", options.rootConsensus)
+	}
+
+	var subnetMinerType hierarchical.ConsensusType
+
+	switch options.subnetConsensus {
+	case hierarchical.Tendermint:
+		subnetMinerType = hierarchical.Tendermint
+	case hierarchical.PoW:
+		subnetMinerType = hierarchical.PoW
+	case hierarchical.Delegated:
+		subnetMinerType = hierarchical.Delegated
+	default:
+		t.Fatalf("subnet consensus %d not supported", options.subnetConsensus)
+	}
+
+	var ens *EudicoEnsemble
+
+	if options.rootConsensus == hierarchical.FilecoinEC {
+		ens = NewEudicoEnsemble(t, eopts...).FullNode(&full, nopts...).Miner(&miner, &full, nopts...).Start()
+		return &full, &miner, subnetMinerType, ens
+	}
+	ens = NewEudicoEnsemble(t, eopts...).FullNode(&full, nopts...).Start()
+	return &full, rootMiner, subnetMinerType, ens
+}
+
+// EudicoEnsembleFullNodeOnly creates and starts a EudicoEnsemble with a single full node.
+// It is used with Eudico consensus protocols that implementation is different from Filecoin one.
+func EudicoEnsembleFullNodeOnly(t *testing.T, opts ...interface{}) (*TestFullNode, *EudicoEnsemble) {
+	opts = append(opts, WithAllSubsystems())
+
+	eopts, nopts := siftOptions(t, opts)
+
+	var (
+		full TestFullNode
+	)
+	ens := NewEudicoEnsemble(t, eopts...).FullNode(&full, nopts...).Start()
+	return &full, ens
+}
+
+func EudicoMiners(t *testing.T, opts ...interface{}) (
+	rootMiner func(ctx context.Context, addr address.Address, api v1api.FullNode) error,
+	subnetMinerType hierarchical.ConsensusType) {
+
+	eopts, _ := siftOptions(t, opts)
+
+	options := DefaultEnsembleOpts
+	for _, o := range eopts {
+		err := o(&options)
+		require.NoError(t, err)
+	}
+
+	switch options.rootConsensus {
+	case hierarchical.Tendermint:
+		rootMiner = tendermint.Mine
+	case hierarchical.PoW:
+		rootMiner = tspow.Mine
+	case hierarchical.Delegated:
+		rootMiner = delegcns.Mine
+	case hierarchical.FilecoinEC:
+		break
+	default:
+		t.Fatalf("root consensus %d not supported", options.rootConsensus)
+	}
+
+	switch options.subnetConsensus {
+	case hierarchical.Tendermint:
+		subnetMinerType = hierarchical.Tendermint
+	case hierarchical.PoW:
+		subnetMinerType = hierarchical.PoW
+	case hierarchical.Delegated:
+		subnetMinerType = hierarchical.Delegated
+	default:
+		t.Fatalf("subnet consensus %d not supported", options.subnetConsensus)
+	}
+
+	return
 }
 
 func EudicoEnsembleWithMinerAndMarketNodes(t *testing.T, opts ...interface{}) (*TestFullNode, *TestMiner, *TestMiner, *EudicoEnsemble) {

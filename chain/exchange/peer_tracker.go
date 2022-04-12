@@ -92,7 +92,10 @@ func newSubnetPeerTracker(ctx context.Context, h host.Host, pmgr *peermgr.PeerMg
 	go func() {
 		select {
 		case <-ctx.Done():
-			evtSub.Close()
+			err := evtSub.Close()
+			if err != nil {
+				log.Errorf("Error closing subnet peerTracker: %s", err)
+			}
 		}
 	}()
 

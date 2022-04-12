@@ -39,6 +39,7 @@ import (
 var SystemActorAddr = builtin7.SystemActorAddr
 var BurntFundsActorAddr = builtin7.BurntFundsActorAddr
 var CronActorAddr = builtin7.CronActorAddr
+var RewardActorAddr = builtin7.RewardActorAddr
 var SaftAddress = makeAddress("t0122")
 var ReserveAddress = makeAddress("t090")
 var RootVerifierAddress = makeAddress("t080")

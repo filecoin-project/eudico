@@ -15,6 +15,7 @@ variable "awsprops" {
     ami          = "ami-0c1bea58988a989155"
     publicip     = true
     secgroupname = "eudico-sec-group"
+    volume_size = 30
   }
 }
 
@@ -70,6 +71,11 @@ resource "aws_instance" "eudico-bootstrap" {
   key_name                    = "spot_key"
   associate_public_ip_address = lookup(var.awsprops, "publicip")
 
+  root_block_device {
+    volume_size = lookup(var.awsprops, "volume_size")
+    volume_type = "gp3"
+  }
+
   tags = {
     Name = "eudico-bootstrap"
   }
@@ -97,6 +103,11 @@ resource "aws_instance" "eudico-node" {
   ]
   key_name                    = "spot_key"
   associate_public_ip_address = lookup(var.awsprops, "publicip")
+ 
+  root_block_device {
+    volume_size = lookup(var.awsprops, "volume_size")
+    volume_type = "gp3"
+  }
 
   tags = {
     Name = "eudico-node-${count.index}"

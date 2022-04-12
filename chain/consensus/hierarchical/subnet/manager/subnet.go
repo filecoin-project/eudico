@@ -152,7 +152,7 @@ func (sh *Subnet) HandleIncomingMessages(ctx context.Context, bootstrapper dtype
 // Stop all processes and remove all handlers.
 func (sh *Subnet) Close(ctx context.Context) error {
 	log.Infow("Closing subnet", "subnetID", sh.ID)
-	sh.stopMining(ctx)
+	_ = sh.stopMining(ctx)
 
 	// Remove hello and exchange handlers to stop accepting requests from peers.
 	sh.host.RemoveStreamHandler(protocol.ID(BlockSyncProtoPrefix + sh.ID.String()))
@@ -280,6 +280,7 @@ func (sh *Subnet) stopMining(ctx context.Context) error {
 	if sh.miningCncl != nil {
 		log.Infow("Stop mining in subnet", "subnetID", sh.ID)
 		sh.miningCncl()
+		sh.miningCtx = nil
 		return nil
 	}
 	return xerrors.Errorf("Currently not mining in subnet")

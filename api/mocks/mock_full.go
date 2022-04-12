@@ -1176,6 +1176,21 @@ func (mr *MockFullNodeMockRecorder) ListCheckpoints(arg0, arg1, arg2 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListCheckpoints", reflect.TypeOf((*MockFullNode)(nil).ListCheckpoints), arg0, arg1, arg2)
 }
 
+// ListSubnets mocks base method.
+func (m *MockFullNode) ListSubnets(arg0 context.Context, arg1 address.SubnetID) ([]sca.SubnetOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListSubnets", arg0, arg1)
+	ret0, _ := ret[0].([]sca.SubnetOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListSubnets indicates an expected call of ListSubnets.
+func (mr *MockFullNodeMockRecorder) ListSubnets(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSubnets", reflect.TypeOf((*MockFullNode)(nil).ListSubnets), arg0, arg1)
+}
+
 // LockState mocks base method.
 func (m *MockFullNode) LockState(arg0 context.Context, arg1, arg2 address.Address, arg3 address.SubnetID, arg4 abi.MethodNum) (cid.Cid, error) {
 	m.ctrl.T.Helper()

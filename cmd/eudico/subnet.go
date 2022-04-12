@@ -6,18 +6,14 @@ import (
 	"fmt"
 
 	"github.com/ipfs/go-cid"
-	cbor "github.com/ipfs/go-ipld-cbor"
 	"github.com/urfave/cli/v2"
-	cbg "github.com/whyrusleeping/cbor-gen"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
-	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors"
-	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
@@ -51,6 +47,12 @@ var subnetCmds = &cli.Command{
 var listSubnetsCmd = &cli.Command{
 	Name:  "list-subnets",
 	Usage: "list all subnets in the current network",
+	Flags: []cli.Flag{&cli.StringFlag{
+		Name:  "subnet",
+		Usage: "specify the id of the subnet to join",
+		Value: address.RootSubnet.String(),
+	},
+	},
 	Action: func(cctx *cli.Context) error {
 		api, closer, err := lcli.GetFullNodeAPI(cctx)
 		if err != nil {
@@ -60,31 +62,22 @@ var listSubnetsCmd = &cli.Command{
 
 		ctx := lcli.ReqContext(cctx)
 
-		var st sca.SCAState
-
-		act, err := api.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, types.EmptyTSK)
+		subnet := cctx.String("subnet")
+		subnets, err := api.ListSubnets(ctx, address.SubnetID(subnet))
 		if err != nil {
-			return xerrors.Errorf("error getting actor state: %w", err)
-		}
-		bs := blockstore.NewAPIBlockstore(api)
-		cst := cbor.NewCborStore(bs)
-		s := adt.WrapStore(ctx, cst)
-		if err := cst.Get(ctx, act.Head, &st); err != nil {
-			return xerrors.Errorf("error getting subnet state: %w", err)
-		}
-
-		subnets, err := sca.ListSubnets(s, st)
-		if err != nil {
-			xerrors.Errorf("error getting list of subnets: %w", err)
+			return xerrors.Errorf("error getting list of subnets: %w", err)
 		}
 		for _, sh := range subnets {
 			status := "Active"
-			if sh.Status != 0 {
+			if sh.Subnet.Status != 0 {
 				status = "Inactive"
 			}
-			fmt.Printf("%s: status=%v, stake=%v, circulating supply=%v\n", sh.ID, status, types.FIL(sh.Stake), types.FIL(sh.CircSupply))
+			fmt.Printf("%s: status=%v, stake=%v, circulating supply=%v\n, consensus=%s",
+				sh.Subnet.ID, status, types.FIL(sh.Subnet.Stake),
+				types.FIL(sh.Subnet.CircSupply),
+				hierarchical.ConsensusName(sh.Consensus),
+			)
 		}
-
 		return nil
 	},
 }
@@ -178,7 +171,7 @@ var addCmd = &cli.Command{
 			return err
 		}
 
-		fmt.Printf("[*] subnet actor deployed as %v and new subnet availabe with ID=%v\n\n", actorAddr, address.NewSubnetID(parent, actorAddr))
+		fmt.Printf("[*] subnet actor deployed as %v and new subnet available with ID=%v\n\n", actorAddr, address.NewSubnetID(parent, actorAddr))
 		fmt.Printf("remember to join and register your subnet for it to be discoverable\n")
 		return nil
 	},
@@ -285,7 +278,7 @@ var syncCmd = &cli.Command{
 
 var mineCmd = &cli.Command{
 	Name:      "mine",
-	Usage:     "Start mining in a subnet",
+	Usage:     "Start/stop mining in a subnet",
 	ArgsUsage: "[]",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
@@ -334,7 +327,11 @@ var mineCmd = &cli.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cctx.App.Writer, "Successfully started/stopped mining in subnet: %s\n", subnet)
+		if cctx.Bool("stop") {
+			fmt.Fprintf(cctx.App.Writer, "Successfully stopped mining in subnet: %s\n", subnet)
+		} else {
+			fmt.Fprintf(cctx.App.Writer, "Successfully started mining in subnet: %s\n", subnet)
+		}
 		return nil
 	},
 }
@@ -925,12 +922,4 @@ var deployActorCmd = &cli.Command{
 		fmt.Fprintf(cctx.App.Writer, "Successfully deployed actor with address: %s\n", r.IDAddress)
 		return nil
 	},
-}
-
-func MustSerialize(i cbg.CBORMarshaler) []byte {
-	buf := new(bytes.Buffer)
-	if err := i.MarshalCBOR(buf); err != nil {
-		panic(err)
-	}
-	return buf.Bytes()
 }

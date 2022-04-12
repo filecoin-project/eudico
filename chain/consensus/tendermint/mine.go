@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	tendermintConsensusBlockDelay = 1200
+	tendermintConsensusBlockDelay = 600
 )
 
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {

@@ -141,7 +141,7 @@ require (
 	github.com/prometheus/client_golang v1.11.0
 	github.com/raulk/clock v1.1.0
 	github.com/raulk/go-watchdog v1.2.0
-	github.com/streadway/quantile v0.0.0-20150917103942-b0c588724d25
+	github.com/streadway/quantile v0.0.0-20220407130108-4246515d968d
 	github.com/stretchr/testify v1.7.0
 	github.com/syndtr/goleveldb v1.0.1-0.20200815110645-5c35d600f0ca
 	github.com/tendermint/tendermint v0.35.0
@@ -163,7 +163,7 @@ require (
 	go.uber.org/fx v1.9.0
 	go.uber.org/multierr v1.7.0
 	go.uber.org/zap v1.19.1
-	golang.org/x/crypto v0.0.0-20211209193657-4570a0811e8b
+	golang.org/x/crypto v0.0.0-20211209193657-4570a0811e8b // indirect
 	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20211209171907-798191bca915
@@ -172,7 +172,7 @@ require (
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
 	gopkg.in/cheggaaa/pb.v1 v1.0.28
 	gotest.tools v2.2.0+incompatible
-	lukechampine.com/blake3 v1.1.7 // indirect
+	lukechampine.com/blake3 v1.1.7
 )
 
 // FIXME: Replacing with a fork to upgrade go-ipld-cbor and support to network v15 and v7 while keeping new actors

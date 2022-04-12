@@ -85,13 +85,13 @@ func NewConsensus(
 	v ffiwrapper.Verifier,
 	g chain.Genesis,
 	netName dtypes.NetworkName,
-) consensus.Consensus {
+) (consensus.Consensus, error) {
 	subnetID := address.SubnetID(netName)
 	log.Infof("New Tendermint consensus for %s subnet", subnetID)
 
 	c, err := tmclient.New(NodeAddr())
 	if err != nil {
-		log.Fatalf("unable to create a Tendermint RPC client: %s", err)
+		return nil, xerrors.Errorf("unable to create a Tendermint RPC client: %s", err)
 	}
 
 	log.Infof("Tendermint RPC address: %s", NodeAddr())
@@ -106,7 +106,7 @@ func NewConsensus(
 
 	regSubnet, err := registerNetworkViaTxSync(ctx, c, subnetID)
 	if err != nil {
-		log.Fatalf("unable to registrate network: %s", err)
+		return nil, xerrors.Errorf("unable to register subnet %s: %s", subnetID, err)
 	}
 	log.Info("subnet registered")
 	log.Warnf("Tendermint offset for %s is %d", regSubnet.Name, regSubnet.Offset)
@@ -127,7 +127,7 @@ func NewConsensus(
 		eudicoClientPubKey:         valPubKey,
 		tendermintEudicoAddresses:  make(map[string]address.Address),
 		seenMessages:               make(map[cid.Cid]bool),
-	}
+	}, nil
 }
 
 func (tm *Tendermint) ValidateBlock(ctx context.Context, b *types.FullBlock) (err error) {
@@ -349,33 +349,30 @@ func (tm *Tendermint) getEudicoMessagesFromTendermintBlock(b *tmtypes.Block) ([]
 		txo := stx[3 : len(stx)-1]
 		txoData, err := hex.DecodeString(txo)
 		if err != nil {
-			log.Error("unable to decode Tendermint tx:", err)
+			log.Error("unable to decode a Tendermint tx:", err)
 			continue
 		}
 		// Eudico data format is {msg hash(nodeID) type}
 		msg, _, err := parseTx(txoData)
 		if err != nil {
-			log.Error("unable to decode a message from Tendermint block:", err)
+			log.Error("unable to decode a message in Tendermint block:", err)
 			continue
 		}
 
 		switch m := msg.(type) {
 		case *types.SignedMessage:
-			log.Infof("found signed message from %s to %s with %s tokens", m.Message.From.String(), m.Message.To.String(), m.Message.Value)
 			id := m.Cid()
 			if _, found := tm.seenMessages[id]; !found {
 				msgs = append(msgs, m)
 				tm.seenMessages[id] = true
 			}
 		case *types.Message:
-			log.Infof("found cross message from %s to %s with %s tokens", m.From.String(), m.To.String(), m.Value)
 			id := m.Cid()
 			if _, found := tm.seenMessages[id]; !found {
 				crossMsgs = append(crossMsgs, m)
 				tm.seenMessages[id] = true
 			}
 		default:
-			log.Info("filtered a message with unknown type:", m)
 		}
 	}
 	return msgs, crossMsgs

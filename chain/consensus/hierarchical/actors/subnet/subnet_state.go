@@ -120,7 +120,7 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 	}
 
 	// Don't allow really small checkpoint periods for now.
-	period := abi.ChainEpoch(params.CheckPeriod)
+	period := params.CheckPeriod
 	if period < sca.MinCheckpointPeriod {
 		period = sca.DefaultCheckpointPeriod
 	}

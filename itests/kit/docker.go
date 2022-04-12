@@ -2,11 +2,9 @@ package kit
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 )
 
 // Container tracks information about the docker container started for tests.
@@ -84,36 +82,4 @@ func StopContainer(id string) error {
 	fmt.Println("Removed:", id)
 
 	return nil
-}
-
-func extractIPPort(id string, port string) (hostIP string, hostPort string, err error) {
-	tmpl := fmt.Sprintf("[{{range $k,$v := (index .NetworkSettings.Ports \"%s/tcp\")}}{{json $v}}{{end}}]", port)
-
-	cmd := exec.Command("docker", "inspect", "-f", tmpl, id)
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	if err := cmd.Run(); err != nil {
-		return "", "", fmt.Errorf("could not inspect container %s: %w", id, err)
-	}
-
-	// When IPv6 is turned on with Docker.
-	// Got  [{"HostIp":"0.0.0.0","HostPort":"49190"}{"HostIp":"::","HostPort":"49190"}]
-	// Need [{"HostIp":"0.0.0.0","HostPort":"49190"},{"HostIp":"::","HostPort":"49190"}]
-	data := strings.ReplaceAll(out.String(), "}{", "},{")
-
-	var docs []struct {
-		HostIP   string
-		HostPort string
-	}
-	if err := json.Unmarshal([]byte(data), &docs); err != nil {
-		return "", "", fmt.Errorf("could not decode json: %w", err)
-	}
-
-	for _, doc := range docs {
-		if doc.HostIP != "::" {
-			return doc.HostIP, doc.HostPort, nil
-		}
-	}
-
-	return "", "", fmt.Errorf("could not locate ip/port")
 }

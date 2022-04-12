@@ -1,19 +1,19 @@
 package sca
 
 import (
-	address "github.com/filecoin-project/go-address"
+	"github.com/ipfs/go-cid"
+	"golang.org/x/xerrors"
+
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
-	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
-	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
-	cid "github.com/ipfs/go-cid"
-	"golang.org/x/xerrors"
-
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/types"
+	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
+	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
 )
 
 const (
@@ -126,7 +126,7 @@ func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, e
 		Checkpoints:          emptyCheckpointsMapCid,
 		CheckMsgsRegistry:    emptyMsgsMetaMapCid,
 		BottomUpMsgsMeta:     emptyBottomUpMsgsAMT,
-		AppliedBottomUpNonce: MaxNonce, // We need inital nonce+1 to be 0 due to how msgs are applied.
+		AppliedBottomUpNonce: MaxNonce, // We need initial nonce+1 to be 0 due to how msgs are applied.
 		AtomicExecRegistry:   emptyAtomicMapCid,
 	}, nil
 }
@@ -163,7 +163,7 @@ func (st *SCAState) flushSubnet(rt runtime.Runtime, sh *Subnet) {
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush subnets")
 }
 
-// currWindowCheckpoint gets the template of the checkpoint being
+// CurrWindowCheckpoint gets the template of the checkpoint being
 // populated in the current window.
 //
 // If it hasn't been instantiated, a template is created. From there on,
@@ -243,7 +243,7 @@ func (st *SCAState) flushCheckpoint(rt runtime.Runtime, ch *schema.Checkpoint) {
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush checkpoints")
 }
 
-// Get subnet from its subnet actor address.
+// GetSubnetFromActorAddr gets subnet from its subnet actor address.
 func (st *SCAState) getSubnetFromActorAddr(s adt.Store, addr address.Address) (*Subnet, bool, error) {
 	shid := address.NewSubnetID(st.NetworkName, addr)
 	return st.GetSubnet(s, shid)
@@ -273,13 +273,15 @@ func (st *SCAState) registerSubnet(rt runtime.Runtime, shid address.SubnetID, st
 	st.flushSubnet(rt, sh)
 }
 
-func ListSubnets(s adt.Store, st SCAState) ([]Subnet, error) {
+// ListSubnets lists subnets.
+func ListSubnets(s adt.Store, st *SCAState) ([]Subnet, error) {
 	subnetMap, err := adt.AsMap(s, st.Subnets, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, err
 	}
+
 	var sh Subnet
-	out := []Subnet{}
+	var out []Subnet
 	err = subnetMap.ForEach(&sh, func(k string) error {
 		out = append(out, sh)
 		return nil

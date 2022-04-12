@@ -3,12 +3,13 @@ package api
 import (
 	"context"
 
+	"github.com/ipfs/go-cid"
+
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/ipfs/go-cid"
 )
 
 type HierarchicalCns interface {
@@ -17,6 +18,7 @@ type HierarchicalCns interface {
 	SyncSubnet(ctx context.Context, id address.SubnetID, stop bool) error                                                                                                                                                       // perm:write
 	MineSubnet(ctx context.Context, wallet address.Address, id address.SubnetID, stop bool) error                                                                                                                               // perm:read
 	LeaveSubnet(ctx context.Context, wallet address.Address, id address.SubnetID) (cid.Cid, error)                                                                                                                              // perm:write
+	ListSubnets(ctx context.Context, id address.SubnetID) ([]sca.SubnetOutput, error)                                                                                                                                           // perm:read
 	KillSubnet(ctx context.Context, wallet address.Address, id address.SubnetID) (cid.Cid, error)                                                                                                                               // perm:write
 	ListCheckpoints(ctx context.Context, id address.SubnetID, num int) ([]*schema.Checkpoint, error)                                                                                                                            // perm:read
 	ValidateCheckpoint(ctx context.Context, id address.SubnetID, epoch abi.ChainEpoch) (*schema.Checkpoint, error)                                                                                                              // perm:read

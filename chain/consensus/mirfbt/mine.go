@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto"
 	"fmt"
-
 	mirCrypto "github.com/hyperledger-labs/mirbft/pkg/crypto"
 	"github.com/hyperledger-labs/mirbft/pkg/dummyclient"
 	mirLogging "github.com/hyperledger-labs/mirbft/pkg/logging"
