@@ -6,7 +6,6 @@ import (
 
 	"github.com/filecoin-project/lotus/chain/consensus/actors/registry"
 	"github.com/filecoin-project/lotus/chain/consensus/common/crossmsg"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/rand"
 
@@ -32,9 +31,7 @@ import (
 	"github.com/filecoin-project/lotus/metrics"
 )
 
-type FilCnsTipSetExecutor struct {
-	submgr subnet.SubnetMgr
-}
+type FilCnsTipSetExecutor struct{}
 
 func NewFilCnsTipSetExecutor() *FilCnsTipSetExecutor {
 	return &FilCnsTipSetExecutor{}

@@ -97,7 +97,7 @@ func checkBottomUpMsg(ctx context.Context, r *resolver.Resolver, snstore blockad
 	}
 	// Check if the message is included in the committed msgMeta.
 	if !hasMsg(comMeta, msg, cross) {
-		xerrors.Errorf("message proposed no included in committed bottom-up msgMeta")
+		return xerrors.Errorf("message proposed no included in committed bottom-up msgMeta")
 	}
 
 	// NOTE: Any additional check required?
@@ -109,7 +109,7 @@ func hasMsg(meta *schema.CrossMsgMeta, msg *types.Message, batch []types.Message
 		// Changing original nonce to that of the MsgMeta as done
 		// by the crossPool.
 		m.Nonce = uint64(meta.Nonce)
-		if msg.Equals(&m) {
+		if msg.Equals(&m) { //nolint
 			return true
 		}
 	}
@@ -133,11 +133,11 @@ func checkTopDownMsg(pstore blockadt.Store, parentSCA, snSCA *sca.SCAState, msg 
 		return xerrors.Errorf("getting topDown msgs: %w", err)
 	}
 	if !found {
-		xerrors.Errorf("No TopDownMsg found for nonce in parent SCA: %d", msg.Nonce)
+		return xerrors.Errorf("No TopDownMsg found for nonce in parent SCA: %d", msg.Nonce)
 	}
 
 	if !comMsg.Equals(msg) {
-		xerrors.Errorf("Committed and proposed TopDownMsg for nonce %d not equal", msg.Nonce)
+		return xerrors.Errorf("Committed and proposed TopDownMsg for nonce %d not equal", msg.Nonce)
 	}
 
 	// NOTE: Any additional check required?

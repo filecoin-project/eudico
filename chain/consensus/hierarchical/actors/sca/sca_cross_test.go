@@ -40,7 +40,7 @@ func TestFund(t *testing.T) {
 	ret := rt.Call(h.SubnetCoordActor.Register, nil)
 	res, ok := ret.(*actor.SubnetIDParam)
 	require.True(t, ok)
-	shid := address.SubnetID("/root/f0101")
+	shid := address.NewSubnetID(address.RootSubnet, SubnetActorAddr)
 	// Verify the return value is correct.
 	require.Equal(t, res.ID, shid.String())
 	rt.Verify()
@@ -50,7 +50,7 @@ func TestFund(t *testing.T) {
 	nn1 := sh.ID
 	require.True(h.t, found)
 	require.Equal(t, sh.Stake, value)
-	require.Equal(t, sh.ID.String(), "/root/f0101")
+	require.Equal(t, sh.ID, address.NewSubnetID(address.RootSubnet, SubnetActorAddr))
 	require.Equal(t, sh.ParentID.String(), "/root")
 	require.Equal(t, sh.Status, actor.Active)
 
@@ -107,18 +107,18 @@ func TestCrossMsg(t *testing.T) {
 	// TopDown
 	snAddr := tutil.NewIDAddr(t, 101)
 	h.registerSubnet(rt, shid, snAddr)
-	crossmsg(h, rt, "/root/f0101/f0101", from, to, value, 1, value)
-	crossmsg(h, rt, "/root/f0101/f0101", from, tutil.NewIDAddr(h.t, 1011), value, 2, big.Mul(big.NewInt(2), value))
-	crossmsg(h, rt, "/root/f0101/f0101/f0102", from, to, value, 3, big.Mul(big.NewInt(3), value))
+	crossmsg(h, rt, address.NewSubnetID("/root/f0101", tutil.NewIDAddr(h.t, 101)), from, to, value, 1, value)
+	crossmsg(h, rt, address.NewSubnetID("/root/f0101", tutil.NewIDAddr(h.t, 101)), from, tutil.NewIDAddr(h.t, 1011), value, 2, big.Mul(big.NewInt(2), value))
+	crossmsg(h, rt, address.SubnetID("/root/f0101/"+tutil.NewIDAddr(h.t, 101).String()+"/f0102"), from, to, value, 3, big.Mul(big.NewInt(3), value))
 }
 
 func TestApplyRouting(t *testing.T) {
 	h := newHarness(t)
 	builder := mock.NewBuilder(builtin.StoragePowerActorAddr).WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
 	rt := builder.Build(t)
-	shid := address.SubnetID("/root/f0101")
-	h.constructAndVerifyWithNetworkName(rt, shid)
 	snAddr1 := tutil.NewIDAddr(t, 101)
+	shid := address.NewSubnetID(address.RootSubnet, snAddr1)
+	h.constructAndVerifyWithNetworkName(rt, shid)
 	h.registerSubnet(rt, shid, snAddr1)
 	snAddr2 := tutil.NewIDAddr(t, 102)
 	h.registerSubnet(rt, shid, snAddr2)
@@ -159,16 +159,16 @@ func TestApplyRouting(t *testing.T) {
 	// BottomUp
 	ff, err = address.NewHAddress(sn1, to)
 	require.NoError(t, err)
-	tt, err = address.NewHAddress(address.SubnetID("/root/f0101/f0102/f011"), from)
+	tt, err = address.NewHAddress(address.SubnetID("/root/"+snAddr1.String()+"/"+snAddr2.String()+"/f011"), from)
 	require.NoError(t, err)
 	h.applyCrossMsg(rt, ff, tt, abi.NewTokenAmount(1e17), 0, 2, false)
 	ff, err = address.NewHAddress(sn2, to)
 	require.NoError(t, err)
-	tt, err = address.NewHAddress(address.SubnetID("/root/f0101/f0101/f011"), from)
+	tt, err = address.NewHAddress(address.SubnetID("/root/"+snAddr1.String()+"/"+snAddr1.String()+"/f011"), from)
 	require.NoError(t, err)
 	h.applyCrossMsg(rt, ff, tt, abi.NewTokenAmount(1e17), 1, 3, false)
 	// Directed to current subnet
-	ff, err = address.NewHAddress(address.SubnetID("/root/f0101/f0102/f011"), from)
+	ff, err = address.NewHAddress(address.SubnetID("/root/"+snAddr1.String()+"/"+snAddr2.String()+"/f011"), from)
 	require.NoError(t, err)
 	tt, err = address.NewHAddress(shid, to)
 	require.NoError(t, err)
@@ -271,7 +271,7 @@ func TestApplyMsg(t *testing.T) {
 		ch := newCheckpoint(h.sn, abi.ChainEpoch(9))
 		v := big.Mul(big.NewInt(2), init)
 		rt.SetBalance(init)
-		addMsgMeta(ch, h.sn, address.RootSubnet, "rand", v)
+		addMsgMeta(t, ch, h.sn, address.RootSubnet, "rand", v)
 		b, err := ch.MarshalBinary()
 		require.NoError(t, err)
 		rt.ExpectSend(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, v, nil, exitcode.Ok)

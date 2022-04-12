@@ -2,7 +2,7 @@ package tspow
 
 import (
 	"context"
-	"math/rand"
+	"crypto/rand"
 	"time"
 
 	"github.com/filecoin-project/go-address"
@@ -123,7 +123,7 @@ func (tsp *TSPoW) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.Block
 		next.ElectionProof = &types.ElectionProof{
 			VRFProof: []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		}
-		rand.Read(next.ElectionProof.VRFProof)
+		rand.Read(next.ElectionProof.VRFProof) //nolint:errcheck
 		if work(&bestH).LessThan(work(next)) {
 			bestH = *next
 			if work(next).GreaterThanEqual(tgt) {

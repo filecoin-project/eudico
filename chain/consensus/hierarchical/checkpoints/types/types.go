@@ -18,7 +18,7 @@ const (
 // current window.
 func CheckpointEpoch(epoch abi.ChainEpoch, period abi.ChainEpoch) abi.ChainEpoch {
 	ind := epoch / period
-	return abi.ChainEpoch(period * ind)
+	return period * ind
 }
 
 // WindowEpoch returns the epoch of the active checkpoint window
@@ -27,5 +27,5 @@ func CheckpointEpoch(epoch abi.ChainEpoch, period abi.ChainEpoch) abi.ChainEpoch
 // to be assigned.
 func WindowEpoch(epoch abi.ChainEpoch, period abi.ChainEpoch) abi.ChainEpoch {
 	ind := epoch / period
-	return abi.ChainEpoch(period * (ind + 1))
+	return period * (ind + 1)
 }

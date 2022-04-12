@@ -2,7 +2,6 @@ package lp2p
 
 import (
 	"context"
-	"encoding/json"
 	"net"
 	"time"
 
@@ -62,16 +61,16 @@ type GossipIn struct {
 	Dr   dtypes.DrandSchedule
 }
 
-func getDrandTopic(chainInfoJSON string) (string, error) {
-	var drandInfo = struct {
-		Hash string `json:"hash"`
-	}{}
-	err := json.Unmarshal([]byte(chainInfoJSON), &drandInfo)
-	if err != nil {
-		return "", xerrors.Errorf("could not unmarshal drand chain info: %w", err)
-	}
-	return "/drand/pubsub/v0.0.0/" + drandInfo.Hash, nil
-}
+// func getDrandTopic(chainInfoJSON string) (string, error) {
+//         var drandInfo = struct {
+//                 Hash string `json:"hash"`
+//         }{}
+//         err := json.Unmarshal([]byte(chainInfoJSON), &drandInfo)
+//         if err != nil {
+//                 return "", xerrors.Errorf("could not unmarshal drand chain info: %w", err)
+//         }
+//         return "/drand/pubsub/v0.0.0/" + drandInfo.Hash, nil
+// }
 
 func GossipSub(in GossipIn) (service *pubsub.PubSub, err error) {
 	bootstrappers := make(map[peer.ID]struct{})
@@ -84,35 +83,6 @@ func GossipSub(in GossipIn) (service *pubsub.PubSub, err error) {
 	}
 
 	isBootstrapNode := in.Cfg.Bootstrapper
-
-	drandTopicParams := &pubsub.TopicScoreParams{
-		// expected 2 beaconsn/min
-		TopicWeight: 0.5, // 5x block topic; max cap is 62.5
-
-		// 1 tick per second, maxes at 1 after 1 hour
-		TimeInMeshWeight:  0.00027, // ~1/3600
-		TimeInMeshQuantum: time.Second,
-		TimeInMeshCap:     1,
-
-		// deliveries decay after 1 hour, cap at 25 beacons
-		FirstMessageDeliveriesWeight: 5, // max value is 125
-		FirstMessageDeliveriesDecay:  pubsub.ScoreParameterDecay(time.Hour),
-		FirstMessageDeliveriesCap:    25, // the maximum expected in an hour is ~26, including the decay
-
-		// Mesh Delivery Failure is currently turned off for beacons
-		// This is on purpose as
-		// - the traffic is very low for meaningful distribution of incoming edges.
-		// - the reaction time needs to be very slow -- in the order of 10 min at least
-		//   so we might as well let opportunistic grafting repair the mesh on its own
-		//   pace.
-		// - the network is too small, so large asymmetries can be expected between mesh
-		//   edges.
-		// We should revisit this once the network grows.
-
-		// invalid messages decay after 1 hour
-		InvalidMessageDeliveriesWeight: -1000,
-		InvalidMessageDeliveriesDecay:  pubsub.ScoreParameterDecay(time.Hour),
-	}
 
 	topicParams := map[string]*pubsub.TopicScoreParams{
 		build.BlocksTopic(in.Nn): {
@@ -195,17 +165,6 @@ func GossipSub(in GossipIn) (service *pubsub.PubSub, err error) {
 	pgTopicWeights := map[string]float64{
 		build.BlocksTopic(in.Nn):   10,
 		build.MessagesTopic(in.Nn): 1,
-	}
-
-	var drandTopics []string
-	for _, d := range in.Dr {
-		topic, err := getDrandTopic(d.Config.ChainInfoJSON)
-		if err != nil {
-			return nil, err
-		}
-		topicParams[topic] = drandTopicParams
-		pgTopicWeights[topic] = 5
-		drandTopics = append(drandTopics, topic)
 	}
 
 	// IP colocation whitelist
@@ -330,20 +289,60 @@ func GossipSub(in GossipIn) (service *pubsub.PubSub, err error) {
 
 	options = append(options, pubsub.WithPeerGater(pgParams))
 
-	/* TODO: Find a way to allow pubsub topics for subnets.
-	This may need something to start allowing topics with a specific
-	prefix.
-		allowTopics := []string{
-			build.BlocksTopic(in.Nn),
-			build.MessagesTopic(in.Nn),
-		}
-		allowTopics = append(allowTopics, drandTopics...)
-		options = append(options,
-			pubsub.WithSubscriptionFilter(
-				pubsub.WrapLimitSubscriptionFilter(
-					pubsub.NewAllowlistSubscriptionFilter(allowTopics...),
-					100)))
-	*/
+	// // FIXME: Find a way to allow pubsub topics for subnets.
+	// // This may need something to start allowing topics with a specific
+	// // prefix.
+	// // See: https://github.com/filecoin-project/eudico/issues/24
+	//
+	// drandTopicParams := &pubsub.TopicScoreParams{
+	//         // expected 2 beaconsn/min
+	//         TopicWeight: 0.5, // 5x block topic; max cap is 62.5
+	//
+	//         // 1 tick per second, maxes at 1 after 1 hour
+	//         TimeInMeshWeight:  0.00027, // ~1/3600
+	//         TimeInMeshQuantum: time.Second,
+	//         TimeInMeshCap:     1,
+	//
+	//         // deliveries decay after 1 hour, cap at 25 beacons
+	//         FirstMessageDeliveriesWeight: 5, // max value is 125
+	//         FirstMessageDeliveriesDecay:  pubsub.ScoreParameterDecay(time.Hour),
+	//         FirstMessageDeliveriesCap:    25, // the maximum expected in an hour is ~26, including the decay
+	//
+	//         // Mesh Delivery Failure is currently turned off for beacons
+	//         // This is on purpose as
+	//         // - the traffic is very low for meaningful distribution of incoming edges.
+	//         // - the reaction time needs to be very slow -- in the order of 10 min at least
+	//         //   so we might as well let opportunistic grafting repair the mesh on its own
+	//         //   pace.
+	//         // - the network is too small, so large asymmetries can be expected between mesh
+	//         //   edges.
+	//         // We should revisit this once the network grows.
+	//
+	//         // invalid messages decay after 1 hour
+	//         InvalidMessageDeliveriesWeight: -1000,
+	//         InvalidMessageDeliveriesDecay:  pubsub.ScoreParameterDecay(time.Hour),
+	// }
+	// var drandTopics []string
+	// for _, d := range in.Dr {
+	//         topic, err := getDrandTopic(d.Config.ChainInfoJSON)
+	//         if err != nil {
+	//                 return nil, err
+	//         }
+	//         topicParams[topic] = drandTopicParams
+	//         pgTopicWeights[topic] = 5
+	//         drandTopics = append(drandTopics, topic)
+	// }
+	//
+	// allowTopics := []string{
+	//         build.BlocksTopic(in.Nn),
+	//         build.MessagesTopic(in.Nn),
+	// }
+	// allowTopics = append(allowTopics, drandTopics...)
+	// options = append(options,
+	//         pubsub.WithSubscriptionFilter(
+	//                 pubsub.WrapLimitSubscriptionFilter(
+	//                         pubsub.NewAllowlistSubscriptionFilter(allowTopics...),
+	//                         100)))
 
 	// tracer
 	if in.Cfg.RemoteTracer != "" {

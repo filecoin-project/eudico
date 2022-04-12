@@ -3,6 +3,7 @@ package itests
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -26,9 +27,11 @@ func TestEudicoConsensus(t *testing.T) {
 		runDelegatedConsensusTests(t, kit.ThroughRPC(), kit.RootDelegated())
 	})
 
-	t.Run("tendermint", func(t *testing.T) {
-		runTendermintConsensusTests(t, kit.ThroughRPC(), kit.RootTendermint())
-	})
+	if os.Getenv("TENDERMINT_ITESTS") != "" {
+		t.Run("tendermint", func(t *testing.T) {
+			runTendermintConsensusTests(t, kit.ThroughRPC(), kit.RootTendermint())
+		})
+	}
 
 	t.Run("filcns", func(t *testing.T) {
 		runFilcnsConsensusTests(t, kit.ThroughRPC(), kit.RootFilcns())
@@ -57,7 +60,10 @@ func (ts *eudicoConsensusSuite) testTSPoWMining(t *testing.T) {
 		t.Fatal("wallet key list is empty")
 	}
 
-	go tspow.Mine(ctx, l[0], full)
+	go func() {
+		err = tspow.Mine(ctx, l[0], full)
+		require.NoError(t, err)
+	}()
 
 	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 3, address.RootSubnet, full)
 	require.NoError(t, err)
@@ -87,7 +93,10 @@ func (ts *eudicoConsensusSuite) testDelegatedMining(t *testing.T) {
 	k, err := wallet.NewKey(ki)
 	require.NoError(t, err)
 
-	go delegcns.Mine(ctx, address.Undef, full)
+	go func() {
+		err = delegcns.Mine(ctx, address.Undef, full)
+		require.NoError(t, err)
+	}()
 
 	newHeads, err := full.ChainNotify(ctx)
 	require.NoError(t, err)
@@ -123,7 +132,11 @@ func (ts *eudicoConsensusSuite) testTendermintMining(t *testing.T) {
 	defer cancel()
 
 	full, ens := kit.EudicoEnsembleFullNodeOnly(t, ts.opts...)
-	defer ens.Stop()
+	var err error
+	defer func() {
+		err = ens.Stop()
+		require.NoError(t, err)
+	}()
 
 	ki, err := tendermint.GetSecp256k1TendermintKey(kit.TendermintConsensusKeyFile)
 	require.NoError(t, err)
@@ -136,7 +149,10 @@ func (ts *eudicoConsensusSuite) testTendermintMining(t *testing.T) {
 		t.Fatal("wallet key list is empty")
 	}
 
-	go tendermint.Mine(ctx, l[0], full)
+	go func() {
+		err = tendermint.Mine(ctx, l[0], full)
+		require.NoError(t, err)
+	}()
 
 	newHeads, err := full.ChainNotify(ctx)
 	require.NoError(t, err)

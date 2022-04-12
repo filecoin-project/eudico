@@ -27,7 +27,6 @@ import (
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
-	"github.com/filecoin-project/lotus/chain/beacon"
 	act "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
@@ -76,7 +75,6 @@ type SubnetMgr struct {
 	pubsub *pubsub.PubSub
 	// Root ds
 	ds           dtypes.MetadataDS
-	beacon       beacon.Schedule
 	syscalls     vm.SyscallBuilder
 	us           stmgr.UpgradeSchedule
 	verifier     ffiwrapper.Verifier
@@ -103,7 +101,6 @@ func NewSubnetMgr(
 	pubsub *pubsub.PubSub,
 	ds dtypes.MetadataDS,
 	host host.Host,
-	beacon beacon.Schedule,
 	syscalls vm.SyscallBuilder,
 	us stmgr.UpgradeSchedule,
 	nodeServer api.FullNodeServer,
@@ -216,8 +213,9 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 		return err
 	}
 
+	beacon := s.api.BeaconAPI.Beacon
 	sh.ch = store.NewChainStore(sh.bs, sh.bs, sh.ds, weight, s.j)
-	sh.sm, err = stmgr.NewStateManager(sh.ch, tsExec, sh.r, s.syscalls, s.us, s.beacon)
+	sh.sm, err = stmgr.NewStateManager(sh.ch, tsExec, sh.r, s.syscalls, s.us, beacon)
 	if err != nil {
 		log.Errorw("Error creating state manager for subnet", "subnetID", id, "err", err)
 		return err
@@ -227,7 +225,10 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 		return xerrors.Errorf("Error loading chain from disk: %w", err)
 	}
 	// Start state manager.
-	sh.sm.Start(ctx)
+	err = sh.sm.Start(ctx)
+	if err != nil {
+		return xerrors.Errorf("error starting sm for subnet %s: %s", sh.ID, err)
+	}
 
 	gen, err := sh.LoadGenesis(ctx, genesis)
 	if err != nil {
@@ -235,7 +236,7 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 		return err
 	}
 	// Instantiate consensus
-	sh.cons, err = subcns.New(ctx, consensus, sh.sm, s, s.beacon, sh.r, s.verifier, gen, dtypes.NetworkName(id))
+	sh.cons, err = subcns.New(ctx, consensus, sh.sm, s, beacon, sh.r, s.verifier, gen, dtypes.NetworkName(id))
 	if err != nil {
 		log.Errorw("Error creating consensus", "subnetID", id, "err", err)
 		return err
@@ -247,7 +248,7 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 	// We are passing to the syncer a new exchange client for the subnet to enable
 	// peers to catch up with the subnet chain.
 	// NOTE: We reuse the same peer manager from the root chain.
-	sh.syncer, err = chain.NewSyncer(sh.ds, sh.sm, sh.exchangeClient(ctx), chain.NewSyncManager, s.host.ConnManager(), s.host.ID(), s.beacon, gen, sh.cons)
+	sh.syncer, err = chain.NewSyncer(sh.ds, sh.sm, sh.exchangeClient(ctx), chain.NewSyncManager, s.host.ConnManager(), s.host.ID(), beacon, gen, sh.cons)
 	if err != nil {
 		log.Errorw("Error creating syncer for subnet", "subnetID", id, "err", err)
 		return err
@@ -257,7 +258,10 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 	// Hello protocol needs to run after the syncer is intialized and the genesis
 	// is created but before we set-up the gossipsub topics to listen for
 	// new blocks and messages.
-	sh.runHello(ctx)
+	err = sh.runHello(ctx)
+	if err != nil {
+		return xerrors.Errorf("Error starting hello protocol for subnet %s: %s", sh.ID, err)
+	}
 
 	// FIXME: Consider inheriting Bitswap ChainBlockService instead of using
 	// offline.Exchange here. See builder_chain to undertand how is built.

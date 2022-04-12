@@ -367,7 +367,7 @@ func (r *Resolver) processPullLocked(submgr subnet.SubnetMgr, rmsg *ResolveMsg) 
 	// FIXME: Make this configurable
 	lstate, found, err := r.getLockedStateFromActor(context.TODO(), submgr, rmsg)
 	if err != nil {
-		return pubsub.ValidationIgnore, xerrors.Errorf("error geting locked state from actor: %s", err)
+		return pubsub.ValidationIgnore, xerrors.Errorf("error getting locked state from actor: %s", err)
 	}
 	if !found {
 		// Reject instead of ignore. Someone may be trying to spam us with
@@ -471,7 +471,7 @@ func (r *Resolver) publishMsg(m *ResolveMsg, id address.SubnetID) error {
 	if err != nil {
 		return xerrors.Errorf("error serializing resolveMsg: %v", err)
 	}
-	return r.pubsub.Publish(SubnetResolverTopic(id), b)
+	return r.pubsub.Publish(SubnetResolverTopic(id), b) //nolint:staticcheck
 }
 
 // WaitCrossMsgsResolved waits until crossMsgs for meta have been fully resolved
@@ -487,7 +487,7 @@ func (r *Resolver) WaitCrossMsgsResolved(ctx context.Context, c cid.Cid, from ad
 				return
 			default:
 				// Check if crossMsg fully resolved.
-				_, resolved, err = r.ResolveCrossMsgs(ctx, c, address.SubnetID(from))
+				_, resolved, err = r.ResolveCrossMsgs(ctx, c, from)
 				if err != nil {
 					out <- err
 				}
@@ -563,7 +563,7 @@ func (r *Resolver) WaitLockedStateResolved(ctx context.Context, c cid.Cid, from 
 				out <- xerrors.Errorf("context timeout")
 				return
 			default:
-				_, resolved, err = r.ResolveLockedState(ctx, c, address.SubnetID(from), actor)
+				_, resolved, err = r.ResolveLockedState(ctx, c, from, actor)
 				if err != nil {
 					out <- err
 				}

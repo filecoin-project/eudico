@@ -408,7 +408,7 @@ func (s *SubnetMgr) getBottomUpPool(ctx context.Context, id address.SubnetID, he
 			// Add the meta nonce to the message nonce
 			m.Nonce = i
 			// Append for return
-			out = append(out, &m)
+			out = append(out, &m) //nolint
 		}
 		s.cm.applyBottomUp(i, id, height)
 	}
@@ -426,11 +426,11 @@ func (s *SubnetMgr) getSubnetResolver(id address.SubnetID) *resolver.Resolver {
 
 func (s *SubnetMgr) CrossMsgResolve(ctx context.Context, id address.SubnetID, c cid.Cid, from address.SubnetID) ([]types.Message, error) {
 	r := s.getSubnetResolver(id)
-	msgs, _, err := r.ResolveCrossMsgs(ctx, c, address.SubnetID(from))
+	msgs, _, err := r.ResolveCrossMsgs(ctx, c, from)
 	return msgs, err
 }
 
 func (s *SubnetMgr) WaitCrossMsgResolved(ctx context.Context, id address.SubnetID, c cid.Cid, from address.SubnetID) chan error {
 	r := s.getSubnetResolver(id)
-	return r.WaitCrossMsgsResolved(ctx, c, address.SubnetID(from))
+	return r.WaitCrossMsgsResolved(ctx, c, from)
 }

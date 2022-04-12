@@ -134,7 +134,7 @@ func (t *SampleState) MarshalCBOR(w io.Writer) error {
 	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.S))); err != nil {
 		return err
 	}
-	if _, err := io.WriteString(w, string(t.S)); err != nil {
+	if _, err := io.WriteString(w, t.S); err != nil {
 		return err
 	}
 	return nil
@@ -166,7 +166,7 @@ func (t *SampleState) UnmarshalCBOR(r io.Reader) error {
 			return err
 		}
 
-		t.S = string(sval)
+		t.S = sval
 	}
 	return nil
 }
