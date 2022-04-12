@@ -480,7 +480,7 @@ func computeMsgMeta(bs cbor.IpldStore, bmsgCids, smsgCids, crossCids []cid.Cid) 
 		SecpkMessages: smroot,
 		CrossMessages: crossroot,
 	})
-	return mrcid, nil
+	return mrcid, err
 }
 
 // FetchTipSet tries to load the provided tipset from the store, and falls back

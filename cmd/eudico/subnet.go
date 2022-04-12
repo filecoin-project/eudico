@@ -7,7 +7,6 @@ import (
 
 	"github.com/ipfs/go-cid"
 	"github.com/urfave/cli/v2"
-	cbg "github.com/whyrusleeping/cbor-gen"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
@@ -169,7 +168,7 @@ var addCmd = &cli.Command{
 			return err
 		}
 
-		fmt.Printf("[*] subnet actor deployed as %v and new subnet availabe with ID=%v\n\n", actorAddr, address.NewSubnetID(parent, actorAddr))
+		fmt.Printf("[*] subnet actor deployed as %v and new subnet available with ID=%v\n\n", actorAddr, address.NewSubnetID(parent, actorAddr))
 		fmt.Printf("remember to join and register your subnet for it to be discoverable\n")
 		return nil
 	},
@@ -916,12 +915,4 @@ var deployActorCmd = &cli.Command{
 		fmt.Fprintf(cctx.App.Writer, "Successfully deployed actor with address: %s\n", r.IDAddress)
 		return nil
 	},
-}
-
-func MustSerialize(i cbg.CBORMarshaler) []byte {
-	buf := new(bytes.Buffer)
-	if err := i.MarshalCBOR(buf); err != nil {
-		panic(err)
-	}
-	return buf.Bytes()
 }

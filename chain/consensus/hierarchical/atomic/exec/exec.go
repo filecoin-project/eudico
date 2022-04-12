@@ -91,7 +91,7 @@ func ComputeAtomicOutput(ctx context.Context, sm *stmgr.StateManager, ts *types.
 		// Ensure that we are targeting the right actor.
 		lmsg.To = to
 		log.Debugf("Computing merge message for actor: %s", lmsg.To)
-		err = computeMsg(ctx, vmi, lmsg)
+		err = computeMsg(ctx, vmi, *lmsg)
 		if err != nil {
 			return nil, xerrors.Errorf("error merging locked states: %w", err)
 		}
@@ -121,7 +121,7 @@ func ComputeAtomicOutput(ctx context.Context, sm *stmgr.StateManager, ts *types.
 		m.Nonce = 0
 		// Ensure that we are targeting the right actor.
 		m.To = to
-		err = computeMsg(ctx, vmi, &m)
+		err = computeMsg(ctx, vmi, m)
 		if err != nil {
 			return nil, xerrors.Errorf("error executing atomic msg: %w", err)
 		}
@@ -158,9 +158,9 @@ func ComputeAtomicOutput(ctx context.Context, sm *stmgr.StateManager, ts *types.
 	return st.Output(lparams), nil
 }
 
-func computeMsg(ctx context.Context, vmi *vm.VM, m *types.Message) error {
+func computeMsg(ctx context.Context, vmi *vm.VM, m types.Message) error {
 	// apply msg implicitly to execute new state
-	ret, err := vmi.ApplyImplicitMessage(ctx, m)
+	ret, err := vmi.ApplyImplicitMessage(ctx, &m)
 	if err != nil {
 		return xerrors.Errorf("apply message failed: %w", err)
 	}

@@ -99,7 +99,7 @@ func UnwrapLockParams(params *LockParams, out Marshalable) error {
 }
 
 // UnlockParams identifies the input params of a message
-// along with the ouput state to merge.
+// along with the output state to merge.
 type UnlockParams struct {
 	Params *LockParams
 	State  []byte
@@ -191,12 +191,12 @@ func WrapLockableState(s LockableState) (*LockedState, error) {
 	return &LockedState{S: buf.Bytes()}, nil
 }
 
-func (l *LockedState) SetState(s LockableState) error {
+func (s *LockedState) SetState(ls LockableState) error {
 	var buf bytes.Buffer
-	if err := s.MarshalCBOR(&buf); err != nil {
+	if err := ls.MarshalCBOR(&buf); err != nil {
 		return err
 	}
-	l.S = buf.Bytes()
+	s.S = buf.Bytes()
 	return nil
 }
 

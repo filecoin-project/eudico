@@ -302,7 +302,7 @@ func TestCheckpoints(t *testing.T) {
 
 	// Submit checkpoint from first miner in second period
 	rt.SetCaller(miners[0], builtin.AccountActorCodeID)
-	rt.SetEpoch(abi.ChainEpoch(epoch + 20))
+	rt.SetEpoch(epoch + 20)
 	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
 	b, err := ch.MarshalBinary()
 	require.NoError(t, err)
@@ -359,7 +359,7 @@ func TestCheckpoints(t *testing.T) {
 
 	// Submit checkpoint from first miner in third period
 	rt.SetCaller(miners[0], builtin.AccountActorCodeID)
-	rt.SetEpoch(abi.ChainEpoch(epoch + 20))
+	rt.SetEpoch(epoch + 20)
 	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
 	// Now sign and send and it should be correct
 	err = ver.Sign(ctx, w, miners[0], ch)
@@ -384,7 +384,7 @@ func TestCheckpoints(t *testing.T) {
 
 	// Submit checkpoint from second miner
 	rt.SetCaller(miners[1], builtin.AccountActorCodeID)
-	rt.SetEpoch(abi.ChainEpoch(epoch + 22))
+	rt.SetEpoch(epoch + 22)
 	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
 	err = ver.Sign(ctx, w, miners[1], ch)
 	require.NoError(t, err)
@@ -458,7 +458,7 @@ func (h *shActorHarness) constructAndVerify(t *testing.T, rt *mock.Runtime) {
 }
 
 // Check what happens if we set a check period equal to zero.
-// We should be assigning the defualt period.
+// We should be assigning the default period.
 func (h *shActorHarness) constructAndVerifyZeroCheck(t *testing.T, rt *mock.Runtime) {
 	rt.ExpectValidateCallerType(builtin.InitActorCodeID)
 	ret := rt.Call(h.SubnetActor.Constructor,
@@ -526,7 +526,7 @@ func (h *shActorHarness) fullSignCheckpoint(t *testing.T, rt *mock.Runtime, mine
 	require.NoError(t, err)
 	// Submit checkpoint from first miner
 	rt.SetCaller(miners[0], builtin.AccountActorCodeID)
-	rt.SetEpoch(abi.ChainEpoch(epoch + 20))
+	rt.SetEpoch(epoch + 20)
 	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
 	b, err := ch.MarshalBinary()
 	require.NoError(t, err)
@@ -546,7 +546,7 @@ func (h *shActorHarness) fullSignCheckpoint(t *testing.T, rt *mock.Runtime, mine
 
 	// Can't send checkpoint for the same miner twice
 	rt.SetCaller(miners[0], builtin.AccountActorCodeID)
-	rt.SetEpoch(abi.ChainEpoch(epoch + 21))
+	rt.SetEpoch(epoch + 21)
 	rt.ExpectValidateCallerType(builtin.AccountActorCodeID)
 	params = &sca.CheckpointParams{Checkpoint: b}
 	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {

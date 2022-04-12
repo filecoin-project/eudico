@@ -224,7 +224,10 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 		return xerrors.Errorf("Error loading chain from disk: %w", err)
 	}
 	// Start state manager.
-	sh.sm.Start(ctx)
+	err = sh.sm.Start(ctx)
+	if err != nil {
+		return xerrors.Errorf("error starting sm for subnet %s: %s", sh.ID, err)
+	}
 
 	gen, err := sh.LoadGenesis(ctx, genesis)
 	if err != nil {
@@ -254,7 +257,10 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 	// Hello protocol needs to run after the syncer is intialized and the genesis
 	// is created but before we set-up the gossipsub topics to listen for
 	// new blocks and messages.
-	sh.runHello(ctx)
+	err = sh.runHello(ctx)
+	if err != nil {
+		return xerrors.Errorf("Error starting hello protocol for subnet %s: %s", sh.ID, err)
+	}
 
 	// FIXME: Consider inheriting Bitswap ChainBlockService instead of using
 	// offline.Exchange here. See builder_chain to undertand how is built.

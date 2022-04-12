@@ -58,7 +58,7 @@ func TestRegister(t *testing.T) {
 	ret := rt.Call(h.SubnetCoordActor.Register, nil)
 	res, ok := ret.(*actor.SubnetIDParam)
 	require.True(t, ok)
-	shid := address.SubnetID("/root/f0101")
+	shid := address.NewSubnetID(address.RootSubnet, SubnetActorAddr)
 	// Verify the return value is correct.
 	require.Equal(t, res.ID, shid.String())
 	rt.Verify()
@@ -68,7 +68,7 @@ func TestRegister(t *testing.T) {
 	sh, found := h.getSubnet(rt, shid)
 	require.True(h.t, found)
 	require.Equal(t, sh.Stake, value)
-	require.Equal(t, sh.ID.String(), "/root/f0101")
+	require.Equal(t, sh.ID, address.NewSubnetID(address.RootSubnet, SubnetActorAddr))
 	require.Equal(t, sh.ParentID.String(), "/root")
 	require.Equal(t, sh.Status, actor.Active)
 
@@ -108,7 +108,7 @@ func TestRegister(t *testing.T) {
 	ret = rt.Call(h.SubnetCoordActor.Register, nil)
 	res, ok = ret.(*actor.SubnetIDParam)
 	require.True(t, ok)
-	shid = address.SubnetID("/root/f0102")
+	shid = address.NewSubnetID(address.RootSubnet, SubnetActorAddr)
 	// Verify the return value is correct.
 	require.Equal(t, res.ID, shid.String())
 	rt.Verify()
@@ -117,7 +117,7 @@ func TestRegister(t *testing.T) {
 	sh, found = h.getSubnet(rt, shid)
 	require.True(h.t, found)
 	require.Equal(t, sh.Stake, value)
-	require.Equal(t, sh.ID.String(), "/root/f0102")
+	require.Equal(t, sh.ID, address.NewSubnetID(address.RootSubnet, SubnetActorAddr))
 	require.Equal(t, sh.ParentID.String(), "/root")
 	require.Equal(t, sh.Status, actor.Active)
 }
@@ -421,12 +421,13 @@ func newCheckpoint(source address.SubnetID, epoch abi.ChainEpoch) *schema.Checkp
 	return ch
 }
 
-func addMsgMeta(ch *schema.Checkpoint, from, to address.SubnetID, rand string, value abi.TokenAmount) *schema.CrossMsgMeta {
+func addMsgMeta(t *testing.T, ch *schema.Checkpoint, from, to address.SubnetID, rand string, value abi.TokenAmount) *schema.CrossMsgMeta {
 	cb := cid.V1Builder{Codec: cid.DagCBOR, MhType: multihash.BLAKE2B_MIN + 31}
 	c, _ := cb.Sum([]byte(from.String() + rand))
 	m := schema.NewCrossMsgMeta(from, to)
 	m.SetCid(c)
-	m.AddValue(value)
+	err := m.AddValue(value)
+	require.NoError(t, err)
 	ch.AppendMsgMeta(m)
 	return m
 

@@ -106,7 +106,7 @@ func (st *SCAState) releaseCircSupply(rt runtime.Runtime, curr *Subnet, id addre
 	if curr.ID == id {
 		curr.releaseSupply(rt, value)
 		return
-		// It is flushed somwhere else.
+		// It is flushed somewhere else.
 	}
 
 	// Update circulating supply reducing release value.

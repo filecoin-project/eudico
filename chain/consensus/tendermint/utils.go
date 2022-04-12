@@ -3,7 +3,6 @@ package tendermint
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
@@ -21,7 +20,6 @@ import (
 	tmclient "github.com/tendermint/tendermint/rpc/client/http"
 	"github.com/tendermint/tendermint/rpc/coretypes"
 	tmtypes "github.com/tendermint/tendermint/types"
-	"golang.org/x/crypto/ripemd160"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
@@ -121,19 +119,6 @@ func findValidatorPubKeyByAddress(validators []*tmtypes.Validator, addr tmcrypto
 		}
 	}
 	return nil
-}
-
-func getTendermintAddress(pubKey []byte) []byte {
-	if len(pubKey) != tmsecp.PubKeySize {
-		panic("length of pubkey is incorrect")
-	}
-	hasherSHA256 := sha256.New()
-	_, _ = hasherSHA256.Write(pubKey) // does not error
-	sha := hasherSHA256.Sum(nil)
-
-	hasherRIPEMD160 := ripemd160.New()
-	_, _ = hasherRIPEMD160.Write(sha) // does not error
-	return hasherRIPEMD160.Sum(nil)
 }
 
 func getValidatorsInfo(ctx context.Context, c *tmclient.HTTP) (string, []byte, address.Address, error) {

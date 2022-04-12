@@ -26,14 +26,14 @@ type Subnet struct {
 	CircSupply abi.TokenAmount // Circulating supply of FIL in subnet.
 	Status     Status
 	// NOTE: We could probably save some gas here without affecting the
-	// overall behavior of check committment by just keeping the information
+	// overall behavior of check commitment by just keeping the information
 	// required for verification (prevCheck cid and epoch).
 	PrevCheckpoint schema.Checkpoint
 }
 
 // addStake adds new funds to the stake of the subnet.
 //
-// This function also accepts negative values to substract, and checks
+// This function also accepts negative values to subtract, and checks
 // if the funds are enough for the subnet to be active.
 func (sh *Subnet) addStake(rt runtime.Runtime, st *SCAState, value abi.TokenAmount) {
 	// Add stake to the subnet

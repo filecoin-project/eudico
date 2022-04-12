@@ -29,6 +29,7 @@ import (
 	tmlogger "github.com/tendermint/tendermint/libs/log"
 	"github.com/tendermint/tendermint/libs/service"
 	"go.uber.org/fx"
+	"go.uber.org/multierr"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
@@ -466,7 +467,6 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 			require.NoError(n.t, cerr)
 			rootGenesisBytes, gferr = ioutil.ReadFile(TendermintConsensusGenesisTestFile)
 		case hierarchical.FilecoinEC:
-			break
 		default:
 			n.t.Fatalf("unknown consensus genesis file %d", n.options.rootConsensus)
 		}
@@ -992,12 +992,12 @@ func (n *EudicoEnsemble) stopTendermint() error {
 		return xerrors.New("tendermint container ID is not set")
 	}
 
-	StopContainer(n.tendermintContainerID)
-
-	if err := n.removeTendermintFiles(); err != nil {
-		return err
-	}
-	return nil
+	err1 := StopContainer(n.tendermintContainerID)
+	err2 := n.removeTendermintFiles()
+	return multierr.Combine(
+		err1,
+		err2,
+	)
 }
 
 // EudicoEnsembleMinimal creates and starts an EudicoEnsemble with a single full node and a single miner.
@@ -1073,10 +1073,9 @@ func EudicoEnsembleTwoMiners(t *testing.T, opts ...interface{}) (*TestFullNode, 
 	if options.rootConsensus == hierarchical.FilecoinEC {
 		ens = NewEudicoEnsemble(t, eopts...).FullNode(&full, nopts...).Miner(&miner, &full, nopts...).Start()
 		return &full, &miner, subnetMinerType, ens
-	} else {
-		ens = NewEudicoEnsemble(t, eopts...).FullNode(&full, nopts...).Start()
-		return &full, rootMiner, subnetMinerType, ens
 	}
+	ens = NewEudicoEnsemble(t, eopts...).FullNode(&full, nopts...).Start()
+	return &full, rootMiner, subnetMinerType, ens
 }
 
 // EudicoEnsembleFullNodeOnly creates and starts a EudicoEnsemble with a single full node.
