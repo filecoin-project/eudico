@@ -408,7 +408,7 @@ func (s *SubnetMgr) getBottomUpPool(ctx context.Context, id address.SubnetID, he
 			// Add the meta nonce to the message nonce
 			m.Nonce = i
 			// Append for return
-			out = append(out, &m)
+			out = append(out, &m) //nolint
 		}
 		s.cm.applyBottomUp(i, id, height)
 	}

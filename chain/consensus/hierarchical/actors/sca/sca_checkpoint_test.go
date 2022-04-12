@@ -39,7 +39,7 @@ func TestCheckpoints(t *testing.T) {
 	ret := rt.Call(h.SubnetCoordActor.Register, nil)
 	res, ok := ret.(*actor.SubnetIDParam)
 	require.True(t, ok)
-	shid := address.SubnetID("/root/f0101")
+	shid := address.NewSubnetID(address.RootSubnet, SubnetActorAddr)
 	// Verify the return value is correct.
 	require.Equal(t, res.ID, shid.String())
 	rt.Verify()
@@ -49,7 +49,7 @@ func TestCheckpoints(t *testing.T) {
 	nn1 := sh.ID
 	require.True(h.t, found)
 	require.Equal(t, sh.Stake, value)
-	require.Equal(t, sh.ID.String(), "/root/f0101")
+	require.Equal(t, sh.ID, address.NewSubnetID(address.RootSubnet, SubnetActorAddr))
 	require.Equal(t, sh.ParentID.String(), "/root")
 	require.Equal(t, sh.Status, actor.Active)
 
@@ -63,7 +63,7 @@ func TestCheckpoints(t *testing.T) {
 	ret = rt.Call(h.SubnetCoordActor.Register, nil)
 	res, ok = ret.(*actor.SubnetIDParam)
 	require.True(t, ok)
-	shid = address.SubnetID("/root/f0102")
+	shid = address.NewSubnetID(address.RootSubnet, SubnetActorAddr2)
 	// Verify the return value is correct.
 	require.Equal(t, res.ID, shid.String())
 	rt.Verify()
@@ -73,7 +73,7 @@ func TestCheckpoints(t *testing.T) {
 	nn2 := sh.ID
 	require.True(h.t, found)
 	require.Equal(t, sh.Stake, value)
-	require.Equal(t, sh.ID.String(), "/root/f0102")
+	require.Equal(t, sh.ID, address.NewSubnetID(address.RootSubnet, SubnetActorAddr2))
 	require.Equal(t, sh.ParentID.String(), "/root")
 	require.Equal(t, sh.Status, actor.Active)
 
@@ -233,7 +233,7 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 	ret := rt.Call(h.SubnetCoordActor.Register, nil)
 	res, ok := ret.(*actor.SubnetIDParam)
 	require.True(t, ok)
-	shid := address.SubnetID(netName + "/f0101")
+	shid := address.NewSubnetID(address.SubnetID(netName), tutil.NewIDAddr(h.t, 101))
 	// Verify the return value is correct.
 	require.Equal(t, res.ID, shid.String())
 	rt.Verify()
@@ -242,7 +242,7 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 	sh, found := h.getSubnet(rt, shid)
 	require.True(h.t, found)
 	require.Equal(t, sh.Stake, value)
-	require.Equal(t, sh.ID.String(), netName+"/f0101")
+	require.Equal(t, sh.ID, shid)
 	require.Equal(t, sh.ParentID.String(), netName)
 	require.Equal(t, sh.Status, actor.Active)
 
@@ -421,7 +421,7 @@ func TestCheckpointInactive(t *testing.T) {
 	ret := rt.Call(h.SubnetCoordActor.Register, nil)
 	res, ok := ret.(*actor.SubnetIDParam)
 	require.True(t, ok)
-	shid := address.SubnetID("/root/f0101")
+	shid := address.NewSubnetID(address.RootSubnet, SubnetActorAddr)
 	// Verify the return value is correct.
 	require.Equal(t, res.ID, shid.String())
 	rt.Verify()
@@ -431,7 +431,7 @@ func TestCheckpointInactive(t *testing.T) {
 	nn1 := sh.ID
 	require.True(h.t, found)
 	require.Equal(t, sh.Stake, value)
-	require.Equal(t, sh.ID.String(), "/root/f0101")
+	require.Equal(t, sh.ID, address.NewSubnetID(address.RootSubnet, SubnetActorAddr))
 	require.Equal(t, sh.ParentID.String(), "/root")
 	require.Equal(t, sh.Status, actor.Active)
 

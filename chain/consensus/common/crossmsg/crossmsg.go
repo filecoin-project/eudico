@@ -109,8 +109,7 @@ func hasMsg(meta *schema.CrossMsgMeta, msg *types.Message, batch []types.Message
 		// Changing original nonce to that of the MsgMeta as done
 		// by the crossPool.
 		m.Nonce = uint64(meta.Nonce)
-		mm := &m
-		if msg.Equals(mm) {
+		if msg.Equals(&m) { //nolint
 			return true
 		}
 	}

@@ -2,7 +2,7 @@ package tspow
 
 import (
 	"context"
-	"math/rand"
+	"crypto/rand"
 	"time"
 
 	"github.com/filecoin-project/go-address"
