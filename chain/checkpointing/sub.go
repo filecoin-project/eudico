@@ -321,7 +321,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 				//first we fetch the checkpoint from the KVS using the cid found from bitcoin
 				cid := c.lastCid
 				fmt.Println("try pull with cid: ", cid)
-				ctx1, _ := context.WithTimeout(ctx, 10 * time.Second)
+				ctx1, _ := context.WithTimeout(ctx, 30 * time.Second)
 				out := c.r.WaitCheckpointResolved(ctx1, cid)
 				select {
 					case <-ctx1.Done():
