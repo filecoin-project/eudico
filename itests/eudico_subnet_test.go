@@ -22,27 +22,6 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
-func TestEudicoSubnetFast(t *testing.T) {
-	t.Run("/root/filcns-/subnet/delegated", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootFilcns(), kit.SubnetDelegated())
-	})
-}
-func TestEudicoSubnetFastFilcnsTendermint(t *testing.T) {
-	t.Run("/root/filcns-/subnet/tendermint", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootFilcns(), kit.SubnetTendermint())
-	})
-}
-
-func TestEudicoSubnetFastTendermintDelegated(t *testing.T) {
-	if os.Getenv("TENDERMINT_ITESTS") == "" {
-		t.Skip("Skipping Tendermint tests")
-	}
-
-	t.Run("/root/tendermint-/subnet/delegated", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootTendermint(), kit.SubnetDelegated())
-	})
-}
-
 func TestEudicoSubnet(t *testing.T) {
 	// Filecoin consensus in root
 	t.Run("/root/filcns-/subnet/delegated", func(t *testing.T) {
@@ -53,58 +32,60 @@ func TestEudicoSubnet(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootFilcns(), kit.SubnetTSPoW())
 	})
 
+	t.Run("/root/delegated-/subnet/pow", func(t *testing.T) {
+		runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetTSPoW())
+	})
+
 	if os.Getenv("TENDERMINT_ITESTS") != "" {
 		t.Run("/root/filcns-/subnet/tendermint", func(t *testing.T) {
 			runSubnetTests(t, kit.ThroughRPC(), kit.RootFilcns(), kit.SubnetTendermint())
 		})
 	}
 
-	// PoW in Root
+	if os.Getenv("FULL_ITESTS") != "" {
+		// PoW in Root
 
-	t.Run("/root/pow-/subnet/pow", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTSPoW())
-	})
-
-	t.Run("/root/pow-/subnet/tendermint", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTendermint())
-	})
-
-	if os.Getenv("TENDERMINT_ITESTS") != "" {
-		t.Run("/root/pow-/subnet/delegated", func(t *testing.T) {
-			runSubnetTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetDelegated())
+		t.Run("/root/pow-/subnet/pow", func(t *testing.T) {
+			runSubnetTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTSPoW())
 		})
-	}
 
-	// Delegated consensus in root
-
-	t.Run("/root/delegated-/subnet/delegated", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetDelegated())
-	})
-
-	t.Run("/root/delegated-/subnet/pow", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetTSPoW())
-	})
-
-	if os.Getenv("TENDERMINT_ITESTS") != "" {
-		t.Run("/root/delegated-/subnet/tendermint", func(t *testing.T) {
-			runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetTendermint())
+		t.Run("/root/pow-/subnet/tendermint", func(t *testing.T) {
+			runSubnetTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTendermint())
 		})
-	}
 
-	// Tendermint in root
+		if os.Getenv("TENDERMINT_ITESTS") != "" {
+			t.Run("/root/pow-/subnet/delegated", func(t *testing.T) {
+				runSubnetTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetDelegated())
+			})
+		}
 
-	if os.Getenv("TENDERMINT_ITESTS") != "" {
+		// Delegated consensus in root
+
 		t.Run("/root/delegated-/subnet/delegated", func(t *testing.T) {
-			runSubnetTests(t, kit.ThroughRPC(), kit.RootTendermint(), kit.SubnetDelegated())
+			runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetDelegated())
 		})
 
-		t.Run("/root/tendermint-/subnet/delegated", func(t *testing.T) {
-			runSubnetTests(t, kit.ThroughRPC(), kit.RootTendermint(), kit.SubnetDelegated())
-		})
+		if os.Getenv("TENDERMINT_ITESTS") != "" {
+			t.Run("/root/delegated-/subnet/tendermint", func(t *testing.T) {
+				runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetTendermint())
+			})
+		}
 
-		t.Run("/root/tendermint-/subnet/pow", func(t *testing.T) {
-			runSubnetTests(t, kit.ThroughRPC(), kit.RootTendermint(), kit.SubnetTSPoW())
-		})
+		// Tendermint in root
+
+		if os.Getenv("TENDERMINT_ITESTS") != "" {
+			t.Run("/root/delegated-/subnet/delegated", func(t *testing.T) {
+				runSubnetTests(t, kit.ThroughRPC(), kit.RootTendermint(), kit.SubnetDelegated())
+			})
+
+			t.Run("/root/tendermint-/subnet/delegated", func(t *testing.T) {
+				runSubnetTests(t, kit.ThroughRPC(), kit.RootTendermint(), kit.SubnetDelegated())
+			})
+
+			t.Run("/root/tendermint-/subnet/pow", func(t *testing.T) {
+				runSubnetTests(t, kit.ThroughRPC(), kit.RootTendermint(), kit.SubnetTSPoW())
+			})
+		}
 	}
 
 }
@@ -140,7 +121,10 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 		bm := kit.NewBlockMiner(t, miner)
 		bm.MineBlocks(ctx, 1*time.Second)
 	case kit.EudicoRootMiner:
-		go miner(ctx, addr, full)
+		go func() {
+			err = miner(ctx, addr, full)
+			require.NoError(t, err)
+		}()
 	default:
 		t.Fatal("unsupported root consensus")
 	}
@@ -190,7 +174,10 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	require.Equal(t, 1, len(sn))
 	require.NotEqual(t, 0, sn[0].Status)
 
-	go full.MineSubnet(ctx, addr, subnetAddr, false)
+	go func() {
+		err = full.MineSubnet(ctx, addr, subnetAddr, false)
+		require.NoError(t, err)
+	}()
 
 	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 4, subnetAddr, full)
 	require.NoError(t, err)

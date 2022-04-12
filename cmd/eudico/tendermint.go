@@ -143,12 +143,14 @@ var tendermintApplicationCmd = &cli.Command{
 		if err := server.Start(); err != nil {
 			return err
 		}
-		defer server.Stop()
+		defer func() {
+			err = server.Stop()
+		}()
 
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 		<-c
 		os.Exit(0)
-		return nil
+		return err
 	},
 }

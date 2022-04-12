@@ -90,9 +90,9 @@ func (cm *CrossMsgs) AddMsg(msg ltypes.Message) {
 	cm.Msgs = append(cm.Msgs, msg)
 }
 
-func (cm *CrossMsgs) hasEqualMeta(meta *schema.CrossMsgMeta) bool {
+func (cm *CrossMsgs) hasEqualMeta(meta schema.CrossMsgMeta) bool {
 	for _, m := range cm.Metas {
-		if m.Equal(meta) {
+		if m.Equal(&meta) {
 			return true
 		}
 	}
@@ -103,7 +103,7 @@ func (cm *CrossMsgs) hasEqualMeta(meta *schema.CrossMsgMeta) bool {
 func (cm *CrossMsgs) AddMetas(metas []schema.CrossMsgMeta) {
 	for _, m := range metas {
 		// If the same meta is already there don't include it.
-		if cm.hasEqualMeta(&m) {
+		if cm.hasEqualMeta(m) {
 			continue
 		}
 		cm.Metas = append(cm.Metas, m)

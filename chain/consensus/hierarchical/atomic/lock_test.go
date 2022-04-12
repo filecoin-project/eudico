@@ -166,7 +166,7 @@ func (t *SampleState) UnmarshalCBOR(r io.Reader) error {
 			return err
 		}
 
-		t.S = string(sval)
+		t.S = sval
 	}
 	return nil
 }
