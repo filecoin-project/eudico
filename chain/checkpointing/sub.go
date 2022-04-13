@@ -548,6 +548,7 @@ func (c *CheckpointingSub) triggerChange(ctx context.Context, diff *diffInfo) (m
 	if diff.cp != nil && diff.hash != nil {
 		// the checkpoint is created by the "previous" set of miners
 		// so that the new key is updated
+		fmt.Println("Checkpoint participants: ", c.participants)
 		for _, participant := range(c.participants){
 			if c.host.ID().String()==participant {
 				err = c.CreateCheckpoint(ctx, diff.cp, diff.hash, c.participants)
@@ -644,6 +645,7 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	c.newDKGComplete = true
 	c.newKey = []byte(c.newTaprootConfig.PublicKey)
 	c.newParticipants = make([]string,0)
+	// we remove the misbehaving participants from the new set of signers
 	for  participant,_ := range(c.newTaprootConfig.VerificationShares){
 		//if participant != "12D3KooWSpyoi7KghH98SWDfDFMyAwuvtP8MWWGDcC1e1uHWzjSm"{
 		c.newParticipants = append(c.newParticipants,string(participant))
