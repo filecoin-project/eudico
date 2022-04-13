@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
 
@@ -33,12 +32,13 @@ func NewRootMirConsensus(ctx context.Context, sm *stmgr.StateManager, beacon bea
 	return mirbft.NewConsensus(ctx, sm, nil, beacon, r, verifier, genesis, netName)
 }
 
-var mirCmd = &cli.Command{
-	Name:  "MirBFT",
+var mirbftCmd = &cli.Command{
+	Name:  "mirbft",
 	Usage: "MirBFT consensus",
 	Subcommands: []*cli.Command{
-		mirGenesisCmd,
-		mirMinerCmd,
+		mirbftGenesisCmd,
+		mirbftMinerCmd,
+		mirbftNodeCmd,
 
 		daemonCmd(node.Options(
 			node.Override(new(consensus.Consensus), NewRootMirConsensus),
@@ -50,7 +50,7 @@ var mirCmd = &cli.Command{
 	},
 }
 
-var mirGenesisCmd = &cli.Command{
+var mirbftGenesisCmd = &cli.Command{
 	Name:      "genesis",
 	Usage:     "Generate genesis for MirBFT consensus",
 	ArgsUsage: "[outfile]",
@@ -74,7 +74,7 @@ var mirGenesisCmd = &cli.Command{
 	},
 }
 
-var mirMinerCmd = &cli.Command{
+var mirbftMinerCmd = &cli.Command{
 	Name:  "miner",
 	Usage: "run MirBFT consensus miner",
 	Flags: []cli.Flag{
@@ -111,5 +111,28 @@ var mirMinerCmd = &cli.Command{
 
 		log.Infow("Starting mining with miner", "miner", miner)
 		return mirbft.Mine(ctx, miner, api)
+	},
+}
+
+var mirbftNodeCmd = &cli.Command{
+	Name:  "node",
+	Usage: "run MirBFT node",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "addr",
+			Value: "tcp://127.0.0.1:26658",
+			Usage: "socket address",
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+		ctx := cliutil.ReqContext(cctx)
+		n, err := mirbft.NewNode(uint64(0))
+		if err != nil {
+			return err
+		}
+		if err := n.Serve(ctx); err != nil {
+			return xerrors.Errorf("unable to run MirBFT node: %s", err)
+		}
+		return err
 	},
 }

@@ -12,43 +12,44 @@ type Tx []byte
 type Application struct {
 	mu sync.Mutex
 
-	db       map[uint64][]Tx
+	cache    []Tx
 	reqStore modules.RequestStore
-	height   uint64
+	height   int64
 }
 
 func NewApplication(reqStore modules.RequestStore) *Application {
 	app := Application{
-		db:       make(map[uint64][]Tx),
+		cache:    nil,
 		reqStore: reqStore,
 		height:   0,
 	}
 	return &app
 }
 
-func (app *Application) Block(i uint64) []Tx {
+func (app *Application) Block(i int64) []Tx {
 	app.mu.Lock()
 	defer app.mu.Unlock()
 
-	return app.db[i]
+	block := make([]Tx, len(app.cache))
+	copy(block, app.cache)
+	app.height++
+	app.cache = nil
+
+	return block
 }
 
 func (app *Application) Apply(batch *requestpb.Batch) error {
 	app.mu.Lock()
 	defer app.mu.Unlock()
 
-	var txs []Tx
-
 	for _, reqRef := range batch.Requests {
 		msg, err := app.reqStore.GetRequest(reqRef)
 		if err != nil {
 			return err
 		}
-		txs = append(txs, msg)
+		app.cache = append(app.cache, msg)
 	}
 
-	app.height++
-	app.db[app.height] = txs
 	return nil
 }
 

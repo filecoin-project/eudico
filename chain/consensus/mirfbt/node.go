@@ -38,6 +38,7 @@ type Node struct {
 	Wal              *simplewal.WAL
 	Net              *grpctransport.GrpcTransport
 	logger           *logging.ZapEventLogger
+	App              *Application
 }
 
 func NewNode(id uint64) (*Node, error) {
@@ -50,7 +51,7 @@ func NewNode(id uint64) (*Node, error) {
 		nodeAddrs[i] = fmt.Sprintf("127.0.0.1:%d", nodeBasePort+i)
 	}
 
-	walPath := path.Join("chat-demo-wal", fmt.Sprintf("%d", id))
+	walPath := path.Join("eudico-wal", fmt.Sprintf("%d", id))
 	wal, err := simplewal.Open(walPath)
 	if err != nil {
 		return nil, err
@@ -75,12 +76,14 @@ func NewNode(id uint64) (*Node, error) {
 		return nil, xerrors.Errorf("could not instantiate ISS protocol module: %w", err)
 	}
 
+	app := NewApplication(reqStore)
+
 	node, err := mirbft.NewNode(ownID, &mirbft.NodeConfig{Logger: logger}, &modules.Modules{
 		Net:          net,
 		WAL:          wal,
 		RequestStore: reqStore,
 		Protocol:     issProtocol,
-		App:          NewApplication(reqStore),
+		App:          app,
 		Crypto:       &mirCrypto.DummyCrypto{DummySig: []byte{0}},
 	})
 	if err != nil {
@@ -103,15 +106,17 @@ func NewNode(id uint64) (*Node, error) {
 		OwnID:           ownID,
 		Wal:             wal,
 		Net:             net,
+		App:             app,
 	}
 
 	return &n, nil
 }
 
 func (n *Node) Serve(ctx context.Context) error {
-	log.Info("MirBFT node was started")
+	log.Info("MirBFT node serving started")
+	defer log.Info("MirBFT node serving stopped")
+
 	stopC := make(chan struct{})
-	var wg sync.WaitGroup
 
 	go func() {
 		<-ctx.Done()
@@ -131,6 +136,7 @@ func (n *Node) Serve(ctx context.Context) error {
 	}()
 
 	// Start the node in a separate goroutine
+	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		if err := n.Node.Run(stopC, time.NewTicker(100*time.Millisecond).C); err != nil {

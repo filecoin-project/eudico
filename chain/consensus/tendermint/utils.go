@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -78,11 +79,11 @@ func parseTx(tx []byte) (interface{}, uint32, error) {
 
 	lastByte := tx[ln-1]
 	switch lastByte {
-	case SignedMessageType:
+	case common.SignedMessageType:
 		msg, err = types.DecodeSignedMessage(tx[:ln-1-32])
-	case CrossMessageType:
+	case common.CrossMessageType:
 		msg, err = types.DecodeMessage(tx[:ln-1-32])
-	case RegistrationMessageType:
+	case common.RegistrationMessageType:
 		msg, err = DecodeRegistrationMessageRequest(tx[:ln-1])
 	default:
 		err = fmt.Errorf("unknown message type %d", lastByte)

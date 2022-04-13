@@ -84,7 +84,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 						log.Error("unable to serialize message:", err)
 						continue
 					}
-					tx := NewSignedMessageBytes(msgBytes, nodeIDBytes[:])
+					tx := common.NewSignedMessageBytes(msgBytes, nodeIDBytes[:])
 					_, err = tendermintClient.BroadcastTxSync(ctx, tx)
 					if err != nil {
 						log.Error("unable to send a message to Tendermint:", err)
@@ -113,7 +113,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 						log.Error("unable to serialize message:", err)
 						continue
 					}
-					tx := NewCrossMessageBytes(msgBytes, nodeIDBytes[:])
+					tx := common.NewCrossMessageBytes(msgBytes, nodeIDBytes[:])
 					_, err = tendermintClient.BroadcastTxSync(ctx, tx)
 					if err != nil {
 						log.Error("unable to send a cross message to Tendermint:", err)
@@ -156,6 +156,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			})
 			if err != nil {
 				log.Errorw("unable to sync the block", "error", err)
+				continue
 			}
 
 			cache.clearSentMessages(base.Height())

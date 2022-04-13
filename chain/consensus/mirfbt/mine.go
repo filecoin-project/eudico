@@ -2,50 +2,35 @@ package mirbft
 
 import (
 	"context"
-	"crypto"
 	"fmt"
-	mirCrypto "github.com/hyperledger-labs/mirbft/pkg/crypto"
-	"github.com/hyperledger-labs/mirbft/pkg/dummyclient"
-	mirLogging "github.com/hyperledger-labs/mirbft/pkg/logging"
-	t "github.com/hyperledger-labs/mirbft/pkg/types"
+	"time"
+
+	mirbft "github.com/hyperledger-labs/mirbft/pkg/types"
 
 	"github.com/filecoin-project/go-address"
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
+	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {
-	log.Info("starting MirBFT miner: ", miner.String())
-	defer log.Info("shutdown MirBFT miner: ", miner.String())
+	addr := miner.String()
+	log.Infof("MirBFT miner %s: started", addr)
+	defer log.Info("MirBFT miner: stopped")
 
-	ownID := t.NodeID(0)
-	nodeIds := []t.NodeID{ownID}
-	reqReceiverAddrs := make(map[t.NodeID]string)
-	for _, i := range nodeIds {
-		reqReceiverAddrs[i] = fmt.Sprintf("127.0.0.1:%d", reqReceiverBasePort+i)
+	netName, nerr := api.StateNetworkName(ctx)
+	if nerr != nil {
+		return nerr
 	}
+	subnetID := address.SubnetID(netName)
 
-	mirBFTClient := dummyclient.NewDummyClient(
-		t.ClientID(0),
-		crypto.SHA256,
-		&mirCrypto.DummyCrypto{DummySig: []byte{0}},
-		mirLogging.ConsoleDebugLogger,
-	)
-
-	mirBFTClient.Connect(context.Background(), reqReceiverAddrs)
-
-	nn, err := api.StateNetworkName(ctx)
-	if err != nil {
-		return err
-	}
-	subnetID := address.SubnetID(nn)
-
-	log.Infof("MirBFT miner params: network name - %s, subnet ID - %s", nn, subnetID)
+	log.Infof("MirBFT miner params: network name - %s, subnet ID - %s", netName, subnetID)
 
 	for {
 		select {
 		case <-ctx.Done():
+			log.Debugf("MirBFT miner %s: context closed", addr)
 			return nil
 		default:
 			base, err := api.ChainHead(ctx)
@@ -58,49 +43,32 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			if err != nil {
 				log.Errorw("unable to select messages from mempool", "error", err)
 			}
-
 			log.Debugf("[subnet: %s, epoch: %d] retrieved %d msgs", subnetID, base.Height()+1, len(msgs))
 
-			for _, msg := range msgs {
-				id := msg.Cid().String()
-
-				log.Debugf("[subnet: %s, epoch: %d] >>>>> msg to send: %s", subnetID, base.Height()+1, id)
-
-				msgBytes, err := msg.Serialize()
-				if err != nil {
-					log.Error("unable to serialize message:", err)
-					continue
-				}
-
-				err = mirBFTClient.SubmitRequest(msgBytes)
-				if err != nil {
-					log.Error("unable to send a message to Tendermint:", err)
-					continue
-				}
-				log.Debugf("successfully sent a message %s to Tendermint", id)
-
+			crossMsgs, err := api.GetCrossMsgsPool(ctx, subnetID, base.Height()+1)
+			if err != nil {
+				log.Errorw("unable to select cross-messages from mempool", "error", err)
 			}
-
-			//TODO: we send only messages, have to add cross-messages.
+			log.Debugf("[subnet: %s, epoch: %d] retrieved %d crossmsgs", subnetID, base.Height()+1, len(crossMsgs))
 
 			log.Infof("[subnet: %s, epoch: %d] try to create a block", subnetID, base.Height()+1)
-
 			bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
-				Miner:            address.Undef,
+				Miner:            miner,
 				Parents:          base.Key(),
 				BeaconValues:     nil,
 				Ticket:           nil,
 				Epoch:            base.Height() + 1,
-				Timestamp:        0,
+				Timestamp:        uint64(time.Now().Unix()),
 				WinningPoStProof: nil,
-				Messages:         nil,
-				CrossMessages:    nil,
+				Messages:         msgs,
+				CrossMessages:    crossMsgs,
 			})
 			if err != nil {
 				log.Errorw("creating block failed", "error", err)
 				continue
 			}
 			if bh == nil {
+				log.Debug("created a nil block")
 				continue
 			}
 
@@ -113,19 +81,108 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 				CrossMessages: bh.CrossMessages,
 			})
 			if err != nil {
-				log.Errorw("unable to sync the block", "error", err)
+				log.Errorw("unable to sync a block", "error", err)
+				continue
 			}
 
 			log.Infof("[subnet: %s, epoch: %d] mined a block %v", subnetID, bh.Header.Height, bh.Cid())
 		}
 	}
-
-	return nil
 }
 
 func (m *MirBFT) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.BlockTemplate) (*types.FullBlock, error) {
-	log.Infof("starting creating block for epoch %d", bt.Epoch)
-	defer log.Infof("stopping creating block for epoch %d", bt.Epoch)
+	log.Infof("create block for epoch %d", bt.Epoch)
 
-	return nil, nil
+	for _, msg := range bt.Messages {
+		msgBytes, err := msg.Serialize()
+		if err != nil {
+			log.Error("unable to serialize message:", err)
+			continue
+		}
+
+		reqNo := mirbft.ReqNo(msg.Message.Nonce)
+		tx := common.NewSignedMessageBytes(msgBytes, nil)
+
+		err = m.node.Node.SubmitRequest(ctx, mirbft.ClientID(0), reqNo, tx, nil)
+		if err != nil {
+			log.Error("unable to submit a message to MirBFT:", err)
+			continue
+		}
+		log.Debug("successfully sent a message to MirBFT")
+
+	}
+
+	for _, msg := range bt.CrossMessages {
+		msgBytes, err := msg.Serialize()
+		if err != nil {
+			log.Error("unable to serialize cross-message:", err)
+			continue
+		}
+
+		tx := common.NewCrossMessageBytes(msgBytes, nil)
+		reqNo := mirbft.ReqNo(msg.Nonce)
+
+		err = m.node.Node.SubmitRequest(ctx, mirbft.ClientID(0), reqNo, tx, nil)
+		if err != nil {
+			log.Error("unable to submit a message to MirBFT:", err)
+			continue
+		}
+		log.Debug("successfully sent a message to MirBFT")
+
+	}
+
+	ticker := time.NewTicker(time.Duration(1000) * time.Millisecond)
+	defer ticker.Stop()
+
+	var block []Tx
+
+	try := true
+	for try {
+		select {
+		case <-ctx.Done():
+			log.Info("create block context closed")
+			return nil, nil
+		case <-ticker.C:
+			log.Debug("received a new block from MirBFT over RPC")
+			block = m.node.App.Block(int64(bt.Epoch))
+			fmt.Println(">>>>> received block len", len(block))
+			try = false
+		}
+	}
+
+	var msgs []*types.SignedMessage
+	var crossMsgs []*types.Message
+
+	for _, tx := range block {
+		msg, err := parseTx(tx)
+		if err != nil {
+			log.Error("unable to parse message:", err)
+			log.Info(msg)
+			continue
+		}
+		switch m := msg.(type) {
+		case *types.Message:
+			crossMsgs = append(crossMsgs, m)
+		case *types.SignedMessage:
+			msgs = append(msgs, m)
+		default:
+		}
+	}
+
+	bt.Messages = msgs
+	bt.CrossMessages = crossMsgs
+
+	fmt.Println(">>>>>", len(msgs), len(crossMsgs))
+
+	b, err := common.PrepareBlockForSignature(ctx, m.sm, bt)
+	if err != nil {
+		return nil, err
+	}
+
+	err = common.SignBlock(ctx, w, b)
+	if err != nil {
+		return nil, err
+	}
+
+	return b, nil
 }

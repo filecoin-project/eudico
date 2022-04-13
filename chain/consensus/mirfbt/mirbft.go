@@ -35,9 +35,6 @@ import (
 )
 
 const (
-	mirbftRPCAddressEnv     = "EUDICO_MIRBFT_RPC"
-	defaultMirBFTRPCAddress = "http://127.0.0.1:26657"
-
 	MaxHeightDrift = 5
 )
 
@@ -75,9 +72,8 @@ func NewConsensus(
 	if err != nil {
 		return nil, err
 	}
-	if err := n.Serve(ctx); err != nil {
-		return nil, xerrors.Errorf("unable to run MirBFT node: %s", err)
-	}
+
+	go n.Serve(ctx)
 
 	return &MirBFT{
 		store:    sm.ChainStore(),
@@ -95,7 +91,7 @@ func NewConsensus(
 func (m *MirBFT) ValidateBlock(ctx context.Context, b *types.FullBlock) (err error) {
 	log.Infof("starting block validation process at @%d", b.Header.Height)
 
-	if err := common.BlockSanityChecks(hierarchical.PoW, b.Header); err != nil {
+	if err := common.BlockSanityChecks(hierarchical.MirBFT, b.Header); err != nil {
 		return xerrors.Errorf("incoming header failed basic sanity checks: %w", err)
 	}
 

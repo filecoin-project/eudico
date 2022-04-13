@@ -3,7 +3,6 @@ package itests
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
@@ -19,27 +18,61 @@ import (
 )
 
 func TestEudicoConsensus(t *testing.T) {
-	t.Run("tspow", func(t *testing.T) {
-		runTSPoWConsensusTests(t, kit.ThroughRPC(), kit.RootTSPoW())
+	t.Run("mirbft", func(t *testing.T) {
+		runMirBFTConsensusTests(t, kit.ThroughRPC(), kit.RootMirBFT())
 	})
 
-	t.Run("delegated", func(t *testing.T) {
-		runDelegatedConsensusTests(t, kit.ThroughRPC(), kit.RootDelegated())
-	})
-
-	if os.Getenv("TENDERMINT_ITESTS") != "" {
-		t.Run("tendermint", func(t *testing.T) {
-			runTendermintConsensusTests(t, kit.ThroughRPC(), kit.RootTendermint())
+	/*
+		t.Run("tspow", func(t *testing.T) {
+			runTSPoWConsensusTests(t, kit.ThroughRPC(), kit.RootTSPoW())
 		})
-	}
 
-	t.Run("filcns", func(t *testing.T) {
-		runFilcnsConsensusTests(t, kit.ThroughRPC(), kit.RootFilcns())
-	})
+		t.Run("delegated", func(t *testing.T) {
+			runDelegatedConsensusTests(t, kit.ThroughRPC(), kit.RootDelegated())
+		})
+
+		if os.Getenv("TENDERMINT_ITESTS") != "" {
+			t.Run("tendermint", func(t *testing.T) {
+				runTendermintConsensusTests(t, kit.ThroughRPC(), kit.RootTendermint())
+			})
+		}
+
+		t.Run("filcns", func(t *testing.T) {
+			runFilcnsConsensusTests(t, kit.ThroughRPC(), kit.RootFilcns())
+		})
+
+	*/
 }
 
 type eudicoConsensusSuite struct {
 	opts []interface{}
+}
+
+func runMirBFTConsensusTests(t *testing.T, opts ...interface{}) {
+	ts := eudicoConsensusSuite{opts: opts}
+
+	t.Run("testMirBFTConsensusMining", ts.testMirBFTWMining)
+}
+
+func (ts *eudicoConsensusSuite) testMirBFTWMining(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	full, _ := kit.EudicoEnsembleFullNodeOnly(t, ts.opts...)
+
+	l, err := full.WalletList(ctx)
+	require.NoError(t, err)
+	if len(l) != 1 {
+		t.Fatal("wallet key list is empty")
+	}
+
+	go func() {
+		err = tspow.Mine(ctx, l[0], full)
+		require.NoError(t, err)
+	}()
+
+	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 3, address.RootSubnet, full)
+	require.NoError(t, err)
 }
 
 func runTSPoWConsensusTests(t *testing.T, opts ...interface{}) {

@@ -66,7 +66,7 @@ require (
 	github.com/hannahhoward/go-pubsub v0.0.0-20200423002714-8d62886cc36e
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/golang-lru v0.5.4
-	github.com/hyperledger-labs/mirbft v0.0.0-20220405072014-f297fb1791ea // indirect
+	github.com/hyperledger-labs/mirbft v0.0.0-20220405072014-f297fb1791ea
 	github.com/icza/backscanner v0.0.0-20210726202459-ac2ffc679f94
 	github.com/influxdata/influxdb1-client v0.0.0-20200827194710-b269163b24ab
 	github.com/ipfs/bbloom v0.0.4

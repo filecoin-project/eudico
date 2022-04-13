@@ -4,12 +4,8 @@ import (
 	"bytes"
 
 	"github.com/filecoin-project/go-address"
-)
 
-const (
-	SignedMessageType       = 1
-	CrossMessageType        = 2
-	RegistrationMessageType = 3
+	"github.com/filecoin-project/lotus/chain/consensus/common"
 )
 
 type RegistrationMessageRequest struct {
@@ -68,20 +64,6 @@ func NewRegistrationMessageBytes(name address.SubnetID, nonce []byte) ([]byte, e
 	if err != nil {
 		return nil, err
 	}
-	b = append(b, RegistrationMessageType)
+	b = append(b, common.RegistrationMessageType)
 	return b, nil
-}
-
-func NewSignedMessageBytes(msg, nodeID []byte) []byte {
-	var payload []byte
-	payload = append(msg, nodeID...)
-	payload = append(payload, SignedMessageType)
-	return payload
-}
-
-func NewCrossMessageBytes(msg, nodeID []byte) []byte {
-	var payload []byte
-	payload = append(msg, nodeID...)
-	payload = append(payload, CrossMessageType)
-	return payload
 }

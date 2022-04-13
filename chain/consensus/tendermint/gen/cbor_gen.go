@@ -1,15 +1,14 @@
 package main
 
 import (
+	"github.com/filecoin-project/lotus/chain/consensus/common"
 	gen "github.com/whyrusleeping/cbor-gen"
-
-	"github.com/filecoin-project/lotus/chain/consensus/tendermint"
 )
 
 func main() {
 	if err := gen.WriteTupleEncodersToFile("./cbor_gen.go", "tendermint",
-		tendermint.RegistrationMessageRequest{},
-		tendermint.RegistrationMessageResponse{},
+		common.RegistrationMessageRequest{},
+		common.RegistrationMessageResponse{},
 	); err != nil {
 		panic(err)
 	}
