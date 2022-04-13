@@ -3,7 +3,6 @@ package itests
 
 import (
 	"context"
-	mirbft "github.com/filecoin-project/lotus/chain/consensus/mirfbt"
 	"os"
 	"testing"
 	"time"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
+	"github.com/filecoin-project/lotus/chain/consensus/mirfbt"
 	"github.com/filecoin-project/lotus/chain/consensus/tendermint"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/types"

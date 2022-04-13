@@ -38,7 +38,6 @@ var mirbftCmd = &cli.Command{
 	Subcommands: []*cli.Command{
 		mirbftGenesisCmd,
 		mirbftMinerCmd,
-		mirbftNodeCmd,
 
 		daemonCmd(node.Options(
 			node.Override(new(consensus.Consensus), NewRootMirBFTConsensus),
@@ -111,28 +110,5 @@ var mirbftMinerCmd = &cli.Command{
 
 		log.Infow("Starting mining with miner", "miner", miner)
 		return mirbft.Mine(ctx, miner, api)
-	},
-}
-
-var mirbftNodeCmd = &cli.Command{
-	Name:  "node",
-	Usage: "run MirBFT node",
-	Flags: []cli.Flag{
-		&cli.StringFlag{
-			Name:  "addr",
-			Value: "tcp://127.0.0.1:26658",
-			Usage: "socket address",
-		},
-	},
-	Action: func(cctx *cli.Context) error {
-		ctx := cliutil.ReqContext(cctx)
-		n, err := mirbft.NewNode(uint64(0))
-		if err != nil {
-			return err
-		}
-		if err := n.Serve(ctx); err != nil {
-			return xerrors.Errorf("unable to run MirBFT node: %s", err)
-		}
-		return err
 	},
 }

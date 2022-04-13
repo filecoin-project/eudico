@@ -26,7 +26,7 @@ func NewApplication(reqStore modules.RequestStore) *Application {
 	return &app
 }
 
-func (app *Application) Block(i int64) []Tx {
+func (app *Application) Block() []Tx {
 	app.mu.Lock()
 	defer app.mu.Unlock()
 

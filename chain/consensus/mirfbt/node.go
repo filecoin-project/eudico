@@ -2,22 +2,18 @@ package mirbft
 
 import (
 	"context"
-	"crypto"
 	"fmt"
 	"os"
 	"path"
-	"sync"
 	"time"
 
 	"github.com/hyperledger-labs/mirbft"
 	mirCrypto "github.com/hyperledger-labs/mirbft/pkg/crypto"
-	"github.com/hyperledger-labs/mirbft/pkg/dummyclient"
 	"github.com/hyperledger-labs/mirbft/pkg/grpctransport"
 	"github.com/hyperledger-labs/mirbft/pkg/iss"
 	mirLogging "github.com/hyperledger-labs/mirbft/pkg/logging"
 	"github.com/hyperledger-labs/mirbft/pkg/modules"
 	"github.com/hyperledger-labs/mirbft/pkg/reqstore"
-	"github.com/hyperledger-labs/mirbft/pkg/requestreceiver"
 	"github.com/hyperledger-labs/mirbft/pkg/simplewal"
 	t "github.com/hyperledger-labs/mirbft/pkg/types"
 	logging "github.com/ipfs/go-log/v2"
@@ -25,23 +21,19 @@ import (
 )
 
 const (
-	nodeBasePort        = 10000
-	reqReceiverBasePort = 20000
+	nodeBasePort = 10000
 )
 
-type Node struct {
-	Node             *mirbft.Node
-	RequestReceiver  *requestreceiver.RequestReceiver
-	Client           *dummyclient.DummyClient
-	OwnID            t.NodeID
-	ReqReceiverAddrs map[t.NodeID]string
-	Wal              *simplewal.WAL
-	Net              *grpctransport.GrpcTransport
-	logger           *logging.ZapEventLogger
-	App              *Application
+type mir struct {
+	Node   *mirbft.Node
+	OwnID  t.NodeID
+	Wal    *simplewal.WAL
+	Net    *grpctransport.GrpcTransport
+	logger *logging.ZapEventLogger
+	App    *Application
 }
 
-func NewNode(id uint64) (*Node, error) {
+func newMir(id uint64) (*mir, error) {
 	ownID := t.NodeID(id)
 	nodeIds := []t.NodeID{ownID}
 	logger := mirLogging.ConsoleDebugLogger
@@ -78,7 +70,7 @@ func NewNode(id uint64) (*Node, error) {
 
 	app := NewApplication(reqStore)
 
-	node, err := mirbft.NewNode(ownID, &mirbft.NodeConfig{Logger: logger}, &modules.Modules{
+	node, err := mirbft.NewNode(ownID, &mirbft.NodeConfig{Logger: mirLogging.NilLogger}, &modules.Modules{
 		Net:          net,
 		WAL:          wal,
 		RequestStore: reqStore,
@@ -90,67 +82,51 @@ func NewNode(id uint64) (*Node, error) {
 		return nil, err
 	}
 
-	reqReceiver := requestreceiver.NewRequestReceiver(node, logger)
-
-	client := dummyclient.NewDummyClient(
-		t.ClientID(ownID),
-		crypto.SHA256,
-		&mirCrypto.DummyCrypto{DummySig: []byte{0}},
-		logger,
-	)
-
-	n := Node{
-		Node:            node,
-		RequestReceiver: reqReceiver,
-		Client:          client,
-		OwnID:           ownID,
-		Wal:             wal,
-		Net:             net,
-		App:             app,
+	n := mir{
+		Node:  node,
+		OwnID: ownID,
+		Wal:   wal,
+		Net:   net,
+		App:   app,
 	}
 
 	return &n, nil
 }
 
-func (n *Node) Serve(ctx context.Context) error {
+func (n *mir) serve(ctx context.Context) error {
 	log.Info("MirBFT node serving started")
 	defer log.Info("MirBFT node serving stopped")
 
 	stopC := make(chan struct{})
 
+	nodeCtx, nodeCancel := context.WithCancel(ctx)
 	go func() {
-		<-ctx.Done()
-
-		log.Info("MirBFT node serve: context closed, shutting down")
-
-		if err := n.Wal.Close(); err != nil {
-			log.Errorf("Could not close write-ahead log: %s", err)
+		select {
+		case <-ctx.Done():
+			log.Info("MirBFT node: context closed, shutting down")
+			n.stop()
+			close(stopC)
+		case <-nodeCtx.Done():
+			n.stop()
 		}
-		n.Client.Disconnect()
-		n.RequestReceiver.Stop()
-		n.Net.Stop()
-
-		close(stopC)
 
 		log.Info("MirBFT node was stopped")
 	}()
 
-	// Start the node in a separate goroutine
-	var wg sync.WaitGroup
-	wg.Add(1)
 	go func() {
+		// TODO: add a bug into the MirBFT repo: use context for signalling
 		if err := n.Node.Run(stopC, time.NewTicker(100*time.Millisecond).C); err != nil {
-			log.Infof("Node error: %s", err)
+			log.Errorf("MirBFT node error: %s", err)
+			nodeCancel()
 		}
-		wg.Done()
 	}()
 
-	if err := n.RequestReceiver.Start(reqReceiverBasePort + int(n.OwnID)); err != nil {
-		return err
-	}
-
-	n.Client.Connect(ctx, n.ReqReceiverAddrs)
-
-	wg.Wait()
 	return nil
+}
+
+func (n *mir) stop() {
+	if err := n.Wal.Close(); err != nil {
+		log.Errorf("Could not close write-ahead log: %s", err)
+	}
+	n.Net.Stop()
 }

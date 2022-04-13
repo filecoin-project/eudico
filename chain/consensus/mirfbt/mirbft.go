@@ -52,7 +52,8 @@ type MirBFT struct {
 	subMgr   subnet.SubnetMgr
 	netName  address.SubnetID
 	resolver *resolver.Resolver
-	node     *Node
+
+	mir *mir
 }
 
 func NewConsensus(
@@ -66,14 +67,14 @@ func NewConsensus(
 	netName dtypes.NetworkName,
 ) (consensus.Consensus, error) {
 	subnetID := address.SubnetID(netName)
-	log.Infof("New MirBFT consensus for %s subnet", subnetID)
+	log.Debugf("New MirBFT consensus for %s subnet", subnetID)
 
-	n, err := NewNode(uint64(0))
+	m, err := newMir(uint64(0))
 	if err != nil {
 		return nil, err
 	}
 
-	go n.Serve(ctx)
+	go m.serve(ctx)
 
 	return &MirBFT{
 		store:    sm.ChainStore(),
@@ -84,11 +85,11 @@ func NewConsensus(
 		subMgr:   submgr,
 		netName:  subnetID,
 		resolver: r,
-		node:     n,
+		mir:      m,
 	}, nil
 }
 
-func (m *MirBFT) ValidateBlock(ctx context.Context, b *types.FullBlock) (err error) {
+func (bft *MirBFT) ValidateBlock(ctx context.Context, b *types.FullBlock) (err error) {
 	log.Infof("starting block validation process at @%d", b.Header.Height)
 
 	if err := common.BlockSanityChecks(hierarchical.MirBFT, b.Header); err != nil {
@@ -97,7 +98,7 @@ func (m *MirBFT) ValidateBlock(ctx context.Context, b *types.FullBlock) (err err
 
 	h := b.Header
 
-	baseTs, err := m.store.LoadTipSet(ctx, types.NewTipSetKey(h.Parents...))
+	baseTs, err := bft.store.LoadTipSet(ctx, types.NewTipSetKey(h.Parents...))
 	if err != nil {
 		return xerrors.Errorf("load parent tipset failed (%s): %w", h.Parents, err)
 	}
@@ -115,10 +116,10 @@ func (m *MirBFT) ValidateBlock(ctx context.Context, b *types.FullBlock) (err err
 		log.Warn("Got block from the future, but within threshold", h.Timestamp, build.Clock.Now().Unix())
 	}
 
-	msgsChecks := common.CheckMsgs(ctx, m.store, m.sm, m.subMgr, m.resolver, m.netName, b, baseTs)
+	msgsChecks := common.CheckMsgs(ctx, bft.store, bft.sm, bft.subMgr, bft.resolver, bft.netName, b, baseTs)
 
 	minerCheck := async.Err(func() error {
-		if err := m.minerIsValid(b.Header.Miner); err != nil {
+		if err := bft.minerIsValid(b.Header.Miner); err != nil {
 			return xerrors.Errorf("minerIsValid failed: %w", err)
 		}
 		return nil
@@ -134,7 +135,7 @@ func (m *MirBFT) ValidateBlock(ctx context.Context, b *types.FullBlock) (err err
 			b.Header.ParentWeight, pweight)
 	}
 
-	stateRootCheck := common.CheckStateRoot(ctx, m.store, m.sm, b, baseTs)
+	stateRootCheck := common.CheckStateRoot(ctx, bft.store, bft.sm, b, baseTs)
 
 	await := []async.ErrorFuture{
 		minerCheck,
@@ -173,7 +174,7 @@ func (m *MirBFT) ValidateBlock(ctx context.Context, b *types.FullBlock) (err err
 	return nil
 }
 
-func (m *MirBFT) ValidateBlockPubsub(ctx context.Context, self bool, msg *pubsub.Message) (pubsub.ValidationResult, string) {
+func (bft *MirBFT) ValidateBlockPubsub(ctx context.Context, self bool, msg *pubsub.Message) (pubsub.ValidationResult, string) {
 	if self {
 		return common.ValidateLocalBlock(ctx, msg)
 	}
@@ -212,7 +213,7 @@ func (m *MirBFT) ValidateBlockPubsub(ctx context.Context, self bool, msg *pubsub
 	return pubsub.ValidationAccept, ""
 }
 
-func (m *MirBFT) minerIsValid(maddr address.Address) error {
+func (bft *MirBFT) minerIsValid(maddr address.Address) error {
 	switch maddr.Protocol() {
 	case address.BLS:
 		fallthrough
@@ -226,16 +227,16 @@ func (m *MirBFT) minerIsValid(maddr address.Address) error {
 // IsEpochBeyondCurrMax is used in Filcns to detect delayed blocks.
 // We are currently using defaults here and not worrying about it.
 // We will consider potential changes of Consensus interface in https://github.com/filecoin-project/eudico/issues/143.
-func (m *MirBFT) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
-	if m.genesis == nil {
+func (bft *MirBFT) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
+	if bft.genesis == nil {
 		return false
 	}
 
 	now := uint64(build.Clock.Now().Unix())
-	return epoch > (abi.ChainEpoch((now-m.genesis.MinTimestamp())/build.BlockDelaySecs) + MaxHeightDrift)
+	return epoch > (abi.ChainEpoch((now-bft.genesis.MinTimestamp())/build.BlockDelaySecs) + MaxHeightDrift)
 }
 
-func (m *MirBFT) Type() hierarchical.ConsensusType {
+func (bft *MirBFT) Type() hierarchical.ConsensusType {
 	return hierarchical.MirBFT
 }
 

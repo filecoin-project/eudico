@@ -2,7 +2,6 @@ package mirbft
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	mirbft "github.com/hyperledger-labs/mirbft/pkg/types"
@@ -90,7 +89,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	}
 }
 
-func (m *MirBFT) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.BlockTemplate) (*types.FullBlock, error) {
+func (bft *MirBFT) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.BlockTemplate) (*types.FullBlock, error) {
 	log.Infof("create block for epoch %d", bt.Epoch)
 
 	for _, msg := range bt.Messages {
@@ -103,7 +102,7 @@ func (m *MirBFT) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.BlockT
 		reqNo := mirbft.ReqNo(msg.Message.Nonce)
 		tx := common.NewSignedMessageBytes(msgBytes, nil)
 
-		err = m.node.Node.SubmitRequest(ctx, mirbft.ClientID(0), reqNo, tx, nil)
+		err = bft.mir.Node.SubmitRequest(ctx, mirbft.ClientID(0), reqNo, tx, nil)
 		if err != nil {
 			log.Error("unable to submit a message to MirBFT:", err)
 			continue
@@ -122,7 +121,7 @@ func (m *MirBFT) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.BlockT
 		tx := common.NewCrossMessageBytes(msgBytes, nil)
 		reqNo := mirbft.ReqNo(msg.Nonce)
 
-		err = m.node.Node.SubmitRequest(ctx, mirbft.ClientID(0), reqNo, tx, nil)
+		err = bft.mir.Node.SubmitRequest(ctx, mirbft.ClientID(0), reqNo, tx, nil)
 		if err != nil {
 			log.Error("unable to submit a message to MirBFT:", err)
 			continue
@@ -131,24 +130,10 @@ func (m *MirBFT) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.BlockT
 
 	}
 
-	ticker := time.NewTicker(time.Duration(1000) * time.Millisecond)
-	defer ticker.Stop()
-
-	var block []Tx
-
-	try := true
-	for try {
-		select {
-		case <-ctx.Done():
-			log.Info("create block context closed")
-			return nil, nil
-		case <-ticker.C:
-			log.Debug("received a new block from MirBFT over RPC")
-			block = m.node.App.Block(int64(bt.Epoch))
-			fmt.Println(">>>>> received block len", len(block))
-			try = false
-		}
-	}
+	// TODO: temporal delay to be able run tests.
+	// Throughput in the basic setting is so high that MirBFT and all other slow consensus are not in sync within subnet.
+	time.Sleep(500 * time.Millisecond)
+	block := bft.mir.App.Block()
 
 	var msgs []*types.SignedMessage
 	var crossMsgs []*types.Message
@@ -172,9 +157,7 @@ func (m *MirBFT) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.BlockT
 	bt.Messages = msgs
 	bt.CrossMessages = crossMsgs
 
-	fmt.Println(">>>>>", len(msgs), len(crossMsgs))
-
-	b, err := common.PrepareBlockForSignature(ctx, m.sm, bt)
+	b, err := common.PrepareBlockForSignature(ctx, bft.sm, bt)
 	if err != nil {
 		return nil, err
 	}
