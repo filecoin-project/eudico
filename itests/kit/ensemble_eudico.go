@@ -482,7 +482,6 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 			cerr := subnet.CreateGenesisFile(ctx, MirBFTConsensusGenesisTestFile, hierarchical.MirBFT, address.Undef, sca.DefaultCheckpointPeriod)
 			require.NoError(n.t, cerr)
 			rootGenesisBytes, gferr = ioutil.ReadFile(MirBFTConsensusGenesisTestFile)
-
 		case hierarchical.FilecoinEC:
 		default:
 			n.t.Fatalf("unknown consensus genesis file %d", n.options.rootConsensus)
@@ -525,6 +524,7 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		switch n.options.rootConsensus {
 		case hierarchical.PoW:
 			addr, err = full.WalletImport(ctx, &full.DefaultKey.KeyInfo)
+			require.NoError(n.t, err)
 		case hierarchical.Delegated:
 			err = ReadKeyInfoFromFile(DelegatedConsensusKeyFile, &ki)
 			require.NoError(n.t, err)
@@ -537,12 +537,13 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 			require.NoError(n.t, err)
 		case hierarchical.MirBFT:
 			addr, err = full.WalletImport(ctx, &full.DefaultKey.KeyInfo)
+			require.NoError(n.t, err)
 		case hierarchical.FilecoinEC:
 			addr, err = full.WalletImport(ctx, &full.DefaultKey.KeyInfo)
+			require.NoError(n.t, err)
 		default:
 			n.t.Fatalf("unknown consensus type %d", n.options.rootConsensus)
 		}
-		require.NoError(n.t, err)
 
 		err = full.WalletSetDefault(ctx, addr)
 		require.NoError(n.t, err)

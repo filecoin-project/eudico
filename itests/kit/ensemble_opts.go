@@ -72,7 +72,7 @@ func RootFilcns() EnsembleOpt {
 // RootMirBFT activates MirBFT consensus protocol for the root subnet in Eudico.
 func RootMirBFT() EnsembleOpt {
 	return func(opts *ensembleOpts) error {
-		opts.rootConsensus = hierarchical.FilecoinEC
+		opts.rootConsensus = hierarchical.MirBFT
 		return nil
 	}
 }

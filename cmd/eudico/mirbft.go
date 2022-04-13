@@ -27,7 +27,7 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
-func NewRootMirConsensus(ctx context.Context, sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
+func NewRootMirBFTConsensus(ctx context.Context, sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
 	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) (consensus.Consensus, error) {
 	return mirbft.NewConsensus(ctx, sm, nil, beacon, r, verifier, genesis, netName)
 }
@@ -41,7 +41,7 @@ var mirbftCmd = &cli.Command{
 		mirbftNodeCmd,
 
 		daemonCmd(node.Options(
-			node.Override(new(consensus.Consensus), NewRootMirConsensus),
+			node.Override(new(consensus.Consensus), NewRootMirBFTConsensus),
 			node.Override(new(store.WeightFunc), mirbft.Weight),
 			node.Unset(new(*slashfilter.SlashFilter)),
 			node.Override(new(stmgr.Executor), common.RootTipSetExecutor),

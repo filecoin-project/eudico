@@ -94,6 +94,7 @@ func WriteGenesis(
 	bs := bstore.WrapIDStore(bstore.NewMemorySync())
 
 	var b *genesis2.GenesisBootstrap
+	ctx := context.TODO()
 	switch consensus {
 	case hierarchical.Delegated:
 		if miner == address.Undef {
@@ -103,7 +104,7 @@ func WriteGenesis(
 		if err != nil {
 			return err
 		}
-		b, err = makeDelegatedGenesisBlock(context.TODO(), bs, *template, checkPeriod)
+		b, err = makeDelegatedGenesisBlock(ctx, bs, *template, checkPeriod)
 		if err != nil {
 			return xerrors.Errorf("error making genesis delegated block: %w", err)
 		}
@@ -112,7 +113,7 @@ func WriteGenesis(
 		if err != nil {
 			return err
 		}
-		b, err = makePoWGenesisBlock(context.TODO(), bs, *template, checkPeriod)
+		b, err = makePoWGenesisBlock(ctx, bs, *template, checkPeriod)
 		if err != nil {
 			return xerrors.Errorf("error making genesis delegated block: %w", err)
 		}
@@ -121,7 +122,7 @@ func WriteGenesis(
 		if err != nil {
 			return err
 		}
-		b, err = makeTendermintGenesisBlock(context.TODO(), bs, *template, checkPeriod)
+		b, err = makeTendermintGenesisBlock(ctx, bs, *template, checkPeriod)
 		if err != nil {
 			return xerrors.Errorf("error making genesis tendermint block: %w", err)
 		}
@@ -130,9 +131,9 @@ func WriteGenesis(
 		if err != nil {
 			return err
 		}
-		b, err = makeMirbftGenesisBlock(context.TODO(), bs, *template, checkPeriod)
+		b, err = makeMirBFTGenesisBlock(ctx, bs, *template, checkPeriod)
 		if err != nil {
-			return xerrors.Errorf("error making genesis tendermint block: %w", err)
+			return xerrors.Errorf("error making genesis MirBFT block: %w", err)
 		}
 	default:
 		return xerrors.Errorf("consensus type not supported. Not writing genesis")
@@ -142,7 +143,7 @@ func WriteGenesis(
 	blkserv := blockservice.New(bs, offl)
 	dserv := merkledag.NewDAGService(blkserv)
 
-	if err := car.WriteCarWithWalker(context.TODO(), dserv, []cid.Cid{b.Genesis.Cid()}, w, gen.CarWalkFunc); err != nil {
+	if err := car.WriteCarWithWalker(ctx, dserv, []cid.Cid{b.Genesis.Cid()}, w, gen.CarWalkFunc); err != nil {
 		return xerrors.Errorf("write genesis car: %w", err)
 	}
 	return nil

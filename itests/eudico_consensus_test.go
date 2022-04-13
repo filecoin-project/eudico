@@ -3,6 +3,8 @@ package itests
 
 import (
 	"context"
+	mirbft "github.com/filecoin-project/lotus/chain/consensus/mirfbt"
+	"os"
 	"testing"
 	"time"
 
@@ -22,26 +24,23 @@ func TestEudicoConsensus(t *testing.T) {
 		runMirBFTConsensusTests(t, kit.ThroughRPC(), kit.RootMirBFT())
 	})
 
-	/*
-		t.Run("tspow", func(t *testing.T) {
-			runTSPoWConsensusTests(t, kit.ThroughRPC(), kit.RootTSPoW())
+	t.Run("tspow", func(t *testing.T) {
+		runTSPoWConsensusTests(t, kit.ThroughRPC(), kit.RootTSPoW())
+	})
+
+	t.Run("delegated", func(t *testing.T) {
+		runDelegatedConsensusTests(t, kit.ThroughRPC(), kit.RootDelegated())
+	})
+
+	if os.Getenv("TENDERMINT_ITESTS") != "" {
+		t.Run("tendermint", func(t *testing.T) {
+			runTendermintConsensusTests(t, kit.ThroughRPC(), kit.RootTendermint())
 		})
+	}
 
-		t.Run("delegated", func(t *testing.T) {
-			runDelegatedConsensusTests(t, kit.ThroughRPC(), kit.RootDelegated())
-		})
-
-		if os.Getenv("TENDERMINT_ITESTS") != "" {
-			t.Run("tendermint", func(t *testing.T) {
-				runTendermintConsensusTests(t, kit.ThroughRPC(), kit.RootTendermint())
-			})
-		}
-
-		t.Run("filcns", func(t *testing.T) {
-			runFilcnsConsensusTests(t, kit.ThroughRPC(), kit.RootFilcns())
-		})
-
-	*/
+	t.Run("filcns", func(t *testing.T) {
+		runFilcnsConsensusTests(t, kit.ThroughRPC(), kit.RootFilcns())
+	})
 }
 
 type eudicoConsensusSuite struct {
@@ -67,11 +66,11 @@ func (ts *eudicoConsensusSuite) testMirBFTWMining(t *testing.T) {
 	}
 
 	go func() {
-		err = tspow.Mine(ctx, l[0], full)
+		err = mirbft.Mine(ctx, l[0], full)
 		require.NoError(t, err)
 	}()
 
-	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 3, address.RootSubnet, full)
+	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 10, address.RootSubnet, full)
 	require.NoError(t, err)
 }
 
