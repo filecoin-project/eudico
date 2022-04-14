@@ -16,7 +16,6 @@ import (
 	"github.com/hyperledger-labs/mirbft/pkg/reqstore"
 	"github.com/hyperledger-labs/mirbft/pkg/simplewal"
 	t "github.com/hyperledger-labs/mirbft/pkg/types"
-	logging "github.com/ipfs/go-log/v2"
 	"golang.org/x/xerrors"
 )
 
@@ -25,18 +24,16 @@ const (
 )
 
 type mir struct {
-	Node   *mirbft.Node
-	OwnID  t.NodeID
-	Wal    *simplewal.WAL
-	Net    *grpctransport.GrpcTransport
-	logger *logging.ZapEventLogger
-	App    *Application
+	Node  *mirbft.Node
+	OwnID t.NodeID
+	Wal   *simplewal.WAL
+	Net   *grpctransport.GrpcTransport
+	App   *Application
 }
 
 func newMir(id uint64) (*mir, error) {
 	ownID := t.NodeID(id)
 	nodeIds := []t.NodeID{ownID}
-	logger := mirLogging.ConsoleDebugLogger
 
 	nodeAddrs := make(map[t.NodeID]string)
 	for _, i := range nodeIds {
@@ -63,7 +60,7 @@ func newMir(id uint64) (*mir, error) {
 
 	// Instantiate the ISS protocol module with default configuration.
 	issConfig := iss.DefaultConfig(nodeIds)
-	issProtocol, err := iss.New(ownID, issConfig, logger)
+	issProtocol, err := iss.New(ownID, issConfig, mirLogging.NilLogger)
 	if err != nil {
 		return nil, xerrors.Errorf("could not instantiate ISS protocol module: %w", err)
 	}

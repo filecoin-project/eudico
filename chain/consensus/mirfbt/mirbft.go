@@ -125,7 +125,7 @@ func (bft *MirBFT) ValidateBlock(ctx context.Context, b *types.FullBlock) (err e
 		return nil
 	})
 
-	pweight, err := Weight(context.TODO(), nil, baseTs)
+	pweight, err := Weight(ctx, nil, baseTs)
 	if err != nil {
 		return xerrors.Errorf("getting parent weight: %w", err)
 	}

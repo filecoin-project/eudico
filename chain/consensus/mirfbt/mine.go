@@ -141,7 +141,7 @@ func (bft *MirBFT) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.Bloc
 	for _, tx := range block {
 		msg, err := parseTx(tx)
 		if err != nil {
-			log.Error("unable to parse message:", err)
+			log.Error("unable to parse a message:", err)
 			log.Info(msg)
 			continue
 		}
@@ -151,6 +151,7 @@ func (bft *MirBFT) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.Bloc
 		case *types.SignedMessage:
 			msgs = append(msgs, m)
 		default:
+			log.Error("received an unknown message")
 		}
 	}
 
