@@ -457,7 +457,6 @@ func (c *CheckpointingSub) matchNewConfig(ctx context.Context, oldTs, newTs *typ
 		log.Infow("New config detected")
 		if participant == c.host.ID().String() {
 			diff.newMiners = newSt.Miners
-			c.newParticipants = newSt.Miners
 			return true, nil
 		}
 	}
@@ -559,6 +558,12 @@ func (c *CheckpointingSub) triggerChange(ctx context.Context, diff *diffInfo) (m
 				break
 			}
 		}
+		// even the participants who did not do the checkpoint need to update their participant list
+		if len(c.newParticipants)>0 {
+			c.participants = c.newParticipants
+			c.newParticipants = make([]string,0)
+		}
+		
 	}
 	return true, nil
 }
@@ -739,7 +744,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 
 			// sleep an arbitrary long time to be sure it has been scanned
 			// removed this because now we are adding without rescanning (too long)
-			//time.Sleep(6 * time.Second)
+			time.Sleep(3 * time.Second)
 			//time.Sleep(20 * time.Second)
 
 			//we get the transaction id using our bitcoin client
