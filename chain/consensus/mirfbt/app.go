@@ -55,7 +55,7 @@ func (app *Application) Apply(batch *requestpb.Batch) error {
 
 // Snapshot returns a binary representation of the application state.
 // The returned value can be passed to RestoreState().
-// At the time of writing this comment, the MirBFT library does not support state transfer
+// At the time of writing this comment, the Mir library does not support state transfer
 // and Snapshot is never actually called.
 // We include its implementation for completeness.
 func (app *Application) Snapshot() ([]byte, error) {

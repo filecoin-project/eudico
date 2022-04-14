@@ -35,7 +35,7 @@ func NewRootMirBFTConsensus(ctx context.Context, sm *stmgr.StateManager, beacon 
 
 var mirbftCmd = &cli.Command{
 	Name:  "mirbft",
-	Usage: "MirBFT consensus",
+	Usage: "Mir consensus",
 	Subcommands: []*cli.Command{
 		mirbftGenesisCmd,
 		mirbftMinerCmd,
@@ -52,7 +52,7 @@ var mirbftCmd = &cli.Command{
 
 var mirbftGenesisCmd = &cli.Command{
 	Name:      "genesis",
-	Usage:     "Generate genesis for MirBFT consensus",
+	Usage:     "Generate genesis for Mir consensus",
 	ArgsUsage: "[outfile]",
 	Action: func(cctx *cli.Context) error {
 		if cctx.Args().Len() != 1 {
@@ -76,7 +76,7 @@ var mirbftGenesisCmd = &cli.Command{
 
 var mirbftMinerCmd = &cli.Command{
 	Name:  "miner",
-	Usage: "run MirBFT consensus miner",
+	Usage: "run Mir consensus miner",
 	Flags: []cli.Flag{
 		&cli.BoolFlag{
 			Name:  "default-key",

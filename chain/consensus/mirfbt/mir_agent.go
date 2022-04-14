@@ -23,15 +23,16 @@ const (
 	nodeBasePort = 10000
 )
 
-// TODO: Suggestion: Figure out how to make this a general interface where we can hook libp2p instead of making it grpc specific.
-type mir struct {
-	Node *mirbft.Node
-	Wal  *simplewal.WAL
-	Net  *grpctransport.GrpcTransport
-	App  *Application
+// MirAgent manages and provides direct access to a Mir node abstraction participating in consensus.
+type MirAgent struct {
+	Node     *mirbft.Node
+	Wal      *simplewal.WAL
+	Net      *grpctransport.GrpcTransport
+	App      *Application
+	stopChan chan struct{}
 }
 
-func newMir(id uint64) (*mir, error) {
+func NewMirAgent(id uint64) (*MirAgent, error) {
 	// TODO: Are client ID and node ID the same in this case?
 	// TODO: Should mirbft use a different type for node ID?
 	ownID := t.NodeID(id)
@@ -52,6 +53,8 @@ func newMir(id uint64) (*mir, error) {
 		return nil, err
 	}
 
+	// TODO: Suggestion: Figure out how to make this a general interface where
+	//  we can hook libp2p instead of making it grpc specific.
 	net := grpctransport.NewGrpcTransport(nodeAddrs, ownID, nil)
 	if err := net.Start(); err != nil {
 		return nil, err
@@ -81,48 +84,48 @@ func newMir(id uint64) (*mir, error) {
 		return nil, err
 	}
 
-	n := mir{
-		Node: node,
-		Wal:  wal,
-		Net:  net,
-		App:  app,
+	a := MirAgent{
+		Node:     node,
+		Wal:      wal,
+		Net:      net,
+		App:      app,
+		stopChan: make(chan struct{}),
 	}
 
-	return &n, nil
+	return &a, nil
 }
 
-func (n *mir) serve(ctx context.Context) {
-	log.Info("MirBFT node serving started")
-	defer log.Info("MirBFT node serving stopped")
+func (m *MirAgent) Start(ctx context.Context) chan error {
+	log.Info("Mir agent starting")
 
-	stopC := make(chan struct{})
+	errChan := make(chan error, 1)
+	agentCtx, agentCancel := context.WithCancel(ctx)
 
-	nodeCtx, nodeCancel := context.WithCancel(ctx)
 	go func() {
 		select {
 		case <-ctx.Done():
-			log.Info("MirBFT node: context closed, shutting down")
-			n.stop()
-			close(stopC)
-		case <-nodeCtx.Done():
-			n.stop()
+			log.Debugf("Mir agent: context closed")
+			m.Stop()
+		case <-agentCtx.Done():
 		}
-
-		log.Info("MirBFT node was stopped")
 	}()
 
 	go func() {
-		// TODO: add a bug into the MirBFT repo: use context for signalling
-		if err := n.Node.Run(stopC, time.NewTicker(100*time.Millisecond).C); err != nil {
-			log.Errorf("MirBFT node error: %s", err)
-			nodeCancel()
-		}
+		// TODO: add a bug into the Mir repo: use context for signalling instead of explicit channel
+		errChan <- m.Node.Run(m.stopChan, time.NewTicker(100*time.Millisecond).C)
+		agentCancel()
 	}()
+
+	return errChan
 }
 
-func (n *mir) stop() {
-	if err := n.Wal.Close(); err != nil {
+func (m *MirAgent) Stop() {
+	log.Info("Mir agent shutting down")
+	defer log.Info("Mir agent stopped")
+
+	if err := m.Wal.Close(); err != nil {
 		log.Errorf("Could not close write-ahead log: %s", err)
 	}
-	n.Net.Stop()
+	m.Net.Stop()
+	close(m.stopChan)
 }

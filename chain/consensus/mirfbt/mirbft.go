@@ -1,4 +1,4 @@
-// Package mirbft implements integration with MirBFT library,
+// Package mirbft implements integration with Mir library,
 // available at https://github.com/hyperledger-labs/mirbft.
 package mirbft
 
@@ -40,10 +40,10 @@ const (
 
 var (
 	log                     = logging.Logger("mir-consensus")
-	_   consensus.Consensus = &MirBFT{}
+	_   consensus.Consensus = &Mir{}
 )
 
-type MirBFT struct {
+type Mir struct {
 	store    *store.ChainStore
 	beacon   beacon.Schedule
 	sm       *stmgr.StateManager
@@ -53,7 +53,7 @@ type MirBFT struct {
 	netName  address.SubnetID
 	resolver *resolver.Resolver
 
-	mir *mir
+	mirAgent *MirAgent
 }
 
 func NewConsensus(
@@ -67,16 +67,9 @@ func NewConsensus(
 	netName dtypes.NetworkName,
 ) (consensus.Consensus, error) {
 	subnetID := address.SubnetID(netName)
-	log.Debugf("New MirBFT consensus for %s subnet", subnetID)
+	log.Debugf("New Mir consensus for %s subnet", subnetID)
 
-	m, err := newMir(uint64(0))
-	if err != nil {
-		return nil, err
-	}
-
-	go m.serve(ctx)
-
-	return &MirBFT{
+	return &Mir{
 		store:    sm.ChainStore(),
 		beacon:   b,
 		sm:       sm,
@@ -85,11 +78,10 @@ func NewConsensus(
 		subMgr:   submgr,
 		netName:  subnetID,
 		resolver: r,
-		mir:      m,
 	}, nil
 }
 
-func (bft *MirBFT) ValidateBlock(ctx context.Context, b *types.FullBlock) (err error) {
+func (bft *Mir) ValidateBlock(ctx context.Context, b *types.FullBlock) (err error) {
 	log.Infof("starting block validation process at @%d", b.Header.Height)
 
 	if err := common.BlockSanityChecks(hierarchical.MirBFT, b.Header); err != nil {
@@ -174,7 +166,7 @@ func (bft *MirBFT) ValidateBlock(ctx context.Context, b *types.FullBlock) (err e
 	return nil
 }
 
-func (bft *MirBFT) ValidateBlockPubsub(ctx context.Context, self bool, msg *pubsub.Message) (pubsub.ValidationResult, string) {
+func (bft *Mir) ValidateBlockPubsub(ctx context.Context, self bool, msg *pubsub.Message) (pubsub.ValidationResult, string) {
 	if self {
 		return common.ValidateLocalBlock(ctx, msg)
 	}
@@ -213,7 +205,7 @@ func (bft *MirBFT) ValidateBlockPubsub(ctx context.Context, self bool, msg *pubs
 	return pubsub.ValidationAccept, ""
 }
 
-func (bft *MirBFT) minerIsValid(maddr address.Address) error {
+func (bft *Mir) minerIsValid(maddr address.Address) error {
 	switch maddr.Protocol() {
 	case address.BLS:
 		fallthrough
@@ -227,7 +219,7 @@ func (bft *MirBFT) minerIsValid(maddr address.Address) error {
 // IsEpochBeyondCurrMax is used in Filcns to detect delayed blocks.
 // We are currently using defaults here and not worrying about it.
 // We will consider potential changes of Consensus interface in https://github.com/filecoin-project/eudico/issues/143.
-func (bft *MirBFT) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
+func (bft *Mir) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
 	if bft.genesis == nil {
 		return false
 	}
@@ -236,7 +228,7 @@ func (bft *MirBFT) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
 	return epoch > (abi.ChainEpoch((now-bft.genesis.MinTimestamp())/build.BlockDelaySecs) + MaxHeightDrift)
 }
 
-func (bft *MirBFT) Type() hierarchical.ConsensusType {
+func (bft *Mir) Type() hierarchical.ConsensusType {
 	return hierarchical.MirBFT
 }
 
