@@ -90,7 +90,7 @@ func newMir(id uint64) (*mir, error) {
 	return &n, nil
 }
 
-func (n *mir) serve(ctx context.Context) error {
+func (n *mir) serve(ctx context.Context) {
 	log.Info("MirBFT node serving started")
 	defer log.Info("MirBFT node serving stopped")
 
@@ -117,8 +117,6 @@ func (n *mir) serve(ctx context.Context) error {
 			nodeCancel()
 		}
 	}()
-
-	return nil
 }
 
 func (n *mir) stop() {
