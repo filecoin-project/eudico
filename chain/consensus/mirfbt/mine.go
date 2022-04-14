@@ -44,6 +44,8 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			}
 			log.Debugf("[subnet: %s, epoch: %d] retrieved %d msgs", subnetID, base.Height()+1, len(msgs))
 
+			// TODO: Here several cross-messages may have the same nonce (as we discussed for Tendermint).
+			// This may be an issue for MirBFT (from our previous discussions). Just to have it in mind.
 			crossMsgs, err := api.GetCrossMsgsPool(ctx, subnetID, base.Height()+1)
 			if err != nil {
 				log.Errorw("unable to select cross-messages from mempool", "error", err)
@@ -102,6 +104,14 @@ func (bft *MirBFT) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.Bloc
 		reqNo := mirbft.ReqNo(msg.Message.Nonce)
 		tx := common.NewSignedMessageBytes(msgBytes, nil)
 
+		// TODO: define what client ID is in Eudico case.
+		// Probably, client ID is a peer ID. In this case MirBFT's client ID interface and type should be changed.
+		//
+		// nodeID, err := api.ID(ctx)
+		//	if err != nil {
+		//		log.Fatalf("unable to get a node ID: %s", err)
+		//	}
+		//	nodeIDBytes := blake3.Sum256([]byte(nodeID.String()))
 		err = bft.mir.Node.SubmitRequest(ctx, mirbft.ClientID(0), reqNo, tx, nil)
 		if err != nil {
 			log.Error("unable to submit a message to MirBFT:", err)
@@ -130,9 +140,8 @@ func (bft *MirBFT) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.Bloc
 
 	}
 
-	// TODO: temporal delay to be able run tests.
-	// Throughput in the basic setting is so high that MirBFT and all other slow consensus are not in sync within subnet.
-	time.Sleep(500 * time.Millisecond)
+	// TODO: this approach to get messages works only for one node.
+	// For general case we should have a mechanism that allows to all nodes get the same messages from the application.
 	block := bft.mir.App.Block()
 
 	var msgs []*types.SignedMessage

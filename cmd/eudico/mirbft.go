@@ -16,7 +16,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
-	"github.com/filecoin-project/lotus/chain/consensus/mirfbt"
+	mirbft "github.com/filecoin-project/lotus/chain/consensus/mirfbt"
 	"github.com/filecoin-project/lotus/chain/gen/genesis"
 	"github.com/filecoin-project/lotus/chain/gen/slashfilter"
 	"github.com/filecoin-project/lotus/chain/stmgr"

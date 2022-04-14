@@ -23,15 +23,17 @@ const (
 	nodeBasePort = 10000
 )
 
+// TODO: Suggestion: Figure out how to make this a general interface where we can hook libp2p instead of making it grpc specific.
 type mir struct {
-	Node  *mirbft.Node
-	OwnID t.NodeID
-	Wal   *simplewal.WAL
-	Net   *grpctransport.GrpcTransport
-	App   *Application
+	Node *mirbft.Node
+	Wal  *simplewal.WAL
+	Net  *grpctransport.GrpcTransport
+	App  *Application
 }
 
 func newMir(id uint64) (*mir, error) {
+	// TODO: Are client ID and node ID the same in this case?
+	// TODO: Should mirbft use a different type for node ID?
 	ownID := t.NodeID(id)
 	nodeIds := []t.NodeID{ownID}
 
@@ -80,11 +82,10 @@ func newMir(id uint64) (*mir, error) {
 	}
 
 	n := mir{
-		Node:  node,
-		OwnID: ownID,
-		Wal:   wal,
-		Net:   net,
-		App:   app,
+		Node: node,
+		Wal:  wal,
+		Net:  net,
+		App:  app,
 	}
 
 	return &n, nil

@@ -1,4 +1,4 @@
-//stm: #integration
+// stm: #integration
 package itests
 
 import (
@@ -24,6 +24,7 @@ import (
 
 func TestEudicoSubnet(t *testing.T) {
 	// Filecoin consensus in root
+
 	t.Run("/root/filcns-/subnet/delegated", func(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootFilcns(), kit.SubnetDelegated())
 	})
@@ -242,7 +243,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	t.Logf("[*] the message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
 
 	t1 = time.Now()
-	bl, err := kit.WaitSubnetActorBalance(ctx, subnetAddr, addr, injectedFils, 100, full)
+	bl, err := kit.WaitSubnetActorBalance(ctx, subnetAddr, addr, injectedFils, full)
 	require.NoError(t, err)
 	t.Logf(" [*] Sent funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
 
@@ -268,7 +269,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	t.Logf("[*] The release message was found in %d epoch of subnet", c.Height)
 
 	t1 = time.Now()
-	bl, err = kit.WaitSubnetActorBalance(ctx, parent, newAddr, big.Add(sentFils, releasedFils), 100, full)
+	bl, err = kit.WaitSubnetActorBalance(ctx, parent, newAddr, big.Add(sentFils, releasedFils), full)
 	require.NoError(t, err)
 	t.Logf("[*] Released funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
 
