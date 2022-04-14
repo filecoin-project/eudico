@@ -490,7 +490,12 @@ func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *ty
 			c.tweakedValue = hashTweakedValue(pubkey, merkleRoot)
 			c.pubkey = pubkeyShort
 			c.newTaprootConfig = nil
-			c.participants = newSt.Miners // we add ourselves to the list of participants
+			//c.participants = newSt.Miners // we add ourselves to the list of participants
+			// even the participants who did not do the checkpoint need to update their participant list
+			if len(c.newParticipants)>0 {
+				c.participants = c.newParticipants
+				c.newParticipants = make([]string,0)
+			}
 			c.newDKGComplete = false
 			//c.newKey =
 
@@ -557,11 +562,6 @@ func (c *CheckpointingSub) triggerChange(ctx context.Context, diff *diffInfo) (m
 				}
 				break
 			}
-		}
-		// even the participants who did not do the checkpoint need to update their participant list
-		if len(c.newParticipants)>0 {
-			c.participants = c.newParticipants
-			c.newParticipants = make([]string,0)
 		}
 		
 	}
