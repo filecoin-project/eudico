@@ -69,14 +69,14 @@ func StartTendermintContainer() (*Container, error) {
 
 // StopContainer stops and removes the specified container.
 func StopContainer(id string) error {
-	fmt.Printf("Stopping container %s ...\n", id)
+	fmt.Printf("Stopping and removing container %s ...\n", id)
 
 	if err := exec.Command("docker", "stop", id).Run(); err != nil {
 		return fmt.Errorf("could not stop container: %w", err)
 	}
 	fmt.Println("Stopped:", id)
 
-	if err := exec.Command("docker", "rm", id, "-v").Run(); err != nil {
+	if err := exec.Command("docker", "rm", "--force", id, "-v").Run(); err != nil {
 		return fmt.Errorf("could not remove container: %w", err)
 	}
 	fmt.Println("Removed:", id)

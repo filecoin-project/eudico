@@ -328,7 +328,6 @@ func NetworkName(mctx helpers.MetricsCtx, lc fx.Lifecycle, cs *store.ChainStore,
 
 // Stop stop ensemble mechanisms.
 func (n *EudicoEnsemble) Stop() error {
-	n.t.Log(">>>>> stop Eudico ensemble")
 	if n.options.subnetConsensus == hierarchical.Tendermint ||
 		n.options.rootConsensus == hierarchical.Tendermint {
 		return n.stopTendermint()

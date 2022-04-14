@@ -32,15 +32,15 @@ func TestEudicoConsensus(t *testing.T) {
 		runDelegatedConsensusTests(t, kit.ThroughRPC(), kit.RootDelegated())
 	})
 
+	t.Run("filcns", func(t *testing.T) {
+		runFilcnsConsensusTests(t, kit.ThroughRPC(), kit.RootFilcns())
+	})
+
 	if os.Getenv("TENDERMINT_ITESTS") != "" {
 		t.Run("tendermint", func(t *testing.T) {
 			runTendermintConsensusTests(t, kit.ThroughRPC(), kit.RootTendermint())
 		})
 	}
-
-	t.Run("filcns", func(t *testing.T) {
-		runFilcnsConsensusTests(t, kit.ThroughRPC(), kit.RootFilcns())
-	})
 }
 
 type eudicoConsensusSuite struct {
