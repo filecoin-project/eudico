@@ -45,7 +45,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 
 		select {
 		case merr := <-mirErrors:
-			return xerrors.Errorf("Mir node error:", merr)
+			return xerrors.Errorf("Mir node error: %w", merr)
 		case <-ctx.Done():
 			log.Debug("Mir miner %s: context closed")
 			return nil
