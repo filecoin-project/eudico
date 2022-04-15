@@ -52,8 +52,6 @@ type Mir struct {
 	subMgr   subnet.SubnetMgr
 	netName  address.SubnetID
 	resolver *resolver.Resolver
-
-	mirAgent *MirAgent
 }
 
 func NewConsensus(
@@ -67,7 +65,7 @@ func NewConsensus(
 	netName dtypes.NetworkName,
 ) (consensus.Consensus, error) {
 	subnetID := address.SubnetID(netName)
-	log.Debugf("New Mir consensus for %s subnet", subnetID)
+	log.Infof("New Mir consensus for %s subnet", subnetID)
 
 	return &Mir{
 		store:    sm.ChainStore(),

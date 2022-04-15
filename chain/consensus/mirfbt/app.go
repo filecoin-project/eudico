@@ -12,20 +12,22 @@ type Tx []byte
 type Application struct {
 	mu sync.Mutex
 
-	cache    []Tx
 	reqStore modules.RequestStore
 	height   int64
+
+	ChainNotify chan []Tx
 }
 
 func NewApplication(reqStore modules.RequestStore) *Application {
 	app := Application{
-		cache:    nil,
-		reqStore: reqStore,
-		height:   0,
+		reqStore:    reqStore,
+		height:      0,
+		ChainNotify: make(chan []Tx),
 	}
 	return &app
 }
 
+/*
 func (app *Application) Block() []Tx {
 	app.mu.Lock()
 	defer app.mu.Unlock()
@@ -38,17 +40,24 @@ func (app *Application) Block() []Tx {
 	return block
 }
 
+*/
+
 func (app *Application) Apply(batch *requestpb.Batch) error {
 	app.mu.Lock()
 	defer app.mu.Unlock()
+
+	var block []Tx
 
 	for _, reqRef := range batch.Requests {
 		msg, err := app.reqStore.GetRequest(reqRef)
 		if err != nil {
 			return err
 		}
-		app.cache = append(app.cache, msg)
+		block = append(block, msg)
 	}
+
+	app.ChainNotify <- block
+	app.height++
 
 	return nil
 }

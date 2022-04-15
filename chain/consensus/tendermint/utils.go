@@ -56,8 +56,11 @@ func getMessageMapFromTendermintBlock(tb *tmtypes.Block) (map[cid.Cid]bool, erro
 			return nil, err
 		}
 		switch m := msg.(type) {
-		case *types.Message:
-			msgs[m.Cid()] = true
+		case *types.UnverifiedCrossMsg:
+			// Here we must use encapsulated Messsage instead of full message
+			// because cross-messages in Filecoin blocks are untyped:
+			// they don't have top-down or bottom-up information.
+			msgs[m.Msg.Cid()] = true
 		case *types.SignedMessage:
 			msgs[m.Cid()] = true
 		default:
@@ -82,7 +85,7 @@ func parseTx(tx []byte) (interface{}, uint32, error) {
 	case common.SignedMessageType:
 		msg, err = types.DecodeSignedMessage(tx[:ln-1-32])
 	case common.CrossMessageType:
-		msg, err = types.DecodeMessage(tx[:ln-1-32])
+		msg, err = types.DecodeUnverifiedCrossMessage(tx[:ln-1-32])
 	case common.RegistrationMessageType:
 		msg, err = DecodeRegistrationMessageRequest(tx[:ln-1])
 	default:

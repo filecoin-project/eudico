@@ -102,13 +102,13 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			}
 			log.Debugf("[subnet: %s, epoch: %d] retrieved %d crossmsgs", subnetID, base.Height()+1, len(crossMsgs))
 
-			for _, w := range crossMsgs {
-				id := w.Cid().String()
+			for _, msg := range crossMsgs {
+				id := msg.Cid().String()
 
 				log.Debugf("[subnet: %s, epoch: %d] >>>>> cross msg to send: %s", id, subnetID, base.Height()+1)
 
 				if cache.shouldSendMessage(id) {
-					msgBytes, err := w.Msg.Serialize()
+					msgBytes, err := msg.Serialize()
 					if err != nil {
 						log.Error("unable to serialize message:", err)
 						continue
@@ -196,6 +196,7 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 	}
 
 	msgs, crossMsgs := tm.getEudicoMessagesFromTendermintBlock(next.Block)
+
 	bt.Messages = msgs
 	bt.CrossMessages = crossMsgs
 	bt.Timestamp = uint64(next.Block.Time.Unix())

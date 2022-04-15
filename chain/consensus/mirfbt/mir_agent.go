@@ -16,12 +16,36 @@ import (
 	"github.com/hyperledger-labs/mirbft/pkg/reqstore"
 	"github.com/hyperledger-labs/mirbft/pkg/simplewal"
 	t "github.com/hyperledger-labs/mirbft/pkg/types"
+	logging "github.com/ipfs/go-log/v2"
 	"golang.org/x/xerrors"
 )
 
 const (
 	nodeBasePort = 10000
 )
+
+type mirLogger struct {
+	logger *logging.ZapEventLogger
+}
+
+func newMirLogger(logger *logging.ZapEventLogger) *mirLogger {
+	return &mirLogger{
+		logger: logger,
+	}
+}
+
+func (m *mirLogger) Log(level mirLogging.LogLevel, text string, args ...interface{}) {
+	switch level {
+	case mirLogging.LevelError:
+		m.logger.Errorf(text, args)
+	case mirLogging.LevelInfo:
+		m.logger.Infof(text, args)
+	case mirLogging.LevelWarn:
+		m.logger.Warnf(text, args)
+	case mirLogging.LevelDebug:
+		m.logger.Debugf(text, args)
+	}
+}
 
 // MirAgent manages and provides direct access to a Mir node abstraction participating in consensus.
 type MirAgent struct {
@@ -65,21 +89,27 @@ func NewMirAgent(id uint64) (*MirAgent, error) {
 
 	// Instantiate the ISS protocol module with default configuration.
 	issConfig := iss.DefaultConfig(nodeIds)
-	issProtocol, err := iss.New(ownID, issConfig, mirLogging.NilLogger)
+	issProtocol, err := iss.New(ownID, issConfig, newMirLogger(log))
 	if err != nil {
 		return nil, xerrors.Errorf("could not instantiate ISS protocol module: %w", err)
 	}
 
 	app := NewApplication(reqStore)
 
-	node, err := mirbft.NewNode(ownID, &mirbft.NodeConfig{Logger: mirLogging.NilLogger}, &modules.Modules{
-		Net:          net,
-		WAL:          wal,
-		RequestStore: reqStore,
-		Protocol:     issProtocol,
-		App:          app,
-		Crypto:       &mirCrypto.DummyCrypto{DummySig: []byte{0}},
-	})
+	// TODO: write a wrapper on Eudico logger to use it in Mir.
+	node, err := mirbft.NewNode(
+		ownID,
+		&mirbft.NodeConfig{
+			Logger: newMirLogger(log),
+		},
+		&modules.Modules{
+			Net:          net,
+			WAL:          wal,
+			RequestStore: reqStore,
+			Protocol:     issProtocol,
+			App:          app,
+			Crypto:       &mirCrypto.DummyCrypto{DummySig: []byte{0}},
+		})
 	if err != nil {
 		return nil, err
 	}
