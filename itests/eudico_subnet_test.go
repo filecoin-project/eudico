@@ -22,13 +22,6 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
-func TestEudicoSubnet1(t *testing.T) {
-
-	t.Run("/root/filcns-/subnet/delegated", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetMir())
-	})
-}
-
 func TestEudicoSubnet(t *testing.T) {
 	// Sanity test with ideal consensus.
 	t.Run("/root/filcns-/subnet/delegated", func(t *testing.T) {
