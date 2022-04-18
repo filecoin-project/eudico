@@ -54,7 +54,7 @@ type eudicoConsensusSuite struct {
 func runIdealConsensusTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoConsensusSuite{opts: opts}
 
-	t.Run("testIdealConsensusMining", ts.testIdealMining)
+	t.Run("testIdealMining", ts.testIdealMining)
 }
 
 func (ts *eudicoConsensusSuite) testIdealMining(t *testing.T) {
@@ -81,7 +81,7 @@ func (ts *eudicoConsensusSuite) testIdealMining(t *testing.T) {
 func runMirConsensusTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoConsensusSuite{opts: opts}
 
-	t.Run("testMirConsensusMining", ts.testMirMining)
+	t.Run("testMirMining", ts.testMirMining)
 }
 
 func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
@@ -108,7 +108,7 @@ func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
 func runTSPoWConsensusTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoConsensusSuite{opts: opts}
 
-	t.Run("testTSpoWConsensusMining", ts.testTSPoWMining)
+	t.Run("testTSpoWMining", ts.testTSPoWMining)
 }
 
 func (ts *eudicoConsensusSuite) testTSPoWMining(t *testing.T) {
@@ -134,7 +134,7 @@ func (ts *eudicoConsensusSuite) testTSPoWMining(t *testing.T) {
 
 func runDelegatedConsensusTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoConsensusSuite{opts: opts}
-	t.Run("testDelegatedConsensusMining", ts.testDelegatedMining)
+	t.Run("testDelegatedMining", ts.testDelegatedMining)
 }
 
 func (ts *eudicoConsensusSuite) testDelegatedMining(t *testing.T) {
@@ -187,7 +187,7 @@ func (ts *eudicoConsensusSuite) testDelegatedMining(t *testing.T) {
 
 func runTendermintConsensusTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoConsensusSuite{opts: opts}
-	t.Run("testTendermintConsensusMining", ts.testTendermintMining)
+	t.Run("testTendermintMining", ts.testTendermintMining)
 }
 
 func (ts *eudicoConsensusSuite) testTendermintMining(t *testing.T) {
@@ -243,7 +243,7 @@ func (ts *eudicoConsensusSuite) testTendermintMining(t *testing.T) {
 
 func runFilcnsConsensusTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoConsensusSuite{opts: opts}
-	t.Run("testFilcnsConsensusMining", ts.testFilcnsMining)
+	t.Run("testFilcnsMining", ts.testFilcnsMining)
 }
 
 func (ts *eudicoConsensusSuite) testFilcnsMining(t *testing.T) {
