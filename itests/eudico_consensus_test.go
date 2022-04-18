@@ -11,6 +11,7 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
+	"github.com/filecoin-project/lotus/chain/consensus/ideal"
 	"github.com/filecoin-project/lotus/chain/consensus/mir"
 	"github.com/filecoin-project/lotus/chain/consensus/tendermint"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
@@ -70,7 +71,7 @@ func (ts *eudicoConsensusSuite) testIdealMining(t *testing.T) {
 	}
 
 	go func() {
-		err = mir.Mine(ctx, l[0], full)
+		err = ideal.Mine(ctx, l[0], full)
 		require.NoError(t, err)
 	}()
 
