@@ -16,7 +16,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
-	mirbft "github.com/filecoin-project/lotus/chain/consensus/mirfbt"
+	"github.com/filecoin-project/lotus/chain/consensus/mir"
 	"github.com/filecoin-project/lotus/chain/gen/genesis"
 	"github.com/filecoin-project/lotus/chain/gen/slashfilter"
 	"github.com/filecoin-project/lotus/chain/stmgr"
@@ -28,9 +28,9 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
-func NewRootMirBFTConsensus(ctx context.Context, sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
+func NewRootMirConsensus(ctx context.Context, sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
 	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) (consensus.Consensus, error) {
-	return mirbft.NewConsensus(ctx, sm, nil, beacon, r, verifier, genesis, netName)
+	return mir.NewConsensus(ctx, sm, nil, beacon, r, verifier, genesis, netName)
 }
 
 var mirbftCmd = &cli.Command{
@@ -41,8 +41,8 @@ var mirbftCmd = &cli.Command{
 		mirbftMinerCmd,
 
 		daemonCmd(node.Options(
-			node.Override(new(consensus.Consensus), NewRootMirBFTConsensus),
-			node.Override(new(store.WeightFunc), mirbft.Weight),
+			node.Override(new(consensus.Consensus), NewRootMirConsensus),
+			node.Override(new(store.WeightFunc), mir.Weight),
 			node.Unset(new(*slashfilter.SlashFilter)),
 			node.Override(new(stmgr.Executor), common.RootTipSetExecutor),
 			node.Override(new(stmgr.UpgradeSchedule), common.DefaultUpgradeSchedule()),
@@ -64,7 +64,7 @@ var mirbftGenesisCmd = &cli.Command{
 		fName := cctx.Args().First()
 
 		// TODO: Make checkPeriod configurable
-		if err := subnet.CreateGenesisFile(cctx.Context, fName, hierarchical.MirBFT, address.Undef, sca.DefaultCheckpointPeriod); err != nil {
+		if err := subnet.CreateGenesisFile(cctx.Context, fName, hierarchical.Mir, address.Undef, sca.DefaultCheckpointPeriod); err != nil {
 			return xerrors.Errorf("creating genesis: %w", err)
 		}
 
@@ -110,6 +110,6 @@ var mirbftMinerCmd = &cli.Command{
 		}
 
 		log.Infow("Starting mining with miner", "miner", miner)
-		return mirbft.Mine(ctx, miner, api)
+		return mir.Mine(ctx, miner, api)
 	},
 }

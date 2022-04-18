@@ -22,7 +22,19 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
+func TestEudicoSubnet1(t *testing.T) {
+
+	t.Run("/root/filcns-/subnet/delegated", func(t *testing.T) {
+		runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetMir())
+	})
+}
+
 func TestEudicoSubnet(t *testing.T) {
+	// Sanity test with ideal consensus.
+	t.Run("/root/filcns-/subnet/delegated", func(t *testing.T) {
+		runSubnetTests(t, kit.ThroughRPC(), kit.RootIdeal(), kit.SubnetIdeal())
+	})
+
 	// Filecoin consensus in root
 
 	t.Run("/root/filcns-/subnet/delegated", func(t *testing.T) {
@@ -44,13 +56,13 @@ func TestEudicoSubnet(t *testing.T) {
 	}
 
 	if os.Getenv("FULL_ITESTS") != "" {
-		// MirBFT
+		// Mir in Root
 
-		t.Run("/root/mirbft-/subnet/delegated", func(t *testing.T) {
-			runSubnetTests(t, kit.ThroughRPC(), kit.RootMirBFT(), kit.SubnetDelegated())
+		t.Run("/root/mir-/subnet/delegated", func(t *testing.T) {
+			runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDelegated())
 		})
-		t.Run("/root/delegated-/subnet/mirbft", func(t *testing.T) {
-			runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetMirbft())
+		t.Run("/root/delegated-/subnet/mir", func(t *testing.T) {
+			runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetMir())
 		})
 
 		// PoW in Root

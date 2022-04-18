@@ -1,4 +1,4 @@
-//stm: #integration
+// stm: #integration
 package itests
 
 import (
@@ -11,7 +11,7 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
-	mirbft "github.com/filecoin-project/lotus/chain/consensus/mirfbt"
+	"github.com/filecoin-project/lotus/chain/consensus/mir"
 	"github.com/filecoin-project/lotus/chain/consensus/tendermint"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -20,8 +20,12 @@ import (
 )
 
 func TestEudicoConsensus(t *testing.T) {
-	t.Run("mirbft", func(t *testing.T) {
-		runMirBFTConsensusTests(t, kit.ThroughRPC(), kit.RootMirBFT())
+	t.Run("ideal", func(t *testing.T) {
+		runIdealConsensusTests(t, kit.ThroughRPC(), kit.RootIdeal())
+	})
+
+	t.Run("mir", func(t *testing.T) {
+		runMirConsensusTests(t, kit.ThroughRPC(), kit.RootMir())
 	})
 
 	t.Run("tspow", func(t *testing.T) {
@@ -47,13 +51,13 @@ type eudicoConsensusSuite struct {
 	opts []interface{}
 }
 
-func runMirBFTConsensusTests(t *testing.T, opts ...interface{}) {
+func runIdealConsensusTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoConsensusSuite{opts: opts}
 
-	t.Run("testMirBFTConsensusMining", ts.testMirBFTWMining)
+	t.Run("testIdealConsensusMining", ts.testIdealMining)
 }
 
-func (ts *eudicoConsensusSuite) testMirBFTWMining(t *testing.T) {
+func (ts *eudicoConsensusSuite) testIdealMining(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -66,7 +70,34 @@ func (ts *eudicoConsensusSuite) testMirBFTWMining(t *testing.T) {
 	}
 
 	go func() {
-		err = mirbft.Mine(ctx, l[0], full)
+		err = mir.Mine(ctx, l[0], full)
+		require.NoError(t, err)
+	}()
+
+	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 10, address.RootSubnet, full)
+	require.NoError(t, err)
+}
+
+func runMirConsensusTests(t *testing.T, opts ...interface{}) {
+	ts := eudicoConsensusSuite{opts: opts}
+
+	t.Run("testMirConsensusMining", ts.testMirMining)
+}
+
+func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	full, _ := kit.EudicoEnsembleFullNodeOnly(t, ts.opts...)
+
+	l, err := full.WalletList(ctx)
+	require.NoError(t, err)
+	if len(l) != 1 {
+		t.Fatal("wallet key list is empty")
+	}
+
+	go func() {
+		err = mir.Mine(ctx, l[0], full)
 		require.NoError(t, err)
 	}()
 

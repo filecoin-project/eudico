@@ -1,10 +1,10 @@
-package mirbft
+package mir
 
 import (
 	"context"
 	"time"
 
-	mirbft "github.com/hyperledger-labs/mirbft/pkg/types"
+	mir "github.com/hyperledger-labs/mirbft/pkg/types"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
@@ -18,6 +18,8 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	log.Info("Mir miner started")
 	defer log.Info("Mir miner stopped")
 
+	// TODO: Suppose we want to use Mir in Root and in a subnet at the same time.
+	// Do we need two mir agents for that?
 	mirAgent, err := NewMirAgent(uint64(0))
 	if err != nil {
 		return err
@@ -33,7 +35,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 
 	log.Infof("Mir miner params: network name - %s, subnet ID - %s", netName, subnetID)
 
-	submitting := time.NewTicker(3500 * time.Millisecond)
+	submitting := time.NewTicker(300 * time.Millisecond)
 	defer submitting.Stop()
 
 	for {
@@ -116,8 +118,6 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			}
 			log.Debugf("[subnet: %s, epoch: %d] retrieved %d msgs", subnetID, base.Height()+1, len(msgs))
 
-			// TODO: Here several cross-messages may have the same nonce (as we discussed for Tendermint).
-			// This may be an issue for Mir (from our previous discussions). Just to have it in mind.
 			crossMsgs, err := api.GetUnverifiedCrossMsgsPool(ctx, subnetID, base.Height()+1)
 			if err != nil {
 				log.Errorw("unable to select cross-messages from mempool", "error", err)
@@ -131,7 +131,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 					continue
 				}
 
-				reqNo := mirbft.ReqNo(msg.Message.Nonce)
+				reqNo := mir.ReqNo(msg.Message.Nonce)
 				tx := common.NewSignedMessageBytes(msgBytes, nil)
 
 				// TODO: define what client ID is in Eudico case.
@@ -146,7 +146,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 				// TODO: client ID should be wallet address
 				// 1) client ID = peer ID + wallet addr
 				// 2) client ID = wallet addr
-				err = mirAgent.Node.SubmitRequest(ctx, mirbft.ClientID(0), reqNo, tx, nil)
+				err = mirAgent.Node.SubmitRequest(ctx, mir.ClientID(0), reqNo, tx, nil)
 				if err != nil {
 					log.Error("unable to submit a message to Mir:", err)
 					continue
@@ -162,9 +162,9 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 				}
 
 				tx := common.NewCrossMessageBytes(msgBytes, nil)
-				reqNo := mirbft.ReqNo(msg.Msg.Nonce)
+				reqNo := mir.ReqNo(msg.Msg.Nonce)
 
-				err = mirAgent.Node.SubmitRequest(ctx, mirbft.ClientID(0), reqNo, tx, []byte{})
+				err = mirAgent.Node.SubmitRequest(ctx, mir.ClientID(0), reqNo, tx, []byte{})
 				if err != nil {
 					log.Error("unable to submit a message to Mir:", err)
 					continue

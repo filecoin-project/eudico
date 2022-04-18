@@ -1,4 +1,4 @@
-package mirbft
+package mir
 
 import (
 	"golang.org/x/xerrors"

@@ -18,8 +18,9 @@ const (
 	Delegated ConsensusType = iota
 	PoW
 	Tendermint
-	MirBFT
+	Mir
 	FilecoinEC
+	Ideal
 )
 
 // ConsensusName returns the consensus algorithm name.
@@ -33,6 +34,10 @@ func ConsensusName(alg ConsensusType) string {
 		return "Tendermint"
 	case FilecoinEC:
 		return "FilecoinEC"
+	case Mir:
+		return "Mir"
+	case Ideal:
+		return "Ideal"
 	default:
 		return "unknown"
 	}

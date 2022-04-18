@@ -1,4 +1,4 @@
-package mirbft
+package mir
 
 import (
 	"sync"

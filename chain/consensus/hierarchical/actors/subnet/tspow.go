@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 
-	address "github.com/filecoin-project/go-address"
+	"github.com/ipfs/go-cid"
+	cbor "github.com/ipfs/go-ipld-cbor"
+	"golang.org/x/xerrors"
+
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	adt0 "github.com/filecoin-project/specs-actors/actors/util/adt"
-	cid "github.com/ipfs/go-cid"
-	cbor "github.com/ipfs/go-ipld-cbor"
-	xerrors "golang.org/x/xerrors"
 
 	bstore "github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
@@ -33,7 +34,7 @@ func makePoWGenesisBlock(ctx context.Context, bs bstore.Blockstore, template gen
 	}
 
 	// temp chainstore
-	//cs := store.NewChainStore(bs, bs, datastore.NewMapDatastore(), j)
+	// cs := store.NewChainStore(bs, bs, datastore.NewMapDatastore(), j)
 
 	/*	// Verify PreSealed Data
 		stateroot, err = VerifyPreSealedData(ctx, cs, sys, stateroot, template, keyIDs, template.NetworkVersion)

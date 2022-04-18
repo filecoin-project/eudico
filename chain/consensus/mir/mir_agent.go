@@ -1,4 +1,4 @@
-package mirbft
+package mir
 
 import (
 	"context"
@@ -23,6 +23,9 @@ import (
 const (
 	nodeBasePort = 10000
 )
+
+// agentLog is a logger accessed by Mir.
+var agentLog = logging.Logger("mir-agent")
 
 type mirLogger struct {
 	logger *logging.ZapEventLogger
@@ -89,7 +92,7 @@ func NewMirAgent(id uint64) (*MirAgent, error) {
 
 	// Instantiate the ISS protocol module with default configuration.
 	issConfig := iss.DefaultConfig(nodeIds)
-	issProtocol, err := iss.New(ownID, issConfig, newMirLogger(log))
+	issProtocol, err := iss.New(ownID, issConfig, newMirLogger(agentLog))
 	if err != nil {
 		return nil, xerrors.Errorf("could not instantiate ISS protocol module: %w", err)
 	}
@@ -100,7 +103,7 @@ func NewMirAgent(id uint64) (*MirAgent, error) {
 	node, err := mirbft.NewNode(
 		ownID,
 		&mirbft.NodeConfig{
-			Logger: newMirLogger(log),
+			Logger: newMirLogger(agentLog),
 		},
 		&modules.Modules{
 			Net:          net,

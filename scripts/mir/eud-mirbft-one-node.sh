@@ -4,7 +4,7 @@ NODE_0_PATH="$HOME/.eudico-node0"
 NODE_0_DAEMON_LOG="./eudico_daemon_0.log"
 NODE_0_MINER_LOG="./eudico_miner_0.log"
 
-LOG_LEVEL="info,mir-consensus=debug"
+LOG_LEVEL="info,mir-consensus=debug,mir-agent=debug"
 
 rm -rf ./eudico
 make eudico
