@@ -24,7 +24,7 @@ import (
 
 func TestEudicoSubnet(t *testing.T) {
 	// Sanity test with ideal consensus.
-	t.Run("/root/filcns-/subnet/delegated", func(t *testing.T) {
+	t.Run("/root/ideal-/subnet/ideal", func(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootIdeal(), kit.SubnetIdeal())
 	})
 
