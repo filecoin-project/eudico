@@ -32,7 +32,7 @@ import (
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/filecoin-project/lotus/chain/consensus/actors/reward"
 	param "github.com/filecoin-project/lotus/chain/consensus/common/params"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	consensus "github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/gen"
 	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
@@ -49,7 +49,7 @@ const (
 
 func makeGenesisBlock(
 	ctx context.Context,
-	cns hierarchical.ConsensusType,
+	cns consensus.ConsensusType,
 	bs bstore.Blockstore,
 	t genesis.Template,
 	e abi.ChainEpoch,
@@ -88,12 +88,12 @@ func makeGenesisBlock(
 
 	var proof []byte
 	switch cns {
-	case hierarchical.PoW:
+	case consensus.PoW:
 		proof, err = param.GenesisWorkTarget.Bytes()
 		if err != nil {
 			return nil, err
 		}
-	case hierarchical.Delegated:
+	case consensus.Delegated:
 		// TODO: We can't use randomness in genesis block
 		// if want to make it deterministic. Consider using
 		// a seed to for the ticket generation?
@@ -174,7 +174,7 @@ func makeTemplate(
 func CreateGenesisFile(
 	ctx context.Context,
 	fileName string,
-	consensus hierarchical.ConsensusType,
+	cns consensus.ConsensusType,
 	addr address.Address,
 	checkPeriod abi.ChainEpoch,
 ) error {
@@ -200,7 +200,7 @@ func CreateGenesisFile(
 
 	t := uint64(time.Now().Unix())
 
-	if err := WriteGenesis(address.RootSubnet, consensus, addr, vreg, rem, checkPeriod, t, f); err != nil {
+	if err := WriteGenesis(address.RootSubnet, cns, addr, vreg, rem, checkPeriod, t, f); err != nil {
 		return xerrors.Errorf("write genesis car: %w", err)
 	}
 
@@ -213,7 +213,7 @@ func CreateGenesisFile(
 
 func WriteGenesis(
 	netName address.SubnetID,
-	consensus hierarchical.ConsensusType,
+	cns consensus.ConsensusType,
 	miner, vreg, rem address.Address,
 	checkPeriod abi.ChainEpoch,
 	seq uint64, w io.Writer,
@@ -222,8 +222,8 @@ func WriteGenesis(
 
 	var b *genesis2.GenesisBootstrap
 	ctx := context.TODO()
-	switch consensus {
-	case hierarchical.Delegated:
+	switch cns {
+	case consensus.Delegated:
 		if miner == address.Undef {
 			return xerrors.Errorf("no miner specified for delegated consensus")
 		}
@@ -236,27 +236,27 @@ func WriteGenesis(
 		if err != nil {
 			return err
 		}
-		b, err = makeGenesisBlock(ctx, consensus, bs, *t, checkPeriod)
+		b, err = makeGenesisBlock(ctx, cns, bs, *t, checkPeriod)
 		if err != nil {
-			return xerrors.Errorf("failed make a genesis block for : %w", hierarchical.ConsensusName(consensus), err)
+			return xerrors.Errorf("failed make genesis block for %s: %w", consensus.ConsensusName(cns), err)
 		}
-	case hierarchical.PoW, hierarchical.Tendermint, hierarchical.Mir, hierarchical.Ideal:
+	case consensus.PoW, consensus.Tendermint, consensus.Mir, consensus.Ideal:
 		t, err := makeTemplate(netName.String(), vreg, rem, seq, types.FromFil(2), nil)
 		if err != nil {
 			return err
 		}
-		b, err = makeGenesisBlock(ctx, consensus, bs, *t, checkPeriod)
+		b, err = makeGenesisBlock(ctx, cns, bs, *t, checkPeriod)
 		if err != nil {
-			return xerrors.Errorf("failed make a genesis block for : %w", hierarchical.ConsensusName(consensus), err)
+			return xerrors.Errorf("failed make genesis block for %s: %w", consensus.ConsensusName(cns), err)
 		}
 	default:
-		return xerrors.Errorf("consensus type not supported. Not writing genesis")
+		return xerrors.Errorf("consensus not supported")
 
 	}
 	e := offline.Exchange(bs)
-	dserv := merkledag.NewDAGService(blockservice.New(bs, e))
+	ds := merkledag.NewDAGService(blockservice.New(bs, e))
 
-	if err := car.WriteCarWithWalker(ctx, dserv, []cid.Cid{b.Genesis.Cid()}, w, gen.CarWalkFunc); err != nil {
+	if err := car.WriteCarWithWalker(ctx, ds, []cid.Cid{b.Genesis.Cid()}, w, gen.CarWalkFunc); err != nil {
 		return xerrors.Errorf("write genesis car: %w", err)
 	}
 	return nil
@@ -328,7 +328,7 @@ func MakeInitialStateTree(
 	if err != nil {
 		return nil, nil, err
 	}
-	err = stateTree.SetActor(hierarchical.SubnetCoordActorAddr, scaact)
+	err = stateTree.SetActor(consensus.SubnetCoordActorAddr, scaact)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("set SCA actor: %w", err)
 	}
