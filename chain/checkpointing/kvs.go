@@ -169,7 +169,15 @@ func (r *Resolver) HandleMsgs(ctx context.Context) error {
 	log.Infof("subscribing to content resolver topic pikachu")
 
 	// Subscribe to subnet resolver topic.
-	msgSub, err := r.pubsub.Subscribe("pikachu") //nolint
+	topic, err := r.pubsub.Join("pikachu")
+	if err != nil {
+		return err
+	}
+	// msgSub, err := r.pubsub.Subscribe("pikachu") //nolint
+	// if err != nil {
+	// 	return err
+	// }
+	msgSub, err := topic.Subscribe(pubsub.WithBufferSize(2000))
 	if err != nil {
 		return err
 	}
