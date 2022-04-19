@@ -61,7 +61,7 @@ const initialValueInWallet = 50
 var sendall = false
 
 // this variable is the number of blocks (in eudico) we want between each checkpoints
-const checkpointFrequency = 50
+const checkpointFrequency = 10
 
 //change to true if regtest is used
 const Regtest = true
@@ -467,7 +467,7 @@ func (c *CheckpointingSub) matchNewConfig(ctx context.Context, oldTs, newTs *typ
 func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *types.TipSet, oldSt, newSt mpower.State, diff *diffInfo) (bool, error) {
 	// we are checking that the list of mocked actor is not empty before starting the checkpoint
 	
-	if newTs.Height()%checkpointFrequency == 0 && len(oldSt.Miners) > 0 && (c.taprootConfig != nil || c.newTaprootConfig != nil) && len(newSt.PublicKey)>0 {
+	if c.newDKGComplete && newTs.Height()%checkpointFrequency == 0 && len(oldSt.Miners) > 0 && (c.taprootConfig != nil || c.newTaprootConfig != nil) && len(newSt.PublicKey)>0 {
 		log.Infow("New checkpoint to start")
 		cp := oldTs.Key().Bytes() // this is the checkpoint
 		diff.cp = cp
@@ -550,6 +550,7 @@ func (c *CheckpointingSub) triggerChange(ctx context.Context, diff *diffInfo) (m
 
 	// trigger the new checkpoint
 	if diff.cp != nil && diff.hash != nil {
+	//if len(diff.newPublicKey)>0 {
 		// the checkpoint is created by the "previous" set of miners
 		// so that the new key is updated
 		fmt.Println("Checkpoint participants: ", c.participants)
@@ -563,7 +564,7 @@ func (c *CheckpointingSub) triggerChange(ctx context.Context, diff *diffInfo) (m
 				break
 			}
 		}
-		
+		c.newDKGComplete = false
 	}
 	return true, nil
 }
