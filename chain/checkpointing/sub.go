@@ -321,7 +321,7 @@ func (c *CheckpointingSub) listenCheckpointEvents(ctx context.Context) {
 				//first we fetch the checkpoint from the KVS using the cid found from bitcoin
 				cid := c.lastCid
 				fmt.Println("try pull with cid: ", cid)
-				ctx1, _ := context.WithTimeout(ctx, 30 * time.Second)
+				ctx1, _ := context.WithTimeout(ctx, 1000 * time.Second)
 				out := c.r.WaitCheckpointResolved(ctx1, cid)
 				select {
 					case <-ctx1.Done():
@@ -848,6 +848,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		// we replace the previous config with this config
 		// Note: if someone left the protocol, they will not do this so this is not great
 		if c.newTaprootConfig != nil {
+			fmt.Println("Changed my config")
 			c.taprootConfig = c.newTaprootConfig
 			c.newTaprootConfig = nil
 		}
