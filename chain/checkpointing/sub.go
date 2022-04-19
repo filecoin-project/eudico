@@ -585,7 +585,7 @@ func (c *CheckpointingSub) Start(ctx context.Context) error {
 	// INCREASE THE BUFFER SIZE BECAUSE IT IS ONLY 32 ! AND IT IS DROPPING MESSAGES WHEN FULL
 	// https://github.com/libp2p/go-libp2p-pubsub/blob/v0.5.4/pubsub.go#L1222
 	// NOTE: 1000 has been choosen arbitraly there is no reason for this number besides it just works.
-	sub, err := topic.Subscribe(pubsub.WithBufferSize(3000))
+	sub, err := topic.Subscribe(pubsub.WithBufferSize(10000))
 	if err != nil {
 		return err
 	}
