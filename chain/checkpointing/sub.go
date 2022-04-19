@@ -648,7 +648,7 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	if !ok {
 		return xerrors.Errorf("state change propagated is the wrong type")
 	}
-	c.newDKGComplete = true
+	//c.newDKGComplete = true
 	c.newKey = []byte(c.newTaprootConfig.PublicKey)
 	c.newParticipants = make([]string,0)
 	// we remove the misbehaving participants from the new set of signers
