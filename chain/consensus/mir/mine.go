@@ -125,7 +125,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 				// TODO: client ID should be wallet address
 				// 1) client ID = peer ID + wallet addr
 				// 2) client ID = wallet addr
-				
+
 				err = mirAgent.Node.SubmitRequest(ctx, mirTypes.ClientID(0), reqNo, tx, nil)
 				if err != nil {
 					log.Error("unable to submit a message to Mir:", err)
