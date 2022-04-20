@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Gurpartap/async"
 	"github.com/hashicorp/go-multierror"
@@ -36,6 +37,7 @@ import (
 
 const (
 	MaxHeightDrift = 5
+	SubmitInterval = 300 * time.Millisecond
 )
 
 var (

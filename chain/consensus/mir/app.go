@@ -1,8 +1,6 @@
 package mir
 
 import (
-	"sync"
-
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 )
@@ -10,42 +8,19 @@ import (
 type Tx []byte
 
 type Application struct {
-	mu sync.Mutex
-
-	reqStore modules.RequestStore
-	height   int64
-
+	reqStore    modules.RequestStore
 	ChainNotify chan []Tx
 }
 
 func NewApplication(reqStore modules.RequestStore) *Application {
 	app := Application{
 		reqStore:    reqStore,
-		height:      0,
 		ChainNotify: make(chan []Tx),
 	}
 	return &app
 }
 
-/*
-func (app *Application) Block() []Tx {
-	app.mu.Lock()
-	defer app.mu.Unlock()
-
-	block := make([]Tx, len(app.cache))
-	copy(block, app.cache)
-	app.height++
-	app.cache = nil
-
-	return block
-}
-
-*/
-
 func (app *Application) Apply(batch *requestpb.Batch) error {
-	app.mu.Lock()
-	defer app.mu.Unlock()
-
 	var block []Tx
 
 	for _, reqRef := range batch.Requests {
@@ -57,7 +32,6 @@ func (app *Application) Apply(batch *requestpb.Batch) error {
 	}
 
 	app.ChainNotify <- block
-	app.height++
 
 	return nil
 }

@@ -11,7 +11,7 @@ import (
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/types"
-	mir "github.com/filecoin-project/mir/pkg/types"
+	mirTypes "github.com/filecoin-project/mir/pkg/types"
 )
 
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {
@@ -35,8 +35,8 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 
 	log.Infof("Mir miner params: network name - %s, subnet ID - %s", netName, subnetID)
 
-	submitting := time.NewTicker(300 * time.Millisecond)
-	defer submitting.Stop()
+	submit := time.NewTicker(SubmitInterval)
+	defer submit.Stop()
 
 	for {
 		base, err := api.ChainHead(ctx)
@@ -51,29 +51,9 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		case <-ctx.Done():
 			log.Debug("Mir miner %s: context closed")
 			return nil
-		case mirBlock := <-mirHead:
-			var msgs []*types.SignedMessage
-			var crossMsgs []*types.Message
-
-			log.Debugf(">>>>> received %d messages in Mir block", len(mirBlock))
-
-			for _, tx := range mirBlock {
-				msg, err := parseTx(tx)
-				if err != nil {
-					log.Error("unable to parse a message:", err)
-					log.Info(msg)
-					continue
-				}
-
-				switch m := msg.(type) {
-				case *types.SignedMessage:
-					msgs = append(msgs, m)
-				case *types.UnverifiedCrossMsg:
-					crossMsgs = append(crossMsgs, m.Msg)
-				default:
-					log.Error("received an unknown message")
-				}
-			}
+		case mb := <-mirHead:
+			log.Debugf(">>>>> received %d messages in Mir block", len(mb))
+			msgs, crossMsgs := getMessagesFromMirBlock(mb)
 
 			log.Infof("[subnet: %s, epoch: %d] try to create a block", subnetID, base.Height()+1)
 			bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
@@ -110,8 +90,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			}
 
 			log.Infof("[subnet: %s, epoch: %d] mined a block %v", subnetID, bh.Header.Height, bh.Cid())
-
-		case <-submitting.C:
+		case <-submit.C:
 			msgs, err := api.MpoolSelect(ctx, base.Key(), 1)
 			if err != nil {
 				log.Errorw("unable to select messages from mempool", "error", err)
@@ -131,7 +110,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 					continue
 				}
 
-				reqNo := mir.ReqNo(msg.Message.Nonce)
+				reqNo := mirTypes.ReqNo(msg.Message.Nonce)
 				tx := common.NewSignedMessageBytes(msgBytes, nil)
 
 				// TODO: define what client ID is in Eudico case.
@@ -146,7 +125,8 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 				// TODO: client ID should be wallet address
 				// 1) client ID = peer ID + wallet addr
 				// 2) client ID = wallet addr
-				err = mirAgent.Node.SubmitRequest(ctx, mir.ClientID(0), reqNo, tx, nil)
+				
+				err = mirAgent.Node.SubmitRequest(ctx, mirTypes.ClientID(0), reqNo, tx, nil)
 				if err != nil {
 					log.Error("unable to submit a message to Mir:", err)
 					continue
@@ -162,9 +142,9 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 				}
 
 				tx := common.NewCrossMessageBytes(msgBytes, nil)
-				reqNo := mir.ReqNo(msg.Msg.Nonce)
+				reqNo := mirTypes.ReqNo(msg.Msg.Nonce)
 
-				err = mirAgent.Node.SubmitRequest(ctx, mir.ClientID(0), reqNo, tx, []byte{})
+				err = mirAgent.Node.SubmitRequest(ctx, mirTypes.ClientID(0), reqNo, tx, []byte{})
 				if err != nil {
 					log.Error("unable to submit a message to Mir:", err)
 					continue

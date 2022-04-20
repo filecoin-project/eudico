@@ -41,13 +41,13 @@ func newMirLogger(logger *logging.ZapEventLogger) *mirLogger {
 func (m *mirLogger) Log(level mirLogging.LogLevel, text string, args ...interface{}) {
 	switch level {
 	case mirLogging.LevelError:
-		m.logger.Errorf(text, args)
+		m.logger.Errorw(text, args)
 	case mirLogging.LevelInfo:
-		m.logger.Infof(text, args)
+		m.logger.Infow(text, args)
 	case mirLogging.LevelWarn:
-		m.logger.Warnf(text, args)
+		m.logger.Warnw(text, args)
 	case mirLogging.LevelDebug:
-		m.logger.Debugf(text, args)
+		m.logger.Debugw(text, args)
 	}
 }
 
@@ -100,7 +100,6 @@ func NewMirAgent(id uint64) (*MirAgent, error) {
 
 	app := NewApplication(reqStore)
 
-	// TODO: write a wrapper on Eudico logger to use it in Mir.
 	node, err := mir.NewNode(
 		ownID,
 		&mir.NodeConfig{
