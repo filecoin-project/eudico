@@ -44,6 +44,7 @@ require (
 	github.com/filecoin-project/go-statemachine v1.0.1
 	github.com/filecoin-project/go-statestore v0.2.0
 	github.com/filecoin-project/go-storedcounter v0.1.0
+	github.com/filecoin-project/mir v0.0.0-20220420083826-946689a11298
 	github.com/filecoin-project/specs-actors v0.9.14
 	github.com/filecoin-project/specs-actors/v2 v2.3.6
 	github.com/filecoin-project/specs-actors/v3 v3.1.1
@@ -66,7 +67,6 @@ require (
 	github.com/hannahhoward/go-pubsub v0.0.0-20200423002714-8d62886cc36e
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/golang-lru v0.5.4
-	github.com/hyperledger-labs/mirbft v0.0.0-20220405072014-f297fb1791ea
 	github.com/icza/backscanner v0.0.0-20210726202459-ac2ffc679f94
 	github.com/influxdata/influxdb1-client v0.0.0-20200827194710-b269163b24ab
 	github.com/ipfs/bbloom v0.0.4

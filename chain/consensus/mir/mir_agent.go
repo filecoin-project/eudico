@@ -7,17 +7,18 @@ import (
 	"path"
 	"time"
 
-	"github.com/hyperledger-labs/mirbft"
-	mirCrypto "github.com/hyperledger-labs/mirbft/pkg/crypto"
-	"github.com/hyperledger-labs/mirbft/pkg/grpctransport"
-	"github.com/hyperledger-labs/mirbft/pkg/iss"
-	mirLogging "github.com/hyperledger-labs/mirbft/pkg/logging"
-	"github.com/hyperledger-labs/mirbft/pkg/modules"
-	"github.com/hyperledger-labs/mirbft/pkg/reqstore"
-	"github.com/hyperledger-labs/mirbft/pkg/simplewal"
-	t "github.com/hyperledger-labs/mirbft/pkg/types"
 	logging "github.com/ipfs/go-log/v2"
 	"golang.org/x/xerrors"
+
+	"github.com/filecoin-project/mir"
+	mirCrypto "github.com/filecoin-project/mir/pkg/crypto"
+	"github.com/filecoin-project/mir/pkg/grpctransport"
+	"github.com/filecoin-project/mir/pkg/iss"
+	mirLogging "github.com/filecoin-project/mir/pkg/logging"
+	"github.com/filecoin-project/mir/pkg/modules"
+	"github.com/filecoin-project/mir/pkg/reqstore"
+	"github.com/filecoin-project/mir/pkg/simplewal"
+	t "github.com/filecoin-project/mir/pkg/types"
 )
 
 const (
@@ -52,7 +53,7 @@ func (m *mirLogger) Log(level mirLogging.LogLevel, text string, args ...interfac
 
 // MirAgent manages and provides direct access to a Mir node abstraction participating in consensus.
 type MirAgent struct {
-	Node     *mirbft.Node
+	Node     *mir.Node
 	Wal      *simplewal.WAL
 	Net      *grpctransport.GrpcTransport
 	App      *Application
@@ -100,9 +101,9 @@ func NewMirAgent(id uint64) (*MirAgent, error) {
 	app := NewApplication(reqStore)
 
 	// TODO: write a wrapper on Eudico logger to use it in Mir.
-	node, err := mirbft.NewNode(
+	node, err := mir.NewNode(
 		ownID,
-		&mirbft.NodeConfig{
+		&mir.NodeConfig{
 			Logger: newMirLogger(agentLog),
 		},
 		&modules.Modules{

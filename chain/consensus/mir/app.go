@@ -3,8 +3,8 @@ package mir
 import (
 	"sync"
 
-	"github.com/hyperledger-labs/mirbft/pkg/modules"
-	"github.com/hyperledger-labs/mirbft/pkg/pb/requestpb"
+	"github.com/filecoin-project/mir/pkg/modules"
+	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 )
 
 type Tx []byte

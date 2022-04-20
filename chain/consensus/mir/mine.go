@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	mir "github.com/hyperledger-labs/mirbft/pkg/types"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
@@ -12,6 +11,7 @@ import (
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/types"
+	mir "github.com/filecoin-project/mir/pkg/types"
 )
 
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {
