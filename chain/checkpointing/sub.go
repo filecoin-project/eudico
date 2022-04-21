@@ -61,7 +61,7 @@ const initialValueInWallet = 50
 var sendall = false
 
 // this variable is the number of blocks (in eudico) we want between each checkpoints
-const checkpointFrequency = 50
+const checkpointFrequency = 100
 
 //change to true if regtest is used
 const Regtest = true
@@ -822,19 +822,20 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		newSetOfParticipants := make([]string, 0)
 		if err != nil {	
 			strErr := err.Error()
-			i := strings.Index(strErr, "]")
-			culprits := strErr[11:i]
-			s := strings.Split(culprits, " ")
-			fmt.Println("culprits: ",s )
-			for _, i := range(s){ 
-				fmt.Println(i)
-				for _,p := range(c.participants) {
-					if ! (p == i) { 
-						newSetOfParticipants = append(newSetOfParticipants, p)
-						}
+			if strErr[:8] == "culprits" {
+				i := strings.Index(strErr, "]")
+				culprits := strErr[11:i]
+				s := strings.Split(culprits, " ")
+				fmt.Println("culprits: ",s )
+				for _, i := range(s){ 
+					fmt.Println(i)
+					for _,p := range(c.participants) {
+						if ! (p == i) { 
+							newSetOfParticipants = append(newSetOfParticipants, p)
+							}
+					}
 				}
 			}
-
 		}
 		log.Infow("result :", "result", r)
 
