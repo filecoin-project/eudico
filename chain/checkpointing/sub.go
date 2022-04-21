@@ -61,7 +61,7 @@ const initialValueInWallet = 50
 var sendall = false
 
 // this variable is the number of blocks (in eudico) we want between each checkpoints
-const checkpointFrequency = 10
+const checkpointFrequency = 50
 
 //change to true if regtest is used
 const Regtest = true
@@ -467,7 +467,9 @@ func (c *CheckpointingSub) matchNewConfig(ctx context.Context, oldTs, newTs *typ
 func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *types.TipSet, oldSt, newSt mpower.State, diff *diffInfo) (bool, error) {
 	// we are checking that the list of mocked actor is not empty before starting the checkpoint
 	
-	if c.newDKGComplete && newTs.Height()%checkpointFrequency == 0 && len(oldSt.Miners) > 0 && (c.taprootConfig != nil || c.newTaprootConfig != nil) && len(newSt.PublicKey)>0 {
+	//if c.newDKGComplete && newTs.Height()%checkpointFrequency == 0 && len(oldSt.Miners) > 0 && (c.taprootConfig != nil || c.newTaprootConfig != nil) && len(newSt.PublicKey)>0 {
+	if newTs.Height()%checkpointFrequency == 0 && len(oldSt.Miners) > 0 && (c.taprootConfig != nil || c.newTaprootConfig != nil) && len(newSt.PublicKey)>0 {
+	
 		log.Infow("New checkpoint to start")
 		cp := oldTs.Key().Bytes() // this is the checkpoint
 		diff.cp = cp
@@ -812,12 +814,36 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		if err != nil {
 			return err
 		}
-		LoopHandler(ctx, handler, n, len(idsStrings), c.file)
+		LoopHandlerSign(ctx, handler, n, len(idsStrings), c.file)
 		r, err := handler.Result()
-		if err != nil {
-			return err
+		// if err != nil {
+		// 	return err
+		// }
+		newSetOfParticipants := make([]string, 0)
+		if err != nil {	
+			strErr := err.Error()
+			i := strings.Index(strErr, "]")
+			culprits := strErr[11:i]
+			s := strings.Split(culprits, " ")
+			fmt.Println("culprits: ",s )
+			for _, i := range(s){ 
+				fmt.Println(i)
+				for _,p := range(c.participants) {
+					if ! (p == i) { 
+						newSetOfParticipants = append(newSetOfParticipants, p)
+						}
+				}
+			}
+
 		}
 		log.Infow("result :", "result", r)
+
+		if len(newSetOfParticipants)>0 {
+			//c.participants = copy(c.participants,newSetOfParticipants)
+			c.participants = newSetOfParticipants
+			fmt.Println("New list of participants: ", c.participants)
+			return nil
+		}
 
 		// if signing is a success we register the new value
 		merkleRoot := hashMerkleRoot(pubkey, cp)

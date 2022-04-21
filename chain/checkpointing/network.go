@@ -73,6 +73,8 @@ func broadcastingMessage(ctx context.Context, h protocol.Handler, network *Netwo
 		fmt.Println("Outgoing message:", msg)
 		if !ok {
 			// the channel was closed, indicating that the protocol is done executing.
+			// we sleep two seconds to be sure we received all messages before closing
+			//time.Sleep(2*time.Second)
 			close(over)
 			return
 		}
@@ -94,14 +96,13 @@ func waitingMessages(ctx context.Context, h protocol.Handler, network *Network, 
 			}*/
 			h.Accept(msg)
 		}
-
 	}
 }
 
 // This could be simplified
 // next and send very similar to next and publish in libp2p
 // the code could be simplified to use next and publish.s
-func LoopHandler(ctx context.Context, h protocol.Handler, network *Network, num int, file *os.File) {
+func LoopHandlerSign(ctx context.Context, h protocol.Handler, network *Network, num int, file *os.File) {
 	defer timeTrack(time.Now(), "Signing", num, file)
 	over := make(chan bool)
 
@@ -110,10 +111,12 @@ func LoopHandler(ctx context.Context, h protocol.Handler, network *Network, num 
 
 	go broadcastingMessage(ctx, h, network, over)
 	go waitingMessages(ctx, h, network, over)
+	go waitTimeOut(ctx, h, network, over)
 
 	<-over
 
 	fmt.Println("We are done")
+	
 	//file.Close()
 }
 func waitTimeOut(ctx context.Context, h protocol.Handler, network *Network, over chan bool) {
@@ -140,6 +143,7 @@ func LoopHandlerDKG(ctx context.Context, h protocol.Handler, network *Network, n
 	<-over
 
 	fmt.Println("We are done")
+	
 }
 
 // func LoopHandlerDKG(ctx context.Context, h protocol.Handler, network *Network) {
@@ -180,7 +184,6 @@ func LoopHandlerDKG(ctx context.Context, h protocol.Handler, network *Network, n
 // 	over := make(chan bool)
 // 	for {
 // 		select {
-
 // 		// outgoing messages
 // 		case msg, ok := <-h.Listen():
 // 			if !ok {
@@ -191,7 +194,7 @@ func LoopHandlerDKG(ctx context.Context, h protocol.Handler, network *Network, n
 // 			go network.Send(ctx,msg)
 
 // 		// incoming messages
-// 		case msg := <- network.Next(ctx):
+// 		case msg := network.Next(ctx):
 // 			h.Accept(msg)
 
 // 		// timeout case
