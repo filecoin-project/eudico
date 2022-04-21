@@ -7,6 +7,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
+// parseTx parses a raw byte transaction from Mir node into a Filecoin message.
 func parseTx(tx []byte) (msg interface{}, err error) {
 	ln := len(tx)
 	if ln <= 2 {
@@ -26,6 +27,7 @@ func parseTx(tx []byte) (msg interface{}, err error) {
 	return
 }
 
+// getMessagesFromMirBlock retrieves Filecoin messages from a Mir block.
 func getMessagesFromMirBlock(b []Tx) (msgs []*types.SignedMessage, crossMsgs []*types.Message) {
 	for _, tx := range b {
 		msg, err := parseTx(tx)

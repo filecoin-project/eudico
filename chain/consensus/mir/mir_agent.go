@@ -28,6 +28,7 @@ const (
 // agentLog is a logger accessed by Mir.
 var agentLog = logging.Logger("mir-agent")
 
+// mirLogger implement Mir's Log interface.
 type mirLogger struct {
 	logger *logging.ZapEventLogger
 }
@@ -38,6 +39,7 @@ func newMirLogger(logger *logging.ZapEventLogger) *mirLogger {
 	}
 }
 
+// Log logs a message with additional context.
 func (m *mirLogger) Log(level mirLogging.LogLevel, text string, args ...interface{}) {
 	switch level {
 	case mirLogging.LevelError:
@@ -128,6 +130,7 @@ func NewMirAgent(id uint64) (*MirAgent, error) {
 	return &a, nil
 }
 
+// Start starts an agent.
 func (m *MirAgent) Start(ctx context.Context) chan error {
 	log.Info("Mir agent starting")
 
@@ -152,6 +155,7 @@ func (m *MirAgent) Start(ctx context.Context) chan error {
 	return errChan
 }
 
+// Stop stops an agent.
 func (m *MirAgent) Stop() {
 	log.Info("Mir agent shutting down")
 	defer log.Info("Mir agent stopped")
@@ -161,4 +165,5 @@ func (m *MirAgent) Stop() {
 	}
 	m.Net.Stop()
 	close(m.stopChan)
+	close(m.App.ChainNotify)
 }

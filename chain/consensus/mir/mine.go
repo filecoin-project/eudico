@@ -14,12 +14,19 @@ import (
 	mirTypes "github.com/filecoin-project/mir/pkg/types"
 )
 
+// Mine mines Filecoin blocks.
+
+// Mine implements the following algorithm:
+// 1. Retrieve messages and cross-messages from mempool.
+// 2. Send these messages to the Mir node.
+// 3. Receive ordered messages from the Mir node and push them into the next Filecoin block.
+// 4. Submit this block.
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {
 	log.Info("Mir miner started")
 	defer log.Info("Mir miner stopped")
 
 	// TODO: Suppose we want to use Mir in Root and in a subnet at the same time.
-	// Do we need two mir agents for that?
+	// Do we need two Mir agents for that?
 	mirAgent, err := NewMirAgent(uint64(0))
 	if err != nil {
 		return err
@@ -46,17 +53,18 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		}
 
 		select {
+		case <-ctx.Done():
+			log.Debug("Mir miner: context closed")
+			return nil
 		case merr := <-mirErrors:
 			return xerrors.Errorf("Mir node error: %w", merr)
-		case <-ctx.Done():
-			log.Debug("Mir miner %s: context closed")
-			return nil
 		case mb := <-mirHead:
 			log.Debugf(">>>>> received %d messages in Mir block", len(mb))
 			msgs, crossMsgs := getMessagesFromMirBlock(mb)
 
 			log.Infof("[subnet: %s, epoch: %d] try to create a block", subnetID, base.Height()+1)
 			bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
+				// TODO: if there are several nodes then the miner is the Mir node proposed the block within Mir.
 				Miner:            miner,
 				Parents:          base.Key(),
 				BeaconValues:     nil,
@@ -155,6 +163,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	}
 }
 
+// CreateBlock creates a final Filecoin block from the input block template.
 func (bft *Mir) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.BlockTemplate) (*types.FullBlock, error) {
 	b, err := common.PrepareBlockForSignature(ctx, bft.sm, bt)
 	if err != nil {
