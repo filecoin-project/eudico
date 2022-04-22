@@ -27,7 +27,11 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 
 	// TODO: Suppose we want to use Mir in Root and in a subnet at the same time.
 	// Do we need two Mir agents for that?
-	mirAgent, err := NewMirAgent(uint64(0))
+	nodeID, err := api.ID(ctx)
+	if err != nil {
+		log.Fatalf("unable to get a node ID: %s", err)
+	}
+	mirAgent, err := NewMirAgent(nodeID.String())
 	if err != nil {
 		return err
 	}
@@ -134,7 +138,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 				// 1) client ID = peer ID + wallet addr
 				// 2) client ID = wallet addr
 
-				err = mirAgent.Node.SubmitRequest(ctx, mirTypes.ClientID(0), reqNo, tx, nil)
+				err = mirAgent.Node.SubmitRequest(ctx, mirTypes.ClientID(nodeID.String()), reqNo, tx, nil)
 				if err != nil {
 					log.Error("unable to submit a message to Mir:", err)
 					continue

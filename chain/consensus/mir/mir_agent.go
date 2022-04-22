@@ -62,16 +62,14 @@ type MirAgent struct {
 	stopChan chan struct{}
 }
 
-func NewMirAgent(id uint64) (*MirAgent, error) {
+func NewMirAgent(id string) (*MirAgent, error) {
 	// TODO: Are client ID and node ID the same in this case?
 	// TODO: Should mirbft use a different type for node ID?
 	ownID := t.NodeID(id)
 	nodeIds := []t.NodeID{ownID}
 
 	nodeAddrs := make(map[t.NodeID]string)
-	for _, i := range nodeIds {
-		nodeAddrs[i] = fmt.Sprintf("127.0.0.1:%d", nodeBasePort+i)
-	}
+	nodeAddrs[ownID] = fmt.Sprintf("127.0.0.1:%d", nodeBasePort)
 
 	walPath := path.Join("eudico-wal", fmt.Sprintf("%d", id))
 	wal, err := simplewal.Open(walPath)
@@ -147,8 +145,8 @@ func (m *MirAgent) Start(ctx context.Context) chan error {
 	}()
 
 	go func() {
-		// TODO: add a bug into the Mir repo: use context for signalling instead of explicit channel
-		errChan <- m.Node.Run(m.stopChan, time.NewTicker(100*time.Millisecond).C)
+		log.Info("AAAAAA")
+		errChan <- m.Node.Run(ctx, time.NewTicker(100*time.Millisecond).C)
 		agentCancel()
 	}()
 
