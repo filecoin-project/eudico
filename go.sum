@@ -447,8 +447,6 @@ github.com/filecoin-project/go-statestore v0.2.0 h1:cRRO0aPLrxKQCZ2UOQbzFGn4WDNd
 github.com/filecoin-project/go-statestore v0.2.0/go.mod h1:8sjBYbS35HwPzct7iT4lIXjLlYyPor80aU7t7a/Kspo=
 github.com/filecoin-project/go-storedcounter v0.1.0 h1:Mui6wSUBC+cQGHbDUBcO7rfh5zQkWJM/CpAZa/uOuus=
 github.com/filecoin-project/go-storedcounter v0.1.0/go.mod h1:4ceukaXi4vFURIoxYMfKzaRF5Xv/Pinh2oTnoxpv+z8=
-github.com/filecoin-project/mir v0.0.0-20220420083826-946689a11298 h1:/FgoW3tmMQU/Lj0b+4AW7qrcQ5wqYrBGZvNu7kBW9wU=
-github.com/filecoin-project/mir v0.0.0-20220420083826-946689a11298/go.mod h1:8GvJM9EfTvQqOnd8D1YkMxL7hQ0rOMByimXE2onAW+I=
 github.com/filecoin-project/mir v0.0.0-20220422110819-f38593bae779 h1:/SA3Ym8OtKpT0P55qsEBMt8+4o7sYFdSUWISTBJloS8=
 github.com/filecoin-project/mir v0.0.0-20220422110819-f38593bae779/go.mod h1:l1X9usvhl01cfYi3sR1+VVwYDfUTz6+XcHnYvYA6KP8=
 github.com/filecoin-project/specs-actors v0.9.13/go.mod h1:TS1AW/7LbG+615j4NsjMK1qlpAwaFsG9w0V2tg2gSao=
@@ -2687,8 +2685,6 @@ golang.org/x/sys v0.0.0-20210917161153-d61c044b1678/go.mod h1:oPkhp1MJrh7nUepCBc
 golang.org/x/sys v0.0.0-20210927094055-39ccf1dd6fa6/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20211004093028-2c5d950f24ef/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20211013075003-97ac67df715c/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
-golang.org/x/sys v0.0.0-20211209171907-798191bca915 h1:P+8mCzuEpyszAT6T42q0sxU+eveBAF/cJ2Kp0x6/8+0=
-golang.org/x/sys v0.0.0-20211209171907-798191bca915/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20220412211240-33da011f77ad h1:ntjMns5wyP/fN65tdBD4g8J5w8n015+iIIs9rtjXkY0=
 golang.org/x/sys v0.0.0-20220412211240-33da011f77ad/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/term v0.0.0-20201117132131-f5c789dd3221/go.mod h1:Nr5EML6q2oocZ2LXRh80K7BxOlk5/8JxuGnuhpl+muw=

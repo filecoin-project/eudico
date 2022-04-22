@@ -71,7 +71,7 @@ func NewMirAgent(id string) (*MirAgent, error) {
 	nodeAddrs := make(map[t.NodeID]string)
 	nodeAddrs[ownID] = fmt.Sprintf("127.0.0.1:%d", nodeBasePort)
 
-	walPath := path.Join("eudico-wal", fmt.Sprintf("%d", id))
+	walPath := path.Join("eudico-wal", fmt.Sprintf("%v", id))
 	wal, err := simplewal.Open(walPath)
 	if err != nil {
 		return nil, err
