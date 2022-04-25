@@ -21,10 +21,6 @@ import (
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
-const (
-	nodeBasePort = 10000
-)
-
 // agentLog is a logger accessed by Mir.
 var agentLog = logging.Logger("mir-agent")
 
@@ -62,14 +58,15 @@ type MirAgent struct {
 	stopChan chan struct{}
 }
 
-func NewMirAgent(id string) (*MirAgent, error) {
+func NewMirAgent(id string, n int) (*MirAgent, error) {
 	// TODO: Are client ID and node ID the same in this case?
 	// TODO: Should mirbft use a different type for node ID?
 	ownID := t.NodeID(id)
-	nodeIds := []t.NodeID{ownID}
+	log.Debugf("Mir agent %v is being created", ownID)
+	defer log.Debugf("Mir agent %v has been created", ownID)
 
-	nodeAddrs := make(map[t.NodeID]string)
-	nodeAddrs[ownID] = fmt.Sprintf("127.0.0.1:%d", nodeBasePort)
+	nodeIds, nodeAddrs := getConfig(n)
+	log.Debug("Mir node config:", nodeIds, nodeAddrs)
 
 	walPath := path.Join("eudico-wal", fmt.Sprintf("%v", id))
 	wal, err := simplewal.Open(walPath)
@@ -145,7 +142,6 @@ func (m *MirAgent) Start(ctx context.Context) chan error {
 	}()
 
 	go func() {
-		log.Info("AAAAAA")
 		errChan <- m.Node.Run(ctx, time.NewTicker(100*time.Millisecond).C)
 		agentCancel()
 	}()

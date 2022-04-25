@@ -112,7 +112,7 @@ eudico-subnet-test:
 
 eudico-consensus-test: GOFLAGS+=-tags=2k
 eudico-consensus-test:
-	go test $(GOFLAGS) -count=1 -run TestEudicoConsensus ./itests
+	EUDICO_MIR_ID=0 EUDICO_MIR_NODES=1 go test $(GOFLAGS) -v -count=1 -run TestEudicoConsensus ./itests
 .PHONY: eudico-consensus-test
 
 eudico-test: eudico-subnet-test eudico-consensus-test

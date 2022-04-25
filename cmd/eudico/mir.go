@@ -34,7 +34,7 @@ func NewRootMirConsensus(ctx context.Context, sm *stmgr.StateManager, beacon bea
 }
 
 var mirbftCmd = &cli.Command{
-	Name:  "mirbft",
+	Name:  "mir",
 	Usage: "Mir consensus",
 	Subcommands: []*cli.Command{
 		mirbftGenesisCmd,

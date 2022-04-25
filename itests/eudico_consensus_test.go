@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
@@ -18,6 +19,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/wallet"
 	"github.com/filecoin-project/lotus/itests/kit"
+	mapi "github.com/filecoin-project/mir"
 )
 
 func TestEudicoConsensus(t *testing.T) {
@@ -99,10 +101,16 @@ func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
 
 	go func() {
 		err = mir.Mine(ctx, l[0], full)
+		if xerrors.Is(mapi.ErrStopped, err) {
+			return
+		}
 		require.NoError(t, err)
 	}()
 
 	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 10, address.RootSubnet, full)
+	if xerrors.Is(mapi.ErrStopped, err) {
+		return
+	}
 	require.NoError(t, err)
 }
 

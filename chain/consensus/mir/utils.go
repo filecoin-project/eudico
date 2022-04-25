@@ -1,11 +1,32 @@
 package mir
 
 import (
+	"fmt"
+
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/types"
+	t "github.com/filecoin-project/mir/pkg/types"
 )
+
+const (
+	nodeBasePort = 10000
+)
+
+func getConfig(n int) ([]t.NodeID, map[t.NodeID]string) {
+	var nodeIds []t.NodeID
+	for i := 0; i < n; i++ {
+		nodeIds = append(nodeIds, t.NewNodeIDFromInt(i))
+	}
+
+	nodeAddrs := make(map[t.NodeID]string)
+	for i := range nodeIds {
+		nodeAddrs[t.NewNodeIDFromInt(i)] = fmt.Sprintf("127.0.0.1:%d", nodeBasePort+i)
+	}
+
+	return nodeIds, nodeAddrs
+}
 
 // parseTx parses a raw byte transaction from Mir node into a Filecoin message.
 func parseTx(tx []byte) (msg interface{}, err error) {

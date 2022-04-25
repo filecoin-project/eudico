@@ -145,8 +145,8 @@ func BlockSanityChecks(ctype hierarchical.ConsensusType, h *types.BlockHeader) e
 			return xerrors.Errorf("block must have a ticket")
 		}
 	case hierarchical.Mir:
-		if h.Ticket != nil {
-			return xerrors.Errorf("block must have nil ticket")
+		if h.Ticket == nil {
+			return xerrors.Errorf("block must have an empty ticket")
 		}
 	case hierarchical.Ideal:
 		if h.Ticket != nil {

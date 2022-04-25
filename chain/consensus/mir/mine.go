@@ -11,6 +11,7 @@ import (
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/types"
+	ltypes "github.com/filecoin-project/lotus/chain/types"
 	mirTypes "github.com/filecoin-project/mir/pkg/types"
 )
 
@@ -27,11 +28,14 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 
 	// TODO: Suppose we want to use Mir in Root and in a subnet at the same time.
 	// Do we need two Mir agents for that?
-	nodeID, err := api.ID(ctx)
-	if err != nil {
-		log.Fatalf("unable to get a node ID: %s", err)
-	}
-	mirAgent, err := NewMirAgent(nodeID.String())
+	// nodeID, err := api.ID(ctx)
+	// if err != nil {
+	//	log.Fatalf("unable to get a node ID: %s", err)
+	// }
+	nodeID := NodeID()
+	nodeNumber := NodeNumber()
+
+	mirAgent, err := NewMirAgent(nodeID, nodeNumber)
 	if err != nil {
 		return err
 	}
@@ -72,7 +76,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 				Miner:            miner,
 				Parents:          base.Key(),
 				BeaconValues:     nil,
-				Ticket:           nil,
+				Ticket:           &ltypes.Ticket{VRFProof: nil},
 				Epoch:            base.Height() + 1,
 				Timestamp:        uint64(time.Now().Unix()),
 				WinningPoStProof: nil,
@@ -138,7 +142,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 				// 1) client ID = peer ID + wallet addr
 				// 2) client ID = wallet addr
 
-				err = mirAgent.Node.SubmitRequest(ctx, mirTypes.ClientID(nodeID.String()), reqNo, tx, nil)
+				err = mirAgent.Node.SubmitRequest(ctx, mirTypes.ClientID(nodeID), reqNo, tx, nil)
 				if err != nil {
 					log.Error("unable to submit a message to Mir:", err)
 					continue

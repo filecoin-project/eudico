@@ -5,6 +5,8 @@ package mir
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -38,12 +40,34 @@ import (
 const (
 	MaxHeightDrift = 5
 	SubmitInterval = 300 * time.Millisecond
+	NodeIDEnv      = "EUDICO_MIR_ID"
+	NodeNumberEnv  = "EUDICO_MIR_NODES"
 )
 
 var (
 	log                     = logging.Logger("mir-consensus")
 	_   consensus.Consensus = &Mir{}
 )
+
+func NodeID() string {
+	id := os.Getenv(NodeIDEnv)
+	if id == "" {
+		panic(fmt.Sprintf("failed to get Mir node ID"))
+	}
+	return id
+}
+
+func NodeNumber() int {
+	n := os.Getenv(NodeNumberEnv)
+	if n == "" {
+		panic(fmt.Sprintf("failed to get Mir node number"))
+	}
+	nn, err := strconv.Atoi(n)
+	if err != nil {
+		panic(fmt.Errorf("failed to convert Mir node number: %s", err))
+	}
+	return nn
+}
 
 type Mir struct {
 	store    *store.ChainStore
@@ -82,6 +106,7 @@ func NewConsensus(
 }
 
 func (bft *Mir) ValidateBlock(ctx context.Context, b *types.FullBlock) (err error) {
+
 	log.Infof("starting block validation process at @%d", b.Header.Height)
 
 	if err := common.BlockSanityChecks(hierarchical.Mir, b.Header); err != nil {
