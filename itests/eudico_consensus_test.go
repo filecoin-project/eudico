@@ -82,6 +82,12 @@ func (ts *eudicoConsensusSuite) testIdealMining(t *testing.T) {
 }
 
 func runMirConsensusTests(t *testing.T, opts ...interface{}) {
+	if err := os.Setenv("EUDICO_MIR_ID", "0"); err != nil {
+		require.NoError(t, err)
+	}
+	if err := os.Setenv("EUDICO_MIR_NODES", "1"); err != nil {
+		require.NoError(t, err)
+	}
 	ts := eudicoConsensusSuite{opts: opts}
 
 	t.Run("testMirMining", ts.testMirMining)

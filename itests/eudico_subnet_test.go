@@ -23,7 +23,15 @@ import (
 )
 
 func TestEudicoSubnet(t *testing.T) {
+	if err := os.Setenv("EUDICO_MIR_ID", "0"); err != nil {
+		require.NoError(t, err)
+	}
+	if err := os.Setenv("EUDICO_MIR_NODES", "1"); err != nil {
+		require.NoError(t, err)
+	}
+
 	// Sanity test with ideal consensus.
+
 	t.Run("/root/ideal-/subnet/ideal", func(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootIdeal(), kit.SubnetIdeal())
 	})
