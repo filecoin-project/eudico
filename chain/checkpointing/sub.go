@@ -495,7 +495,8 @@ func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *ty
 			//c.participants = newSt.Miners // we add ourselves to the list of participants
 			// even the participants who did not do the checkpoint need to update their participant list
 			if len(c.newParticipants)>0 {
-				c.participants = c.newParticipants
+				c.participants = make([]string, len(c.newParticipants))
+				copy(c.participants,c.newParticipants)
 				c.newParticipants = make([]string,0)
 			}
 			c.newDKGComplete = false
@@ -587,7 +588,7 @@ func (c *CheckpointingSub) Start(ctx context.Context) error {
 	// INCREASE THE BUFFER SIZE BECAUSE IT IS ONLY 32 ! AND IT IS DROPPING MESSAGES WHEN FULL
 	// https://github.com/libp2p/go-libp2p-pubsub/blob/v0.5.4/pubsub.go#L1222
 	// NOTE: 1000 has been choosen arbitraly there is no reason for this number besides it just works.
-	sub, err := topic.Subscribe(pubsub.WithBufferSize(10000))
+	sub, err := topic.Subscribe(pubsub.WithBufferSize(15000))
 	if err != nil {
 		return err
 	}
@@ -654,9 +655,11 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	c.newKey = []byte(c.newTaprootConfig.PublicKey)
 	c.newParticipants = make([]string,0)
 	// we remove the misbehaving participants from the new set of signers
+	participantsToRemove := make([]string,0)
 	for  participant,_ := range(c.newTaprootConfig.VerificationShares){
 		//if participant != "12D3KooWSpyoi7KghH98SWDfDFMyAwuvtP8MWWGDcC1e1uHWzjSm"{
 		c.newParticipants = append(c.newParticipants,string(participant))
+		participantsToRemove = append(participantsToRemove, string(participant))
 	}
 
 	// we need to update the taproot public key in the mocked actor
@@ -689,7 +692,7 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 			To:     a,         //this is the mocked actor address
 			From:   aliceaddr, // this is alice address, will need to be changed at some point
 			Value:  abi.NewTokenAmount(0),
-			Method: 4,
+			Method: 4, // this method corresponds to the one updating the key
 			Params: seraddp,
 		}, nil)
 
@@ -697,7 +700,33 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 			return aerr
 		}
 
-		fmt.Println("message sent")
+		fmt.Println("message to update the public key sent")
+
+		// the issue is that removing participants will also trigger 
+		// a DKG so we do not do it here
+		// if len(participantsToRemove)>0 {
+		// 	addp = &mpower.NewTaprootAddressParam{
+		// 		PublicKey: []byte(c.newTaprootConfig.PublicKey), // new public key that was just generated
+		// 	}
+
+		// 	seraddp, err1 = actors.SerializeParams(addp)
+		// 	if err1 != nil {
+		// 		return err1
+		// 	}
+		// 	_, aerr = c.api.MpoolPushMessage(ctx, &types.Message{
+		// 		To:     a,         //this is the mocked actor address
+		// 		From:   aliceaddr, // this is alice address, will need to be changed at some point
+		// 		Value:  abi.NewTokenAmount(0),
+		// 		Method: 4,
+		// 		Params: seraddp,
+		// 	}, nil)
+
+		// 	if aerr != nil {
+		// 		return aerr
+		// 	}
+
+		// 	fmt.Println("message to update list of miners sentsent")
+		// }
 	}
 	return nil
 }
@@ -810,6 +839,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		n := NewNetwork(c.sub, c.topic)
 		// hashedTx[:] is the session id
 		// ensure everyone is on the same session id
+		fmt.Println("SSID: ", hashedTx[:])
 		handler, err := protocol.NewMultiHandler(f, hashedTx[:])
 		if err != nil {
 			return err
@@ -820,7 +850,9 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		// 	return err
 		// }
 		newSetOfParticipants := make([]string, 0)
-		if err != nil {	
+		ssid := hashedTx[:]
+		j := 0
+		for (err != nil) {	
 			strErr := err.Error()
 			if strErr[:8] == "culprits" {
 				i := strings.Index(strErr, "]")
@@ -835,7 +867,19 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 							}
 					}
 				}
-			}
+				time.Sleep(2 * time.Second) // make sure everyone has finished prev protocol before starting
+				ids = c.formIDSlice(newSetOfParticipants)
+				f = frost.SignTaprootWithTweak(c.taprootConfig, ids, hashedTx[:], c.tweakedValue[:])
+				ssid = append(ssid,byte(j))
+				fmt.Println("SSID: ", ssid)
+				handler, err2 := protocol.NewMultiHandler(f, ssid)
+				if err2 != nil {
+					return err
+				}
+				LoopHandlerSign(ctx, handler, n, len(newSetOfParticipants), c.file)
+				r, err = handler.Result()
+				i = i+1
+			} else {return err }
 		}
 		log.Infow("result :", "result", r)
 
@@ -844,7 +888,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 			copy(c.participants, newSetOfParticipants)
 			//c.participants = newSetOfParticipants
 			fmt.Println("New list of participants: ", c.participants)
-			return nil
+			//return nil
 		}
 
 		// if signing is a success we register the new value
@@ -886,7 +930,8 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		// return true for everyone after a DKG has completed (whether they took part or no)
 		if c.newDKGComplete {
 			c.keysUpdated = true
-			c.participants = c.newParticipants
+			c.participants = make([]string, len(c.newParticipants))
+			copy(c.participants, c.newParticipants)
 			c.newParticipants = []string{}
 			c.newDKGComplete = false
 
