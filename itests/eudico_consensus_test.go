@@ -22,6 +22,13 @@ import (
 	mapi "github.com/filecoin-project/mir"
 )
 
+func TestEudicoConsensus1(t *testing.T) {
+
+	t.Run("mir", func(t *testing.T) {
+		runMirConsensusTests(t, kit.ThroughRPC(), kit.RootMir())
+	})
+}
+
 func TestEudicoConsensus(t *testing.T) {
 	t.Run("ideal", func(t *testing.T) {
 		runIdealConsensusTests(t, kit.ThroughRPC(), kit.RootIdeal())

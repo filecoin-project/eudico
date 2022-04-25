@@ -4,8 +4,6 @@ import (
 	"context"
 	"time"
 
-	"golang.org/x/xerrors"
-
 	"github.com/filecoin-project/go-address"
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
@@ -65,7 +63,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			log.Debug("Mir miner: context closed")
 			return nil
 		case merr := <-mirErrors:
-			return xerrors.Errorf("Mir node error: %w", merr)
+			return merr
 		case mb := <-mirHead:
 			log.Debugf(">>>>> received %d messages in Mir block", len(mb))
 			msgs, crossMsgs := getMessagesFromMirBlock(mb)
