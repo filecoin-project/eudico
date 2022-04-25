@@ -235,6 +235,7 @@ func getTxOut(url, txid string, index int) (float64, []byte) {
 
 	}
 	taprootTxOut := result["result"].(map[string]interface{})
+	fmt.Println("gettxout output ",taprootTxOut)
 	scriptPubkey := taprootTxOut["scriptPubKey"].(map[string]interface{})
 	scriptPubkeyBytes, _ := hex.DecodeString(scriptPubkey["hex"].(string))
 

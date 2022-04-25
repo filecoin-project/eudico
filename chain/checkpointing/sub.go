@@ -61,7 +61,7 @@ const initialValueInWallet = 50
 var sendall = false
 
 // this variable is the number of blocks (in eudico) we want between each checkpoints
-const checkpointFrequency = 100
+const checkpointFrequency = 25
 
 //change to true if regtest is used
 const Regtest = true
@@ -134,6 +134,11 @@ type CheckpointingSub struct {
 	height abi.ChainEpoch
 	// last cid pushed to bitcoin
 	lastCid string
+	// keeps track of the amount left in the last UTXO
+	amount float64
+	// keeps track of last script
+	scriptPubkeyBytes []byte
+
 
 	// KVS
 	r *Resolver
@@ -752,7 +757,8 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		if err != nil {
 			return err
 		}
-
+		//hex.DecodeString
+		//hex.DecodeString(newTaprootAddress))
 		// the list of participants is ordered
 		// we will chose the "first" half of participants
 		// in order to sign the transaction in the threshold signing.
@@ -789,18 +795,31 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		}
 
 		index := 0
+		var value float64
+		var scriptPubkeyBytes []byte
 		//fmt.Println("Previous tx id: ", c.ptxid)
-		value, scriptPubkeyBytes := getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
-
-		// TODO: instead of calling getTxOUt we need to check for the latest transaction
-		// same as is done in the verification.sh script
-
-		if scriptPubkeyBytes[0] != 0x51 {
-			log.Infow("wrong txout")
-			index = 1
+		//value, scriptPubkeyBytes = getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
+		//fmt.Println("scriptPubkeyBytes: ", scriptPubkeyBytes)
+		if len(c.scriptPubkeyBytes) == 0 {
 			value, scriptPubkeyBytes = getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
+
+			// TODO: instead of calling getTxOUt we need to check for the latest transaction
+			// same as is done in the verification.sh script
+
+			if scriptPubkeyBytes[0] != 0x51 {
+				log.Infow("wrong txout")
+				index = 1
+				value, scriptPubkeyBytes = getTxOut(c.cpconfig.BitcoinHost, c.ptxid, index)
+			}
+
+			fmt.Println("scriptPubkeyBytes: ", scriptPubkeyBytes)
+		} else {
+			fmt.Println("Did not call gettxout")
+			value = c.amount
+			scriptPubkeyBytes = c.scriptPubkeyBytes
 		}
 		newValue := value - c.cpconfig.Fee
+		c.amount = newValue
 		//fmt.Println("Fee for next transaction is: ", c.cpconfig.Fee)
 		payload1 := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.8f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
 		fmt.Println("Data pushed to opreturn: ", hex.EncodeToString(data))
@@ -817,15 +836,20 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 			return err
 		}
 
+		
+		
 		var buf [8]byte
 		binary.LittleEndian.PutUint64(buf[:], uint64(value*100000000))
 		utxo := append(buf[:], []byte{34}...)
 		utxo = append(utxo, scriptPubkeyBytes...)
+		
+		
 
 		hashedTx, err := TaprootSignatureHash(tx, utxo, 0x00)
 		if err != nil {
 			return err
 		}
+
 
 		/*
 		 * Orchestrate the signing message
@@ -904,11 +928,14 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendrawtransaction\", \"params\": [\"" + rawtx + "\"]}"
 		//fmt.Println("Send raw transaction command:", payload)
 		//fmt.Println("Raw tx: ", payload1)
+		//c.scriptPubkeyBytes = 
 		result = jsonRPC(c.cpconfig.BitcoinHost, payload)
 		//fmt.Println("Transaction to be sent: ", result)
 		if result["error"] != nil {
 			return xerrors.Errorf("failed to broadcast transaction")
 		}
+		
+		c.scriptPubkeyBytes,_ = hex.DecodeString(getTaprootScript(pubkeyShort))
 
 		/* Need to keep this to build next one */
 		newtxid := result["result"].(string)
@@ -1039,6 +1066,7 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 				value = initialValueInWallet
 			}
 			newValue := value - c.cpconfig.Fee
+			c.amount = newValue
 			payload := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"sendtoaddress\", \"params\": [\"" + address + "\", \"" + fmt.Sprintf("%.8f", newValue) + "\" ]}"
 			//fmt.Println(payload)
 			result := jsonRPC(c.cpconfig.BitcoinHost, payload)
