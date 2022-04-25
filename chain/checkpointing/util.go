@@ -226,7 +226,9 @@ func getTxOut(url, txid string, index int) (float64, []byte) {
 	result := jsonRPC(url, payload)
 
 	if result == nil {
-		panic("Cannot retrieve previous transaction.")
+		time.Sleep(1 * time.Second)
+		result = jsonRPC(url, payload)
+		if result == nil {panic("Cannot retrieve previous transaction.")}
 	}
 	if result["result"] == nil {
 		panic("No transaction returned (maybe the output has already be spent")
