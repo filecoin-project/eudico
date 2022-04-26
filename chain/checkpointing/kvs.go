@@ -239,7 +239,7 @@ func (v *Validator) Validate(ctx context.Context, pid peer.ID, msg *pubsub.Messa
 	// Decode resolve msg
 	rmsg, err := DecodeResolveMsg(msg.GetData())
 	if err != nil {
-		fmt.Println("errod decoding message cid")
+		fmt.Println("error decoding message cid")
 		log.Errorf("error decoding resolve msg cid: %s", err)
 		return pubsub.ValidationReject
 	}

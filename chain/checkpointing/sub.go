@@ -872,7 +872,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		// Here all the participants sign the transaction
 		// in practice we only need "threshold" of them to sign
 		f := frost.SignTaprootWithTweak(c.taprootConfig, ids, hashedTx[:], c.tweakedValue[:])
-		n := NewNetwork(c.sub, c.topic)
+		//n := NewNetwork(c.sub, c.topic)
 		// hashedTx[:] is the session id
 		// ensure everyone is on the same session id
 		fmt.Println("SSID: ", hashedTx[:])
@@ -880,7 +880,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		if err != nil {
 			return err
 		}
-		LoopHandlerSign(ctx, handler, n, len(idsStrings), c.file)
+		LoopHandlerSign(ctx, handler, c, len(idsStrings), c.file)
 		r, err := handler.Result()
 		// if err != nil {
 		// 	return err
@@ -912,7 +912,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 				if err2 != nil {
 					return err
 				}
-				LoopHandlerSign(ctx, handler, n, len(newSetOfParticipants), c.file)
+				LoopHandlerSign(ctx, handler,c, len(newSetOfParticipants), c.file)
 				r, err = handler.Result()
 				i = i+1
 			} else {return err }

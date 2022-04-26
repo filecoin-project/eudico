@@ -101,23 +101,23 @@ func waitingMessages(ctx context.Context, h protocol.Handler, network *Network, 
 // This could be simplified
 // next and send very similar to next and publish in libp2p
 // the code could be simplified to use next and publish.s
-func LoopHandlerSign(ctx context.Context, h protocol.Handler, network *Network, num int, file *os.File) {
-	defer timeTrack(time.Now(), "Signing", num, file)
-	over := make(chan bool)
+// func LoopHandlerSign(ctx context.Context, h protocol.Handler, network *Network, num int, file *os.File) {
+// 	defer timeTrack(time.Now(), "Signing", num, file)
+// 	over := make(chan bool)
 
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+// 	ctx, cancel := context.WithCancel(ctx)
+// 	defer cancel()
 
-	go broadcastingMessage(ctx, h, network, over)
-	go waitingMessages(ctx, h, network, over)
-	go waitTimeOut(ctx, h, network, over)
+// 	go broadcastingMessage(ctx, h, network, over)
+// 	go waitingMessages(ctx, h, network, over)
+// 	go waitTimeOut(ctx, h, network, over)
 
-	<-over
+// 	<-over
 
-	fmt.Println("We are done")
+// 	fmt.Println("We are done")
 	
-	//file.Close()
-}
+// 	//file.Close()
+// }
 func waitTimeOut(ctx context.Context, h protocol.Handler, network *Network, over chan bool) {
 	for {
 		select {

@@ -9,7 +9,7 @@ import (
 	"os"
 	"crypto/sha256"
 	"errors"
-	"hex"
+
 
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	lru "github.com/hashicorp/golang-lru"
@@ -36,7 +36,6 @@ func NewNetwork(sub *pubsub.Subscription, topic *pubsub.Topic) *Network {
 
 type messageReceiptCache struct {
 	messages *lru.TwoQueueCache
-	counts int
 }
 
 func (mrc *messageReceiptCache) add(mcid string) int {
@@ -66,7 +65,7 @@ type MessageValidator struct {
 
 	recvMessages *messageReceiptCache
 
-	blacklist func(peer.ID)
+	//blacklist func(peer.ID)
 
 }
 
@@ -127,7 +126,7 @@ func (mv *MessageValidator) Validate(ctx context.Context, pid peer.ID, msg *prot
 	//res, what = mv.consensus.ValidateBlockPubsub(ctx, pid == bv.self, msg)
 	//verify with h.can accept?
 	if h.CanAccept(msg){
- 	// it's a good block! make sure we've only seen it once
+ 	// it's a good message! make sure we've only seen it once
 		if count := mv.recvMessages.add(HashedCID(msg)); count > 0 {
 			if pid == mv.self {
 				log.Warnf("local block has been seen %d times; ignoring", count)
