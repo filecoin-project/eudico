@@ -61,7 +61,7 @@ const initialValueInWallet = 50
 var sendall = false
 
 // this variable is the number of blocks (in eudico) we want between each checkpoints
-const checkpointFrequency = 100
+const checkpointFrequency = 20
 
 //change to true if regtest is used
 const Regtest = true
@@ -534,7 +534,6 @@ func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *ty
 			} 
 			//Push data to everyone
 			c.r.PushCheckpointMsgs(*msgs,false)
-			fmt.Println("Data pushed to KVS: ",[]byte(minersConfig))
 		}
 
 		return true, nil
@@ -822,22 +821,18 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		c.amount = newValue
 		//fmt.Println("Fee for next transaction is: ", c.cpconfig.Fee)
 		payload1 := "{\"jsonrpc\": \"1.0\", \"id\":\"wow\", \"method\": \"createrawtransaction\", \"params\": [[{\"txid\":\"" + c.ptxid + "\",\"vout\": " + strconv.Itoa(index) + ", \"sequence\": 4294967295}], [{\"" + newTaprootAddress + "\": \"" + fmt.Sprintf("%.8f", newValue) + "\"}, {\"data\": \"" + hex.EncodeToString(data) + "\"}]]}"
-		fmt.Println("Data pushed to opreturn: ", hex.EncodeToString(data))
 		
 
 		result := jsonRPC(c.cpconfig.BitcoinHost, payload1)
-		fmt.Println("Raw tx payload1: ", payload1)
 		if result == nil {
 			return xerrors.Errorf("can not create new transaction")
 		}
-		fmt.Println("Create raw tx result:", result)
 		var hexString map[string]interface{}
 		
 
 		if err = json.Unmarshal([]byte(payload1), &hexString); err != nil {
 			return err
 		}
-		fmt.Println(hexString)
 		//a,_ := hex.DecodeString(hexString)
 		//fmt.Println("trying to replicate Create raw tx result:",  a)
 
@@ -847,15 +842,12 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		if err != nil {
 			return err
 		}
-
-		fmt.Println("TX: ", tx)
 		
 		var buf [8]byte
 		binary.LittleEndian.PutUint64(buf[:], uint64(value*100000000))
 		utxo := append(buf[:], []byte{34}...)
 		utxo = append(utxo, scriptPubkeyBytes...)
 		
-		fmt.Println("UTXO: ", utxo)
 
 		hashedTx, err := TaprootSignatureHash(tx, utxo, 0x00)
 		if err != nil {
@@ -875,7 +867,6 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		//n := NewNetwork(c.sub, c.topic)
 		// hashedTx[:] is the session id
 		// ensure everyone is on the same session id
-		fmt.Println("SSID: ", hashedTx[:])
 		handler, err := protocol.NewMultiHandler(f, hashedTx[:])
 		if err != nil {
 			return err

@@ -189,7 +189,7 @@ func (t *SigningMsg) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufResolveMsg); err != nil {
+	if _, err := w.Write(lengthBufSigningMsg); err != nil {
 		return err
 	}
 

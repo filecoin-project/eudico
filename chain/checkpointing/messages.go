@@ -44,6 +44,8 @@ type MessageValidator struct {
 
 	lk          sync.Mutex
 
+	h protocol.Handler
+
 }
 
 type SigningMsg struct {
@@ -71,11 +73,12 @@ func (r *MessageValidator) addMsgReceipt( bcid string, from peer.ID) int {
 
 }
 
-func NewMessageValidator(self peer.ID, pubsub *pubsub.PubSub) *MessageValidator {
+func NewMessageValidator(self peer.ID, pubsub *pubsub.PubSub, h protocol.Handler) *MessageValidator {
 	return &MessageValidator{
 		self:        self,
 		pubsub:      pubsub,
 		messageCache:   newMsgReceiptCache(),
+		h: h,
 	}
 }
 
@@ -88,10 +91,12 @@ func HandleSigningMsgs(mctx helpers.MetricsCtx, lc fx.Lifecycle, r *MessageValid
 
 func (r *MessageValidator) HandleSigningMsgs(ctx context.Context) error {
 	// Register new message validator for resolver msgs.
+	fmt.Println("Inside handle signing msg")
 	v := NewSigningValidator(r)
-	if err := r.pubsub.RegisterTopicValidator("signing", v.ValidateSigning); err != nil {
+	if err := r.pubsub.RegisterTopicValidator("signing", v.Validate); err != nil {
 		return err
 	}
+	fmt.Println("topic registred")
 
 	log.Infof("subscribing to signing topic")
 
@@ -100,6 +105,7 @@ func (r *MessageValidator) HandleSigningMsgs(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	fmt.Println("topic joined")
 	// msgSub, err := r.pubsub.Subscribe("pikachu") //nolint
 	// if err != nil {
 	// 	return err
@@ -108,6 +114,7 @@ func (r *MessageValidator) HandleSigningMsgs(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	fmt.Println("topic suscribed")
 
 	//time.Sleep(6 * time.Second)
 
@@ -147,21 +154,32 @@ func NewSigningValidator( r *MessageValidator) *SigningValidator {
 }
 
 
-func (v *SigningValidator) ValidateSigning(ctx context.Context, pid peer.ID, msg *pubsub.Message, h protocol.Handler) (res pubsub.ValidationResult) {
+func (v *SigningValidator) Validate(ctx context.Context, pid peer.ID, msg *pubsub.Message) (res pubsub.ValidationResult) {
+	rmsg, err := DecodeSigningMsg(msg.GetData())
+	if err != nil {
+		fmt.Println("Message decode failed")
+		panic(err)
+	}
 	var pmessage protocol.Message
 	// this part is very important
-	err := pmessage.UnmarshalBinary(msg.Data)
+	err = pmessage.UnmarshalBinary(rmsg.Content.Content)
 	if err != nil {
 		panic(err)
 	}
-	if h.CanAccept(&pmessage) {return pubsub.ValidationAccept}
-	return pubsub.ValidationReject
+	if v.r.h.CanAcceptLibp2p(&pmessage) {
+		fmt.Println("Accept message ", &pmessage)
+		v.r.h.Accept(&pmessage)
+		return pubsub.ValidationAccept
+	}
+	fmt.Println("Ignore message: ", &pmessage)
+	return pubsub.ValidationIgnore
 }
 
 
 func (r *MessageValidator) HandleIncomingSigningMsg(ctx context.Context, sub *pubsub.Subscription) {
 	for {
-		msg, err := sub.Next(ctx)
+		_, err := sub.Next(ctx)
+		fmt.Println("Incoming message received")
 		if err != nil {
 			log.Warn("error from message subscription: ", err)
 			if ctx.Err() != nil {
@@ -171,7 +189,7 @@ func (r *MessageValidator) HandleIncomingSigningMsg(ctx context.Context, sub *pu
 			log.Error("error from signing-msg subscription: ", err)
 			continue
 		}
-		fmt.Println("Incoming message:", msg)
+
 
 
 		// Do nothing... everything happens in validate
@@ -183,11 +201,41 @@ func (r *MessageValidator) HandleIncomingSigningMsg(ctx context.Context, sub *pu
 func LoopHandlerSign(ctx context.Context, h protocol.Handler,c *CheckpointingSub, num int, file *os.File) {
 	defer timeTrack(time.Now(), "Signing", num, file)
 	over := make(chan bool)
+	fmt.Println("starting loop")
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	r := NewMessageValidator(c.host.ID(), c.pubsub)
-	go r.HandleSigningMsgs(ctx)
+	r := NewMessageValidator(c.host.ID(), c.pubsub, h)
+	
+	fmt.Println("Inside handle signing msg")
+	v := NewSigningValidator(r)
+	if err := r.pubsub.RegisterTopicValidator("signing", v.Validate); err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println("topic registred")
+
+	log.Infof("subscribing to signing topic")
+
+	// Subscribe to signing topic.
+	topic, err := r.pubsub.Join("signing")
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println("topic joined")
+	// msgSub, err := r.pubsub.Subscribe("pikachu") //nolint
+	// if err != nil {
+	// 	return err
+	// }
+	msgSub, err := topic.Subscribe(pubsub.WithBufferSize(10000))
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println("topic suscribed")
+
+	//time.Sleep(6 * time.Second)
+
+	// Start handle incoming resolver msg.
+	go r.HandleIncomingSigningMsg(ctx, msgSub)
 	go r.broadcastingMessage(ctx, h, over)
 	//go waitingMessages(ctx, h, network, over)
 	go r.waitTimeOut(ctx, h, over)
@@ -213,6 +261,7 @@ func (r *MessageValidator) broadcastingMessage(ctx context.Context, h protocol.H
 		msg, ok := <-h.Listen()
 		fmt.Println("Outgoing message:", msg)
 		if !ok {
+			fmt.Println("message not ok closing chan")
 			// the channel was closed, indicating that the protocol is done executing.
 			// we sleep two seconds to be sure we received all messages before closing
 			//time.Sleep(2*time.Second)
@@ -229,9 +278,11 @@ func (r *MessageValidator) broadcastingMessage(ctx context.Context, h protocol.H
 			Cid:  cid,
 			Content: *msgData,
 		}
+
 		err = r.publishMsg(m)
 		if err != nil {
-			panic(err)
+			fmt.Println("Published message panicked", err)
+			//panic(err)
 		}
 	}
 }
@@ -240,7 +291,8 @@ func (r *MessageValidator) broadcastingMessage(ctx context.Context, h protocol.H
 func (r *MessageValidator) publishMsg(m *SigningMsg) error {
 	b, err := EncodeSigningMsg(m)
 	if err != nil {
-		return xerrors.Errorf("error serializing resolveMsg: %v", err)
+		fmt.Println("error serializing signingMsg")
+		return xerrors.Errorf("error serializing signingMsg: %v", err)
 	}
 	return r.pubsub.Publish("signing", b)
 }
@@ -255,3 +307,5 @@ func HashedCid(cm *MsgData) (string, error) {
 	//return hex.EncodeToString((*cm).content), nil
 
 }
+
+
