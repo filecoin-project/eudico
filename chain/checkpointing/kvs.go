@@ -177,7 +177,7 @@ func (r *Resolver) HandleMsgs(ctx context.Context) error {
 	// if err != nil {
 	// 	return err
 	// }
-	msgSub, err := topic.Subscribe(pubsub.WithBufferSize(3000))
+	msgSub, err := topic.Subscribe(pubsub.WithBufferSize(10000))
 	if err != nil {
 		return err
 	}

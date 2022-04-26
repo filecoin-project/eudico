@@ -1,19 +1,27 @@
+// +build exclude
+
 package checkpointing
+
 import (
 	"context"
 	"fmt"
 	"time"
 	"os"
+	"crypto/sha256"
+	"errors"
+	"hex"
 
+	peer "github.com/libp2p/go-libp2p-core/peer"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/sa8/multi-party-sig/pkg/protocol"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"golang.org/x/xerrors"
 )
 
 type Network struct {
 	sub   *pubsub.Subscription
 	topic *pubsub.Topic
 }
-
 // this define new means of communication, not a network
 // we reuse the same network
 // in the taurus group, they called it new network
@@ -24,6 +32,120 @@ func NewNetwork(sub *pubsub.Subscription, topic *pubsub.Topic) *Network {
 	}
 	return c
 }
+
+
+type messageReceiptCache struct {
+	messages *lru.TwoQueueCache
+	counts int
+}
+
+func (mrc *messageReceiptCache) add(mcid string) int {
+	val, ok := brc.blocks.Get(bcid)
+	if !ok {
+		brc.blocks.Add(bcid, int(1))
+		return 0
+	}
+
+	brc.blocks.Add(bcid, val.(int)+1)
+	return val.(int)
+}
+
+func newMessageReceiptCache() *messageReceiptCache {
+	c, _ := lru.New2Q(8192)
+
+	return &messageReceiptCache{
+		messages: c,
+	}
+}
+type MessageValidator struct {
+	self peer.ID
+
+	peers *lru.TwoQueueCache
+
+	killThresh int
+
+	recvMessages *messageReceiptCache
+
+	blacklist func(peer.ID)
+
+}
+
+func NewMessageValidator(self peer.ID,  blacklist func(peer.ID)) *MessageValidator {
+	p, _ := lru.New2Q(4096)
+	return &MessageValidator{
+		self:       self,
+		peers:      p,
+		killThresh: 10,
+		blacklist:  blacklist,
+		recvMessages: newMessageReceiptCache(),
+	}
+}
+
+
+func (mv *MessageValidator) flagPeer(p peer.ID) {
+	v, ok := mv.peers.Get(p)
+	if !ok {
+		mv.peers.Add(p, int(1))
+		return
+	}
+
+	val := v.(int)
+
+	if val >= mv.killThresh {
+		log.Warnf("blacklisting peer %s", p)
+		mv.blacklist(p)
+		return
+	}
+
+	mv.peers.Add(p, v.(int)+1)
+}
+func HashedCid(cm *protocol.Message) (string, error) {
+	// to do
+	if len((*cm).Data) == 0 {
+		return "", errors.New("Message data is empty.")
+	}
+	sha256 := sha256.Sum256((*cm).Data)
+
+	return hex.EncodeToString(sha256[:]), nil
+	//return hex.EncodeToString((*cm).content), nil
+
+}
+
+func (mv *MessageValidator) Validate(ctx context.Context, pid peer.ID, msg *protocol.Message, h protocol.Handler) (res pubsub.ValidationResult) {
+	defer func() {
+		if rerr := recover(); rerr != nil {
+			err := xerrors.Errorf("validate message: %s", rerr)
+			// I don't think we need the following line in our case
+			//recordFailure(ctx, metrics.BlockValidationFailure, err.Error())
+			mv.flagPeer(pid)
+			res = pubsub.ValidationReject
+			return
+		}
+	}()
+
+	var what string
+	//res, what = mv.consensus.ValidateBlockPubsub(ctx, pid == bv.self, msg)
+	//verify with h.can accept?
+	if h.CanAccept(msg){
+ 	// it's a good block! make sure we've only seen it once
+		if count := mv.recvMessages.add(HashedCID(msg)); count > 0 {
+			if pid == mv.self {
+				log.Warnf("local block has been seen %d times; ignoring", count)
+			}
+
+			// TODO: once these changes propagate to the network, we can consider
+			// dropping peers who send us the same block multiple times
+			return pubsub.ValidationIgnore
+		}
+	} else {
+		//recordFailure(ctx, metrics.MessageValidationFailure, nil)
+		return pubsub.ValidationReject
+	}
+
+	return pubsub.ValidationAccept
+}
+
+
 
 // we could potentially re-use next.sub.net
 // protocol message est la structure 

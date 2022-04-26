@@ -16,6 +16,7 @@ import (
 	"github.com/sa8/multi-party-sig/pkg/math/curve"
 	"github.com/btcsuite/btcutil/bech32"
 	"github.com/cronokirby/safenum"
+	//"github.com/btcsuite/btcd/wire"
 )
 
 type VerificationShare struct {
@@ -52,6 +53,7 @@ func sha256Util(data []byte) []byte {
 	h.Write(data[:])
 	return h.Sum(nil)
 }
+
 
 func TaprootSignatureHash(tx []byte, utxo []byte, hash_type byte) ([]byte, error) {
 	if hash_type != 0x00 {
@@ -215,7 +217,11 @@ func prepareWitnessRawTransaction(rawtx string, sig []byte) string {
 
 	return wtx
 }
+// func prepareRawTransactionBeforeSigning(rawtx string, sig []byte) string {
+// 	wtx := rawtx[:4*2] + "00" + "01" + rawtx[4*2:len(rawtx)-4*2] + "01" + "40" + hex.EncodeToString(sig) + rawtx[len(rawtx)-4*2:]
 
+// 	return wtx
+// }
 func parseUnspentTxOut(utxo []byte) (amount, script []byte) {
 	return utxo[0:8], utxo[9:]
 }
@@ -311,3 +317,75 @@ func timeTrack(start time.Time, name string, number int, file *os.File) {
    //fmt.Println(name," took", elapsed)
    fmt.Fprintf(file, "%s,%d,%s \n", name, number, elapsed)
 }
+
+// func CreateTx(pubkey string, destination string, amount int64) (string, error) {
+
+
+//    // use TestNet3Params for interacting with bitcoin testnet
+//    // if we want to interact with main net should use MainNetParams
+//    addrPubKey, err := btcutil.NewAddressPubKey(pubkey.SerializeUncompressed(), &chaincfg.TestNet3Params)
+//    if err != nil {
+//       return "", err
+//    }
+
+//    txid, balance, pkScript, err := GetUTXO(addrPubKey.EncodeAddress())
+//    if err != nil {
+//       return "", err
+//    }
+
+
+//    /*
+//     * 1 or unit-amount in Bitcoin is equal to 1 satoshi and 1 Bitcoin = 100000000 satoshi
+//     */
+
+//    // checking for sufficiency of account
+//    if balance < amount {
+//       return "", fmt.Errorf("the balance of the account is not sufficient")
+//    }
+
+//    // extracting destination address as []byte from function argument (destination string)
+//    destinationAddr, err := btcutil.DecodeAddress(destination, &chaincfg.TestNet3Params)
+//    if err != nil {
+//       return "", err
+//    }
+
+//    destinationAddrByte, err := txscript.PayToAddrScript(destinationAddr)
+//    if err != nil {
+//       return "", err
+//    }
+
+
+//    // creating a new bitcoin transaction, different sections of the tx, including
+//    // input list (contain UTXOs) and outputlist (contain destination address and usually our address)
+//    // in next steps, sections will be field and pass to sign
+//    redeemTx, err := NewTx()
+//    if err != nil {
+//       return "", err
+//    }
+
+
+//    utxoHash, err := chainhash.NewHashFromStr(txid)
+//    if err != nil {
+//       return "", err
+//    }
+
+//    // the second argument is vout or Tx-index, which is the index
+//    // of spending UTXO in the transaction that Txid referred to
+//    // in this case is 0, but can vary different numbers
+//    outPoint := wire.NewOutPoint(utxoHash, 0)
+
+//    // making the input, and adding it to transaction
+//    txIn := wire.NewTxIn(outPoint, nil, nil)
+//    redeemTx.AddTxIn(txIn)
+
+//    // adding the destination address and the amount to
+//    // the transaction as output
+//    redeemTxOut := wire.NewTxOut(amount, destinationAddrByte)
+//    redeemTx.AddTxOut(redeemTxOut)
+
+//    // now sign the transaction
+//    finalRawTx, err := SignTx(privKey, pkScript, redeemTx)
+
+
+//    return finalRawTx, nil
+// }
