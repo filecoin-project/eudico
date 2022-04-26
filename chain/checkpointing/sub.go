@@ -1180,7 +1180,7 @@ func BuildCheckpointingSub(mctx helpers.MetricsCtx, lc fx.Lifecycle, c *Checkpoi
 		merkleRoot := hashMerkleRoot(c.taprootConfig.PublicKey, cidBytes)
 		c.tweakedValue = hashTweakedValue(c.taprootConfig.PublicKey, merkleRoot)
 	}
-	c.file, err = os.Create(c.host.ID().String()+"data.txt")
+	c.file, err = os.Create("data.txt")
     if err != nil {
         log.Fatal(err)
     }
