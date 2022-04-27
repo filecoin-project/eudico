@@ -26,7 +26,7 @@ tmux new-session -d -s "mir" \; \
         export EUDICO_PATH=$NODE_0_PATH
         export GOLOG_LOG_LEVEL=$LOG_LEVEL
         export EUDICO_MIR_ID=0
-        export EUDICO_MIR_NODES=1
+        export EUDICO_MIR_NODES=0@127.0.0.1:10000
         sleep 3
         ./eudico wait-api;
         ./eudico wallet import --as-default ./testdata/wallet/node0.key;

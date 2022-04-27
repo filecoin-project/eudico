@@ -58,14 +58,17 @@ type MirAgent struct {
 	stopChan chan struct{}
 }
 
-func NewMirAgent(id string, n int) (*MirAgent, error) {
+func NewMirAgent(id string, nodes string) (*MirAgent, error) {
 	// TODO: Are client ID and node ID the same in this case?
-	// TODO: Should mirbft use a different type for node ID?
+	// TODO: Should mir use a different type for node ID?
 	ownID := t.NodeID(id)
 	log.Debugf("Mir agent %v is being created", ownID)
 	defer log.Debugf("Mir agent %v has been created", ownID)
 
-	nodeIds, nodeAddrs := getConfig(n)
+	nodeIds, nodeAddrs, err := parsePersistentNodes(nodes)
+	if err != nil {
+		return nil, err
+	}
 	log.Debug("Mir node config:", nodeIds, nodeAddrs)
 
 	walPath := path.Join("eudico-wal", fmt.Sprintf("%v", id))

@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -41,7 +40,7 @@ const (
 	MaxHeightDrift = 5
 	SubmitInterval = 300 * time.Millisecond
 	NodeIDEnv      = "EUDICO_MIR_ID"
-	NodeNumberEnv  = "EUDICO_MIR_NODES"
+	NodesEnv       = "EUDICO_MIR_NODES"
 )
 
 var (
@@ -49,7 +48,7 @@ var (
 	_   consensus.Consensus = &Mir{}
 )
 
-func NodeID() string {
+func NodeIDFromEnv() string {
 	id := os.Getenv(NodeIDEnv)
 	if id == "" {
 		panic(fmt.Sprintf("failed to get Mir node ID"))
@@ -57,16 +56,12 @@ func NodeID() string {
 	return id
 }
 
-func NodeNumber() int {
-	n := os.Getenv(NodeNumberEnv)
+func NodesFromEnv() string {
+	n := os.Getenv(NodesEnv)
 	if n == "" {
-		panic(fmt.Sprintf("failed to get Mir node number"))
+		panic(fmt.Sprintf("failed to get Mir nodes"))
 	}
-	nn, err := strconv.Atoi(n)
-	if err != nil {
-		panic(fmt.Errorf("failed to convert Mir node number: %s", err))
-	}
-	return nn
+	return n
 }
 
 type Mir struct {

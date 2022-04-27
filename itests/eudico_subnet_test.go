@@ -26,7 +26,7 @@ func TestEudicoSubnet(t *testing.T) {
 	if err := os.Setenv("EUDICO_MIR_ID", "0"); err != nil {
 		require.NoError(t, err)
 	}
-	if err := os.Setenv("EUDICO_MIR_NODES", "1"); err != nil {
+	if err := os.Setenv("EUDICO_MIR_NODES", "0@127.0.0.1:10000"); err != nil {
 		require.NoError(t, err)
 	}
 

@@ -30,10 +30,10 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	// if err != nil {
 	//	log.Fatalf("unable to get a node ID: %s", err)
 	// }
-	nodeID := NodeID()
-	nodeNumber := NodeNumber()
+	nodeID := NodeIDFromEnv()
+	nodes := NodesFromEnv()
 
-	mirAgent, err := NewMirAgent(nodeID, nodeNumber)
+	mirAgent, err := NewMirAgent(nodeID, nodes)
 	if err != nil {
 		return err
 	}

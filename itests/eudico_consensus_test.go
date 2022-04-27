@@ -22,13 +22,6 @@ import (
 	mapi "github.com/filecoin-project/mir"
 )
 
-func TestEudicoConsensus1(t *testing.T) {
-
-	t.Run("mir", func(t *testing.T) {
-		runMirConsensusTests(t, kit.ThroughRPC(), kit.RootMir())
-	})
-}
-
 func TestEudicoConsensus(t *testing.T) {
 	t.Run("dummy", func(t *testing.T) {
 		runDummyConsensusTests(t, kit.ThroughRPC(), kit.RootDummy())
@@ -92,7 +85,7 @@ func runMirConsensusTests(t *testing.T, opts ...interface{}) {
 	if err := os.Setenv("EUDICO_MIR_ID", "0"); err != nil {
 		require.NoError(t, err)
 	}
-	if err := os.Setenv("EUDICO_MIR_NODES", "1"); err != nil {
+	if err := os.Setenv("EUDICO_MIR_NODES", "0@127.0.0.1:10000"); err != nil {
 		require.NoError(t, err)
 	}
 	ts := eudicoConsensusSuite{opts: opts}
@@ -104,7 +97,11 @@ func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	full, _ := kit.EudicoEnsembleFullNodeOnly(t, ts.opts...)
+	full, ens := kit.EudicoEnsembleFullNodeOnly(t, ts.opts...)
+	defer func() {
+		err := ens.Stop()
+		require.NoError(t, err)
+	}()
 
 	l, err := full.WalletList(ctx)
 	require.NoError(t, err)
@@ -124,6 +121,9 @@ func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
 	if xerrors.Is(mapi.ErrStopped, err) {
 		return
 	}
+	require.NoError(t, err)
+
+	err = ens.Stop()
 	require.NoError(t, err)
 }
 

@@ -339,6 +339,11 @@ func (n *EudicoEnsemble) Stop() error {
 		n.options.rootConsensus == hierarchical.Tendermint {
 		return n.stopTendermint()
 	}
+
+	if n.options.subnetConsensus == hierarchical.Mir ||
+		n.options.rootConsensus == hierarchical.Mir {
+		return n.stopMir()
+	}
 	return nil
 }
 
@@ -1016,6 +1021,13 @@ func (n *EudicoEnsemble) removeTendermintFiles() error {
 	return nil
 }
 
+func (n *EudicoEnsemble) removeMirFiles() error {
+	if err := os.RemoveAll("./eudico-wal"); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (n *EudicoEnsemble) stopTendermint() error {
 	if n.tendermintAppServer == nil {
 		return xerrors.New("tendermint server is not running")
@@ -1035,6 +1047,10 @@ func (n *EudicoEnsemble) stopTendermint() error {
 		err1,
 		err2,
 	)
+}
+
+func (n *EudicoEnsemble) stopMir() error {
+	return n.removeMirFiles()
 }
 
 // EudicoEnsembleMinimal creates and starts an EudicoEnsemble with a single full node and a single miner.
