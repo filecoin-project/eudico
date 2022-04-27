@@ -652,7 +652,7 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	// if err != nil {
 	// 	return err
 	// }
-	LoopHandlerSign(ctx, handler, c, len(idsStrings), c.file, sessionID)
+	LoopHandlerSign(ctx, handler, c, len(idsStrings), c.file, sessionID, "DKG")
 	r, err := handler.Result()
 
 
@@ -880,7 +880,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		if err != nil {
 			return err
 		}
-		LoopHandlerSign(ctx, handler, c, len(idsStrings), c.file, string(cp))
+		LoopHandlerSign(ctx, handler, c, len(idsStrings), c.file, string(cp), "Signing")
 		r, err := handler.Result()
 		// if err != nil {
 		// 	return err
@@ -912,9 +912,9 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 				if err2 != nil {
 					return err
 				}
-				LoopHandlerSign(ctx, handler,c, len(newSetOfParticipants), c.file, string(cp)+string(j))
+				LoopHandlerSign(ctx, handler,c, len(newSetOfParticipants), c.file, string(cp)+string(j), "Sign-after-failure")
 				r, err = handler.Result()
-				i = i+1
+				j = j+1
 			} else {return err }
 		}
 		log.Infow("result :", "result", r)
@@ -945,9 +945,9 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 			result = jsonRPC(c.cpconfig.BitcoinHost, payload)
 			//fmt.Println("Transaction to be sent: ", result)
 			if result["error"] != nil {
-				return xerrors.Errorf("failed to broadcast transaction")
-			}
-			fmt.Println("Tx id: ", result["result"].(string))
+				fmt.Println("failed to broadcast transaction ", result["error"])
+				//return xerrors.Errorf("failed to broadcast transaction")
+			} else {fmt.Println("Tx id: ", result["result"].(string))}
 		}
 		c.scriptPubkeyBytes,_ = hex.DecodeString(getTaprootScript(pubkeyShort))
 

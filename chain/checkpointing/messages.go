@@ -211,7 +211,7 @@ func (r *MessageValidator) HandleIncomingSigningMsg(ctx context.Context, sub *pu
 }
 
 
-func LoopHandlerSign(ctx context.Context, h protocol.Handler,c *CheckpointingSub, num int, file *os.File, t string) {
+func LoopHandlerSign(ctx context.Context, h protocol.Handler,c *CheckpointingSub, num int, file *os.File, t string, tag string) {
 	
 	over := make(chan bool)
 	fmt.Println("starting loop at ", time.Now())
@@ -251,7 +251,7 @@ func LoopHandlerSign(ctx context.Context, h protocol.Handler,c *CheckpointingSub
 	// Start handle incoming resolver msg.
 	go r.HandleIncomingSigningMsg(ctx, msgSub)
 	time.Sleep(2 * time.Second)
-	defer timeTrack(time.Now(), "Signing", num, file)
+	defer timeTrack(time.Now(), tag, num, file)
 	go r.broadcastingMessage(ctx, h, over)
 	//go waitingMessages(ctx, h, network, over)
 	go r.waitTimeOut(ctx, h, over)
