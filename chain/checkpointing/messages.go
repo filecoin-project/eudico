@@ -1,3 +1,5 @@
+// +build !race
+
 package checkpointing
 
 //go:generate go run ./gen/gen.go
@@ -19,13 +21,13 @@ import (
 	// "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	//"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	//"github.com/filecoin-project/lotus/chain/types"
-	"github.com/filecoin-project/lotus/node/modules/helpers"
+	//"github.com/filecoin-project/lotus/node/modules/helpers"
 	//"github.com/ipfs/go-cid"
 	"github.com/sa8/multi-party-sig/pkg/protocol"
 	//logging "github.com/ipfs/go-log/v2"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"go.uber.org/fx"
+	//"go.uber.org/fx"
 	xerrors "golang.org/x/xerrors"
 )
 
@@ -33,6 +35,7 @@ type MessageValidator struct {
 	//netName address.SubnetID
 	self   peer.ID
 	pubsub *pubsub.PubSub
+	topic string
 
 	// Caches to track duplicate and frequent msgs
 	messageCache *msgReceiptCache
@@ -73,59 +76,60 @@ func (r *MessageValidator) addMsgReceipt( bcid string, from peer.ID) int {
 
 }
 
-func NewMessageValidator(self peer.ID, pubsub *pubsub.PubSub, h protocol.Handler) *MessageValidator {
+func NewMessageValidator(self peer.ID, pubsub *pubsub.PubSub, h protocol.Handler, t string) *MessageValidator {
 	return &MessageValidator{
 		self:        self,
 		pubsub:      pubsub,
 		messageCache:   newMsgReceiptCache(),
 		h: h,
+		topic: t,
 	}
 }
 
-func HandleSigningMsgs(mctx helpers.MetricsCtx, lc fx.Lifecycle, r *MessageValidator) {
-	ctx := helpers.LifecycleCtx(mctx, lc)
-	if err := r.HandleSigningMsgs(ctx); err != nil {
-		panic(err)
-	}
-}
+// func HandleSigningMsgs(mctx helpers.MetricsCtx, lc fx.Lifecycle, r *MessageValidator) {
+// 	ctx := helpers.LifecycleCtx(mctx, lc)
+// 	if err := r.HandleSigningMsgs(ctx); err != nil {
+// 		panic(err)
+// 	}
+// }
 
-func (r *MessageValidator) HandleSigningMsgs(ctx context.Context) error {
-	// Register new message validator for resolver msgs.
-	fmt.Println("Inside handle signing msg")
-	v := NewSigningValidator(r)
-	if err := r.pubsub.RegisterTopicValidator("signing", v.Validate); err != nil {
-		return err
-	}
-	fmt.Println("topic registred")
+// func (r *MessageValidator) HandleSigningMsgs(ctx context.Context) error {
+// 	// Register new message validator for resolver msgs.
+// 	fmt.Println("Inside handle signing msg")
+// 	v := NewSigningValidator(r)
+// 	if err := r.pubsub.RegisterTopicValidator("signing", v.Validate); err != nil {
+// 		return err
+// 	}
+// 	fmt.Println("topic registred")
 
-	log.Infof("subscribing to signing topic")
+// 	log.Infof("subscribing to signing topic")
 
-	// Subscribe to signing topic.
-	topic, err := r.pubsub.Join("signing")
-	if err != nil {
-		return err
-	}
-	fmt.Println("topic joined")
-	// msgSub, err := r.pubsub.Subscribe("pikachu") //nolint
-	// if err != nil {
-	// 	return err
-	// }
-	msgSub, err := topic.Subscribe(pubsub.WithBufferSize(10000))
-	if err != nil {
-		return err
-	}
-	fmt.Println("topic suscribed")
+// 	// Subscribe to signing topic.
+// 	topic, err := r.pubsub.Join("signing")
+// 	if err != nil {
+// 		return err
+// 	}
+// 	fmt.Println("topic joined")
+// 	// msgSub, err := r.pubsub.Subscribe("pikachu") //nolint
+// 	// if err != nil {
+// 	// 	return err
+// 	// }
+// 	msgSub, err := topic.Subscribe(pubsub.WithBufferSize(10000))
+// 	if err != nil {
+// 		return err
+// 	}
+// 	fmt.Println("topic suscribed")
 
-	//time.Sleep(6 * time.Second)
+// 	//time.Sleep(6 * time.Second)
 
-	// Start handle incoming resolver msg.
-	go r.HandleIncomingSigningMsg(ctx, msgSub)
-	return nil
-}
+// 	// Start handle incoming resolver msg.
+// 	go r.HandleIncomingSigningMsg(ctx, msgSub)
+// 	return nil
+// }
 func (r *MessageValidator) Close() error {
 	// Unregister topic validator when resolver is closed. If not, when
 	// initializing it again registering the validator will fail.
-	return r.pubsub.UnregisterTopicValidator("signing")
+	return r.pubsub.UnregisterTopicValidator(r.topic)
 }
 
 func DecodeSigningMsg(b []byte) (*SigningMsg, error) {
@@ -155,31 +159,40 @@ func NewSigningValidator( r *MessageValidator) *SigningValidator {
 
 
 func (v *SigningValidator) Validate(ctx context.Context, pid peer.ID, msg *pubsub.Message) (res pubsub.ValidationResult) {
-	rmsg, err := DecodeSigningMsg(msg.GetData())
+	smsg, err := DecodeSigningMsg(msg.GetData())
 	if err != nil {
 		fmt.Println("Message decode failed")
 		panic(err)
 	}
+
+	sub, err := v.r.processSigningMsg(ctx, smsg)
+	if err != nil {
+		log.Errorf("error processing signing message: %s", err)
+		return sub
+	}
+
+	return pubsub.ValidationAccept
+}
+func (r *MessageValidator) processSigningMsg(ctx context.Context, smsg *SigningMsg) (pubsub.ValidationResult, error) {
 	var pmessage protocol.Message
 	// this part is very important
-	err = pmessage.UnmarshalBinary(rmsg.Content.Content)
+	err := pmessage.UnmarshalBinary(smsg.Content.Content)
 	if err != nil {
 		panic(err)
 	}
-	if v.r.h.CanAcceptLibp2p(&pmessage) {
+	//fmt.Println("processing pmessage: ", pmessage)
+	if r.h.CanAccept(&pmessage){
 		fmt.Println("Accept message ", &pmessage)
-		v.r.h.Accept(&pmessage)
-		return pubsub.ValidationAccept
+		r.h.Accept(&pmessage)
+		return pubsub.ValidationAccept, nil
 	}
-	fmt.Println("Ignore message: ", &pmessage)
-	return pubsub.ValidationIgnore
+
+	return pubsub.ValidationAccept, nil
+
 }
-
-
 func (r *MessageValidator) HandleIncomingSigningMsg(ctx context.Context, sub *pubsub.Subscription) {
 	for {
 		_, err := sub.Next(ctx)
-		fmt.Println("Incoming message received")
 		if err != nil {
 			log.Warn("error from message subscription: ", err)
 			if ctx.Err() != nil {
@@ -198,18 +211,19 @@ func (r *MessageValidator) HandleIncomingSigningMsg(ctx context.Context, sub *pu
 }
 
 
-func LoopHandlerSign(ctx context.Context, h protocol.Handler,c *CheckpointingSub, num int, file *os.File) {
-	defer timeTrack(time.Now(), "Signing", num, file)
+func LoopHandlerSign(ctx context.Context, h protocol.Handler,c *CheckpointingSub, num int, file *os.File, t string) {
+	
 	over := make(chan bool)
-	fmt.Println("starting loop")
+	fmt.Println("starting loop at ", time.Now())
+
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	r := NewMessageValidator(c.host.ID(), c.pubsub, h)
+	r := NewMessageValidator(c.host.ID(), c.pubsub, h, t)
 	
 	fmt.Println("Inside handle signing msg")
 	v := NewSigningValidator(r)
-	if err := r.pubsub.RegisterTopicValidator("signing", v.Validate); err != nil {
+	if err := r.pubsub.RegisterTopicValidator(r.topic, v.Validate); err != nil {
 		fmt.Println(err)
 	}
 	fmt.Println("topic registred")
@@ -217,7 +231,7 @@ func LoopHandlerSign(ctx context.Context, h protocol.Handler,c *CheckpointingSub
 	log.Infof("subscribing to signing topic")
 
 	// Subscribe to signing topic.
-	topic, err := r.pubsub.Join("signing")
+	topic, err := r.pubsub.Join(r.topic)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -236,6 +250,8 @@ func LoopHandlerSign(ctx context.Context, h protocol.Handler,c *CheckpointingSub
 
 	// Start handle incoming resolver msg.
 	go r.HandleIncomingSigningMsg(ctx, msgSub)
+	time.Sleep(2 * time.Second)
+	defer timeTrack(time.Now(), "Signing", num, file)
 	go r.broadcastingMessage(ctx, h, over)
 	//go waitingMessages(ctx, h, network, over)
 	go r.waitTimeOut(ctx, h, over)
@@ -245,15 +261,13 @@ func LoopHandlerSign(ctx context.Context, h protocol.Handler,c *CheckpointingSub
 	fmt.Println("We are done")
 	
 	//file.Close()
+	r.Close()
+	fmt.Println("Topic unregister")
 }
+
 func (r *MessageValidator) waitTimeOut(ctx context.Context, h protocol.Handler, over chan bool) {
 	for {
-		select {
-		case <-over:
-			return
-		default:
-			h.TimeOutExpired()
-		}
+		h.TimeOutExpired()
 	}
 }
 func (r *MessageValidator) broadcastingMessage(ctx context.Context, h protocol.Handler,  over chan bool) {
@@ -261,7 +275,7 @@ func (r *MessageValidator) broadcastingMessage(ctx context.Context, h protocol.H
 		msg, ok := <-h.Listen()
 		fmt.Println("Outgoing message:", msg)
 		if !ok {
-			fmt.Println("message not ok closing chan")
+			fmt.Println("closing channel")
 			// the channel was closed, indicating that the protocol is done executing.
 			// we sleep two seconds to be sure we received all messages before closing
 			//time.Sleep(2*time.Second)
@@ -294,7 +308,7 @@ func (r *MessageValidator) publishMsg(m *SigningMsg) error {
 		fmt.Println("error serializing signingMsg")
 		return xerrors.Errorf("error serializing signingMsg: %v", err)
 	}
-	return r.pubsub.Publish("signing", b)
+	return r.pubsub.Publish(r.topic, b)
 }
 func HashedCid(cm *MsgData) (string, error) {
 	// to do

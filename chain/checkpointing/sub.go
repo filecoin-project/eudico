@@ -61,7 +61,7 @@ const initialValueInWallet = 50
 var sendall = false
 
 // this variable is the number of blocks (in eudico) we want between each checkpoints
-const checkpointFrequency = 20
+const checkpointFrequency = 100
 
 //change to true if regtest is used
 const Regtest = true
@@ -627,14 +627,14 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	//starting a new ceremony with the subscription and topic that were
 	// already defined
 	//why not call the checkpointing sub directly?
-	n := NewNetwork(c.sub, c.topic)
+	
 
 	// Keygen with Gennaro protocol if failing
 	f := frost.KeygenTaprootGennaro(id, ids, threshold)
 	//f := frost.KeygenTaproot(id, ids, threshold)
 
 
-
+	n := NewNetwork(c.sub, c.topic)
 	//handler, err := protocol.NewMultiHandler(f, []byte{1, 2, 3})
 	sessionID := strings.Join(idsStrings, "")
 	handler, err := protocol.NewMultiHandler(f, []byte(sessionID))
@@ -647,6 +647,15 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 		// if a participant is mibehaving the DKG entirely fail (no fallback)
 		return err
 	}
+
+	// handler, err := protocol.NewMultiHandler(f, []byte(sessionID))
+	// if err != nil {
+	// 	return err
+	// }
+	// LoopHandlerSign(ctx, handler, c, len(idsStrings), c.file)
+	// r, err := handler.Result()
+
+
 	log.Infow("result :", "result", r)
 
 	var ok bool
@@ -871,7 +880,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		if err != nil {
 			return err
 		}
-		LoopHandlerSign(ctx, handler, c, len(idsStrings), c.file)
+		LoopHandlerSign(ctx, handler, c, len(idsStrings), c.file, string(cp))
 		r, err := handler.Result()
 		// if err != nil {
 		// 	return err
@@ -903,7 +912,7 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 				if err2 != nil {
 					return err
 				}
-				LoopHandlerSign(ctx, handler,c, len(newSetOfParticipants), c.file)
+				LoopHandlerSign(ctx, handler,c, len(newSetOfParticipants), c.file, string(cp)+string(j))
 				r, err = handler.Result()
 				i = i+1
 			} else {return err }
