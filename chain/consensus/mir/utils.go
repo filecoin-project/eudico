@@ -55,6 +55,7 @@ func parsePersistentNodes(input string) ([]t.NodeID, map[t.NodeID]string, error)
 	return nodeIds, nodeAddrs, nil
 }
 
+// nolint
 func getConfig(n int) ([]t.NodeID, map[t.NodeID]string) {
 	var nodeIds []t.NodeID
 	for i := 0; i < n; i++ {
