@@ -33,8 +33,6 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	nodeID := NodeID()
 	nodeNumber := NodeNumber()
 
-	api.Sub
-
 	mirAgent, err := NewMirAgent(nodeID, nodeNumber)
 	if err != nil {
 		return err
@@ -128,15 +126,6 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 
 				reqNo := mirTypes.ReqNo(msg.Message.Nonce)
 				tx := common.NewSignedMessageBytes(msgBytes, nil)
-
-				// TODO: define what client ID is in Eudico case.
-				// Probably, client ID is a peer ID. In this case Mir's client ID interface and type should be changed.
-				//
-				// nodeID, err := api.ID(ctx)
-				//	if err != nil {
-				//		log.Fatalf("unable to get a node ID: %s", err)
-				//	}
-				//	nodeIDBytes := blake3.Sum256([]byte(nodeID.String()))
 
 				// TODO: client ID should be subnet.String()+"::"+peer.ID.String()
 				err = mirAgent.Node.SubmitRequest(ctx, mirTypes.ClientID(nodeID), reqNo, tx, nil)
