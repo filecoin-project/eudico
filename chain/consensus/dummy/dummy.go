@@ -1,7 +1,7 @@
-// Package ideal implements Ideal consensus for testing purposes only.
-// Ideal consensus is a centralised consensus in one node setting.
-// It is used for testing only.
-package ideal
+// Package dummy implements consensus for testing purposes only.
+// Dummy consensus is a centralised consensus, it works on one node only,
+// and fundamentally cannot be extended to run on multiple nodes.
+package dummy
 
 import (
 	"context"
@@ -40,11 +40,11 @@ const (
 )
 
 var (
-	log                     = logging.Logger("ideal-consensus")
-	_   consensus.Consensus = &Ideal{}
+	log                     = logging.Logger("dummy-consensus")
+	_   consensus.Consensus = &Dummy{}
 )
 
-type Ideal struct {
+type Dummy struct {
 	store    *store.ChainStore
 	beacon   beacon.Schedule
 	sm       *stmgr.StateManager
@@ -68,7 +68,7 @@ func NewConsensus(
 	subnetID := address.SubnetID(netName)
 	log.Infof("New Mir consensus for %s subnet", subnetID)
 
-	return &Ideal{
+	return &Dummy{
 		store:    sm.ChainStore(),
 		beacon:   b,
 		sm:       sm,
@@ -80,10 +80,10 @@ func NewConsensus(
 	}, nil
 }
 
-func (bft *Ideal) ValidateBlock(ctx context.Context, b *types.FullBlock) (err error) {
+func (bft *Dummy) ValidateBlock(ctx context.Context, b *types.FullBlock) (err error) {
 	log.Infof("starting block validation process at @%d", b.Header.Height)
 
-	if err := common.BlockSanityChecks(hierarchical.Ideal, b.Header); err != nil {
+	if err := common.BlockSanityChecks(hierarchical.Dummy, b.Header); err != nil {
 		return xerrors.Errorf("incoming header failed basic sanity checks: %w", err)
 	}
 
@@ -165,7 +165,7 @@ func (bft *Ideal) ValidateBlock(ctx context.Context, b *types.FullBlock) (err er
 	return nil
 }
 
-func (bft *Ideal) ValidateBlockPubsub(ctx context.Context, self bool, msg *pubsub.Message) (pubsub.ValidationResult, string) {
+func (bft *Dummy) ValidateBlockPubsub(ctx context.Context, self bool, msg *pubsub.Message) (pubsub.ValidationResult, string) {
 	if self {
 		return common.ValidateLocalBlock(ctx, msg)
 	}
@@ -204,7 +204,7 @@ func (bft *Ideal) ValidateBlockPubsub(ctx context.Context, self bool, msg *pubsu
 	return pubsub.ValidationAccept, ""
 }
 
-func (bft *Ideal) minerIsValid(maddr address.Address) error {
+func (bft *Dummy) minerIsValid(maddr address.Address) error {
 	switch maddr.Protocol() {
 	case address.BLS:
 		fallthrough
@@ -217,7 +217,7 @@ func (bft *Ideal) minerIsValid(maddr address.Address) error {
 // IsEpochBeyondCurrMax is used in Filcns to detect delayed blocks.
 // We are currently using defaults here and not worrying about it.
 // We will consider potential changes of Consensus interface in https://github.com/filecoin-project/eudico/issues/143.
-func (bft *Ideal) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
+func (bft *Dummy) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
 	if bft.genesis == nil {
 		return false
 	}
@@ -226,8 +226,8 @@ func (bft *Ideal) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
 	return epoch > (abi.ChainEpoch((now-bft.genesis.MinTimestamp())/build.BlockDelaySecs) + MaxHeightDrift)
 }
 
-func (bft *Ideal) Type() hierarchical.ConsensusType {
-	return hierarchical.Ideal
+func (bft *Dummy) Type() hierarchical.ConsensusType {
+	return hierarchical.Dummy
 }
 
 // Weight defines weight.

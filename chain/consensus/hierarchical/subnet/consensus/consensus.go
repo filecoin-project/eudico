@@ -11,10 +11,10 @@ import (
 	"github.com/filecoin-project/lotus/chain/beacon"
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
+	"github.com/filecoin-project/lotus/chain/consensus/dummy"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
-	"github.com/filecoin-project/lotus/chain/consensus/ideal"
 	"github.com/filecoin-project/lotus/chain/consensus/mir"
 	"github.com/filecoin-project/lotus/chain/consensus/tendermint"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
@@ -38,8 +38,8 @@ func Weight(consensus hierarchical.ConsensusType) (store.WeightFunc, error) {
 		return tendermint.Weight, nil
 	case hierarchical.Mir:
 		return mir.Weight, nil
-	case hierarchical.Ideal:
-		return ideal.Weight, nil
+	case hierarchical.Dummy:
+		return dummy.Weight, nil
 	default:
 		return nil, xerrors.New("consensus type not supported")
 	}
@@ -62,8 +62,8 @@ func New(
 		return tendermint.NewConsensus(ctx, sm, snMgr, beacon, r, verifier, genesis, netName)
 	case hierarchical.Mir:
 		return mir.NewConsensus(ctx, sm, snMgr, beacon, r, verifier, genesis, netName)
-	case hierarchical.Ideal:
-		return ideal.NewConsensus(ctx, sm, snMgr, beacon, r, verifier, genesis, netName)
+	case hierarchical.Dummy:
+		return dummy.NewConsensus(ctx, sm, snMgr, beacon, r, verifier, genesis, netName)
 	default:
 		return nil, xerrors.New("consensus type not supported")
 	}
@@ -81,8 +81,8 @@ func Mine(ctx context.Context, api v1api.FullNode, wallet address.Address, cnsTy
 			err = tendermint.Mine(ctx, wallet, api)
 		case hierarchical.Mir:
 			err = mir.Mine(ctx, wallet, api)
-		case hierarchical.Ideal:
-			err = ideal.Mine(ctx, wallet, api)
+		case hierarchical.Dummy:
+			err = dummy.Mine(ctx, wallet, api)
 		default:
 			err = xerrors.New("consensus type not supported")
 		}

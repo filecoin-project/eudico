@@ -12,7 +12,7 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
-	"github.com/filecoin-project/lotus/chain/consensus/ideal"
+	"github.com/filecoin-project/lotus/chain/consensus/dummy"
 	"github.com/filecoin-project/lotus/chain/consensus/mir"
 	"github.com/filecoin-project/lotus/chain/consensus/tendermint"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
@@ -30,8 +30,8 @@ func TestEudicoConsensus1(t *testing.T) {
 }
 
 func TestEudicoConsensus(t *testing.T) {
-	t.Run("ideal", func(t *testing.T) {
-		runIdealConsensusTests(t, kit.ThroughRPC(), kit.RootIdeal())
+	t.Run("dummy", func(t *testing.T) {
+		runDummyConsensusTests(t, kit.ThroughRPC(), kit.RootDummy())
 	})
 
 	t.Run("mir", func(t *testing.T) {
@@ -61,13 +61,13 @@ type eudicoConsensusSuite struct {
 	opts []interface{}
 }
 
-func runIdealConsensusTests(t *testing.T, opts ...interface{}) {
+func runDummyConsensusTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoConsensusSuite{opts: opts}
 
-	t.Run("testIdealMining", ts.testIdealMining)
+	t.Run("testDummyMining", ts.testDummyMining)
 }
 
-func (ts *eudicoConsensusSuite) testIdealMining(t *testing.T) {
+func (ts *eudicoConsensusSuite) testDummyMining(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -80,7 +80,7 @@ func (ts *eudicoConsensusSuite) testIdealMining(t *testing.T) {
 	}
 
 	go func() {
-		err = ideal.Mine(ctx, l[0], full)
+		err = dummy.Mine(ctx, l[0], full)
 		require.NoError(t, err)
 	}()
 

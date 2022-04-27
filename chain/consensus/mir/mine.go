@@ -33,6 +33,8 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	nodeID := NodeID()
 	nodeNumber := NodeNumber()
 
+	api.Sub
+
 	mirAgent, err := NewMirAgent(nodeID, nodeNumber)
 	if err != nil {
 		return err
@@ -136,10 +138,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 				//	}
 				//	nodeIDBytes := blake3.Sum256([]byte(nodeID.String()))
 
-				// TODO: client ID should be wallet address
-				// 1) client ID = peer ID + wallet addr
-				// 2) client ID = wallet addr
-
+				// TODO: client ID should be subnet.String()+"::"+peer.ID.String()
 				err = mirAgent.Node.SubmitRequest(ctx, mirTypes.ClientID(nodeID), reqNo, tx, nil)
 				if err != nil {
 					log.Error("unable to submit a message to Mir:", err)

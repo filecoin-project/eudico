@@ -1,4 +1,4 @@
-package ideal
+package dummy
 
 import (
 	"context"
@@ -30,7 +30,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 
 		select {
 		case <-ctx.Done():
-			log.Debug("Ideal miner %s: context closed")
+			log.Debug("Dummy miner %s: context closed")
 			return nil
 
 		case <-submitting.C:
@@ -85,7 +85,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	}
 }
 
-func (bft *Ideal) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.BlockTemplate) (*types.FullBlock, error) {
+func (bft *Dummy) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.BlockTemplate) (*types.FullBlock, error) {
 	b, err := common.PrepareBlockForSignature(ctx, bft.sm, bt)
 	if err != nil {
 		return nil, err

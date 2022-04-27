@@ -77,10 +77,10 @@ func RootMir() EnsembleOpt {
 	}
 }
 
-// RootIdeal activates Ideal consensus protocol for the root subnet in Eudico.
-func RootIdeal() EnsembleOpt {
+// RootDummy activates Ideal consensus protocol for the root subnet in Eudico.
+func RootDummy() EnsembleOpt {
 	return func(opts *ensembleOpts) error {
-		opts.rootConsensus = hierarchical.Ideal
+		opts.rootConsensus = hierarchical.Dummy
 		return nil
 	}
 }
@@ -117,10 +117,10 @@ func SubnetMir() EnsembleOpt {
 	}
 }
 
-// SubnetIdeal activates Ideal consensus protocol for a subnet in Eudico.
-func SubnetIdeal() EnsembleOpt {
+// SubnetDummy activates Dummy consensus protocol for a subnet in Eudico.
+func SubnetDummy() EnsembleOpt {
 	return func(opts *ensembleOpts) error {
-		opts.subnetConsensus = hierarchical.Ideal
+		opts.subnetConsensus = hierarchical.Dummy
 		return nil
 	}
 }

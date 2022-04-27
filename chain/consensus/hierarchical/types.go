@@ -20,7 +20,7 @@ const (
 	Tendermint
 	Mir
 	FilecoinEC
-	Ideal
+	Dummy
 )
 
 // ConsensusName returns the consensus algorithm name.
@@ -36,8 +36,8 @@ func ConsensusName(alg ConsensusType) string {
 		return "FilecoinEC"
 	case Mir:
 		return "Mir"
-	case Ideal:
-		return "Ideal"
+	case Dummy:
+		return "Dummy"
 	default:
 		return "unknown"
 	}

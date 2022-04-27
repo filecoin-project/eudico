@@ -240,7 +240,7 @@ func WriteGenesis(
 		if err != nil {
 			return xerrors.Errorf("failed make genesis block for %s: %w", consensus.ConsensusName(cns), err)
 		}
-	case consensus.PoW, consensus.Tendermint, consensus.Mir, consensus.Ideal:
+	case consensus.PoW, consensus.Tendermint, consensus.Mir, consensus.Dummy:
 		t, err := makeTemplate(netName.String(), vreg, rem, seq, types.FromFil(2), nil)
 		if err != nil {
 			return err
