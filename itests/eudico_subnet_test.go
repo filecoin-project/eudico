@@ -1,4 +1,4 @@
-//stm: #integration
+// stm: #integration
 package itests
 
 import (
@@ -23,7 +23,21 @@ import (
 )
 
 func TestEudicoSubnet(t *testing.T) {
+	if err := os.Setenv("EUDICO_MIR_ID", "0"); err != nil {
+		require.NoError(t, err)
+	}
+	if err := os.Setenv("EUDICO_MIR_NODES", "1"); err != nil {
+		require.NoError(t, err)
+	}
+
+	// Sanity test with Dummy consensus.
+
+	t.Run("/root/dummy-/subnet/dummy", func(t *testing.T) {
+		runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetDummy())
+	})
+
 	// Filecoin consensus in root
+
 	t.Run("/root/filcns-/subnet/delegated", func(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootFilcns(), kit.SubnetDelegated())
 	})
@@ -43,21 +57,30 @@ func TestEudicoSubnet(t *testing.T) {
 	}
 
 	if os.Getenv("FULL_ITESTS") != "" {
+		// Mir in Root
+
+		t.Run("/root/mir-/subnet/delegated", func(t *testing.T) {
+			runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDelegated())
+		})
+		t.Run("/root/delegated-/subnet/mir", func(t *testing.T) {
+			runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetMir())
+		})
+
 		// PoW in Root
 
 		t.Run("/root/pow-/subnet/pow", func(t *testing.T) {
 			runSubnetTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTSPoW())
 		})
 
-		t.Run("/root/pow-/subnet/tendermint", func(t *testing.T) {
-			runSubnetTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTendermint())
-		})
-
 		if os.Getenv("TENDERMINT_ITESTS") != "" {
-			t.Run("/root/pow-/subnet/delegated", func(t *testing.T) {
-				runSubnetTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetDelegated())
+			t.Run("/root/pow-/subnet/tendermint", func(t *testing.T) {
+				runSubnetTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTendermint())
 			})
 		}
+
+		t.Run("/root/pow-/subnet/delegated", func(t *testing.T) {
+			runSubnetTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetDelegated())
+		})
 
 		// Delegated consensus in root
 
@@ -74,10 +97,6 @@ func TestEudicoSubnet(t *testing.T) {
 		// Tendermint in root
 
 		if os.Getenv("TENDERMINT_ITESTS") != "" {
-			t.Run("/root/delegated-/subnet/delegated", func(t *testing.T) {
-				runSubnetTests(t, kit.ThroughRPC(), kit.RootTendermint(), kit.SubnetDelegated())
-			})
-
 			t.Run("/root/tendermint-/subnet/delegated", func(t *testing.T) {
 				runSubnetTests(t, kit.ThroughRPC(), kit.RootTendermint(), kit.SubnetDelegated())
 			})
@@ -87,7 +106,6 @@ func TestEudicoSubnet(t *testing.T) {
 			})
 		}
 	}
-
 }
 
 func runSubnetTests(t *testing.T, opts ...interface{}) {
@@ -238,7 +256,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	t.Logf("[*] the message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
 
 	t1 = time.Now()
-	bl, err := kit.WaitSubnetActorBalance(ctx, subnetAddr, addr, injectedFils, 100, full)
+	bl, err := kit.WaitSubnetActorBalance(ctx, subnetAddr, addr, injectedFils, full)
 	require.NoError(t, err)
 	t.Logf(" [*] Sent funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
 
@@ -264,7 +282,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	t.Logf("[*] The release message was found in %d epoch of subnet", c.Height)
 
 	t1 = time.Now()
-	bl, err = kit.WaitSubnetActorBalance(ctx, parent, newAddr, big.Add(sentFils, releasedFils), 100, full)
+	bl, err = kit.WaitSubnetActorBalance(ctx, parent, newAddr, big.Add(sentFils, releasedFils), full)
 	require.NoError(t, err)
 	t.Logf("[*] Released funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
 

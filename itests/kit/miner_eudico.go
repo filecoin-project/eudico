@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	finalityTimeout  = 600
+	finalityTimeout  = 1200
 	balanceSleepTime = 3
 )
 
@@ -40,7 +40,7 @@ func getSubnetActor(ctx context.Context, subnetAddr addr.SubnetID, addr addr.Add
 	return
 }
 
-func WaitSubnetActorBalance(ctx context.Context, subnetAddr addr.SubnetID, addr addr.Address, balance big.Int, limit int, api napi.FullNode) (int, error) {
+func WaitSubnetActorBalance1(ctx context.Context, subnetAddr addr.SubnetID, addr addr.Address, balance big.Int, limit int, api napi.FullNode) (int, error) {
 	heads, err := getSubnetChainHead(ctx, subnetAddr, api)
 	if err != nil {
 		return 0, err
@@ -71,6 +71,39 @@ func WaitSubnetActorBalance(ctx context.Context, subnetAddr addr.SubnetID, addr 
 		}
 	}
 	return 0, xerrors.New("unable to wait the target amount")
+}
+
+func WaitSubnetActorBalance(ctx context.Context, subnetAddr addr.SubnetID, addr addr.Address, balance big.Int, api napi.FullNode) (int, error) {
+	heads, err := getSubnetChainHead(ctx, subnetAddr, api)
+	if err != nil {
+		return 0, err
+	}
+
+	n := 0
+	timer := time.After(finalityTimeout * time.Second)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return 0, xerrors.New("context closed")
+		case <-heads:
+			a, err := getSubnetActor(ctx, subnetAddr, addr, api)
+			switch {
+			case err != nil && !strings.Contains(err.Error(), types.ErrActorNotFound.Error()):
+				return 0, err
+			case err != nil && strings.Contains(err.Error(), types.ErrActorNotFound.Error()):
+				n++
+			case err == nil:
+				if big.Cmp(balance, a.Balance) == 0 {
+					return n, nil
+				}
+				n++
+			}
+		case <-timer:
+			return 0, xerrors.New("finality timer exceeded")
+		}
+	}
+	// return 0, xerrors.New("unable to wait the target amount")
 }
 
 func WaitForBalance(ctx context.Context, addr addr.Address, balance uint64, api napi.FullNode) error {

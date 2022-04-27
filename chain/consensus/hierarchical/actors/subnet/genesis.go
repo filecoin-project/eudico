@@ -31,7 +31,8 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin/system"
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/filecoin-project/lotus/chain/consensus/actors/reward"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	param "github.com/filecoin-project/lotus/chain/consensus/common/params"
+	consensus "github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/gen"
 	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
@@ -39,15 +40,141 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/wallet"
 	"github.com/filecoin-project/lotus/genesis"
+	adt0 "github.com/filecoin-project/specs-actors/actors/util/adt"
 )
 
 const (
 	networkVersion = network.Version15
 )
 
-func CreateGenesisFile(ctx context.Context,
+func makeGenesisBlock(
+	ctx context.Context,
+	cns consensus.ConsensusType,
+	bs bstore.Blockstore,
+	t genesis.Template,
+	e abi.ChainEpoch,
+) (*genesis2.GenesisBootstrap, error) {
+	var err error
+	st, _, err := MakeInitialStateTree(ctx, bs, t, e)
+	if err != nil {
+		return nil, xerrors.Errorf("make initial state tree failed: %w", err)
+	}
+
+	stateRoot, err := st.Flush(ctx)
+	if err != nil {
+		return nil, xerrors.Errorf("flush state tree failed: %w", err)
+	}
+
+	store := adt.WrapStore(ctx, cbor.NewCborStore(bs))
+	emptyRoot, err := adt0.MakeEmptyArray(store).Root()
+	if err != nil {
+		return nil, xerrors.Errorf("amt build failed: %w", err)
+	}
+
+	mm := &types.MsgMeta{
+		BlsMessages:   emptyRoot,
+		SecpkMessages: emptyRoot,
+		CrossMessages: emptyRoot,
+	}
+	mmb, err := mm.ToStorageBlock()
+	if err != nil {
+		return nil, xerrors.Errorf("serializing msgmeta failed: %w", err)
+	}
+	if err := bs.Put(ctx, mmb); err != nil {
+		return nil, xerrors.Errorf("putting msgmeta block to blockstore: %w", err)
+	}
+
+	log.Infof("Empty Genesis root: %s", emptyRoot)
+
+	var proof []byte
+	switch cns {
+	case consensus.PoW:
+		proof, err = param.GenesisWorkTarget.Bytes()
+		if err != nil {
+			return nil, err
+		}
+	case consensus.Delegated:
+		// TODO: We can't use randomness in genesis block
+		// if want to make it deterministic. Consider using
+		// a seed to for the ticket generation?
+		// _, _ = rand.Read(tickBuf)
+		proof = make([]byte, 32)
+	}
+
+	genesisTicket := &types.Ticket{
+		VRFProof: proof,
+	}
+
+	b := &types.BlockHeader{
+		Miner:                 system.Address,
+		Ticket:                genesisTicket,
+		Parents:               []cid.Cid{},
+		Height:                0,
+		ParentWeight:          types.NewInt(0),
+		ParentStateRoot:       stateRoot,
+		Messages:              mmb.Cid(),
+		ParentMessageReceipts: emptyRoot,
+		BLSAggregate:          nil,
+		BlockSig:              nil,
+		Timestamp:             t.Timestamp,
+		ElectionProof:         new(types.ElectionProof),
+		BeaconEntries: []types.BeaconEntry{
+			{
+				Round: 0,
+				Data:  make([]byte, 32),
+			},
+		},
+		ParentBaseFee: abi.NewTokenAmount(build.InitialBaseFee),
+	}
+
+	sb, err := b.ToStorageBlock()
+	if err != nil {
+		return nil, xerrors.Errorf("serializing block header failed: %w", err)
+	}
+
+	if err := bs.Put(ctx, sb); err != nil {
+		return nil, xerrors.Errorf("putting header to blockstore: %w", err)
+	}
+
+	return &genesis2.GenesisBootstrap{
+		Genesis: b,
+	}, nil
+}
+
+func makeTemplate(
+	subnetID string,
+	vreg, rem address.Address,
+	seq uint64,
+	b types.BigInt,
+	a *genesis.Actor,
+) (*genesis.Template, error) {
+	accounts := make([]genesis.Actor, 0)
+	if a != nil {
+		accounts = append(accounts, *a)
+	}
+	return &genesis.Template{
+		NetworkVersion: networkVersion,
+		Accounts:       accounts,
+		Miners:         nil,
+		NetworkName:    subnetID,
+		Timestamp:      seq,
+
+		VerifregRootKey: genesis.Actor{
+			Type:    genesis.TAccount,
+			Balance: b,
+			Meta:    json.RawMessage(`{"Owner":"` + vreg.String() + `"}`),
+		},
+		RemainderAccount: genesis.Actor{
+			Type: genesis.TAccount,
+			Meta: json.RawMessage(`{"Owner":"` + rem.String() + `"}`),
+		},
+	}, nil
+}
+
+func CreateGenesisFile(
+	ctx context.Context,
 	fileName string,
-	cns hierarchical.ConsensusType,
+	cns consensus.ConsensusType,
 	addr address.Address,
 	checkPeriod abi.ChainEpoch,
 ) error {
@@ -86,7 +213,7 @@ func CreateGenesisFile(ctx context.Context,
 
 func WriteGenesis(
 	netName address.SubnetID,
-	consensus hierarchical.ConsensusType,
+	cns consensus.ConsensusType,
 	miner, vreg, rem address.Address,
 	checkPeriod abi.ChainEpoch,
 	seq uint64, w io.Writer,
@@ -94,46 +221,42 @@ func WriteGenesis(
 	bs := bstore.WrapIDStore(bstore.NewMemorySync())
 
 	var b *genesis2.GenesisBootstrap
-	switch consensus {
-	case hierarchical.Delegated:
+	ctx := context.TODO()
+	switch cns {
+	case consensus.Delegated:
 		if miner == address.Undef {
 			return xerrors.Errorf("no miner specified for delegated consensus")
 		}
-		template, err := delegatedGenTemplate(netName.String(), miner, vreg, rem, seq)
+		a := genesis.Actor{
+			Type:    genesis.TAccount,
+			Balance: types.FromFil(0),
+			Meta:    json.RawMessage(`{"Owner":"` + miner.String() + `"}`),
+		}
+		t, err := makeTemplate(netName.String(), vreg, rem, seq, types.FromFil(2), &a)
 		if err != nil {
 			return err
 		}
-		b, err = makeDelegatedGenesisBlock(context.TODO(), bs, *template, checkPeriod)
+		b, err = makeGenesisBlock(ctx, cns, bs, *t, checkPeriod)
 		if err != nil {
-			return xerrors.Errorf("error making genesis delegated block: %w", err)
+			return xerrors.Errorf("failed make genesis block for %s: %w", consensus.ConsensusName(cns), err)
 		}
-	case hierarchical.PoW:
-		template, err := powGenTemplate(netName.String(), vreg, rem, seq)
+	case consensus.PoW, consensus.Tendermint, consensus.Mir, consensus.Dummy:
+		t, err := makeTemplate(netName.String(), vreg, rem, seq, types.FromFil(2), nil)
 		if err != nil {
 			return err
 		}
-		b, err = makePoWGenesisBlock(context.TODO(), bs, *template, checkPeriod)
+		b, err = makeGenesisBlock(ctx, cns, bs, *t, checkPeriod)
 		if err != nil {
-			return xerrors.Errorf("error making genesis delegated block: %w", err)
-		}
-	case hierarchical.Tendermint:
-		template, err := tendermintGenTemplate(netName.String(), vreg, rem, seq)
-		if err != nil {
-			return err
-		}
-		b, err = makeTendermintGenesisBlock(context.TODO(), bs, *template, checkPeriod)
-		if err != nil {
-			return xerrors.Errorf("error making genesis tendermint block: %w", err)
+			return xerrors.Errorf("failed make genesis block for %s: %w", consensus.ConsensusName(cns), err)
 		}
 	default:
-		return xerrors.Errorf("consensus type not supported. Not writing genesis")
+		return xerrors.Errorf("consensus not supported")
 
 	}
-	offl := offline.Exchange(bs)
-	blkserv := blockservice.New(bs, offl)
-	dserv := merkledag.NewDAGService(blkserv)
+	e := offline.Exchange(bs)
+	ds := merkledag.NewDAGService(blockservice.New(bs, e))
 
-	if err := car.WriteCarWithWalker(context.TODO(), dserv, []cid.Cid{b.Genesis.Cid()}, w, gen.CarWalkFunc); err != nil {
+	if err := car.WriteCarWithWalker(ctx, ds, []cid.Cid{b.Genesis.Cid()}, w, gen.CarWalkFunc); err != nil {
 		return xerrors.Errorf("write genesis car: %w", err)
 	}
 	return nil
@@ -157,7 +280,7 @@ func MakeInitialStateTree(
 		return nil, nil, xerrors.Errorf("getting state tree version: %w", err)
 	}
 
-	state, err := state.NewStateTree(cst, sv)
+	stateTree, err := state.NewStateTree(cst, sv)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("making new state tree: %w", err)
 	}
@@ -173,7 +296,7 @@ func MakeInitialStateTree(
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup system actor: %w", err)
 	}
-	if err := state.SetActor(system.Address, sysact); err != nil {
+	if err := stateTree.SetActor(system.Address, sysact); err != nil {
 		return nil, nil, xerrors.Errorf("set system actor: %w", err)
 	}
 
@@ -182,7 +305,7 @@ func MakeInitialStateTree(
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup storage power actor: %w", err)
 	}
-	if err := state.SetActor(power.Address, spact); err != nil {
+	if err := stateTree.SetActor(power.Address, spact); err != nil {
 		return nil, nil, xerrors.Errorf("set storage power actor: %w", err)
 	}
 
@@ -192,7 +315,7 @@ func MakeInitialStateTree(
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup init actor: %w", err)
 	}
-	if err := state.SetActor(init_.Address, initact); err != nil {
+	if err := stateTree.SetActor(init_.Address, initact); err != nil {
 		return nil, nil, xerrors.Errorf("set init actor: %w", err)
 	}
 
@@ -205,7 +328,7 @@ func MakeInitialStateTree(
 	if err != nil {
 		return nil, nil, err
 	}
-	err = state.SetActor(hierarchical.SubnetCoordActorAddr, scaact)
+	err = stateTree.SetActor(consensus.SubnetCoordActorAddr, scaact)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("set SCA actor: %w", err)
 	}
@@ -215,7 +338,7 @@ func MakeInitialStateTree(
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup storage market actor: %w", err)
 	}
-	if err := state.SetActor(market.Address, marketact); err != nil {
+	if err := stateTree.SetActor(market.Address, marketact); err != nil {
 		return nil, nil, xerrors.Errorf("set storage market actor: %w", err)
 	}
 	// Setup reward actor
@@ -226,7 +349,7 @@ func MakeInitialStateTree(
 		return nil, nil, xerrors.Errorf("setup reward actor: %w", err)
 	}
 
-	err = state.SetActor(reward.RewardActorAddr, rewact)
+	err = stateTree.SetActor(reward.RewardActorAddr, rewact)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("set reward actor: %w", err)
 	}
@@ -235,7 +358,7 @@ func MakeInitialStateTree(
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup burnt funds actor state: %w", err)
 	}
-	if err := state.SetActor(builtin.BurntFundsActorAddr, bact); err != nil {
+	if err := stateTree.SetActor(builtin.BurntFundsActorAddr, bact); err != nil {
 		return nil, nil, xerrors.Errorf("set burnt funds actor: %w", err)
 	}
 
@@ -244,7 +367,7 @@ func MakeInitialStateTree(
 
 		switch info.Type {
 		case genesis.TAccount:
-			if err := genesis2.CreateAccountActor(ctx, cst, state, info, keyIDs, av); err != nil {
+			if err := genesis2.CreateAccountActor(ctx, cst, stateTree, info, keyIDs, av); err != nil {
 				return nil, nil, xerrors.Errorf("failed to create account actor: %w", err)
 			}
 
@@ -256,7 +379,7 @@ func MakeInitialStateTree(
 			}
 			idStart++
 
-			if err := genesis2.CreateMultisigAccount(ctx, cst, state, ida, info, keyIDs, av); err != nil {
+			if err := genesis2.CreateMultisigAccount(ctx, cst, stateTree, ida, info, keyIDs, av); err != nil {
 				return nil, nil, err
 			}
 		default:
@@ -267,7 +390,7 @@ func MakeInitialStateTree(
 
 	totalFilAllocated := big.Zero()
 
-	err = state.ForEach(func(addr address.Address, act *types.Actor) error {
+	err = stateTree.ForEach(func(addr address.Address, act *types.Actor) error {
 		if act.Balance.Nil() {
 			panic(fmt.Sprintf("actor %s (%s) has nil balance", addr, builtin.ActorNameByCode(act.Code)))
 		}
@@ -299,20 +422,20 @@ func MakeInitialStateTree(
 		}
 
 		keyIDs[ainfo.Owner] = builtin.ReserveAddress
-		err = genesis2.CreateAccountActor(ctx, cst, state, template.RemainderAccount, keyIDs, av)
+		err = genesis2.CreateAccountActor(ctx, cst, stateTree, template.RemainderAccount, keyIDs, av)
 		if err != nil {
 			return nil, nil, xerrors.Errorf("creating remainder acct: %w", err)
 		}
 
 	case genesis.TMultisig:
-		if err = genesis2.CreateMultisigAccount(ctx, cst, state, builtin.ReserveAddress, template.RemainderAccount, keyIDs, av); err != nil {
+		if err = genesis2.CreateMultisigAccount(ctx, cst, stateTree, builtin.ReserveAddress, template.RemainderAccount, keyIDs, av); err != nil {
 			return nil, nil, xerrors.Errorf("failed to set up remainder: %w", err)
 		}
 	default:
 		return nil, nil, xerrors.Errorf("unknown account type for remainder: %w", err)
 	}
 
-	return state, keyIDs, nil
+	return stateTree, keyIDs, nil
 }
 
 func SetupSCAActor(ctx context.Context, bs bstore.Blockstore, params *sca.ConstructorParams) (*types.Actor, error) {

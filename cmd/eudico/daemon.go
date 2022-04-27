@@ -15,6 +15,17 @@ import (
 	"runtime/pprof"
 	"strings"
 
+	"github.com/gorilla/mux"
+	metricsprom "github.com/ipfs/go-metrics-prometheus"
+	"github.com/mitchellh/go-homedir"
+	"github.com/multiformats/go-multiaddr"
+	"github.com/urfave/cli/v2"
+	"go.opencensus.io/plugin/runmetrics"
+	"go.opencensus.io/stats"
+	"go.opencensus.io/stats/view"
+	"go.opencensus.io/tag"
+	"golang.org/x/xerrors"
+
 	"github.com/filecoin-project/go-jsonrpc"
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
@@ -30,16 +41,6 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/modules/testing"
 	"github.com/filecoin-project/lotus/node/repo"
-	"github.com/gorilla/mux"
-	metricsprom "github.com/ipfs/go-metrics-prometheus"
-	"github.com/mitchellh/go-homedir"
-	"github.com/multiformats/go-multiaddr"
-	"github.com/urfave/cli/v2"
-	"go.opencensus.io/plugin/runmetrics"
-	"go.opencensus.io/stats"
-	"go.opencensus.io/stats/view"
-	"go.opencensus.io/tag"
-	"golang.org/x/xerrors"
 )
 
 const (

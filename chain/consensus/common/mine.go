@@ -3,10 +3,10 @@ package common
 import (
 	"context"
 
-	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
 
+	"github.com/filecoin-project/go-state-types/crypto"
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/stmgr"

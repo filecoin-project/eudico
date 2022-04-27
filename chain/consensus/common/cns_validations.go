@@ -5,10 +5,6 @@ import (
 	"fmt"
 
 	"github.com/Gurpartap/async"
-	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-state-types/network"
-	bstore "github.com/filecoin-project/lotus/blockstore"
-	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 	"github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
 	logging "github.com/ipfs/go-log/v2"
@@ -17,6 +13,9 @@ import (
 	"go.opencensus.io/stats"
 	"golang.org/x/xerrors"
 
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/network"
+	bstore "github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/consensus"
@@ -32,6 +31,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/vm"
 	"github.com/filecoin-project/lotus/lib/sigs"
 	"github.com/filecoin-project/lotus/metrics"
+	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 )
 
 var log = logging.Logger("consensus-common")
@@ -142,7 +142,15 @@ func BlockSanityChecks(ctype hierarchical.ConsensusType, h *types.BlockHeader) e
 		}
 	case hierarchical.Tendermint:
 		if h.Ticket == nil {
-			return xerrors.Errorf("Tendermint-backed block must have a ticket")
+			return xerrors.Errorf("block must have a ticket")
+		}
+	case hierarchical.Mir:
+		if h.Ticket == nil {
+			return xerrors.Errorf("block must have an empty ticket")
+		}
+	case hierarchical.Dummy:
+		if h.Ticket != nil {
+			return xerrors.Errorf("block must have nil ticket")
 		}
 	default:
 		// FIXME: We currently support PoW and delegated, thus the

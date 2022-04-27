@@ -50,12 +50,14 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
+	"github.com/filecoin-project/lotus/chain/consensus/dummy"
 	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	snmgr "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/manager"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
+	"github.com/filecoin-project/lotus/chain/consensus/mir"
 	"github.com/filecoin-project/lotus/chain/consensus/tendermint"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/gen"
@@ -89,6 +91,7 @@ import (
 
 const (
 	TSPoWConsensusGenesisTestFile = "../testdata/tspow.gen"
+	DummyConsensusGenesisTestFile = "../testdata/dummy.gen"
 
 	DelegatedConsensusGenesisTestFile = "../testdata/delegcns.gen"
 	DelegatedConsnensusMinerAddr      = "f1ozbo7zqwfx6d4tqb353qoq7sfp4qhycefx6ftgy"
@@ -98,6 +101,8 @@ const (
 	TendermintConsensusTestDir         = "../testdata/tendermint-test"
 	TendermintConsensusKeyFile         = TendermintConsensusTestDir + "/config/priv_validator_key.json"
 	TendermintApplicationAddress       = "tcp://127.0.0.1:26658"
+
+	MirBFTConsensusGenesisTestFile = "../testdata/mirbft.gen"
 
 	FilcnsConsensusGenesisTestFile = "../testdata/filcns.gen"
 )
@@ -302,6 +307,16 @@ func NewFilecoinExpectedConsensus(ctx context.Context, sm *stmgr.StateManager, b
 	return filcns.NewFilecoinExpectedConsensus(ctx, sm, beacon, r, verifier, genesis)
 }
 
+func NewRootMirConsensus(ctx context.Context, sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
+	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) (consensus.Consensus, error) {
+	return mir.NewConsensus(ctx, sm, nil, beacon, r, verifier, genesis, netName)
+}
+
+func NewRootDummyConsensus(ctx context.Context, sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
+	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) (consensus.Consensus, error) {
+	return dummy.NewConsensus(ctx, sm, nil, beacon, r, verifier, genesis, netName)
+}
+
 func NetworkName(mctx helpers.MetricsCtx, lc fx.Lifecycle, cs *store.ChainStore, tsexec stmgr.Executor,
 	syscalls vm.SyscallBuilder, us stmgr.UpgradeSchedule, _ dtypes.AfterGenesisSet) (dtypes.NetworkName, error) {
 
@@ -320,7 +335,6 @@ func NetworkName(mctx helpers.MetricsCtx, lc fx.Lifecycle, cs *store.ChainStore,
 
 // Stop stop ensemble mechanisms.
 func (n *EudicoEnsemble) Stop() error {
-	n.t.Log(">>>>> stop Eudico ensemble")
 	if n.options.subnetConsensus == hierarchical.Tendermint ||
 		n.options.rootConsensus == hierarchical.Tendermint {
 		return n.stopTendermint()
@@ -382,8 +396,12 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		rootConsensusConstructor = NewRootDelegatedConsensus
 	case hierarchical.Tendermint:
 		rootConsensusConstructor = NewRootTendermintConsensus
+	case hierarchical.Mir:
+		rootConsensusConstructor = NewRootMirConsensus
 	case hierarchical.FilecoinEC:
 		rootConsensusConstructor = NewFilecoinExpectedConsensus
+	case hierarchical.Dummy:
+		rootConsensusConstructor = NewRootDummyConsensus
 	default:
 		n.t.Fatalf("unknown consensus constructor %d", n.options.rootConsensus)
 	}
@@ -396,8 +414,12 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		rootConsensusWeight = delegcns.Weight
 	case hierarchical.Tendermint:
 		rootConsensusWeight = tendermint.Weight
+	case hierarchical.Mir:
+		rootConsensusWeight = mir.Weight
 	case hierarchical.FilecoinEC:
 		rootConsensusWeight = filcns.Weight
+	case hierarchical.Dummy:
+		rootConsensusWeight = dummy.Weight
 	default:
 		n.t.Fatalf("unknown consensus weight %d", n.options.rootConsensus)
 	}
@@ -466,6 +488,14 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 			cerr := subnet.CreateGenesisFile(ctx, TendermintConsensusGenesisTestFile, hierarchical.Tendermint, address.Undef, sca.DefaultCheckpointPeriod)
 			require.NoError(n.t, cerr)
 			rootGenesisBytes, gferr = ioutil.ReadFile(TendermintConsensusGenesisTestFile)
+		case hierarchical.Mir:
+			cerr := subnet.CreateGenesisFile(ctx, MirBFTConsensusGenesisTestFile, hierarchical.Mir, address.Undef, sca.DefaultCheckpointPeriod)
+			require.NoError(n.t, cerr)
+			rootGenesisBytes, gferr = ioutil.ReadFile(MirBFTConsensusGenesisTestFile)
+		case hierarchical.Dummy:
+			cerr := subnet.CreateGenesisFile(ctx, DummyConsensusGenesisTestFile, hierarchical.Dummy, address.Undef, sca.DefaultCheckpointPeriod)
+			require.NoError(n.t, cerr)
+			rootGenesisBytes, gferr = ioutil.ReadFile(DummyConsensusGenesisTestFile)
 		case hierarchical.FilecoinEC:
 		default:
 			n.t.Fatalf("unknown consensus genesis file %d", n.options.rootConsensus)
@@ -474,7 +504,7 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 
 		gtempl.NetworkName = "/root"
 
-		//TODO: compare with original itests and fix
+		// TODO: compare with original itests and fix
 		// Either generate the genesis or inject it.
 		if n.options.rootConsensus == hierarchical.FilecoinEC {
 			if i == 0 && !n.bootstrapped {
@@ -508,6 +538,7 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		switch n.options.rootConsensus {
 		case hierarchical.PoW:
 			addr, err = full.WalletImport(ctx, &full.DefaultKey.KeyInfo)
+			require.NoError(n.t, err)
 		case hierarchical.Delegated:
 			err = ReadKeyInfoFromFile(DelegatedConsensusKeyFile, &ki)
 			require.NoError(n.t, err)
@@ -518,12 +549,18 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 			require.NoError(n.t, err)
 			addr, err = full.WalletImport(ctx, ki)
 			require.NoError(n.t, err)
+		case hierarchical.Mir:
+			addr, err = full.WalletImport(ctx, &full.DefaultKey.KeyInfo)
+			require.NoError(n.t, err)
+		case hierarchical.Dummy:
+			addr, err = full.WalletImport(ctx, &full.DefaultKey.KeyInfo)
+			require.NoError(n.t, err)
 		case hierarchical.FilecoinEC:
 			addr, err = full.WalletImport(ctx, &full.DefaultKey.KeyInfo)
+			require.NoError(n.t, err)
 		default:
 			n.t.Fatalf("unknown consensus type %d", n.options.rootConsensus)
 		}
-		require.NoError(n.t, err)
 
 		err = full.WalletSetDefault(ctx, addr)
 		require.NoError(n.t, err)
@@ -1048,6 +1085,10 @@ func EudicoEnsembleTwoMiners(t *testing.T, opts ...interface{}) (*TestFullNode, 
 		rootMiner = tspow.Mine
 	case hierarchical.Delegated:
 		rootMiner = delegcns.Mine
+	case hierarchical.Mir:
+		rootMiner = mir.Mine
+	case hierarchical.Dummy:
+		rootMiner = dummy.Mine
 	case hierarchical.FilecoinEC:
 		// Filecoin miner is created below within itests approach.
 		break
@@ -1064,6 +1105,10 @@ func EudicoEnsembleTwoMiners(t *testing.T, opts ...interface{}) (*TestFullNode, 
 		subnetMinerType = hierarchical.PoW
 	case hierarchical.Delegated:
 		subnetMinerType = hierarchical.Delegated
+	case hierarchical.Mir:
+		subnetMinerType = hierarchical.Mir
+	case hierarchical.Dummy:
+		subnetMinerType = hierarchical.Dummy
 	default:
 		t.Fatalf("subnet consensus %d not supported", options.subnetConsensus)
 	}
@@ -1111,6 +1156,10 @@ func EudicoMiners(t *testing.T, opts ...interface{}) (
 		rootMiner = tspow.Mine
 	case hierarchical.Delegated:
 		rootMiner = delegcns.Mine
+	case hierarchical.Mir:
+		rootMiner = mir.Mine
+	case hierarchical.Dummy:
+		rootMiner = dummy.Mine
 	case hierarchical.FilecoinEC:
 		break
 	default:
@@ -1124,6 +1173,10 @@ func EudicoMiners(t *testing.T, opts ...interface{}) (
 		subnetMinerType = hierarchical.PoW
 	case hierarchical.Delegated:
 		subnetMinerType = hierarchical.Delegated
+	case hierarchical.Mir:
+		subnetMinerType = hierarchical.Mir
+	case hierarchical.Dummy:
+		subnetMinerType = hierarchical.Dummy
 	default:
 		t.Fatalf("subnet consensus %d not supported", options.subnetConsensus)
 	}

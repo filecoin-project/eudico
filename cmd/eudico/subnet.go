@@ -97,7 +97,7 @@ var addCmd = &cli.Command{
 		},
 		&cli.IntFlag{
 			Name:  "consensus",
-			Usage: "specify consensus for the subnet (0=delegated, 1=PoW, 2=Tendermint)",
+			Usage: "specify consensus for the subnet (0=delegated, 1=PoW, 2=Tendermint, 3=MirBFT)",
 		},
 		&cli.IntFlag{
 			Name:  "checkperiod",

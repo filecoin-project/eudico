@@ -1,13 +1,14 @@
 package main
 
 import (
+	"github.com/urfave/cli/v2"
+
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/node"
-	"github.com/urfave/cli/v2"
 )
 
 var filcnsCmd = &cli.Command{

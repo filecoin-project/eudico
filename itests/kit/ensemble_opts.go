@@ -69,6 +69,22 @@ func RootFilcns() EnsembleOpt {
 	}
 }
 
+// RootMir activates MirBFT consensus protocol for the root subnet in Eudico.
+func RootMir() EnsembleOpt {
+	return func(opts *ensembleOpts) error {
+		opts.rootConsensus = hierarchical.Mir
+		return nil
+	}
+}
+
+// RootDummy activates Ideal consensus protocol for the root subnet in Eudico.
+func RootDummy() EnsembleOpt {
+	return func(opts *ensembleOpts) error {
+		opts.rootConsensus = hierarchical.Dummy
+		return nil
+	}
+}
+
 // SubnetTSPoW activates PoW consensus protocol for a subnet in Eudico.
 func SubnetTSPoW() EnsembleOpt {
 	return func(opts *ensembleOpts) error {
@@ -89,6 +105,22 @@ func SubnetDelegated() EnsembleOpt {
 func SubnetTendermint() EnsembleOpt {
 	return func(opts *ensembleOpts) error {
 		opts.subnetConsensus = hierarchical.Tendermint
+		return nil
+	}
+}
+
+// SubnetMir activates MirBFT consensus protocol for a subnet in Eudico.
+func SubnetMir() EnsembleOpt {
+	return func(opts *ensembleOpts) error {
+		opts.subnetConsensus = hierarchical.Mir
+		return nil
+	}
+}
+
+// SubnetDummy activates Dummy consensus protocol for a subnet in Eudico.
+func SubnetDummy() EnsembleOpt {
+	return func(opts *ensembleOpts) error {
+		opts.subnetConsensus = hierarchical.Dummy
 		return nil
 	}
 }

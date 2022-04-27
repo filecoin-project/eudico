@@ -88,6 +88,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			})
 			if err != nil {
 				log.Errorw("submitting block failed", "error", err)
+				continue
 			}
 
 			log.Info("delegated mined a block! ", bh.Cid(), " msgs ", len(msgs))

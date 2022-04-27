@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 
+	block "github.com/ipfs/go-block-format"
+	"github.com/ipfs/go-cid"
+	"golang.org/x/xerrors"
+
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/network"
 	"github.com/filecoin-project/lotus/build"
-	block "github.com/ipfs/go-block-format"
-	"github.com/ipfs/go-cid"
-	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 )
@@ -69,6 +70,19 @@ func (m *Message) Receiver() address.Address {
 
 func (m *Message) ValueReceived() abi.TokenAmount {
 	return m.Value
+}
+
+func DecodeUnverifiedCrossMessage(b []byte) (*UnverifiedCrossMsg, error) {
+	var msg UnverifiedCrossMsg
+	if err := msg.UnmarshalCBOR(bytes.NewReader(b)); err != nil {
+		return nil, err
+	}
+
+	if msg.Msg.Version != MessageVersion {
+		return nil, fmt.Errorf("decoded message had incorrect version (%d)", msg.Msg.Version)
+	}
+
+	return &msg, nil
 }
 
 func DecodeMessage(b []byte) (*Message, error) {
