@@ -634,26 +634,26 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	//f := frost.KeygenTaproot(id, ids, threshold)
 
 
-	n := NewNetwork(c.sub, c.topic)
+	//n := NewNetwork(c.sub, c.topic)
 	//handler, err := protocol.NewMultiHandler(f, []byte{1, 2, 3})
 	sessionID := strings.Join(idsStrings, "")
 	handler, err := protocol.NewMultiHandler(f, []byte(sessionID))
 	if err != nil {
 		return err
 	}
-	LoopHandlerDKG(ctx, handler, n, len(idsStrings),c.file,) //use the new network, could be re-written
-	r, err := handler.Result()
-	if err != nil {
-		// if a participant is mibehaving the DKG entirely fail (no fallback)
-		return err
-	}
+	// LoopHandlerDKG(ctx, handler, n, len(idsStrings),c.file,) //use the new network, could be re-written
+	// r, err := handler.Result()
+	// if err != nil {
+	// 	// if a participant is mibehaving the DKG entirely fail (no fallback)
+	// 	return err
+	// }
 
 	// handler, err := protocol.NewMultiHandler(f, []byte(sessionID))
 	// if err != nil {
 	// 	return err
 	// }
-	// LoopHandlerSign(ctx, handler, c, len(idsStrings), c.file)
-	// r, err := handler.Result()
+	LoopHandlerSign(ctx, handler, c, len(idsStrings), c.file, sessionID)
+	r, err := handler.Result()
 
 
 	log.Infow("result :", "result", r)
