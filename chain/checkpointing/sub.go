@@ -800,8 +800,10 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 			}
 			c.ptxid = ptxid
 			log.Infow("found precedent txid:", "txid", c.ptxid)
+		} else {
+			time.Sleep(3 * time.Second) // make sure everyone starts roughly at the same time
 		}
-
+		fmt.Println("Previous tx id: ", c.ptxid)
 		index := 0
 		var value float64
 		var scriptPubkeyBytes []byte
