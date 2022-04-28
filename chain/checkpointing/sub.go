@@ -634,26 +634,26 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 	//f := frost.KeygenTaproot(id, ids, threshold)
 
 
-	//n := NewNetwork(c.sub, c.topic)
+	n := NewNetwork(c.sub, c.topic)
 	//handler, err := protocol.NewMultiHandler(f, []byte{1, 2, 3})
 	sessionID := strings.Join(idsStrings, "")
 	handler, err := protocol.NewMultiHandler(f, []byte(sessionID))
 	if err != nil {
 		return err
 	}
-	// LoopHandlerDKG(ctx, handler, n, len(idsStrings),c.file,) //use the new network, could be re-written
-	// r, err := handler.Result()
-	// if err != nil {
-	// 	// if a participant is mibehaving the DKG entirely fail (no fallback)
-	// 	return err
-	// }
+	LoopHandlerDKG(ctx, handler, n, len(idsStrings),c.file,) //use the new network, could be re-written
+	r, err := handler.Result()
+	if err != nil {
+		// if a participant is mibehaving the DKG entirely fail (no fallback)
+		return err
+	}
 
 	// handler, err := protocol.NewMultiHandler(f, []byte(sessionID))
 	// if err != nil {
 	// 	return err
 	// }
-	LoopHandlerSign(ctx, handler, c, len(idsStrings), c.file, sessionID, "DKG")
-	r, err := handler.Result()
+	// LoopHandlerSign(ctx, handler, c, len(idsStrings), c.file, sessionID, "DKG")
+	// r, err := handler.Result()
 
 
 	log.Infow("result :", "result", r)
@@ -875,14 +875,15 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 		// Here all the participants sign the transaction
 		// in practice we only need "threshold" of them to sign
 		f := frost.SignTaprootWithTweak(c.taprootConfig, ids, hashedTx[:], c.tweakedValue[:])
-		//n := NewNetwork(c.sub, c.topic)
+		n := NewNetwork(c.sub, c.topic)
 		// hashedTx[:] is the session id
 		// ensure everyone is on the same session id
 		handler, err := protocol.NewMultiHandler(f, hashedTx[:])
 		if err != nil {
 			return err
 		}
-		LoopHandlerSign(ctx, handler, c, len(idsStrings), c.file, string(cp), "Signing")
+		LoopHandlerSign(ctx, handler, n, len(idsStrings), c.file)
+		//LoopHandlerSign(ctx, handler, c, len(idsStrings), c.file, string(cp), "Signing")
 		r, err := handler.Result()
 		// if err != nil {
 		// 	return err
@@ -914,7 +915,8 @@ func (c *CheckpointingSub) CreateCheckpoint(ctx context.Context, cp, data []byte
 				if err2 != nil {
 					return err
 				}
-				LoopHandlerSign(ctx, handler,c, len(newSetOfParticipants), c.file, string(cp)+string(j), "Sign-after-failure")
+				//LoopHandlerSign(ctx, handler,c, len(newSetOfParticipants), c.file, string(cp)+string(j), "Sign-after-failure")
+				LoopHandlerSign(ctx, handler, n, len(newSetOfParticipants), c.file)
 				r, err = handler.Result()
 				j = j+1
 			} else {return err }

@@ -1,4 +1,4 @@
-// +build !race
+// +build exclude
 
 package checkpointing
 
