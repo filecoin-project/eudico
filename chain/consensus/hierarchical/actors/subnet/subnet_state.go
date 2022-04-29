@@ -3,19 +3,19 @@ package subnet
 import (
 	mbig "math/big"
 
-	address "github.com/filecoin-project/go-address"
+	"github.com/ipfs/go-cid"
+	"golang.org/x/xerrors"
+
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
-	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
-	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
-	cid "github.com/ipfs/go-cid"
-	"golang.org/x/xerrors"
-
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
+	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
+	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
 )
 
 var (
@@ -26,7 +26,7 @@ var (
 	// miner to be granted mining rights in the subnet and join it.
 	MinMinerStake = abi.NewTokenAmount(1e18)
 
-	// LeavingFee Penalization
+	// LeavingFeeCoeff Penalization
 	// Coefficient divided to miner stake when leaving a subnet.
 	// NOTE: This is currently set to 1, i.e., the miner recovers
 	// its full stake. This may change once cryptoecon is figured out.
@@ -40,7 +40,7 @@ var (
 	SignatureThreshold = mbig.NewFloat(0.66)
 )
 
-// SubnetStatus describes in what state in its lifecycle a subnet is.
+// Status describes in what state in its lifecycle a subnet is.
 type Status uint64
 
 const (
@@ -49,7 +49,6 @@ const (
 	Inactive                   // Inactive for lack of stake
 	Terminating                // Waiting for everyone to take their funds back and close the subnet
 	Killed                     // Not active anymore.
-
 )
 
 type SubnetState struct {
@@ -80,6 +79,8 @@ type SubnetState struct {
 	Checkpoints cid.Cid // HAMT[epoch]Checkpoint
 	// WindowChecks
 	WindowChecks cid.Cid // HAMT[cid]CheckVotes
+	// Validators contains BFT validator addresses
+	Validators map[string]ValAddress
 }
 
 type CheckVotes struct {
@@ -125,6 +126,7 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 		period = sca.DefaultCheckpointPeriod
 	}
 
+	// TODO: @alfonso do we need this?
 	/* Initialize AMT of miners.
 	emptyArr, err := adt.MakeEmptyArray(adt.AsStore(rt), LaneStatesAmtBitwidth)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create empty array")
@@ -144,6 +146,7 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 		CheckPeriod:   period,
 		Checkpoints:   emptyCheckpointsMapCid,
 		WindowChecks:  emptyWindowChecks,
+		Validators:    make(map[string]ValAddress),
 	}, nil
 
 }

@@ -24,6 +24,9 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
+// MirNodeNumber defines the number of Mir nodes that must join subnet to launch consensus protocol.
+const MirNodeNumber = 2
+
 // Weight defines consensus weight function.
 // TODO // FIXME: Make an SubnetConsensus interface from this functions
 // to avoid having to use so many switch/cases. Deferring to the next

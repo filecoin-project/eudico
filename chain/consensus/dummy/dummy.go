@@ -66,7 +66,7 @@ func NewConsensus(
 	netName dtypes.NetworkName,
 ) (consensus.Consensus, error) {
 	subnetID := address.SubnetID(netName)
-	log.Infof("New Mir consensus for %s subnet", subnetID)
+	log.Infof("New Dummy consensus for %s subnet", subnetID)
 
 	return &Dummy{
 		store:    sm.ChainStore(),

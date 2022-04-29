@@ -10,6 +10,7 @@ import (
 	logging "github.com/ipfs/go-log/v2"
 	"golang.org/x/xerrors"
 
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	"github.com/filecoin-project/mir"
 	mirCrypto "github.com/filecoin-project/mir/pkg/crypto"
 	"github.com/filecoin-project/mir/pkg/grpctransport"
@@ -65,7 +66,7 @@ func NewMirAgent(id string, nodes string) (*MirAgent, error) {
 	log.Debugf("Mir agent %v is being created", ownID)
 	defer log.Debugf("Mir agent %v has been created", ownID)
 
-	nodeIds, nodeAddrs, err := parsePersistentNodes(nodes)
+	nodeIds, nodeAddrs, err := subnet.ParseValInfo(nodes)
 	if err != nil {
 		return nil, err
 	}
@@ -88,6 +89,7 @@ func NewMirAgent(id string, nodes string) (*MirAgent, error) {
 		return nil, err
 	}
 	net.Connect()
+	log.Debug("Mir network transport connected")
 
 	reqStore := reqstore.NewVolatileRequestStore()
 

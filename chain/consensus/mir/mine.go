@@ -8,6 +8,7 @@ import (
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	"github.com/filecoin-project/lotus/chain/types"
 	ltypes "github.com/filecoin-project/lotus/chain/types"
 	mirTypes "github.com/filecoin-project/mir/pkg/types"
@@ -24,6 +25,14 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	log.Info("Mir miner started")
 	defer log.Info("Mir miner stopped")
 
+	netName, err := api.StateNetworkName(ctx)
+	if err != nil {
+		return err
+	}
+	subnetID := address.SubnetID(netName)
+
+	log.Infof("Mir miner params: network name - %s, subnet ID - %s", netName, subnetID)
+
 	// TODO: Suppose we want to use Mir in Root and in a subnet at the same time.
 	// Do we need two Mir agents for that?
 	// nodeID, err := api.ID(ctx)
@@ -31,7 +40,10 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	//	log.Fatalf("unable to get a node ID: %s", err)
 	// }
 	nodeID := NodeIDFromEnv()
-	nodes := NodesFromEnv()
+	nodes, err := subnet.ValStringFromContext(ctx)
+	if err != nil {
+		nodes = NodesFromEnv()
+	}
 
 	mirAgent, err := NewMirAgent(nodeID, nodes)
 	if err != nil {
@@ -39,14 +51,6 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	}
 	mirErrors := mirAgent.Start(ctx)
 	mirHead := mirAgent.App.ChainNotify
-
-	netName, nerr := api.StateNetworkName(ctx)
-	if nerr != nil {
-		return nerr
-	}
-	subnetID := address.SubnetID(netName)
-
-	log.Infof("Mir miner params: network name - %s, subnet ID - %s", netName, subnetID)
 
 	submit := time.NewTicker(SubmitInterval)
 	defer submit.Stop()

@@ -3,6 +3,7 @@ package subnetmgr
 import (
 	"bytes"
 	"context"
+	"os"
 	"sync"
 
 	"github.com/ipfs/go-blockservice"
@@ -61,7 +62,7 @@ var _ subiface.SubnetMgr = &SubnetMgr{}
 
 var log = logging.Logger("subnetMgr")
 
-// SubnetMgr is the subneting manager in the root chain
+// SubnetMgr is the subneting manager in the root chain.
 type SubnetMgr struct {
 	ctx context.Context
 	// Listener for events of the root chain.
@@ -96,7 +97,7 @@ type SubnetMgr struct {
 func NewSubnetMgr(
 	mctx helpers.MetricsCtx,
 	lc fx.Lifecycle,
-	//api impl.FullNodeAPI,
+	// api impl.FullNodeAPI,
 	self peer.ID,
 	pubsub *pubsub.PubSub,
 	ds dtypes.MetadataDS,
@@ -280,7 +281,7 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 		return xerrors.Errorf("error initializing cross-msg resolver: %s", err)
 	}
 
-	// This functions create a new pubsub topic for the subnet to start
+	// These functions create a new pubsub topic for the subnet to start
 	// listening to new messages and blocks for the subnet.
 	err = sh.HandleIncomingBlocks(ctx, bserv)
 	if err != nil {
@@ -433,6 +434,23 @@ func (s *SubnetMgr) JoinSubnet(
 		return cid.Undef, err
 	}
 
+	// TODO: use CLI instead of env variables
+	mirID := os.Getenv("EUDICO_MIR_ID")
+	if mirID == "" {
+		panic("empty mir node ID")
+	}
+
+	params := subnet.ValAddress{
+		Value: mirID,
+	}
+
+	var paramsBuf bytes.Buffer
+	err = params.MarshalCBOR(&paramsBuf)
+	if err != nil {
+		log.Error(err)
+		return cid.Undef, err
+	}
+
 	// Get the parent and the actor to know where to send the message.
 	// Not everything needs to be sent to the root.
 	smsg, aerr := parentAPI.MpoolPushMessage(ctx, &types.Message{
@@ -440,7 +458,7 @@ func (s *SubnetMgr) JoinSubnet(
 		From:   wallet,
 		Value:  value,
 		Method: subnet.Methods.Join,
-		Params: nil,
+		Params: paramsBuf.Bytes(),
 	}, nil)
 	if aerr != nil {
 		log.Errorw("Error pushing join subnet message to parent api", "err", aerr)
@@ -557,6 +575,16 @@ func (s *SubnetMgr) MineSubnet(
 	walletID, err := s.api.StateLookupID(ctx, wallet, types.EmptyTSK)
 	if err != nil {
 		return err
+	}
+
+	if st.Consensus == hierarchical.Mir {
+		if len(st.Validators) != subcns.MirNodeNumber {
+			return xerrors.Errorf("Mir nodes joined %d, wanted %d", len(st.Validators), subcns.MirNodeNumber)
+		}
+		// Encode validator addresses into a string and pass it via context.
+		vs := subnet.EncodeValInfo(st.Validators)
+		log.Debugf("Validators: %s", vs)
+		s.ctx = subnet.SetVal(s.ctx, vs)
 	}
 
 	if st.IsMiner(walletID) && st.Status != subnet.Killed {
