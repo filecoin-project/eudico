@@ -8,7 +8,6 @@ import (
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	"github.com/filecoin-project/lotus/chain/types"
 	ltypes "github.com/filecoin-project/lotus/chain/types"
 	mirTypes "github.com/filecoin-project/mir/pkg/types"
@@ -40,8 +39,8 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	//	log.Fatalf("unable to get a node ID: %s", err)
 	// }
 	nodeID := NodeIDFromEnv()
-	nodes, err := subnet.ValStringFromContext(ctx)
-	if err != nil {
+	nodes, err := api.SubnetGetActorStateValidators(ctx, subnetID)
+	if err != nil || nodes == "" {
 		nodes = NodesFromEnv()
 	}
 

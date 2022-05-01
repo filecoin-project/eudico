@@ -351,6 +351,22 @@ func BuildSubnetMgr(mctx helpers.MetricsCtx, lc fx.Lifecycle, s *SubnetMgr) {
 	})
 }
 
+func (s *SubnetMgr) GetActorState(ctx context.Context, id address.SubnetID, actor address.Address) (*subnet.SubnetState, error) {
+	// Get the api for the parent network hosting the subnet actor
+	// for the subnet.
+	parentAPI, err := s.getParentAPI(id)
+	if err != nil {
+		return nil, err
+	}
+	// Get actor state to check if the subnet is active and we are in the list
+	// of miners
+	st, err := parentAPI.getActorState(ctx, actor)
+	if err != nil {
+		return nil, err
+	}
+	return st, nil
+}
+
 func (s *SubnetMgr) AddSubnet(
 	ctx context.Context, wallet address.Address,
 	parent address.SubnetID, name string,
@@ -558,15 +574,7 @@ func (s *SubnetMgr) MineSubnet(
 		return sh.stopMining(ctx)
 	}
 
-	// Get the api for the parent network hosting the subnet actor
-	// for the subnet.
-	parentAPI, err := s.getParentAPI(id)
-	if err != nil {
-		return err
-	}
-	// Get actor state to check if the subnet is active and we are in the list
-	// of miners
-	st, err := parentAPI.getActorState(ctx, SubnetActor)
+	st, err := s.GetActorState(ctx, id, SubnetActor)
 	if err != nil {
 		return err
 	}
@@ -579,12 +587,8 @@ func (s *SubnetMgr) MineSubnet(
 
 	if st.Consensus == hierarchical.Mir {
 		if len(st.Validators) != subcns.MirNodeNumber {
-			return xerrors.Errorf("Mir nodes joined %d, wanted %d", len(st.Validators), subcns.MirNodeNumber)
+			return xerrors.Errorf("Mir nodes - joined %d, wanted %d", len(st.Validators), subcns.MirNodeNumber)
 		}
-		// Encode validator addresses into a string and pass it via context.
-		vs := subnet.EncodeValInfo(st.Validators)
-		log.Debugf("Validators: %s", vs)
-		s.ctx = subnet.SetVal(s.ctx, vs)
 	}
 
 	if st.IsMiner(walletID) && st.Status != subnet.Killed {
@@ -836,4 +840,16 @@ func (s *SubnetMgr) SubnetStateWaitMsg(ctx context.Context, id address.SubnetID,
 		return nil, err
 	}
 	return api.StateWaitMsg(ctx, cid, confidence, limit, allowReplaced)
+}
+
+func (s *SubnetMgr) SubnetGetActorStateValidators(ctx context.Context, id address.SubnetID) (string, error) {
+	actor, err := id.Actor()
+	if err != nil {
+		return "", err
+	}
+	st, err := s.GetActorState(ctx, id, actor)
+	if err != nil {
+		return "", err
+	}
+	return subnet.EncodeValInfo(st.Validators), nil
 }

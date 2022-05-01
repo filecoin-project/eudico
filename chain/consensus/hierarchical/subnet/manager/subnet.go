@@ -6,15 +6,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/filecoin-project/go-address"
 	"github.com/ipld/go-car"
 	"github.com/libp2p/go-libp2p-core/host"
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"go.uber.org/multierr"
 	"golang.org/x/xerrors"
 
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
@@ -111,7 +111,7 @@ func (sh *Subnet) LoadGenesis(ctx context.Context, genBytes []byte) (chain.Genes
 		log.Errorw("Error setting genesis for subnet", "err", err)
 		return nil, err
 	}
-	//LoadGenesis to pass it
+	// LoadGenesis to pass it.
 	return chain.LoadGenesis(ctx, sh.sm)
 }
 
@@ -126,7 +126,7 @@ func (sh *Subnet) HandleIncomingMessages(ctx context.Context, bootstrapper dtype
 	subscribe := func() {
 		log.Infof("subscribing to pubsub topic %s", build.MessagesTopic(nn))
 
-		msgsub, err := sh.pubsub.Subscribe(build.MessagesTopic(nn)) //nolint
+		msgsub, err := sh.pubsub.Subscribe(build.MessagesTopic(nn)) // nolint
 		if err != nil {
 			// TODO: We should maybe remove the panic from
 			// here and return an error if we don't sync. I guess
@@ -240,7 +240,7 @@ func (sh *Subnet) HandleIncomingBlocks(ctx context.Context, bserv dtypes.ChainBl
 
 	log.Infof("subscribing to pubsub topic %s", build.BlocksTopic(nn))
 
-	blocksub, err := sh.pubsub.Subscribe(build.BlocksTopic(nn)) //nolint
+	blocksub, err := sh.pubsub.Subscribe(build.BlocksTopic(nn)) // nolint
 	if err != nil {
 		return err
 	}

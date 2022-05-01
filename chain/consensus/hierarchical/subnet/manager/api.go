@@ -7,16 +7,16 @@ import (
 	"path"
 	"time"
 
-	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-jsonrpc"
-	"github.com/filecoin-project/go-jsonrpc/auth"
-	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/gorilla/mux"
 	"github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
 	"github.com/libp2p/go-libp2p-core/host"
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/peer"
 
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-jsonrpc"
+	"github.com/filecoin-project/go-jsonrpc/auth"
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v0api"
 	"github.com/filecoin-project/lotus/api/v1api"
@@ -59,8 +59,8 @@ type API struct {
 	*SubnetMgr
 }
 
-func (n *API) getActorState(ctx context.Context, SubnetActor address.Address) (*subnet.SubnetState, error) {
-	act, err := n.StateGetActor(ctx, SubnetActor, types.EmptyTSK)
+func (n *API) getActorState(ctx context.Context, actor address.Address) (*subnet.SubnetState, error) {
+	act, err := n.StateGetActor(ctx, actor, types.EmptyTSK)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +74,7 @@ func (n *API) getActorState(ctx context.Context, SubnetActor address.Address) (*
 	return &st, nil
 }
 
-// PopulateAPIs populates the impl/fullNode for a subnet.
+// populateAPIs populates the impl/fullNode for a subnet.
 // NOTE: We may be able to do this with DI in the future.
 func (sh *Subnet) populateAPIs(
 	parentAPI *API,
@@ -269,6 +269,7 @@ func (n *API) NodeStatus(ctx context.Context, inclChainStatus bool) (status api.
 
 // The next two functions are exact copies from node/rpc.go to be able to handle subnet APIs
 // as if they were FullNode API implementations.
+
 // FullNodeHandler returns a full node handler, to be mounted as-is on the server.
 func FullNodeHandler(prefix string, a v1api.FullNode, permissioned bool, opts ...jsonrpc.ServerOption) (http.Handler, error) {
 	m := mux.NewRouter()

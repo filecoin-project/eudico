@@ -603,6 +603,8 @@ type HierarchicalCnsStruct struct {
 
 		SubnetChainNotify func(p0 context.Context, p1 address.SubnetID) (<-chan []*HeadChange, error) `perm:"read"`
 
+		SubnetGetActorStateValidators func(p0 context.Context, p1 address.SubnetID) (string, error) `perm:"read"`
+
 		SubnetStateGetActor func(p0 context.Context, p1 address.SubnetID, p2 address.Address, p3 types.TipSetKey) (*types.Actor, error) `perm:"read"`
 
 		SubnetStateWaitMsg func(p0 context.Context, p1 address.SubnetID, p2 cid.Cid, p3 uint64, p4 abi.ChainEpoch, p5 bool) (*MsgLookup, error) `perm:"read"`
@@ -3745,6 +3747,17 @@ func (s *HierarchicalCnsStruct) SubnetChainNotify(p0 context.Context, p1 address
 
 func (s *HierarchicalCnsStub) SubnetChainNotify(p0 context.Context, p1 address.SubnetID) (<-chan []*HeadChange, error) {
 	return nil, ErrNotSupported
+}
+
+func (s *HierarchicalCnsStruct) SubnetGetActorStateValidators(p0 context.Context, p1 address.SubnetID) (string, error) {
+	if s.Internal.SubnetGetActorStateValidators == nil {
+		return "", ErrNotSupported
+	}
+	return s.Internal.SubnetGetActorStateValidators(p0, p1)
+}
+
+func (s *HierarchicalCnsStub) SubnetGetActorStateValidators(p0 context.Context, p1 address.SubnetID) (string, error) {
+	return "", ErrNotSupported
 }
 
 func (s *HierarchicalCnsStruct) SubnetStateGetActor(p0 context.Context, p1 address.SubnetID, p2 address.Address, p3 types.TipSetKey) (*types.Actor, error) {

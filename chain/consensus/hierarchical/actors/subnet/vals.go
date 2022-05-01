@@ -1,7 +1,6 @@
 package subnet
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -9,10 +8,6 @@ import (
 
 	t "github.com/filecoin-project/mir/pkg/types"
 )
-
-type contextKey string
-
-const validatorKey = contextKey("validator")
 
 // ValAddress encapsulated string to be compatible with CBOR implementation.
 type ValAddress struct {
@@ -26,20 +21,6 @@ func EncodeValInfo(vals map[string]ValAddress) string {
 		s += fmt.Sprintf("%s@%s,", i, addr.Value)
 	}
 	return strings.TrimSuffix(s, ",")
-}
-
-// SetVal adds validator addresses into the context.
-func SetVal(ctx context.Context, v string) context.Context {
-	return context.WithValue(ctx, validatorKey, v)
-}
-
-// ValStringFromContext returns validator addresses from the context.
-func ValStringFromContext(ctx context.Context) (string, error) {
-	v, ok := ctx.Value(validatorKey).(string)
-	if !ok {
-		return "", xerrors.New("claim value missing from context")
-	}
-	return v, nil
 }
 
 // ParseValInfo parses comma-delimited ID@host:port persistent validator string.

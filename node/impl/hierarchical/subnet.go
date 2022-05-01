@@ -145,3 +145,7 @@ func (a *HierarchicalAPI) SubnetStateWaitMsg(ctx context.Context, id address.Sub
 	allowReplaced bool) (*api.MsgLookup, error) {
 	return a.Sub.SubnetStateWaitMsg(ctx, id, cid, confidence, limit, allowReplaced)
 }
+
+func (a *HierarchicalAPI) SubnetGetActorStateValidators(ctx context.Context, id address.SubnetID) (string, error) {
+	return a.Sub.SubnetGetActorStateValidators(ctx, id)
+}
