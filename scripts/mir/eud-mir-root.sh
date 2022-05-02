@@ -4,7 +4,7 @@ NODE_1=/root:t1k7t2zufxvtgamk7ogoifa5mvdagb4cafu6pdzga
 NODE_2=/root:t1rlhubezzmetmmpxyze22tc2uxuiiqv3iy6rvpra
 NODE_3=/root:t1sqbkluz5elnekdu62ute5zjammslkplgdcpa2zi
 
-# Persistent nodes in Tendermint format
+# Persistent nodes in Tendermint-type format
 #NODES=0@127.0.0.1:10000,1@127.0.0.1:10001,2@127.0.0.1:10002,3@127.0.0.1:10003
 NODES=/root:t1wpixt5mihkj75lfhrnaa6v56n27epvlgwparujy@127.0.0.1:10000,/root:t1k7t2zufxvtgamk7ogoifa5mvdagb4cafu6pdzga@127.0.0.1:10001,/root:t1rlhubezzmetmmpxyze22tc2uxuiiqv3iy6rvpra@127.0.0.1:10002,/root:t1sqbkluz5elnekdu62ute5zjammslkplgdcpa2zi@127.0.0.1:10003
 
@@ -68,7 +68,6 @@ tmux new-session -d -s "mir" \; \
   send-keys -t "mir:0.0" "
         export GOLOG_LOG_LEVEL=$LOG_LEVEL
         export EUDICO_PATH=$NODE_0_PATH
-        ./scripts/wait-for-it.sh -t 0 $NODE_0 -- sleep 1;
         ./eudico mir daemon --genesis=$BLOCK0 --api=$NODE_0_API 2>&1 | tee $NODE_0_DAEMON_LOG" Enter \; \
   send-keys -t "mir:0.1" "
         export EUDICO_MIR_ID=$NODE_0
@@ -83,7 +82,6 @@ tmux new-session -d -s "mir" \; \
   send-keys -t "mir:0.2" "
         export GOLOG_LOG_LEVEL=$LOG_LEVEL
         export EUDICO_PATH=$NODE_1_PATH
-        ./scripts/wait-for-it.sh -t 0 $NODE_1 -- sleep 1;
         ./eudico mir daemon --genesis=$BLOCK0 --api=$NODE_1_API 2>&1 | tee $NODE_1_DAEMON_LOG" Enter \; \
   send-keys -t "mir:0.3" "
         export GOLOG_LOG_LEVEL=$LOG_LEVEL
@@ -99,7 +97,6 @@ tmux new-session -d -s "mir" \; \
   send-keys -t "mir:1.0" "
         export GOLOG_LOG_LEVEL=$LOG_LEVEL
         export EUDICO_PATH=$NODE_2_PATH
-        ./scripts/wait-for-it.sh -t 0 $NODE_2 -- sleep 1;
         ./eudico mir daemon --genesis=$BLOCK0 --api=$NODE_2_API 2>&1 | tee $NODE_2_DAEMON_LOG" Enter \; \
     send-keys -t "mir:1.1" "
         export GOLOG_LOG_LEVEL=$LOG_LEVEL
@@ -114,7 +111,6 @@ tmux new-session -d -s "mir" \; \
     send-keys -t "mir:1.2" "
         export GOLOG_LOG_LEVEL=$LOG_LEVEL
         export EUDICO_PATH=$NODE_3_PATH
-        ./scripts/wait-for-it.sh -t 0 $NODE_3 -- sleep 1;
         ./eudico mir daemon --genesis=$BLOCK0 --api=$NODE_3_API 2>&1 | tee $NODE_3_DAEMON_LOG" Enter \; \
     send-keys -t "mir:1.3" "
        export GOLOG_LOG_LEVEL=$LOG_LEVEL

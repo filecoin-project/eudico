@@ -1075,18 +1075,18 @@ func (mr *MockFullNodeMockRecorder) InitAtomicExec(arg0, arg1, arg2, arg3 interf
 }
 
 // JoinSubnet mocks base method.
-func (m *MockFullNode) JoinSubnet(arg0 context.Context, arg1 address.Address, arg2 big.Int, arg3 address.SubnetID) (cid.Cid, error) {
+func (m *MockFullNode) JoinSubnet(arg0 context.Context, arg1 address.Address, arg2 big.Int, arg3 address.SubnetID, arg4 string) (cid.Cid, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "JoinSubnet", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "JoinSubnet", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(cid.Cid)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // JoinSubnet indicates an expected call of JoinSubnet.
-func (mr *MockFullNodeMockRecorder) JoinSubnet(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MockFullNodeMockRecorder) JoinSubnet(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "JoinSubnet", reflect.TypeOf((*MockFullNode)(nil).JoinSubnet), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "JoinSubnet", reflect.TypeOf((*MockFullNode)(nil).JoinSubnet), arg0, arg1, arg2, arg3, arg4)
 }
 
 // KillSubnet mocks base method.

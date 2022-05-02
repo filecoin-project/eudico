@@ -22,6 +22,13 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
+func TestEudicoSubnet1(t *testing.T) {
+
+	t.Run("/root/dummy-/subnet/dummy", func(t *testing.T) {
+		runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetDummy())
+	})
+
+}
 func TestEudicoSubnet(t *testing.T) {
 	if err := os.Setenv("EUDICO_MIR_ID", "0"); err != nil {
 		require.NoError(t, err)
@@ -178,7 +185,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	_, err = full.StateLookupID(ctx, addr, types.EmptyTSK)
 	require.NoError(t, err)
 
-	sc, err := full.JoinSubnet(ctx, addr, big.Int(val), subnetAddr)
+	sc, err := full.JoinSubnet(ctx, addr, big.Int(val), subnetAddr, "")
 	require.NoError(t, err)
 	t1 := time.Now()
 	c, err := full.StateWaitMsg(ctx, sc, 1, 100, false)

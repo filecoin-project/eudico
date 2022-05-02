@@ -149,7 +149,7 @@ All other Tmux commands can be found in the [Tmux Cheat Sheet](https://tmuxcheat
 
 To create a deployment run the following script:
 ```
-./scripts/eud-tendermint-testnet-subnet.sh
+./scripts/tendermint/eud-tendermint-testnet-subnet.sh
 ```
 
 Then run the following commands:
@@ -170,7 +170,7 @@ Then run the following commands:
 
 To run a deployment use the following script:
 ```
-./scripts/eud-tendermint-testnet.sh
+./scripts/mir/eud-tendermint-testnet.sh
 ```
 
 Run the following commands in terminal 4 (that will be the bottom-right terminal):

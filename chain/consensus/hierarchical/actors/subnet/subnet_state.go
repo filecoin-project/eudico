@@ -79,8 +79,8 @@ type SubnetState struct {
 	Checkpoints cid.Cid // HAMT[epoch]Checkpoint
 	// WindowChecks
 	WindowChecks cid.Cid // HAMT[cid]CheckVotes
-	// Validators contains BFT validator addresses
-	Validators map[string]ValAddress
+	// Validators contains BFT validator info for consensus service
+	Validators []Validator
 }
 
 type CheckVotes struct {
@@ -146,7 +146,7 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 		CheckPeriod:   period,
 		Checkpoints:   emptyCheckpointsMapCid,
 		WindowChecks:  emptyWindowChecks,
-		Validators:    make(map[string]ValAddress),
+		Validators:    make([]Validator, 0, 0),
 	}, nil
 
 }

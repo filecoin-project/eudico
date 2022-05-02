@@ -581,7 +581,7 @@ type HierarchicalCnsStruct struct {
 
 		InitAtomicExec func(p0 context.Context, p1 address.Address, p2 map[string]sca.LockedState, p3 []types.Message) (cid.Cid, error) `perm:"write"`
 
-		JoinSubnet func(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 address.SubnetID) (cid.Cid, error) `perm:"write"`
+		JoinSubnet func(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 address.SubnetID, p4 string) (cid.Cid, error) `perm:"write"`
 
 		KillSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID) (cid.Cid, error) `perm:"write"`
 
@@ -3628,14 +3628,14 @@ func (s *HierarchicalCnsStub) InitAtomicExec(p0 context.Context, p1 address.Addr
 	return *new(cid.Cid), ErrNotSupported
 }
 
-func (s *HierarchicalCnsStruct) JoinSubnet(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 address.SubnetID) (cid.Cid, error) {
+func (s *HierarchicalCnsStruct) JoinSubnet(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 address.SubnetID, p4 string) (cid.Cid, error) {
 	if s.Internal.JoinSubnet == nil {
 		return *new(cid.Cid), ErrNotSupported
 	}
-	return s.Internal.JoinSubnet(p0, p1, p2, p3)
+	return s.Internal.JoinSubnet(p0, p1, p2, p3, p4)
 }
 
-func (s *HierarchicalCnsStub) JoinSubnet(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 address.SubnetID) (cid.Cid, error) {
+func (s *HierarchicalCnsStub) JoinSubnet(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 address.SubnetID, p4 string) (cid.Cid, error) {
 	return *new(cid.Cid), ErrNotSupported
 }
 

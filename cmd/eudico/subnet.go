@@ -19,7 +19,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
-	spec_builtin "github.com/filecoin-project/specs-actors/actors/builtin"
+	specbuiltin "github.com/filecoin-project/specs-actors/actors/builtin"
 	init_ "github.com/filecoin-project/specs-actors/actors/builtin/init"
 )
 
@@ -67,12 +67,17 @@ var listSubnetsCmd = &cli.Command{
 		if err != nil {
 			return xerrors.Errorf("error getting list of subnets: %w", err)
 		}
+		if len(subnets) == 0 {
+			fmt.Println("no subnets")
+			return nil
+		}
+
 		for _, sh := range subnets {
 			status := "Active"
 			if sh.Subnet.Status != 0 {
 				status = "Inactive"
 			}
-			fmt.Printf("%s: status=%v, stake=%v, circulating supply=%v\n, consensus=%s",
+			fmt.Printf("%s: status=%v, stake=%v, circulating supply=%v, consensus=%v\n",
 				sh.Subnet.ID, status, types.FIL(sh.Subnet.Stake),
 				types.FIL(sh.Subnet.CircSupply),
 				hierarchical.ConsensusName(sh.Consensus),
@@ -191,6 +196,11 @@ var joinCmd = &cli.Command{
 			Usage: "specify the id of the subnet to join",
 			Value: address.RootSubnet.String(),
 		},
+		&cli.StringFlag{
+			Name:  "val-addr",
+			Usage: "specify subnet validator address",
+			Value: "",
+		},
 	},
 	Action: func(cctx *cli.Context) error {
 
@@ -225,11 +235,13 @@ var joinCmd = &cli.Command{
 			return lcli.ShowHelp(cctx, fmt.Errorf("failed to parse amount: %w", err))
 		}
 
-		c, err := api.JoinSubnet(ctx, addr, big.Int(val), address.SubnetID(subnet))
+		c, err := api.JoinSubnet(ctx, addr, big.Int(val), address.SubnetID(subnet), cctx.String("val-addr"))
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cctx.App.Writer, "Successfully added stake to subnet %s in message: %s\n", subnet, c)
+		if _, err := fmt.Fprintf(cctx.App.Writer, "Successfully added stake to subnet %s in message: %s\n", subnet, c); err != nil {
+			return err
+		}
 		return nil
 	},
 }
@@ -271,7 +283,9 @@ var syncCmd = &cli.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cctx.App.Writer, "Successfully started/stopped syncing with subnet %s \n", subnet)
+		if _, err := fmt.Fprintf(cctx.App.Writer, "Successfully started/stopped syncing with subnet %s \n", subnet); err != nil {
+			return err
+		}
 		return nil
 	},
 }
@@ -328,9 +342,13 @@ var mineCmd = &cli.Command{
 			return err
 		}
 		if cctx.Bool("stop") {
-			fmt.Fprintf(cctx.App.Writer, "Successfully stopped mining in subnet: %s\n", subnet)
+			if _, err := fmt.Fprintf(cctx.App.Writer, "Successfully stopped mining in subnet: %s\n", subnet); err != nil {
+				return err
+			}
 		} else {
-			fmt.Fprintf(cctx.App.Writer, "Successfully started mining in subnet: %s\n", subnet)
+			if _, err := fmt.Fprintf(cctx.App.Writer, "Successfully started mining in subnet: %s\n", subnet); err != nil {
+				return err
+			}
 		}
 		return nil
 	},
@@ -383,7 +401,9 @@ var leaveCmd = &cli.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cctx.App.Writer, "Successfully left subnet in message: %s\n", c)
+		if _, err := fmt.Fprintf(cctx.App.Writer, "Successfully left subnet in message: %s\n", c); err != nil {
+			return err
+		}
 		return nil
 	},
 }
@@ -435,7 +455,9 @@ var killCmd = &cli.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cctx.App.Writer, "Successfully sent kill to subnet in message: %s\n", c)
+		if _, err := fmt.Fprintf(cctx.App.Writer, "Successfully sent kill to subnet in message: %s\n", c); err != nil {
+			return err
+		}
 		return nil
 	},
 }
@@ -494,9 +516,14 @@ var releaseCmd = &cli.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cctx.App.Writer, "Successfully sent release message: %s\n", c)
-		fmt.Fprintf(cctx.App.Writer, "Cross-message should be propagated in the next checkpoint to: %s\n",
+		if _, err := fmt.Fprintf(cctx.App.Writer, "Successfully sent release message: %s\n", c); err != nil {
+			return err
+		}
+		_, err = fmt.Fprintf(cctx.App.Writer, "Cross-message should be propagated in the next checkpoint to: %s\n",
 			address.SubnetID(subnet).Parent())
+		if err != nil {
+			return err
+		}
 		return nil
 	},
 }
@@ -525,7 +552,9 @@ var hAddrCmd = &cli.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cctx.App.Writer, "%s\n", out)
+		if _, err := fmt.Fprintf(cctx.App.Writer, "%s\n", out); err != nil {
+			return err
+		}
 		return nil
 	},
 }
@@ -583,8 +612,12 @@ var fundCmd = &cli.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cctx.App.Writer, "Successfully funded subnet in message: %s\n", c)
-		fmt.Fprintf(cctx.App.Writer, "Cross-message should be validated shortly in subnet: %s\n", subnet)
+		if _, err := fmt.Fprintf(cctx.App.Writer, "Successfully funded subnet in message: %s\n", c); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(cctx.App.Writer, "Cross-message should be validated shortly in subnet: %s\n", subnet); err != nil {
+			return nil
+		}
 		return nil
 	},
 }
@@ -753,8 +786,12 @@ var sendCmd = &cli.Command{
 			return xerrors.Errorf("Error sending message: %s", aerr)
 		}
 
-		fmt.Fprintf(cctx.App.Writer, "Successfully send cross-message with cid: %s\n", smsg.Cid())
-		fmt.Fprintf(cctx.App.Writer, "Cross-message should be propagated shortly to the right subnet: %s\n", subnet)
+		if _, err := fmt.Fprintf(cctx.App.Writer, "Successfully send cross-message with cid: %s\n", smsg.Cid()); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(cctx.App.Writer, "Cross-message should be propagated shortly to the right subnet: %s\n", subnet); err != nil {
+			return err
+		}
 		return nil
 	},
 }
@@ -816,6 +853,7 @@ var deployActorCmd = &cli.Command{
 		if err != nil {
 			return err
 		}
+		// TODO: use this https://www.joeshaw.org/dont-defer-close-on-writable-files/ to check error on srv close
 		defer srv.Close() //nolint:errcheck
 
 		ctx := lcli.ReqContext(cctx)
@@ -896,10 +934,10 @@ var deployActorCmd = &cli.Command{
 
 		// Init actor is responsible for the deployment of new actors.
 		smsg, aerr := api.MpoolPushMessage(ctx, &types.Message{
-			To:         spec_builtin.InitActorAddr,
+			To:         specbuiltin.InitActorAddr,
 			From:       params.From,
 			Value:      big.Zero(),
-			Method:     spec_builtin.MethodsInit.Exec,
+			Method:     specbuiltin.MethodsInit.Exec,
 			Params:     serparams,
 			GasLimit:   *params.GasLimit,
 			GasFeeCap:  *params.GasFeeCap,
@@ -919,7 +957,10 @@ var deployActorCmd = &cli.Command{
 		if err := r.UnmarshalCBOR(bytes.NewReader(mw.Receipt.Return)); err != nil {
 			return err
 		}
-		fmt.Fprintf(cctx.App.Writer, "Successfully deployed actor with address: %s\n", r.IDAddress)
+		_, err = fmt.Fprintf(cctx.App.Writer, "Successfully deployed actor with address: %s\n", r.IDAddress)
+		if err != nil {
+			return err
+		}
 		return nil
 	},
 }

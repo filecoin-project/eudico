@@ -3,7 +3,7 @@ package subnetmgr
 import (
 	"bytes"
 	"context"
-	"os"
+	"fmt"
 	"sync"
 
 	"github.com/ipfs/go-blockservice"
@@ -431,7 +431,9 @@ func (s *SubnetMgr) AddSubnet(
 func (s *SubnetMgr) JoinSubnet(
 	ctx context.Context, wallet address.Address,
 	value abi.TokenAmount,
-	id address.SubnetID) (cid.Cid, error) {
+	id address.SubnetID,
+	valAddr string,
+) (cid.Cid, error) {
 
 	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.Lock()
@@ -450,21 +452,33 @@ func (s *SubnetMgr) JoinSubnet(
 		return cid.Undef, err
 	}
 
-	// TODO: use CLI instead of env variables
-	mirID := os.Getenv("EUDICO_MIR_ID")
-	if mirID == "" {
-		panic("empty mir node ID")
-	}
-
-	params := subnet.ValAddress{
-		Value: mirID,
-	}
-
-	var paramsBuf bytes.Buffer
-	err = params.MarshalCBOR(&paramsBuf)
+	var st subnet.SubnetState
+	subnetAct, err := parentAPI.StateGetActor(ctx, SubnetActor, types.EmptyTSK)
 	if err != nil {
-		log.Error(err)
-		return cid.Undef, err
+		return cid.Undef, xerrors.Errorf("loading actor state: %w", err)
+	}
+	pbs := blockstore.NewAPIBlockstore(parentAPI)
+	pcst := cbor.NewCborStore(pbs)
+	if err := pcst.Get(ctx, subnetAct.Head, &st); err != nil {
+		return cid.Undef, xerrors.Errorf("getting actor state: %w", err)
+	}
+
+	var paramsBuf []byte
+	if st.Consensus == hierarchical.Mir {
+		var b bytes.Buffer
+		if valAddr == "" {
+			return cid.Undef, xerrors.New("Mir validator address is not provided")
+		}
+		params := subnet.Validator{
+			ID:      fmt.Sprintf("%s:%s", id, wallet),
+			Address: valAddr,
+		}
+		err = params.MarshalCBOR(&b)
+		if err != nil {
+			log.Error(err)
+			return cid.Undef, err
+		}
+		paramsBuf = b.Bytes()
 	}
 
 	// Get the parent and the actor to know where to send the message.
@@ -474,7 +488,7 @@ func (s *SubnetMgr) JoinSubnet(
 		From:   wallet,
 		Value:  value,
 		Method: subnet.Methods.Join,
-		Params: paramsBuf.Bytes(),
+		Params: paramsBuf,
 	}, nil)
 	if aerr != nil {
 		log.Errorw("Error pushing join subnet message to parent api", "err", aerr)

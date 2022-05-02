@@ -56,10 +56,8 @@ tmux new-session -d -s "mir" \; \
   split-window -t "mir:1.2" -h \; \
   \
   send-keys -t "mir:0.0" "
-        export EUDICO_MIR_ID=0
         export GOLOG_LOG_LEVEL=$LOG_LEVEL
         export EUDICO_PATH=$NODE_0_PATH
-        ./scripts/wait-for-it.sh -t 0 $NODE_0 -- sleep 1;
         ./eudico tspow daemon --genesis=$BLOCK0 --api=$NODE_0_API 2>&1 | tee $NODE_0_DAEMON_LOG" Enter \; \
   send-keys -t "mir:0.1" "
         export EUDICO_MIR_ID=0
@@ -71,15 +69,13 @@ tmux new-session -d -s "mir" \; \
         ./eudico wallet import --as-default $NODE_0_KEY
         ./eudico tspow miner --default-key 2>&1 | tee $NODE_0_MINER_LOG" Enter \; \
   send-keys -t "mir:0.2" "
-        export EUDICO_MIR_ID=1
-        export GOLOG_LOG_LEVEL=$LOG_LEVEL
         export EUDICO_PATH=$NODE_1_PATH
-        ./scripts/wait-for-it.sh -t 0 $NODE_1 -- sleep 1;
+        export GOLOG_LOG_LEVEL=$LOG_LEVEL
         ./eudico tspow daemon --genesis=$BLOCK0 --api=$NODE_1_API 2>&1 | tee $NODE_1_DAEMON_LOG" Enter \; \
   send-keys -t "mir:0.3" "
-        export GOLOG_LOG_LEVEL=$LOG_LEVEL
         export EUDICO_MIR_ID=1
         export EUDICO_PATH=$NODE_1_PATH
+        export GOLOG_LOG_LEVEL=$LOG_LEVEL
         ./eudico wait-api;
         ./eudico net listen | grep '/ip6/::1/' > $NODE_1_NETADDR; sleep 2; \
         ./eudico net connect \$(cat $NODE_0_NETADDR);

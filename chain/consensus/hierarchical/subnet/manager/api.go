@@ -12,6 +12,7 @@ import (
 	cbor "github.com/ipfs/go-ipld-cbor"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-jsonrpc"
@@ -190,6 +191,8 @@ func (sh *Subnet) populateAPIs(
 }
 
 func (n *API) CreateBackup(ctx context.Context, fpath string) error {
+	_ = ctx
+	_ = fpath
 	panic("backup not implemented for wrapped abstraction")
 }
 
@@ -295,7 +298,11 @@ func FullNodeHandler(prefix string, a v1api.FullNode, permissioned bool, opts ..
 	serveRpc(path.Join("/", prefix, "/rpc/v0"), &v0api.WrapperV1Full{FullNode: fnapi})
 
 	// Import handler
-	handleImportFunc := handleImport(a.(*API))
+	h, ok := a.(*API)
+	if !ok {
+		return nil, xerrors.New("type assertion failed")
+	}
+	handleImportFunc := handleImport(h)
 	if permissioned {
 		importAH := &auth.Handler{
 			Verify: a.AuthVerify,

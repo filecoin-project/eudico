@@ -33,8 +33,8 @@ func (a *HierarchicalAPI) AddSubnet(
 }
 
 func (a *HierarchicalAPI) JoinSubnet(ctx context.Context, wallet address.Address,
-	value abi.TokenAmount, id address.SubnetID) (cid.Cid, error) {
-	return a.Sub.JoinSubnet(ctx, wallet, value, id)
+	value abi.TokenAmount, id address.SubnetID, validator string) (cid.Cid, error) {
+	return a.Sub.JoinSubnet(ctx, wallet, value, id, validator)
 }
 
 func (a *HierarchicalAPI) SyncSubnet(ctx context.Context, id address.SubnetID, stop bool) error {

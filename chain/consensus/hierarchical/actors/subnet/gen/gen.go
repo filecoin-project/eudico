@@ -1,9 +1,9 @@
 package main
 
 import (
-	actor "github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
-
 	gen "github.com/whyrusleeping/cbor-gen"
+
+	actor "github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 )
 
 func main() {
@@ -11,7 +11,7 @@ func main() {
 		actor.SubnetState{},
 		actor.ConstructParams{},
 		actor.CheckVotes{},
-		actor.ValAddress{},
+		actor.Validator{},
 	); err != nil {
 		panic(err)
 	}

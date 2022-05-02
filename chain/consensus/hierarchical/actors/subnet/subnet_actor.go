@@ -4,7 +4,6 @@ package subnet
 
 import (
 	"bytes"
-	"fmt"
 
 	"github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log/v2"
@@ -111,7 +110,7 @@ func (st *SubnetState) initGenesis(rt runtime.Runtime, params *ConstructParams) 
 
 // Join adds stake to the subnet and/or joins if the source is still not part of it.
 // TODO: Join may not be the best name for this function, consider changing it.
-func (a SubnetActor) Join(rt runtime.Runtime, addr *ValAddress) *abi.EmptyValue {
+func (a SubnetActor) Join(rt runtime.Runtime, v *Validator) *abi.EmptyValue {
 	rt.ValidateImmediateCallerAcceptAny()
 	sourceAddr := rt.Caller()
 	value := rt.ValueReceived()
@@ -148,14 +147,13 @@ func (a SubnetActor) Join(rt runtime.Runtime, addr *ValAddress) *abi.EmptyValue 
 
 	rt.StateTransaction(&st, func() {
 		// Mutate state
-		// TODO: That's code is PoC only to play with subnet actors and check it works.
 		if st.Consensus == hierarchical.Mir {
 
-			st.Validators[addr.Value] = ValAddress{Value: fmt.Sprintf("127.0.0.1:1000%s", addr.Value)}
+			st.Validators = append(st.Validators, *v)
 
-			log.Infof("Added Mir node into the subnet state: %s: %s", addr.Value, st.Validators[addr.Value])
+			log.Infof("Added Mir node into the subnet state: %s: %s", v.ID, v.Address)
 			log.Infof("%d Mir nodes have been registered", len(st.Validators))
-			log.Info("Mir nodes list:", st.Validators)
+			log.Info("Current Mir validators list:", st.Validators)
 		}
 	})
 

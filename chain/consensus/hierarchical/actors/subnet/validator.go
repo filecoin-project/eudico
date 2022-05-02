@@ -9,16 +9,17 @@ import (
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
-// ValAddress encapsulated string to be compatible with CBOR implementation.
-type ValAddress struct {
-	Value string
+// Validator encapsulated string to be compatible with CBOR implementation.
+type Validator struct {
+	ID      string
+	Address string
 }
 
 // EncodeValInfo adds a validator ID and address into a string.
-func EncodeValInfo(vals map[string]ValAddress) string {
+func EncodeValInfo(vals []Validator) string {
 	var s string
-	for i, addr := range vals {
-		s += fmt.Sprintf("%s@%s,", i, addr.Value)
+	for _, v := range vals {
+		s += fmt.Sprintf("%s@%s,", v.ID, v.Address)
 	}
 	return strings.TrimSuffix(s, ",")
 }

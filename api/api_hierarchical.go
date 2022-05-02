@@ -14,7 +14,7 @@ import (
 
 type HierarchicalCns interface {
 	AddSubnet(ctx context.Context, wallet address.Address, parent address.SubnetID, name string, consensus uint64, minerStake abi.TokenAmount, checkperiod abi.ChainEpoch, delegminer address.Address) (address.Address, error) // perm:write
-	JoinSubnet(ctx context.Context, wallet address.Address, value abi.TokenAmount, id address.SubnetID) (cid.Cid, error)                                                                                                        // perm:write
+	JoinSubnet(ctx context.Context, wallet address.Address, value abi.TokenAmount, id address.SubnetID, validatorAddr string) (cid.Cid, error)                                                                                  // perm:write
 	SyncSubnet(ctx context.Context, id address.SubnetID, stop bool) error                                                                                                                                                       // perm:write
 	MineSubnet(ctx context.Context, wallet address.Address, id address.SubnetID, stop bool) error                                                                                                                               // perm:read
 	LeaveSubnet(ctx context.Context, wallet address.Address, id address.SubnetID) (cid.Cid, error)                                                                                                                              // perm:write

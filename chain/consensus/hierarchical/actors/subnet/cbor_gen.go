@@ -136,39 +136,17 @@ func (t *SubnetState) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("failed to write cid field t.WindowChecks: %w", err)
 	}
 
-	// t.Validators (map[string]subnet.ValAddress) (map)
-	{
-		if len(t.Validators) > 4096 {
-			return xerrors.Errorf("cannot marshal t.Validators map too large")
-		}
+	// t.Validators ([]subnet.Validator) (slice)
+	if len(t.Validators) > cbg.MaxLength {
+		return xerrors.Errorf("Slice value in field t.Validators was too long")
+	}
 
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajMap, uint64(len(t.Validators))); err != nil {
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajArray, uint64(len(t.Validators))); err != nil {
+		return err
+	}
+	for _, v := range t.Validators {
+		if err := v.MarshalCBOR(w); err != nil {
 			return err
-		}
-
-		keys := make([]string, 0, len(t.Validators))
-		for k := range t.Validators {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			v := t.Validators[k]
-
-			if len(k) > cbg.MaxLength {
-				return xerrors.Errorf("Value in field k was too long")
-			}
-
-			if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(k))); err != nil {
-				return err
-			}
-			if _, err := io.WriteString(w, string(k)); err != nil {
-				return err
-			}
-
-			if err := v.MarshalCBOR(w); err != nil {
-				return err
-			}
-
 		}
 	}
 	return nil
@@ -369,47 +347,35 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) error {
 		t.WindowChecks = c
 
 	}
-	// t.Validators (map[string]subnet.ValAddress) (map)
+	// t.Validators ([]subnet.Validator) (slice)
 
 	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
 	if err != nil {
 		return err
 	}
-	if maj != cbg.MajMap {
-		return fmt.Errorf("expected a map (major type 5)")
-	}
-	if extra > 4096 {
-		return fmt.Errorf("t.Validators: map too large")
+
+	if extra > cbg.MaxLength {
+		return fmt.Errorf("t.Validators: array too large (%d)", extra)
 	}
 
-	t.Validators = make(map[string]ValAddress, extra)
+	if maj != cbg.MajArray {
+		return fmt.Errorf("expected cbor array")
+	}
 
-	for i, l := 0, int(extra); i < l; i++ {
+	if extra > 0 {
+		t.Validators = make([]Validator, extra)
+	}
 
-		var k string
+	for i := 0; i < int(extra); i++ {
 
-		{
-			sval, err := cbg.ReadStringBuf(br, scratch)
-			if err != nil {
-				return err
-			}
-
-			k = string(sval)
+		var v Validator
+		if err := v.UnmarshalCBOR(br); err != nil {
+			return err
 		}
 
-		var v ValAddress
-
-		{
-
-			if err := v.UnmarshalCBOR(br); err != nil {
-				return xerrors.Errorf("unmarshaling v: %w", err)
-			}
-
-		}
-
-		t.Validators[k] = v
-
+		t.Validators[i] = v
 	}
+
 	return nil
 }
 
@@ -678,35 +644,47 @@ func (t *CheckVotes) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufValAddress = []byte{129}
+var lengthBufValidator = []byte{130}
 
-func (t *ValAddress) MarshalCBOR(w io.Writer) error {
+func (t *Validator) MarshalCBOR(w io.Writer) error {
 	if t == nil {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufValAddress); err != nil {
+	if _, err := w.Write(lengthBufValidator); err != nil {
 		return err
 	}
 
 	scratch := make([]byte, 9)
 
-	// t.Value (string) (string)
-	if len(t.Value) > cbg.MaxLength {
-		return xerrors.Errorf("Value in field t.Value was too long")
+	// t.ID (string) (string)
+	if len(t.ID) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.ID was too long")
 	}
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Value))); err != nil {
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.ID))); err != nil {
 		return err
 	}
-	if _, err := io.WriteString(w, string(t.Value)); err != nil {
+	if _, err := io.WriteString(w, string(t.ID)); err != nil {
+		return err
+	}
+
+	// t.Address (string) (string)
+	if len(t.Address) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.Address was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Address))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.Address)); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (t *ValAddress) UnmarshalCBOR(r io.Reader) error {
-	*t = ValAddress{}
+func (t *Validator) UnmarshalCBOR(r io.Reader) error {
+	*t = Validator{}
 
 	br := cbg.GetPeeker(r)
 	scratch := make([]byte, 8)
@@ -719,11 +697,11 @@ func (t *ValAddress) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 1 {
+	if extra != 2 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.Value (string) (string)
+	// t.ID (string) (string)
 
 	{
 		sval, err := cbg.ReadStringBuf(br, scratch)
@@ -731,7 +709,17 @@ func (t *ValAddress) UnmarshalCBOR(r io.Reader) error {
 			return err
 		}
 
-		t.Value = string(sval)
+		t.ID = string(sval)
+	}
+	// t.Address (string) (string)
+
+	{
+		sval, err := cbg.ReadStringBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+
+		t.Address = string(sval)
 	}
 	return nil
 }

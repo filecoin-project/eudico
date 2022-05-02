@@ -4,22 +4,28 @@ import (
 	"context"
 	"time"
 
+	"golang.org/x/xerrors"
+
 	"github.com/filecoin-project/go-address"
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/types"
 	ltypes "github.com/filecoin-project/lotus/chain/types"
-	mirTypes "github.com/filecoin-project/mir/pkg/types"
+	mirtypes "github.com/filecoin-project/mir/pkg/types"
 )
 
 // Mine mines Filecoin blocks.
-
+//
 // Mine implements the following algorithm:
 // 1. Retrieve messages and cross-messages from mempool.
 // 2. Send these messages to the Mir node.
 // 3. Receive ordered messages from the Mir node and push them into the next Filecoin block.
 // 4. Submit this block.
+//
+// There are two ways how mining with Mir consensus can be launching:
+// 1) Environment variables: Provide all validators ID and addresses via EUDICO_MIR_NODES and EUDICO_MIR_ID variables;
+// 2) Use hierarchical consensus framework: join the subnet providing the Mir validator address for Eudico.
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {
 	log.Info("Mir miner started")
 	defer log.Info("Mir miner stopped")
@@ -38,13 +44,18 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	// if err != nil {
 	//	log.Fatalf("unable to get a node ID: %s", err)
 	// }
-	nodeID := NodeIDFromEnv()
+
+	var nodeID string
 	nodes, err := api.SubnetGetActorStateValidators(ctx, subnetID)
 	if err != nil || nodes == "" {
+		nodeID = NodeIDFromEnv()
 		nodes = NodesFromEnv()
+		if nodeID == "" || nodes == "" {
+			return xerrors.New("Failed to get Mir nodes and ID from environment variables")
+		}
 	}
 
-	mirAgent, err := NewMirAgent(nodeID, nodes)
+	mirAgent, err := NewMirAgent(ctx, nodeID, nodes)
 	if err != nil {
 		return err
 	}
@@ -127,11 +138,11 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 					continue
 				}
 
-				reqNo := mirTypes.ReqNo(msg.Message.Nonce)
+				reqNo := mirtypes.ReqNo(msg.Message.Nonce)
 				tx := common.NewSignedMessageBytes(msgBytes, nil)
 
 				// TODO: client ID should be subnet.String()+"::"+peer.ID.String()
-				err = mirAgent.Node.SubmitRequest(ctx, mirTypes.ClientID(nodeID), reqNo, tx, nil)
+				err = mirAgent.Node.SubmitRequest(ctx, mirtypes.ClientID(nodeID), reqNo, tx, nil)
 				if err != nil {
 					log.Error("unable to submit a message to Mir:", err)
 					continue
@@ -147,9 +158,9 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 				}
 
 				tx := common.NewCrossMessageBytes(msgBytes, nil)
-				reqNo := mirTypes.ReqNo(msg.Msg.Nonce)
+				reqNo := mirtypes.ReqNo(msg.Msg.Nonce)
 
-				err = mirAgent.Node.SubmitRequest(ctx, mirTypes.ClientID(0), reqNo, tx, []byte{})
+				err = mirAgent.Node.SubmitRequest(ctx, mirtypes.ClientID(0), reqNo, tx, []byte{})
 				if err != nil {
 					log.Error("unable to submit a message to Mir:", err)
 					continue
