@@ -300,7 +300,7 @@ func FullNodeHandler(prefix string, a v1api.FullNode, permissioned bool, opts ..
 	// Import handler
 	h, ok := a.(*API)
 	if !ok {
-		return nil, xerrors.New("type assertion failed")
+		return nil, xerrors.New("subnet manager API type assertion failed")
 	}
 	handleImportFunc := handleImport(h)
 	if permissioned {

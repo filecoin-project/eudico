@@ -443,15 +443,8 @@ func (t *ConstructParams) MarshalCBOR(w io.Writer) error {
 		}
 	}
 
-	// t.ValAddress (string) (string)
-	if len(t.ValAddress) > cbg.MaxLength {
-		return xerrors.Errorf("Value in field t.ValAddress was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.ValAddress))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string(t.ValAddress)); err != nil {
+	// t.Validator (subnet.Validator) (struct)
+	if err := t.Validator.MarshalCBOR(w); err != nil {
 		return err
 	}
 	return nil
@@ -552,15 +545,14 @@ func (t *ConstructParams) UnmarshalCBOR(r io.Reader) error {
 
 		t.CheckPeriod = abi.ChainEpoch(extraI)
 	}
-	// t.ValAddress (string) (string)
+	// t.Validator (subnet.Validator) (struct)
 
 	{
-		sval, err := cbg.ReadStringBuf(br, scratch)
-		if err != nil {
-			return err
+
+		if err := t.Validator.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Validator: %w", err)
 		}
 
-		t.ValAddress = string(sval)
 	}
 	return nil
 }

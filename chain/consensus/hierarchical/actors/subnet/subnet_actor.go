@@ -71,7 +71,7 @@ type ConstructParams struct {
 	MinMinerStake abi.TokenAmount            // MinStake to give miner rights
 	DelegMiner    address.Address            // Miner in delegated consensus
 	CheckPeriod   abi.ChainEpoch             // Checkpointing period.
-	ValAddress    string                     // Validator ID @ GRPC address experimental field.
+	Validator     Validator                  // Validator ID @ GRPC address experimental field.
 }
 
 func (a SubnetActor) Constructor(rt runtime.Runtime, params *ConstructParams) *abi.EmptyValue {

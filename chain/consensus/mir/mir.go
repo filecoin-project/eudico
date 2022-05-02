@@ -39,7 +39,6 @@ import (
 const (
 	MaxHeightDrift = 5
 	SubmitInterval = 300 * time.Millisecond
-	NodeIDEnv      = "EUDICO_MIR_ID"
 	NodesEnv       = "EUDICO_MIR_NODES"
 )
 
@@ -47,14 +46,6 @@ var (
 	log                     = logging.Logger("mir-consensus")
 	_   consensus.Consensus = &Mir{}
 )
-
-func NodeIDFromEnv() string {
-	id := os.Getenv(NodeIDEnv)
-	if id == "" {
-		panic(fmt.Sprintf("failed to get Mir node ID"))
-	}
-	return id
-}
 
 func NodesFromEnv() string {
 	n := os.Getenv(NodesEnv)

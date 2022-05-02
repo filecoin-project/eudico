@@ -146,7 +146,7 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 		CheckPeriod:   period,
 		Checkpoints:   emptyCheckpointsMapCid,
 		WindowChecks:  emptyWindowChecks,
-		Validators:    make([]Validator, 0, 0),
+		Validators:    make([]Validator, 0),
 	}, nil
 
 }

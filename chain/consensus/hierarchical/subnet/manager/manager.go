@@ -463,22 +463,19 @@ func (s *SubnetMgr) JoinSubnet(
 		return cid.Undef, xerrors.Errorf("getting actor state: %w", err)
 	}
 
-	var paramsBuf []byte
+	var v subnet.Validator
+	var params bytes.Buffer
+
 	if st.Consensus == hierarchical.Mir {
-		var b bytes.Buffer
 		if valAddr == "" {
 			return cid.Undef, xerrors.New("Mir validator address is not provided")
 		}
-		params := subnet.Validator{
-			ID:      fmt.Sprintf("%s:%s", id, wallet),
-			Address: valAddr,
-		}
-		err = params.MarshalCBOR(&b)
-		if err != nil {
-			log.Error(err)
-			return cid.Undef, err
-		}
-		paramsBuf = b.Bytes()
+		v.ID = fmt.Sprintf("%s:%s", id, wallet)
+		v.Address = valAddr
+	}
+	err = v.MarshalCBOR(&params)
+	if err != nil {
+		return cid.Undef, err
 	}
 
 	// Get the parent and the actor to know where to send the message.
@@ -488,7 +485,7 @@ func (s *SubnetMgr) JoinSubnet(
 		From:   wallet,
 		Value:  value,
 		Method: subnet.Methods.Join,
-		Params: paramsBuf,
+		Params: params.Bytes(),
 	}, nil)
 	if aerr != nil {
 		log.Errorw("Error pushing join subnet message to parent api", "err", aerr)

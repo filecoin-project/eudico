@@ -44,13 +44,18 @@ To create a deployment run the following script:
 Then run the following commands:
 ```
  ./eudico subnet add --consensus 3 --name mir
- ./eudico subnet join --subnet=/root/t01001 -val-addr=127.0.0.1:10000 10 
- ./eudico subnet mine  --subnet=/root/t01001
- ./eudico --subnet-api=/root/t01001 wallet list
- ./eudico subnet fund --from=X --subnet=/root/t01001 11
+ ./eudico subnet join --subnet=/root/t01002 -val-addr=127.0.0.1:10000 10 
+ ./eudico subnet mine  --subnet=/root/t01002
+ ./eudico --subnet-api=/root/t01002 wallet list
+ ./eudico subnet fund --from=X --subnet=/root/t01002 11
  ./eudico --subnet-api=/root/t01001 send <addr> 10
  ./eudico subnet list-subnets
- ./eudico subnet release --from=X --subnet=/root/t01001
+ ./eudico subnet release --from=X --subnet=/root/t01002
+```
+
+Don't forget provide different addresses if you use Mir nodes on the same machine: 
+```
+./eudico subnet join --subnet=/root/t01002 -val-addr=127.0.0.1:10001 10 
 ```
 
 `t01001` name is just an example, in your setup the real subnet name may be different.

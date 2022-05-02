@@ -2,6 +2,7 @@ package mir
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"golang.org/x/xerrors"
@@ -45,13 +46,12 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	//	log.Fatalf("unable to get a node ID: %s", err)
 	// }
 
-	var nodeID string
+	nodeID := fmt.Sprintf("%s:%s", subnetID, miner)
 	nodes, err := api.SubnetGetActorStateValidators(ctx, subnetID)
 	if err != nil || nodes == "" {
-		nodeID = NodeIDFromEnv()
 		nodes = NodesFromEnv()
-		if nodeID == "" || nodes == "" {
-			return xerrors.New("Failed to get Mir nodes and ID from environment variables")
+		if nodes == "" {
+			return xerrors.New("failed to get Mir nodes from environment variable")
 		}
 	}
 
