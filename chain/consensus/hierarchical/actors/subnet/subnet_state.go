@@ -128,10 +128,6 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 		period = sca.DefaultCheckpointPeriod
 	}
 
-	if params.ValidatorsNumber < 0 {
-		return nil, xerrors.New("validators number is less than 0")
-	}
-
 	// TODO: @alfonso do we need this?
 	/* Initialize AMT of miners.
 	emptyArr, err := adt.MakeEmptyArray(adt.AsStore(rt), LaneStatesAmtBitwidth)
