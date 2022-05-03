@@ -60,7 +60,6 @@ tmux new-session -d -s "mir" \; \
         export EUDICO_PATH=$NODE_0_PATH
         ./eudico tspow daemon --genesis=$BLOCK0 --api=$NODE_0_API 2>&1 | tee $NODE_0_DAEMON_LOG" Enter \; \
   send-keys -t "mir:0.1" "
-        export EUDICO_MIR_ID=0
         export EUDICO_PATH=$NODE_0_PATH
         export GOLOG_LOG_LEVEL=$LOG_LEVEL
         ./eudico wait-api;
@@ -73,7 +72,6 @@ tmux new-session -d -s "mir" \; \
         export GOLOG_LOG_LEVEL=$LOG_LEVEL
         ./eudico tspow daemon --genesis=$BLOCK0 --api=$NODE_1_API 2>&1 | tee $NODE_1_DAEMON_LOG" Enter \; \
   send-keys -t "mir:0.3" "
-        export EUDICO_MIR_ID=1
         export EUDICO_PATH=$NODE_1_PATH
         export GOLOG_LOG_LEVEL=$LOG_LEVEL
         ./eudico wait-api;

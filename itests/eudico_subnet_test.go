@@ -22,19 +22,29 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
-func TestEudicoSubnet1(t *testing.T) {
-
+func TestEudicoSubnetWithMir(t *testing.T) {
 	if err := os.Setenv("EUDICO_MIR_ID", "0"); err != nil {
 		require.NoError(t, err)
 	}
 	if err := os.Setenv("EUDICO_MIR_NODES", "0@127.0.0.1:10000"); err != nil {
 		require.NoError(t, err)
 	}
-	t.Run("/root/delegated-/subnet/mir", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetMir())
+	t.Run("/root/mir-/subnet/dummy", func(t *testing.T) {
+		runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDummy())
+	})
+
+	t.Run("/root/dummy-/subnet/mir", func(t *testing.T) {
+		runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetMir())
 	})
 
 }
+
+func TestEudicoSubnetMirWithActor(t *testing.T) {
+	t.Run("/root/dummy-/subnet/mir", func(t *testing.T) {
+		runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetMir(), kit.ValidatorsNumber(1), kit.ValidatorAddress("127.0.0.1:11001"))
+	})
+}
+
 func TestEudicoSubnet(t *testing.T) {
 	if err := os.Setenv("EUDICO_MIR_ID", "0"); err != nil {
 		require.NoError(t, err)
@@ -137,6 +147,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	defer cancel()
 
 	full, rootMiner, subnetMinerType, ens := kit.EudicoEnsembleTwoMiners(t, ts.opts...)
+	n, valAddr := ens.ValidatorInfo()
 
 	addr, err := full.WalletDefaultAddress(ctx)
 	require.NoError(t, err)
@@ -153,7 +164,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 		bm.MineBlocks(ctx, 1*time.Second)
 	case kit.EudicoRootMiner:
 		go func() {
-			err = miner(ctx, addr, full)
+			err := miner(ctx, addr, full)
 			require.NoError(t, err)
 		}()
 	default:
@@ -174,7 +185,8 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("[*] %s balance: %d", addr, balance)
 
-	actorAddr, err := full.AddSubnet(ctx, addr, parent, subnetName, uint64(subnetMinerType), minerStake, checkPeriod, addr)
+	cns := uint64(subnetMinerType)
+	actorAddr, err := full.AddSubnet(ctx, addr, parent, subnetName, cns, minerStake, checkPeriod, addr, n)
 	require.NoError(t, err)
 
 	subnetAddr := address.NewSubnetID(parent, actorAddr)
@@ -190,11 +202,6 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 
 	_, err = full.StateLookupID(ctx, addr, types.EmptyTSK)
 	require.NoError(t, err)
-
-	var valAddr string
-	if subnetMinerType == hierarchical.Mir {
-		valAddr = "127.0.0.1:11000"
-	}
 
 	sc, err := full.JoinSubnet(ctx, addr, big.Int(val), subnetAddr, valAddr)
 	require.NoError(t, err)
@@ -212,7 +219,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	require.Equal(t, subnetMinerType, sn[0].Consensus)
 
 	go func() {
-		err = full.MineSubnet(ctx, addr, subnetAddr, false)
+		err := full.MineSubnet(ctx, addr, subnetAddr, false)
 		require.NoError(t, err)
 	}()
 

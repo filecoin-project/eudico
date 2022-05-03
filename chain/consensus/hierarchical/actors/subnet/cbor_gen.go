@@ -21,7 +21,7 @@ var _ = cid.Undef
 var _ = math.E
 var _ = sort.Sort
 
-var lengthBufSubnetState = []byte{141}
+var lengthBufSubnetState = []byte{142}
 
 func (t *SubnetState) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -149,6 +149,13 @@ func (t *SubnetState) MarshalCBOR(w io.Writer) error {
 			return err
 		}
 	}
+
+	// t.ValidatorsNumber (uint64) (uint64)
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.ValidatorsNumber)); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -166,7 +173,7 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 13 {
+	if extra != 14 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -376,6 +383,20 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) error {
 		t.Validators[i] = v
 	}
 
+	// t.ValidatorsNumber (uint64) (uint64)
+
+	{
+
+		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+		if maj != cbg.MajUnsignedInt {
+			return fmt.Errorf("wrong type for uint64 field")
+		}
+		t.ValidatorsNumber = uint64(extra)
+
+	}
 	return nil
 }
 
@@ -443,10 +464,12 @@ func (t *ConstructParams) MarshalCBOR(w io.Writer) error {
 		}
 	}
 
-	// t.Validator (subnet.Validator) (struct)
-	if err := t.Validator.MarshalCBOR(w); err != nil {
+	// t.ValidatorsNumber (uint64) (uint64)
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.ValidatorsNumber)); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -545,13 +568,18 @@ func (t *ConstructParams) UnmarshalCBOR(r io.Reader) error {
 
 		t.CheckPeriod = abi.ChainEpoch(extraI)
 	}
-	// t.Validator (subnet.Validator) (struct)
+	// t.ValidatorsNumber (uint64) (uint64)
 
 	{
 
-		if err := t.Validator.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.Validator: %w", err)
+		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		if err != nil {
+			return err
 		}
+		if maj != cbg.MajUnsignedInt {
+			return fmt.Errorf("wrong type for uint64 field")
+		}
+		t.ValidatorsNumber = uint64(extra)
 
 	}
 	return nil

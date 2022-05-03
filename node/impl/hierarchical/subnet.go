@@ -28,8 +28,9 @@ func (a *HierarchicalAPI) AddSubnet(
 	parent address.SubnetID, name string,
 	consensus uint64, minerStake abi.TokenAmount,
 	checkPeriod abi.ChainEpoch,
-	delegminer address.Address) (address.Address, error) {
-	return a.Sub.AddSubnet(ctx, wallet, parent, name, consensus, minerStake, checkPeriod, delegminer)
+	dm address.Address,
+	n uint64) (address.Address, error) {
+	return a.Sub.AddSubnet(ctx, wallet, parent, name, consensus, minerStake, checkPeriod, dm, n)
 }
 
 func (a *HierarchicalAPI) JoinSubnet(ctx context.Context, wallet address.Address,

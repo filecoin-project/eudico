@@ -100,9 +100,9 @@ var addCmd = &cli.Command{
 			Name:  "parent",
 			Usage: "specify the ID of the parent subnet from which to add",
 		},
-		&cli.IntFlag{
+		&cli.Uint64Flag{
 			Name:  "consensus",
-			Usage: "specify consensus for the subnet (0=delegated, 1=PoW, 2=Tendermint, 3=MirBFT)",
+			Usage: "specify consensus for the subnet (0=delegated, 1=PoW, 2=Tendermint, 3=Mir)",
 		},
 		&cli.IntFlag{
 			Name:  "checkperiod",
@@ -115,6 +115,11 @@ var addCmd = &cli.Command{
 		&cli.StringFlag{
 			Name:  "delegminer",
 			Usage: "optionally specify miner for delegated consensus",
+		},
+		&cli.Uint64Flag{
+			Name:  "validators",
+			Usage: "optionally specify number of validators in Mir",
+			Value: 0,
 		},
 	},
 	Action: func(cctx *cli.Context) error {
@@ -139,9 +144,9 @@ var addCmd = &cli.Command{
 			}
 		}
 
-		consensus := 0
+		var cns uint64
 		if cctx.IsSet("consensus") {
-			consensus = cctx.Int("consensus")
+			cns = cctx.Uint64("consensus")
 		}
 
 		var name string
@@ -156,6 +161,11 @@ var addCmd = &cli.Command{
 			parent = address.SubnetID(cctx.String("parent"))
 		}
 
+		var vals uint64
+		if cctx.IsSet("validators") {
+			vals = cctx.Uint64("validators")
+		}
+
 		// FIXME: This is a horrible workaround to avoid delegminer from
 		// not being set. But need to demo in 30 mins, so will fix it afterwards
 		// (we all know I'll come across this comment in 2 years and laugh at it).
@@ -166,12 +176,12 @@ var addCmd = &cli.Command{
 			if err != nil {
 				return xerrors.Errorf("couldn't parse deleg miner address: %s", err)
 			}
-		} else if consensus == 0 {
+		} else if cns == 0 {
 			return lcli.ShowHelp(cctx, fmt.Errorf("no delegated miner for delegated consensus specified"))
 		}
 		minerStake := abi.NewStoragePower(1e8) // TODO: Make this value configurable in a flag/argument
 		checkperiod := abi.ChainEpoch(cctx.Int("checkperiod"))
-		actorAddr, err := api.AddSubnet(ctx, addr, parent, name, uint64(consensus), minerStake, checkperiod, delegminer)
+		actorAddr, err := api.AddSubnet(ctx, addr, parent, name, cns, minerStake, checkperiod, delegminer, vals)
 		if err != nil {
 			return err
 		}

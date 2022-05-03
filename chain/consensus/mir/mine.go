@@ -3,6 +3,7 @@ package mir
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"golang.org/x/xerrors"
@@ -25,8 +26,10 @@ import (
 // 4. Submit this block.
 //
 // There are two ways how mining with Mir consensus can be launching:
-// 1) Environment variables: Provide all validators ID and addresses via EUDICO_MIR_NODES and EUDICO_MIR_ID variables;
+// 1) Environment variables: Provide all validators ID and addresses via EUDICO_MIR_NODES and EUDICO_MIR_ID variables.
+//    This is used to run Mir in the root network.
 // 2) Use hierarchical consensus framework: join the subnet providing the Mir validator address for Eudico.
+//    This is used to run Mir in a subnet.
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {
 	log.Info("Mir miner started")
 	defer log.Info("Mir miner stopped")
@@ -46,12 +49,16 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	//	log.Fatalf("unable to get a node ID: %s", err)
 	// }
 
-	nodeID := fmt.Sprintf("%s:%s", subnetID, miner)
-	nodes, err := api.SubnetGetActorStateValidators(ctx, subnetID)
-	if err != nil || nodes == "" {
-		nodes = NodesFromEnv()
-		if nodes == "" {
-			return xerrors.New("failed to get Mir nodes from environment variable")
+	nodeID := os.Getenv(NodeIDEnv)
+	if nodeID == "" {
+		nodeID = fmt.Sprintf("%s:%s", subnetID, miner)
+	}
+
+	nodes := os.Getenv(NodesEnv)
+	if nodes == "" {
+		nodes, err = api.SubnetGetActorStateValidators(ctx, subnetID)
+		if err != nil {
+			return xerrors.New("failed to get Mir nodes from state and environment variable")
 		}
 	}
 

@@ -372,7 +372,8 @@ func (s *SubnetMgr) AddSubnet(
 	parent address.SubnetID, name string,
 	consensus uint64, minerStake abi.TokenAmount,
 	checkPeriod abi.ChainEpoch,
-	delegminer address.Address) (address.Address, error) {
+	delegminer address.Address,
+	validatorsNumber uint64) (address.Address, error) {
 
 	// Get the api for the parent network hosting the subnet actor
 	// for the subnet.
@@ -382,12 +383,13 @@ func (s *SubnetMgr) AddSubnet(
 	}
 	// Populate constructor parameters for subnet actor
 	addp := &subnet.ConstructParams{
-		NetworkName:   string(s.api.NetName),
-		MinMinerStake: minerStake,
-		Name:          name,
-		Consensus:     hierarchical.ConsensusType(consensus),
-		DelegMiner:    delegminer,
-		CheckPeriod:   checkPeriod,
+		NetworkName:      string(s.api.NetName),
+		MinMinerStake:    minerStake,
+		Name:             name,
+		Consensus:        hierarchical.ConsensusType(consensus),
+		DelegMiner:       delegminer,
+		CheckPeriod:      checkPeriod,
+		ValidatorsNumber: validatorsNumber,
 	}
 
 	seraddp, err := actors.SerializeParams(addp)
@@ -466,7 +468,7 @@ func (s *SubnetMgr) JoinSubnet(
 	var v subnet.Validator
 	var params bytes.Buffer
 
-	if st.Consensus == hierarchical.Mir {
+	if st.Consensus == hierarchical.Mir && st.ValidatorsNumber > 0 {
 		if valAddr == "" {
 			return cid.Undef, xerrors.New("Mir validator address is not provided")
 		}
@@ -596,9 +598,10 @@ func (s *SubnetMgr) MineSubnet(
 		return err
 	}
 
-	if st.Consensus == hierarchical.Mir {
-		if len(st.Validators) != subcns.MirNodeNumber {
-			return xerrors.Errorf("Mir nodes - joined %d, wanted %d", len(st.Validators), subcns.MirNodeNumber)
+	if st.Consensus == hierarchical.Mir && int(st.ValidatorsNumber) > 0 {
+		log.Debugf("%d Mir validators joined subnet %s", st.ValidatorsNumber, id)
+		if len(st.Validators) != int(st.ValidatorsNumber) {
+			return xerrors.Errorf("Mir nodes - joined %d, wanted %d", len(st.Validators), st.ValidatorsNumber)
 		}
 	}
 

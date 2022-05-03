@@ -40,6 +40,7 @@ const (
 	MaxHeightDrift = 5
 	SubmitInterval = 300 * time.Millisecond
 	NodesEnv       = "EUDICO_MIR_NODES"
+	NodeIDEnv      = "EUDICO_MIR_ID"
 )
 
 var (

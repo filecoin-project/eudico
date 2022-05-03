@@ -65,13 +65,13 @@ func (a SubnetActor) State() cbor.Er {
 // ConstructParams specifies the configuration parameters for the
 // subnet actor constructor.
 type ConstructParams struct {
-	NetworkName   string                     // Name of the current network.
-	Name          string                     // Name for the subnet
-	Consensus     hierarchical.ConsensusType // Consensus for subnet.
-	MinMinerStake abi.TokenAmount            // MinStake to give miner rights
-	DelegMiner    address.Address            // Miner in delegated consensus
-	CheckPeriod   abi.ChainEpoch             // Checkpointing period.
-	Validator     Validator                  // Validator ID @ GRPC address experimental field.
+	NetworkName      string                     // Name of the current network.
+	Name             string                     // Name for the subnet
+	Consensus        hierarchical.ConsensusType // Consensus for subnet.
+	MinMinerStake    abi.TokenAmount            // MinStake to give miner rights
+	DelegMiner       address.Address            // Miner in delegated consensus
+	CheckPeriod      abi.ChainEpoch             // Checkpointing period.
+	ValidatorsNumber uint64                     // Number of validators.
 }
 
 func (a SubnetActor) Constructor(rt runtime.Runtime, params *ConstructParams) *abi.EmptyValue {
@@ -151,9 +151,9 @@ func (a SubnetActor) Join(rt runtime.Runtime, v *Validator) *abi.EmptyValue {
 
 			st.Validators = append(st.Validators, *v)
 
-			log.Infof("Added Mir node into the subnet state: %s: %s", v.ID, v.Address)
-			log.Infof("%d Mir nodes have been registered", len(st.Validators))
-			log.Info("Current Mir validators list:", st.Validators)
+			log.Debugf("Added Mir validator into the subnet state: %s: %s", v.ID, v.Address)
+			log.Debugf("%d Mir nodes have been registered", len(st.Validators))
+			log.Debug("Current Mir validators:", st.Validators)
 		}
 	})
 

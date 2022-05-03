@@ -79,8 +79,10 @@ type SubnetState struct {
 	Checkpoints cid.Cid // HAMT[epoch]Checkpoint
 	// WindowChecks
 	WindowChecks cid.Cid // HAMT[cid]CheckVotes
-	// Validators contains BFT validator info for consensus service
+	// Validators contains information about BFT validators
 	Validators []Validator
+	// ValidatorsNumber initial number of validators to start a subnet with BFT-type consensus
+	ValidatorsNumber uint64
 }
 
 type CheckVotes struct {
@@ -126,6 +128,10 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 		period = sca.DefaultCheckpointPeriod
 	}
 
+	if params.ValidatorsNumber < 0 {
+		return nil, xerrors.New("validators number is less than 0")
+	}
+
 	// TODO: @alfonso do we need this?
 	/* Initialize AMT of miners.
 	emptyArr, err := adt.MakeEmptyArray(adt.AsStore(rt), LaneStatesAmtBitwidth)
@@ -137,16 +143,17 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 	parentID := address.SubnetID(params.NetworkName)
 
 	return &SubnetState{
-		ParentID:      parentID,
-		Consensus:     params.Consensus,
-		MinMinerStake: params.MinMinerStake,
-		Miners:        make([]address.Address, 0),
-		Stake:         emptyStakeCid,
-		Status:        Instantiated,
-		CheckPeriod:   period,
-		Checkpoints:   emptyCheckpointsMapCid,
-		WindowChecks:  emptyWindowChecks,
-		Validators:    make([]Validator, 0),
+		ParentID:         parentID,
+		Consensus:        params.Consensus,
+		MinMinerStake:    params.MinMinerStake,
+		Miners:           make([]address.Address, 0),
+		Stake:            emptyStakeCid,
+		Status:           Instantiated,
+		CheckPeriod:      period,
+		Checkpoints:      emptyCheckpointsMapCid,
+		WindowChecks:     emptyWindowChecks,
+		Validators:       make([]Validator, 0),
+		ValidatorsNumber: params.ValidatorsNumber,
 	}, nil
 
 }

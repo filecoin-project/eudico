@@ -170,6 +170,11 @@ func NewEudicoEnsemble(t *testing.T, opts ...EnsembleOpt) *EudicoEnsemble {
 	return n
 }
 
+// ValidatorInfo returns information validator information.
+func (n *EudicoEnsemble) ValidatorInfo(opts ...NodeOpt) (uint64, string) {
+	return n.options.validatorsNumber, n.options.validatorAddress
+}
+
 // FullNode enrolls a new full node.
 func (n *EudicoEnsemble) FullNode(full *TestFullNode, opts ...NodeOpt) *EudicoEnsemble {
 	options := DefaultNodeOpts
@@ -432,6 +437,12 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 	if n.options.subnetConsensus == hierarchical.Tendermint ||
 		n.options.rootConsensus == hierarchical.Tendermint {
 		terr := n.startTendermint()
+		require.NoError(n.t, terr)
+	}
+
+	if n.options.subnetConsensus == hierarchical.Mir ||
+		n.options.rootConsensus == hierarchical.Mir {
+		terr := n.startMir()
 		require.NoError(n.t, terr)
 	}
 
@@ -1047,6 +1058,10 @@ func (n *EudicoEnsemble) stopTendermint() error {
 		err1,
 		err2,
 	)
+}
+
+func (n *EudicoEnsemble) startMir() error {
+	return n.removeMirFiles()
 }
 
 func (n *EudicoEnsemble) stopMir() error {
