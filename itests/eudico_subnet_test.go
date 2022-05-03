@@ -16,19 +16,17 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
+	"github.com/filecoin-project/lotus/chain/consensus/mir"
 	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/itests/kit"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
-func TestEudicoSubnetWithMir(t *testing.T) {
-	if err := os.Setenv("EUDICO_MIR_ID", "0"); err != nil {
-		require.NoError(t, err)
-	}
-	if err := os.Setenv("EUDICO_MIR_NODES", "0@127.0.0.1:10000"); err != nil {
-		require.NoError(t, err)
-	}
+func TestEudicoSubnetMir(t *testing.T) {
+	t.Setenv(mir.NodeIDEnv, "0")
+	t.Setenv(mir.NodesEnv, "0@127.0.0.1:10000")
+
 	t.Run("/root/mir-/subnet/dummy", func(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDummy())
 	})
@@ -36,22 +34,17 @@ func TestEudicoSubnetWithMir(t *testing.T) {
 	t.Run("/root/dummy-/subnet/mir", func(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetMir())
 	})
-
 }
 
-func TestEudicoSubnetMirWithActor(t *testing.T) {
+func TestEudicoMirStartedViaActor(t *testing.T) {
 	t.Run("/root/dummy-/subnet/mir", func(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetMir(), kit.ValidatorsNumber(1), kit.ValidatorAddress("127.0.0.1:11001"))
 	})
 }
 
 func TestEudicoSubnet(t *testing.T) {
-	if err := os.Setenv("EUDICO_MIR_ID", "0"); err != nil {
-		require.NoError(t, err)
-	}
-	if err := os.Setenv("EUDICO_MIR_NODES", "0@127.0.0.1:10000"); err != nil {
-		require.NoError(t, err)
-	}
+	t.Setenv(mir.NodeIDEnv, "0")
+	t.Setenv(mir.NodesEnv, "0@127.0.0.1:10000")
 
 	// Sanity test with Dummy consensus.
 
@@ -85,9 +78,6 @@ func TestEudicoSubnet(t *testing.T) {
 		t.Run("/root/mir-/subnet/delegated", func(t *testing.T) {
 			runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDelegated())
 		})
-		t.Run("/root/delegated-/subnet/mir", func(t *testing.T) {
-			runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetMir())
-		})
 
 		// PoW in Root
 
@@ -109,6 +99,10 @@ func TestEudicoSubnet(t *testing.T) {
 
 		t.Run("/root/delegated-/subnet/delegated", func(t *testing.T) {
 			runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetDelegated())
+		})
+
+		t.Run("/root/delegated-/subnet/mir", func(t *testing.T) {
+			runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetMir())
 		})
 
 		if os.Getenv("TENDERMINT_ITESTS") != "" {
@@ -146,6 +140,13 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Stop test and cancel mining, if we receive at least one error from error channel.
+	errChan := make(chan error, 1)
+	go func() {
+		<-errChan
+		cancel()
+	}()
+
 	full, rootMiner, subnetMinerType, ens := kit.EudicoEnsembleTwoMiners(t, ts.opts...)
 	n, valAddr := ens.ValidatorInfo()
 
@@ -165,7 +166,11 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	case kit.EudicoRootMiner:
 		go func() {
 			err := miner(ctx, addr, full)
-			require.NoError(t, err)
+			if err != nil {
+				t.Error(err)
+				errChan <- err
+				return
+			}
 		}()
 	default:
 		t.Fatal("unsupported root consensus")
@@ -220,7 +225,11 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 
 	go func() {
 		err := full.MineSubnet(ctx, addr, subnetAddr, false)
-		require.NoError(t, err)
+		if err != nil {
+			t.Error(err)
+			errChan <- err
+			return
+		}
 	}()
 
 	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 4, subnetAddr, full)
