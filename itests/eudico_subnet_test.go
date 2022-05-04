@@ -24,8 +24,12 @@ import (
 )
 
 func TestEudicoSubnetMir(t *testing.T) {
-	t.Setenv(mir.NodeIDEnv, "0")                // nolint
-	t.Setenv(mir.NodesEnv, "0@127.0.0.1:10000") // nolint
+	err := os.Setenv(mir.NodeIDEnv, "0")
+	require.NoError(t, err)
+	defer os.Unsetenv(mir.NodeIDEnv) // nolint
+	err = os.Setenv(mir.NodesEnv, "0@127.0.0.1:10000")
+	require.NoError(t, err)
+	defer os.Unsetenv(mir.NodesEnv) // nolint
 
 	t.Run("/root/mir-/subnet/dummy", func(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDummy())
@@ -34,9 +38,15 @@ func TestEudicoSubnetMir(t *testing.T) {
 	t.Run("/root/dummy-/subnet/mir", func(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetMir())
 	})
+
+	if os.Getenv("FULL_ITESTS") != "" {
+		t.Run("/root/mir-/subnet/delegated", func(t *testing.T) {
+			runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDelegated())
+		})
+	}
 }
 
-func TestEudicoMirStartedViaActor(t *testing.T) {
+func TestEudicoSubnetMirActor(t *testing.T) {
 	t.Run("/root/dummy-/subnet/mir", func(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetMir(), kit.ValidatorsNumber(1), kit.ValidatorAddress("127.0.0.1:11001"))
 	})
@@ -73,11 +83,6 @@ func TestEudicoSubnet(t *testing.T) {
 	}
 
 	if os.Getenv("FULL_ITESTS") != "" {
-		// Mir in Root
-
-		t.Run("/root/mir-/subnet/delegated", func(t *testing.T) {
-			runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDelegated())
-		})
 
 		// PoW in Root
 
