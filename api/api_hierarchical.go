@@ -37,5 +37,5 @@ type HierarchicalCns interface {
 	SubnetChainHead(context.Context, address.SubnetID) (*types.TipSet, error)                                                                                                                                               // perm:read
 	SubnetStateGetActor(ctx context.Context, id address.SubnetID, addr address.Address, tsk types.TipSetKey) (*types.Actor, error)                                                                                          // perm:read
 	SubnetStateWaitMsg(ctx context.Context, id address.SubnetID, cid cid.Cid, confidence uint64, limit abi.ChainEpoch, allowReplaced bool) (*MsgLookup, error)                                                              // perm:read
-	SubnetGetActorStateValidators(ctx context.Context, id address.SubnetID) (string, error)                                                                                                                                 // perm:read
+	SubnetGetValidators(ctx context.Context, id address.SubnetID) (string, error)                                                                                                                                           // perm:read
 }

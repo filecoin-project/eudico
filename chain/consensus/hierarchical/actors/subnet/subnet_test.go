@@ -4,18 +4,14 @@ import (
 	"context"
 	"testing"
 
-	address "github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/big"
-	"github.com/filecoin-project/go-state-types/exitcode"
-	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
-	"github.com/filecoin-project/specs-actors/v7/support/mock"
-	tutil "github.com/filecoin-project/specs-actors/v7/support/testing"
-	cid "github.com/ipfs/go-cid"
+	"github.com/ipfs/go-cid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-state-types/exitcode"
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
@@ -25,6 +21,10 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/utils"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/wallet"
+	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
+	"github.com/filecoin-project/specs-actors/v7/support/mock"
+	tutil "github.com/filecoin-project/specs-actors/v7/support/testing"
 )
 
 func TestExports(t *testing.T) {
@@ -56,7 +56,7 @@ func TestJoin(t *testing.T) {
 	rt.SetBalance(value)
 	// Anyone can call
 	rt.ExpectValidateCallerAny()
-	ret := rt.Call(h.SubnetActor.Join, nil)
+	ret := rt.Call(h.SubnetActor.Join, &actor.Validator{})
 	rt.Verify()
 	assert.Nil(h.t, ret)
 	// Check that the subnet is instantiated but not active.
@@ -75,7 +75,7 @@ func TestJoin(t *testing.T) {
 	rt.SetCaller(miner, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerAny()
 	rt.ExpectSend(hierarchical.SubnetCoordActorAddr, sca.Methods.Register, nil, totalStake, nil, exitcode.Ok)
-	rt.Call(h.SubnetActor.Join, nil)
+	rt.Call(h.SubnetActor.Join, &actor.Validator{})
 	rt.Verify()
 	// Check that we are active
 	st = getState(rt)
@@ -92,7 +92,7 @@ func TestJoin(t *testing.T) {
 	rt.ExpectValidateCallerAny()
 	// Triggers a stake top-up in SCA
 	rt.ExpectSend(hierarchical.SubnetCoordActorAddr, sca.Methods.AddStake, nil, value, nil, exitcode.Ok)
-	rt.Call(h.SubnetActor.Join, nil)
+	rt.Call(h.SubnetActor.Join, &actor.Validator{})
 	rt.Verify()
 	// Check that the subnet is instantiated but not active.
 	st = getState(rt)
@@ -122,7 +122,7 @@ func TestLeaveAndKill(t *testing.T) {
 	// Anyone can call
 	rt.ExpectValidateCallerAny()
 	rt.ExpectSend(hierarchical.SubnetCoordActorAddr, sca.Methods.Register, nil, totalStake, nil, exitcode.Ok)
-	ret := rt.Call(h.SubnetActor.Join, nil)
+	ret := rt.Call(h.SubnetActor.Join, &actor.Validator{})
 	assert.Nil(h.t, ret)
 	// Check that the subnet is instantiated but not active.
 	st := getState(rt)
@@ -139,7 +139,7 @@ func TestLeaveAndKill(t *testing.T) {
 	rt.SetCaller(joiner2, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerAny()
 	rt.ExpectSend(hierarchical.SubnetCoordActorAddr, sca.Methods.AddStake, nil, value, nil, exitcode.Ok)
-	rt.Call(h.SubnetActor.Join, nil)
+	rt.Call(h.SubnetActor.Join, &actor.Validator{})
 	rt.Verify()
 	// Check that we are active
 	st = getState(rt)
@@ -156,7 +156,7 @@ func TestLeaveAndKill(t *testing.T) {
 	rt.SetCaller(joiner3, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerAny()
 	rt.ExpectSend(hierarchical.SubnetCoordActorAddr, sca.Methods.AddStake, nil, value, nil, exitcode.Ok)
-	rt.Call(h.SubnetActor.Join, nil)
+	rt.Call(h.SubnetActor.Join, &actor.Validator{})
 	rt.Verify()
 	// Check that we are active
 	st = getState(rt)
@@ -273,7 +273,7 @@ func TestCheckpoints(t *testing.T) {
 		} else {
 			rt.ExpectSend(hierarchical.SubnetCoordActorAddr, sca.Methods.AddStake, nil, value, nil, exitcode.Ok)
 		}
-		ret := rt.Call(h.SubnetActor.Join, nil)
+		ret := rt.Call(h.SubnetActor.Join, &actor.Validator{})
 		rt.Verify()
 		assert.Nil(h.t, ret)
 	}
@@ -449,6 +449,8 @@ func (h *shActorHarness) constructAndVerify(t *testing.T, rt *mock.Runtime) {
 	assert.Equal(h.t, st.MinMinerStake, actor.MinMinerStake)
 	assert.Equal(h.t, st.Status, actor.Instantiated)
 	assert.Equal(h.t, st.CheckPeriod, abi.ChainEpoch(100))
+	assert.Equal(h.t, st.ValidatorsNumber, uint64(0))
+	assert.Equal(h.t, len(st.Validators), 0)
 	// Verify that the genesis for the subnet has been generated.
 	// TODO: Consider making some test verifications over genesis.
 	assert.NotEqual(h.t, len(st.Genesis), 0)

@@ -856,7 +856,7 @@ func (s *SubnetMgr) SubnetStateWaitMsg(ctx context.Context, id address.SubnetID,
 	return api.StateWaitMsg(ctx, cid, confidence, limit, allowReplaced)
 }
 
-func (s *SubnetMgr) SubnetGetActorStateValidators(ctx context.Context, id address.SubnetID) (string, error) {
+func (s *SubnetMgr) SubnetGetValidators(ctx context.Context, id address.SubnetID) (string, error) {
 	actor, err := id.Actor()
 	if err != nil {
 		return "", err

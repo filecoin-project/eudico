@@ -147,6 +147,6 @@ func (a *HierarchicalAPI) SubnetStateWaitMsg(ctx context.Context, id address.Sub
 	return a.Sub.SubnetStateWaitMsg(ctx, id, cid, confidence, limit, allowReplaced)
 }
 
-func (a *HierarchicalAPI) SubnetGetActorStateValidators(ctx context.Context, id address.SubnetID) (string, error) {
-	return a.Sub.SubnetGetActorStateValidators(ctx, id)
+func (a *HierarchicalAPI) SubnetGetValidators(ctx context.Context, id address.SubnetID) (string, error) {
+	return a.Sub.SubnetGetValidators(ctx, id)
 }

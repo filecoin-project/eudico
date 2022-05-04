@@ -56,7 +56,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 
 	nodes := os.Getenv(NodesEnv)
 	if nodes == "" {
-		nodes, err = api.SubnetGetActorStateValidators(ctx, subnetID)
+		nodes, err = api.SubnetGetValidators(ctx, subnetID)
 		if err != nil {
 			return xerrors.New("failed to get Mir nodes from state and environment variable")
 		}

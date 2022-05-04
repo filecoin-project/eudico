@@ -24,8 +24,8 @@ import (
 )
 
 func TestEudicoSubnetMir(t *testing.T) {
-	t.Setenv(mir.NodeIDEnv, "0")
-	t.Setenv(mir.NodesEnv, "0@127.0.0.1:10000")
+	t.Setenv(mir.NodeIDEnv, "0")                // nolint
+	t.Setenv(mir.NodesEnv, "0@127.0.0.1:10000") // nolint
 
 	t.Run("/root/mir-/subnet/dummy", func(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDummy())
@@ -43,8 +43,8 @@ func TestEudicoMirStartedViaActor(t *testing.T) {
 }
 
 func TestEudicoSubnet(t *testing.T) {
-	t.Setenv(mir.NodeIDEnv, "0")
-	t.Setenv(mir.NodesEnv, "0@127.0.0.1:10000")
+	t.Setenv(mir.NodeIDEnv, "0")                // nolint
+	t.Setenv(mir.NodesEnv, "0@127.0.0.1:10000") // nolint
 
 	// Sanity test with Dummy consensus.
 
