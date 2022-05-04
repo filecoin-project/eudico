@@ -43,6 +43,10 @@ func TestEudicoSubnetMir(t *testing.T) {
 		t.Run("/root/mir-/subnet/delegated", func(t *testing.T) {
 			runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDelegated())
 		})
+
+		t.Run("/root/delegated-/subnet/mir", func(t *testing.T) {
+			runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetMir())
+		})
 	}
 }
 
@@ -53,10 +57,7 @@ func TestEudicoSubnetMirActor(t *testing.T) {
 }
 
 func TestEudicoSubnet(t *testing.T) {
-	t.Setenv(mir.NodeIDEnv, "0")                // nolint
-	t.Setenv(mir.NodesEnv, "0@127.0.0.1:10000") // nolint
-
-	// Sanity test with Dummy consensus.
+	// Sanity test with Dummy consensus
 
 	t.Run("/root/dummy-/subnet/dummy", func(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetDummy())
@@ -104,10 +105,6 @@ func TestEudicoSubnet(t *testing.T) {
 
 		t.Run("/root/delegated-/subnet/delegated", func(t *testing.T) {
 			runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetDelegated())
-		})
-
-		t.Run("/root/delegated-/subnet/mir", func(t *testing.T) {
-			runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetMir())
 		})
 
 		if os.Getenv("TENDERMINT_ITESTS") != "" {
