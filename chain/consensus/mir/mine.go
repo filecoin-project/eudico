@@ -25,7 +25,7 @@ import (
 // 3. Receive ordered messages from the Mir node and push them into the next Filecoin block.
 // 4. Submit this block.
 //
-// There are two ways how mining with Mir consensus can be launching:
+// There are two ways mining can be launched for Mir consensus:
 // 1) Environment variables: Provide all validators ID and addresses via EUDICO_MIR_NODES and EUDICO_MIR_ID variables.
 //    This is used to run Mir in the root network.
 // 2) Use hierarchical consensus framework: join the subnet providing the Mir validator address for Eudico.
