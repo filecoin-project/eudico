@@ -28,23 +28,15 @@ func TestEudicoSubnetMir(t *testing.T) {
 	})
 
 	t.Run("/root/dummy-/subnet/mir", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetMir())
+		runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetMir(), kit.MinValidators(1), kit.ValidatorAddress("127.0.0.1:11001"))
 	})
 
-	if os.Getenv("FULL_ITESTS") != "" {
-		t.Run("/root/mir-/subnet/delegated", func(t *testing.T) {
-			runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDelegated())
-		})
+	t.Run("/root/mir-/subnet/delegated", func(t *testing.T) {
+		runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDelegated())
+	})
 
-		t.Run("/root/delegated-/subnet/mir", func(t *testing.T) {
-			runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetMir())
-		})
-	}
-}
-
-func TestEudicoSubnetMirActor(t *testing.T) {
-	t.Run("/root/dummy-/subnet/mir", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetMir(), kit.ValidatorsNumber(1), kit.ValidatorAddress("127.0.0.1:11001"))
+	t.Run("/root/delegated-/subnet/mir", func(t *testing.T) {
+		runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetMir(), kit.MinValidators(1), kit.ValidatorAddress("127.0.0.1:11001"))
 	})
 }
 

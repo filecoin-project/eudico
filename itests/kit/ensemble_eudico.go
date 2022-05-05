@@ -172,7 +172,7 @@ func NewEudicoEnsemble(t *testing.T, opts ...EnsembleOpt) *EudicoEnsemble {
 
 // ValidatorInfo returns information validator information.
 func (n *EudicoEnsemble) ValidatorInfo(opts ...NodeOpt) (uint64, string) {
-	return n.options.validatorsNumber, n.options.validatorAddress
+	return n.options.minValidators, n.options.validatorAddress
 }
 
 // FullNode enrolls a new full node.

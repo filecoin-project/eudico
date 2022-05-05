@@ -28,7 +28,7 @@ type ensembleOpts struct {
 	rootConsensus   hierarchical.ConsensusType
 	subnetConsensus hierarchical.ConsensusType
 
-	validatorsNumber uint64
+	minValidators    uint64
 	validatorAddress string
 }
 
@@ -38,13 +38,13 @@ var DefaultEnsembleOpts = ensembleOpts{
 		Height:  -1,
 		Network: build.NewestNetworkVersion,
 	}},
-	validatorsNumber: 0,
+	minValidators: 0,
 }
 
-// ValidatorsNumber sets number of validators.
-func ValidatorsNumber(n uint64) EnsembleOpt {
+// MinValidators sets the minimum number of validators in a subnet.
+func MinValidators(n uint64) EnsembleOpt {
 	return func(opts *ensembleOpts) error {
-		opts.validatorsNumber = n
+		opts.minValidators = n
 		return nil
 	}
 }

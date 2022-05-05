@@ -61,7 +61,10 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		clientID = fmt.Sprintf("%s:%s", subnetID, miner)
 		validators, err = api.SubnetGetValidators(ctx, subnetID)
 		if err != nil {
-			return xerrors.New("failed to get subnet validators")
+			return xerrors.New("failed to get validator set")
+		}
+		if len(validators) == 0 {
+			return xerrors.New("empty validator set")
 		}
 	}
 
@@ -73,7 +76,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		miners = append(miners, v.Addr)
 	}
 
-	log.Info("Miner: ", miners)
+	log.Info("Miners: ", miners)
 
 	mirAgent, err := NewMirAgent(ctx, clientID, validators)
 	if err != nil {
