@@ -64,7 +64,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			return xerrors.New("failed to get subnet validators")
 		}
 	}
-	
+
 	log.Infof("Mir miner params:\n\tnetwork name - %s\n\tsubnet ID - %s\n\tclientID - %s\n\tclients - %v",
 		netName, subnetID, clientID, validators)
 

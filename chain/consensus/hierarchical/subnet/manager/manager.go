@@ -481,7 +481,6 @@ func (s *SubnetMgr) JoinSubnet(
 	v := hierarchical.NewValidator(id, wallet, validatorNetAddr)
 	err = v.MarshalCBOR(&params)
 	if err != nil {
-		panic(err)
 		return cid.Undef, err
 	}
 

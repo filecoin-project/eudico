@@ -116,12 +116,12 @@ func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
 	if err := os.Setenv(mir.MirClientIDEnv, mirNodeID); err != nil {
 		require.NoError(t, err)
 	}
-	defer os.Unsetenv(mir.MirClientIDEnv)
+	defer os.Unsetenv(mir.MirClientIDEnv) // nolint
 
 	if err := os.Setenv(mir.MirClientsEnv, fmt.Sprintf("%s@%s", mirNodeID, "127.0.0.1:10000")); err != nil {
 		require.NoError(t, err)
 	}
-	defer os.Unsetenv(mir.MirClientsEnv)
+	defer os.Unsetenv(mir.MirClientsEnv) // nolint
 
 	go func() {
 		err = mir.Mine(ctx, l[0], full)
