@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"golang.org/x/xerrors"
@@ -13,7 +12,7 @@ import (
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/types"
 	ltypes "github.com/filecoin-project/lotus/chain/types"
 	mirtypes "github.com/filecoin-project/mir/pkg/types"
@@ -30,7 +29,7 @@ import (
 //
 // There are two ways how mining with Mir consensus can be started:
 // 1) Environment variables: validators ID and their network addresses are passed
-//    via EUDICO_MIR_NODES and EUDICO_MIR_ID variables.
+//    via EUDICO_MIR_CLIENTS and EUDICO_MIR_ID variables.
 //    This approach can be used to run Mir in the root network and for simple demos.
 // 2) Hierarchical consensus framework: validators IDs and their network addresses
 //    are received via state, after each validator joins the subnet.
@@ -44,36 +43,44 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		return err
 	}
 	subnetID := address.SubnetID(netName)
-	nodeID := os.Getenv(NodeIDEnv)
-	if nodeID == "" {
-		nodeID = fmt.Sprintf("%s:%s", subnetID, miner)
-	}
-	nodes := os.Getenv(NodesEnv)
-	if nodes == "" {
-		nodes, err = api.SubnetGetValidators(ctx, subnetID)
+
+	clientID := os.Getenv(MirClientIDEnv)
+	clientsStr := os.Getenv(MirClientsEnv)
+
+	var validators []hierarchical.Validator
+
+	if clientID != "" && clientsStr != "" {
+		validators, err = hierarchical.ValidatorsFromString(clientsStr)
 		if err != nil {
-			return xerrors.New("failed to get Mir nodes from state and environment variable")
+			return xerrors.Errorf("failed get validators: %s", err)
+		}
+	} else {
+		if subnetID == address.RootSubnet {
+			return xerrors.New("can't be run in root net without static validators")
+		}
+		clientID = fmt.Sprintf("%s:%s", subnetID, miner)
+		validators, err = api.SubnetGetValidators(ctx, subnetID)
+		if err != nil {
+			return xerrors.New("failed to get subnet validators")
 		}
 	}
-	log.Infof("Mir miner params:\n\tnetwork name - %s\n\tsubnet ID - %s\n\tnodeID - %s\n\tpeers - %v",
-		netName, subnetID, nodeID, nodes)
+	
+	log.Infof("Mir miner params:\n\tnetwork name - %s\n\tsubnet ID - %s\n\tclientID - %s\n\tclients - %v",
+		netName, subnetID, clientID, validators)
 
-	mirAgent, err := NewMirAgent(ctx, nodeID, nodes)
+	var miners []address.Address
+	for _, v := range validators {
+		miners = append(miners, v.Addr)
+	}
+
+	log.Info("Miner: ", miners)
+
+	mirAgent, err := NewMirAgent(ctx, clientID, validators)
 	if err != nil {
 		return err
 	}
 	mirErrors := mirAgent.Start(ctx)
 	mirHead := mirAgent.App.ChainNotify
-
-	ids, _, _ := subnet.ParseValidatorInfo(nodes)
-	var addrs []address.Address
-
-	for _, a := range ids {
-		ad, _ := address.NewFromString(strings.Split(a.Pb(), ":")[1])
-		addrs = append(addrs, ad)
-	}
-
-	log.Info("Validator addresses: ", addrs)
 
 	submit := time.NewTicker(SubmitInterval)
 	defer submit.Stop()
@@ -85,9 +92,9 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			continue
 		}
 
-		minerAddr := addrs[int(base.Height())%len(addrs)]
+		epochMiner := miners[int(base.Height())%len(miners)]
 
-		log.Infof("Mining leader for %d epoch: %v", base.Height(), minerAddr)
+		log.Infof("Miner for %d epoch: %v", base.Height(), epochMiner)
 
 		select {
 		case <-ctx.Done():
@@ -101,7 +108,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 
 			log.Infof("[subnet: %s, epoch: %d] try to create a block", subnetID, base.Height()+1)
 			bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
-				Miner:            minerAddr,
+				Miner:            epochMiner,
 				Parents:          base.Key(),
 				BeaconValues:     nil,
 				Ticket:           &ltypes.Ticket{VRFProof: nil},
@@ -157,12 +164,12 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 				reqNo := mirtypes.ReqNo(msg.Message.Nonce)
 				tx := common.NewSignedMessageBytes(msgBytes, nil)
 
-				err = mirAgent.Node.SubmitRequest(ctx, mirtypes.ClientID(nodeID), reqNo, tx, nil)
+				err = mirAgent.Node.SubmitRequest(ctx, mirtypes.ClientID(clientID), reqNo, tx, nil)
 				if err != nil {
 					log.Error("unable to submit a message to Mir:", err)
 					continue
 				}
-				log.Debugf("%v successfully sent a request (%v, %d) to Mir", nodeID, msg.Message.From, reqNo)
+				log.Debugf("%v successfully sent a request (%v, %d) to Mir", clientID, msg.Message.From, reqNo)
 			}
 
 			for _, msg := range crossMsgs {
@@ -180,7 +187,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 					log.Error("unable to submit a message to Mir:", err)
 					continue
 				}
-				log.Debugf("%v successfully sent a cross request (%v, %d) to Mir", nodeID, msg.Msg.From, reqNo)
+				log.Debugf("%v successfully sent a cross request (%v, %d) to Mir", clientID, msg.Msg.From, reqNo)
 			}
 		}
 	}

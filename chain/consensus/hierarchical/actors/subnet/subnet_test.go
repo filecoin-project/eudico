@@ -56,7 +56,7 @@ func TestJoin(t *testing.T) {
 	rt.SetBalance(value)
 	// Anyone can call
 	rt.ExpectValidateCallerAny()
-	ret := rt.Call(h.SubnetActor.Join, &actor.Validator{})
+	ret := rt.Call(h.SubnetActor.Join, &hierarchical.Validator{})
 	rt.Verify()
 	assert.Nil(h.t, ret)
 	// Check that the subnet is instantiated but not active.
@@ -75,7 +75,7 @@ func TestJoin(t *testing.T) {
 	rt.SetCaller(miner, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerAny()
 	rt.ExpectSend(hierarchical.SubnetCoordActorAddr, sca.Methods.Register, nil, totalStake, nil, exitcode.Ok)
-	rt.Call(h.SubnetActor.Join, &actor.Validator{})
+	rt.Call(h.SubnetActor.Join, &hierarchical.Validator{})
 	rt.Verify()
 	// Check that we are active
 	st = getState(rt)
@@ -92,7 +92,7 @@ func TestJoin(t *testing.T) {
 	rt.ExpectValidateCallerAny()
 	// Triggers a stake top-up in SCA
 	rt.ExpectSend(hierarchical.SubnetCoordActorAddr, sca.Methods.AddStake, nil, value, nil, exitcode.Ok)
-	rt.Call(h.SubnetActor.Join, &actor.Validator{})
+	rt.Call(h.SubnetActor.Join, &hierarchical.Validator{})
 	rt.Verify()
 	// Check that the subnet is instantiated but not active.
 	st = getState(rt)
@@ -122,7 +122,7 @@ func TestLeaveAndKill(t *testing.T) {
 	// Anyone can call
 	rt.ExpectValidateCallerAny()
 	rt.ExpectSend(hierarchical.SubnetCoordActorAddr, sca.Methods.Register, nil, totalStake, nil, exitcode.Ok)
-	ret := rt.Call(h.SubnetActor.Join, &actor.Validator{})
+	ret := rt.Call(h.SubnetActor.Join, &hierarchical.Validator{})
 	assert.Nil(h.t, ret)
 	// Check that the subnet is instantiated but not active.
 	st := getState(rt)
@@ -139,7 +139,7 @@ func TestLeaveAndKill(t *testing.T) {
 	rt.SetCaller(joiner2, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerAny()
 	rt.ExpectSend(hierarchical.SubnetCoordActorAddr, sca.Methods.AddStake, nil, value, nil, exitcode.Ok)
-	rt.Call(h.SubnetActor.Join, &actor.Validator{})
+	rt.Call(h.SubnetActor.Join, &hierarchical.Validator{})
 	rt.Verify()
 	// Check that we are active
 	st = getState(rt)
@@ -156,7 +156,7 @@ func TestLeaveAndKill(t *testing.T) {
 	rt.SetCaller(joiner3, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerAny()
 	rt.ExpectSend(hierarchical.SubnetCoordActorAddr, sca.Methods.AddStake, nil, value, nil, exitcode.Ok)
-	rt.Call(h.SubnetActor.Join, &actor.Validator{})
+	rt.Call(h.SubnetActor.Join, &hierarchical.Validator{})
 	rt.Verify()
 	// Check that we are active
 	st = getState(rt)
@@ -273,7 +273,7 @@ func TestCheckpoints(t *testing.T) {
 		} else {
 			rt.ExpectSend(hierarchical.SubnetCoordActorAddr, sca.Methods.AddStake, nil, value, nil, exitcode.Ok)
 		}
-		ret := rt.Call(h.SubnetActor.Join, &actor.Validator{})
+		ret := rt.Call(h.SubnetActor.Join, &hierarchical.Validator{})
 		rt.Verify()
 		assert.Nil(h.t, ret)
 	}

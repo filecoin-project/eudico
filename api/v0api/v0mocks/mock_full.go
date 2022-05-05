@@ -3119,10 +3119,10 @@ func (mr *MockFullNodeMockRecorder) SubnetChainNotify(arg0, arg1 interface{}) *g
 }
 
 // SubnetGetValidators mocks base method.
-func (m *MockFullNode) SubnetGetValidators(arg0 context.Context, arg1 address.SubnetID) (string, error) {
+func (m *MockFullNode) SubnetGetValidators(arg0 context.Context, arg1 address.SubnetID) ([]hierarchical.Validator, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SubnetGetValidators", arg0, arg1)
-	ret0, _ := ret[0].(string)
+	ret0, _ := ret[0].([]hierarchical.Validator)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

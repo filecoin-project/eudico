@@ -10,7 +10,7 @@ import (
 	logging "github.com/ipfs/go-log/v2"
 	"golang.org/x/xerrors"
 
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/mir"
 	mirCrypto "github.com/filecoin-project/mir/pkg/crypto"
 	"github.com/filecoin-project/mir/pkg/grpctransport"
@@ -59,21 +59,21 @@ type MirAgent struct {
 	stopChan chan struct{}
 }
 
-func NewMirAgent(ctx context.Context, id string, nodes string) (*MirAgent, error) {
-	if id == "" || nodes == "" {
-		return nil, xerrors.New("invalid ID or nodes")
+func NewMirAgent(ctx context.Context, clientID string, clients []hierarchical.Validator) (*MirAgent, error) {
+	if clientID == "" || clients == nil {
+		return nil, xerrors.New("invalid node ID or clients")
 	}
-	ownID := t.NodeID(id)
+	ownID := t.NodeID(clientID)
 	log.Debugf("Mir agent %v is being created", ownID)
 	defer log.Debugf("Mir agent %v has been created", ownID)
 
-	nodeIds, nodeAddrs, err := subnet.ParseValidatorInfo(nodes)
+	nodeIds, membership, err := hierarchical.ValidatorMembership(clients)
 	if err != nil {
 		return nil, err
 	}
-	log.Debug("Mir node config:", nodeIds, nodeAddrs)
+	log.Debug("Mir node config:", nodeIds, membership)
 
-	walPath := path.Join("eudico-wal", fmt.Sprintf("%v", id))
+	walPath := path.Join("eudico-wal", fmt.Sprintf("%v", clientID))
 	wal, err := simplewal.Open(walPath)
 	if err != nil {
 		return nil, err
@@ -85,7 +85,7 @@ func NewMirAgent(ctx context.Context, id string, nodes string) (*MirAgent, error
 
 	// TODO: Suggestion: Figure out how to make this a general interface where
 	//  we can hook libp2p instead of making it grpc specific.
-	net := grpctransport.NewGrpcTransport(nodeAddrs, ownID, nil)
+	net := grpctransport.NewGrpcTransport(membership, ownID, nil)
 	if err := net.Start(); err != nil {
 		return nil, err
 	}

@@ -38,8 +38,8 @@ import (
 const (
 	MaxHeightDrift = 5
 	SubmitInterval = 300 * time.Millisecond
-	NodesEnv       = "EUDICO_MIR_NODES"
-	NodeIDEnv      = "EUDICO_MIR_ID"
+	MirClientsEnv  = "EUDICO_MIR_CLIENTS"
+	MirClientIDEnv = "EUDICO_MIR_ID"
 )
 
 var (

@@ -108,7 +108,7 @@ func (st *SubnetState) initGenesis(rt runtime.Runtime, params *ConstructParams) 
 
 // Join adds stake to the subnet and/or joins if the source is still not part of it.
 // TODO: Join may not be the best name for this function, consider changing it.
-func (a SubnetActor) Join(rt runtime.Runtime, v *Validator) *abi.EmptyValue {
+func (a SubnetActor) Join(rt runtime.Runtime, v *hierarchical.Validator) *abi.EmptyValue {
 	rt.ValidateImmediateCallerAcceptAny()
 	sourceAddr := rt.Caller()
 	value := rt.ValueReceived()

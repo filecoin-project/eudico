@@ -478,7 +478,7 @@ func (s *SubnetMgr) JoinSubnet(
 		}
 	}
 	var params bytes.Buffer
-	v := subnet.NewValidator(id, wallet, validatorNetAddr)
+	v := hierarchical.NewValidator(id, wallet, validatorNetAddr)
 	err = v.MarshalCBOR(&params)
 	if err != nil {
 		panic(err)
@@ -861,14 +861,14 @@ func (s *SubnetMgr) SubnetStateWaitMsg(ctx context.Context, id address.SubnetID,
 	return sapi.StateWaitMsg(ctx, cid, confidence, limit, allowReplaced)
 }
 
-func (s *SubnetMgr) SubnetGetValidators(ctx context.Context, id address.SubnetID) (string, error) {
+func (s *SubnetMgr) SubnetGetValidators(ctx context.Context, id address.SubnetID) ([]hierarchical.Validator, error) {
 	actor, err := id.Actor()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	st, err := s.GetActorState(ctx, id, actor)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return subnet.EncodeValidatorInfo(st.ValidatorSet), nil
+	return st.ValidatorSet, nil
 }

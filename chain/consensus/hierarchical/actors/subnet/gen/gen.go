@@ -11,7 +11,6 @@ func main() {
 		actor.SubnetState{},
 		actor.ConstructParams{},
 		actor.CheckVotes{},
-		actor.Validator{},
 	); err != nil {
 		panic(err)
 	}

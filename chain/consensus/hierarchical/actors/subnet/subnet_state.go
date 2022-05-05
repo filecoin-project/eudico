@@ -80,7 +80,7 @@ type SubnetState struct {
 	// WindowChecks
 	WindowChecks cid.Cid // HAMT[cid]CheckVotes
 	// ValidatorSet is a set of validators
-	ValidatorSet []Validator
+	ValidatorSet []hierarchical.Validator
 	// MinValidators is the minimal number of validators required to join before starting the subnet
 	MinValidators uint64
 }
@@ -148,7 +148,7 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 		CheckPeriod:   period,
 		Checkpoints:   emptyCheckpointsMapCid,
 		WindowChecks:  emptyWindowChecks,
-		ValidatorSet:  make([]Validator, 0),
+		ValidatorSet:  make([]hierarchical.Validator, 0),
 		MinValidators: params.ConsensusParams.MinValidators,
 	}, nil
 

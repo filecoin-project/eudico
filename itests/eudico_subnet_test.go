@@ -24,12 +24,12 @@ import (
 )
 
 func TestEudicoSubnetMir(t *testing.T) {
-	err := os.Setenv(mir.NodeIDEnv, "0")
+	err := os.Setenv(mir.MirClientIDEnv, "0")
 	require.NoError(t, err)
-	defer os.Unsetenv(mir.NodeIDEnv) // nolint
-	err = os.Setenv(mir.NodesEnv, "0@127.0.0.1:10000")
+	defer os.Unsetenv(mir.MirClientIDEnv) // nolint
+	err = os.Setenv(mir.MirClientsEnv, "0@127.0.0.1:10000")
 	require.NoError(t, err)
-	defer os.Unsetenv(mir.NodesEnv) // nolint
+	defer os.Unsetenv(mir.MirClientsEnv) // nolint
 
 	t.Run("/root/mir-/subnet/dummy", func(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDummy())

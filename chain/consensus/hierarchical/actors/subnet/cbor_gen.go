@@ -136,7 +136,7 @@ func (t *SubnetState) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("failed to write cid field t.WindowChecks: %w", err)
 	}
 
-	// t.ValidatorSet ([]subnet.Validator) (slice)
+	// t.ValidatorSet ([]hierarchical.Validator) (slice)
 	if len(t.ValidatorSet) > cbg.MaxLength {
 		return xerrors.Errorf("Slice value in field t.ValidatorSet was too long")
 	}
@@ -354,7 +354,7 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) error {
 		t.WindowChecks = c
 
 	}
-	// t.ValidatorSet ([]subnet.Validator) (slice)
+	// t.ValidatorSet ([]hierarchical.Validator) (slice)
 
 	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
 	if err != nil {
@@ -370,12 +370,12 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) error {
 	}
 
 	if extra > 0 {
-		t.ValidatorSet = make([]Validator, extra)
+		t.ValidatorSet = make([]hierarchical.Validator, extra)
 	}
 
 	for i := 0; i < int(extra); i++ {
 
-		var v Validator
+		var v hierarchical.Validator
 		if err := v.UnmarshalCBOR(br); err != nil {
 			return err
 		}
@@ -443,6 +443,11 @@ func (t *ConstructParams) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
+	// t.ConsensusParams (hierarchical.ConsensusParams) (struct)
+	if err := t.ConsensusParams.MarshalCBOR(w); err != nil {
+		return err
+	}
+
 	// t.MinMinerStake (big.Int) (struct)
 	if err := t.MinMinerStake.MarshalCBOR(w); err != nil {
 		return err
@@ -457,11 +462,6 @@ func (t *ConstructParams) MarshalCBOR(w io.Writer) error {
 		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.CheckPeriod-1)); err != nil {
 			return err
 		}
-	}
-
-	// t.ConsensusParams (hierarchical.ConsensusParams) (struct)
-	if err := t.ConsensusParams.MarshalCBOR(w); err != nil {
-		return err
 	}
 	return nil
 }
@@ -518,6 +518,25 @@ func (t *ConstructParams) UnmarshalCBOR(r io.Reader) error {
 		t.Consensus = hierarchical.ConsensusType(extra)
 
 	}
+	// t.ConsensusParams (hierarchical.ConsensusParams) (struct)
+
+	{
+
+		b, err := br.ReadByte()
+		if err != nil {
+			return err
+		}
+		if b != cbg.CborNull[0] {
+			if err := br.UnreadByte(); err != nil {
+				return err
+			}
+			t.ConsensusParams = new(hierarchical.ConsensusParams)
+			if err := t.ConsensusParams.UnmarshalCBOR(br); err != nil {
+				return xerrors.Errorf("unmarshaling t.ConsensusParams pointer: %w", err)
+			}
+		}
+
+	}
 	// t.MinMinerStake (big.Int) (struct)
 
 	{
@@ -551,25 +570,6 @@ func (t *ConstructParams) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		t.CheckPeriod = abi.ChainEpoch(extraI)
-	}
-	// t.ConsensusParams (hierarchical.ConsensusParams) (struct)
-
-	{
-
-		b, err := br.ReadByte()
-		if err != nil {
-			return err
-		}
-		if b != cbg.CborNull[0] {
-			if err := br.UnreadByte(); err != nil {
-				return err
-			}
-			t.ConsensusParams = new(hierarchical.ConsensusParams)
-			if err := t.ConsensusParams.UnmarshalCBOR(br); err != nil {
-				return xerrors.Errorf("unmarshaling t.ConsensusParams pointer: %w", err)
-			}
-		}
-
 	}
 	return nil
 }
@@ -650,99 +650,5 @@ func (t *CheckVotes) UnmarshalCBOR(r io.Reader) error {
 		t.Miners[i] = v
 	}
 
-	return nil
-}
-
-var lengthBufValidator = []byte{131}
-
-func (t *Validator) MarshalCBOR(w io.Writer) error {
-	if t == nil {
-		_, err := w.Write(cbg.CborNull)
-		return err
-	}
-	if _, err := w.Write(lengthBufValidator); err != nil {
-		return err
-	}
-
-	scratch := make([]byte, 9)
-
-	// t.Subnet (address.SubnetID) (string)
-	if len(t.Subnet) > cbg.MaxLength {
-		return xerrors.Errorf("Value in field t.Subnet was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Subnet))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string(t.Subnet)); err != nil {
-		return err
-	}
-
-	// t.Addr (address.Address) (struct)
-	if err := t.Addr.MarshalCBOR(w); err != nil {
-		return err
-	}
-
-	// t.NetAddr (string) (string)
-	if len(t.NetAddr) > cbg.MaxLength {
-		return xerrors.Errorf("Value in field t.NetAddr was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.NetAddr))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string(t.NetAddr)); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (t *Validator) UnmarshalCBOR(r io.Reader) error {
-	*t = Validator{}
-
-	br := cbg.GetPeeker(r)
-	scratch := make([]byte, 8)
-
-	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
-	if err != nil {
-		return err
-	}
-	if maj != cbg.MajArray {
-		return fmt.Errorf("cbor input should be of type array")
-	}
-
-	if extra != 3 {
-		return fmt.Errorf("cbor input had wrong number of fields")
-	}
-
-	// t.Subnet (address.SubnetID) (string)
-
-	{
-		sval, err := cbg.ReadStringBuf(br, scratch)
-		if err != nil {
-			return err
-		}
-
-		t.Subnet = address.SubnetID(sval)
-	}
-	// t.Addr (address.Address) (struct)
-
-	{
-
-		if err := t.Addr.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.Addr: %w", err)
-		}
-
-	}
-	// t.NetAddr (string) (string)
-
-	{
-		sval, err := cbg.ReadStringBuf(br, scratch)
-		if err != nil {
-			return err
-		}
-
-		t.NetAddr = string(sval)
-	}
 	return nil
 }

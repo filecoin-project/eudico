@@ -9,6 +9,7 @@ import (
 func main() {
 	if err := gen.WriteTupleEncodersToFile("./cbor_gen.go", "hierarchical",
 		hierarchical.ConsensusParams{},
+		hierarchical.Validator{},
 	); err != nil {
 		panic(err)
 	}

@@ -8,9 +8,10 @@ import (
 	"math"
 	"sort"
 
-	"github.com/ipfs/go-cid"
+	address "github.com/filecoin-project/go-address"
+	cid "github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
-	"golang.org/x/xerrors"
+	xerrors "golang.org/x/xerrors"
 )
 
 var _ = xerrors.Errorf
@@ -89,3 +90,96 @@ func (t *ConsensusParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
+var lengthBufValidator = []byte{131}
+
+func (t *Validator) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufValidator); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.Subnet (address.SubnetID) (string)
+	if len(t.Subnet) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.Subnet was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Subnet))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.Subnet)); err != nil {
+		return err
+	}
+
+	// t.Addr (address.Address) (struct)
+	if err := t.Addr.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.NetAddr (string) (string)
+	if len(t.NetAddr) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.NetAddr was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.NetAddr))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.NetAddr)); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *Validator) UnmarshalCBOR(r io.Reader) error {
+	*t = Validator{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 3 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.Subnet (address.SubnetID) (string)
+
+	{
+		sval, err := cbg.ReadStringBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+
+		t.Subnet = address.SubnetID(sval)
+	}
+	// t.Addr (address.Address) (struct)
+
+	{
+
+		if err := t.Addr.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Addr: %w", err)
+		}
+
+	}
+	// t.NetAddr (string) (string)
+
+	{
+		sval, err := cbg.ReadStringBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+
+		t.NetAddr = string(sval)
+	}
+	return nil
+}

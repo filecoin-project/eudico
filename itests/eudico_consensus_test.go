@@ -3,6 +3,7 @@ package itests
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -82,12 +83,6 @@ func (ts *eudicoConsensusSuite) testDummyMining(t *testing.T) {
 }
 
 func runMirConsensusTests(t *testing.T, opts ...interface{}) {
-	if err := os.Setenv("EUDICO_MIR_ID", "0"); err != nil {
-		require.NoError(t, err)
-	}
-	if err := os.Setenv("EUDICO_MIR_NODES", "0@127.0.0.1:10000"); err != nil {
-		require.NoError(t, err)
-	}
 	ts := eudicoConsensusSuite{opts: opts}
 
 	t.Run("testMirMining", ts.testMirMining)
@@ -96,6 +91,14 @@ func runMirConsensusTests(t *testing.T, opts ...interface{}) {
 func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Stop test and cancel mining, if we receive at least one error from error channel.
+	// TODO: implement the same for all tests
+	errChan := make(chan error, 1)
+	go func() {
+		<-errChan
+		cancel()
+	}()
 
 	full, ens := kit.EudicoEnsembleFullNodeOnly(t, ts.opts...)
 	defer func() {
@@ -109,12 +112,27 @@ func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
 		t.Fatal("wallet key list is empty")
 	}
 
+	mirNodeID := fmt.Sprintf("%s:%s", address.RootSubnet, l[0].String())
+	if err := os.Setenv(mir.MirClientIDEnv, mirNodeID); err != nil {
+		require.NoError(t, err)
+	}
+	defer os.Unsetenv(mir.MirClientIDEnv)
+
+	if err := os.Setenv(mir.MirClientsEnv, fmt.Sprintf("%s@%s", mirNodeID, "127.0.0.1:10000")); err != nil {
+		require.NoError(t, err)
+	}
+	defer os.Unsetenv(mir.MirClientsEnv)
+
 	go func() {
 		err = mir.Mine(ctx, l[0], full)
 		if xerrors.Is(mapi.ErrStopped, err) {
 			return
 		}
-		require.NoError(t, err)
+		if err != nil {
+			t.Error(err)
+			errChan <- err
+			return
+		}
 	}()
 
 	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 10, address.RootSubnet, full)

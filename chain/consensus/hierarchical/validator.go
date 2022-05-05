@@ -1,4 +1,4 @@
-package subnet
+package hierarchical
 
 import (
 	"fmt"
@@ -28,24 +28,49 @@ func (v *Validator) HAddr() (addr.Address, error) {
 }
 
 func (v *Validator) ID() string {
-	return fmt.Sprintf("%s:%s", v.NetAddr, v.Addr)
-}
-
-func GetValidatorAddrs(vals []Validator) []addr.Address {
-	var addrs []addr.Address
-	for _, v := range vals {
-		addrs = append(addrs, v.Addr)
-	}
-	return addrs
+	return fmt.Sprintf("%s:%s", v.Subnet, v.Addr)
 }
 
 // EncodeValidatorInfo adds a validator subnet, address and network address into a string.
-func EncodeValidatorInfo(vals []Validator) string {
+func EncodeValidatorInfo(vilidators []Validator) string {
 	var s string
-	for _, v := range vals {
+	for _, v := range vilidators {
 		s += fmt.Sprintf("%s:%s@%s,", v.Subnet.String(), v.Addr.String(), v.NetAddr)
 	}
 	return strings.TrimSuffix(s, ",")
+}
+
+func ValidatorsFromString(input string) ([]Validator, error) {
+	var validators []Validator
+	for _, idAddr := range splitAndTrimEmpty(input, ",", " ") {
+		ss := strings.Split(idAddr, "@")
+		if len(ss) != 2 {
+			return nil, xerrors.New("failed to parse string")
+		}
+
+		subnetAndID := ss[0]
+		netAddr := ss[1]
+		sss := strings.Split(subnetAndID, ":")
+		if len(sss) != 2 {
+			return nil, xerrors.New("failed to parse addr")
+		}
+		subnet := sss[0]
+		ID := sss[1]
+
+		a, err := addr.NewFromString(ID)
+		if err != nil {
+			return nil, err
+		}
+
+		v := Validator{
+			addr.SubnetID(subnet),
+			a,
+			netAddr,
+		}
+
+		validators = append(validators, v)
+	}
+	return validators, nil
 }
 
 // ParseValidatorInfo parses comma-delimited ID@host:port persistent validator string.
@@ -64,6 +89,19 @@ func ParseValidatorInfo(input string) ([]t.NodeID, map[t.NodeID]string, error) {
 
 		id := t.NodeID(ss[0])
 		netAddr := ss[1]
+		nodeIds = append(nodeIds, id)
+		nodeAddrs[id] = netAddr
+	}
+	return nodeIds, nodeAddrs, nil
+}
+
+func ValidatorMembership(validators []Validator) ([]t.NodeID, map[t.NodeID]string, error) {
+	var nodeIds []t.NodeID
+	nodeAddrs := make(map[t.NodeID]string)
+
+	for _, v := range validators {
+		id := t.NodeID(v.ID())
+		netAddr := v.NetAddr
 		nodeIds = append(nodeIds, id)
 		nodeAddrs[id] = netAddr
 	}
