@@ -1168,9 +1168,8 @@ func EudicoEnsembleTwoMiners(t *testing.T, opts ...interface{}) (*TestFullNode, 
 		addr, _ := full.WalletDefaultAddress(context.Background())
 		err := os.Setenv(mir.MirClientIDEnv, "/root:"+addr.String())
 		require.NoError(t, err)
-		// defer os.Unsetenv(mir.MirClientIDEnv) // nolint
 		err = os.Setenv(mir.MirClientsEnv, "/root:"+addr.String()+"@127.0.0.1:10000")
-		// defer os.Unsetenv(mir.MirClientsEnv) // nolint
+		require.NoError(t, err)
 	}
 	return &full, rootMiner, subnetMinerType, ens
 }
