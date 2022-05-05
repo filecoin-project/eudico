@@ -102,7 +102,7 @@ const (
 	TendermintConsensusKeyFile         = TendermintConsensusTestDir + "/config/priv_validator_key.json"
 	TendermintApplicationAddress       = "tcp://127.0.0.1:26658"
 
-	MirBFTConsensusGenesisTestFile = "../testdata/mirbft.gen"
+	MirBFTConsensusGenesisTestFile = "../testdata/mir.gen"
 
 	FilcnsConsensusGenesisTestFile = "../testdata/filcns.gen"
 )
@@ -347,6 +347,8 @@ func (n *EudicoEnsemble) Stop() error {
 
 	if n.options.subnetConsensus == hierarchical.Mir ||
 		n.options.rootConsensus == hierarchical.Mir {
+		os.Unsetenv(mir.MirClientIDEnv) // nolint
+		os.Unsetenv(mir.MirClientsEnv)  // nolint
 		return n.stopMir()
 	}
 	return nil
@@ -859,6 +861,17 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 	return n
 }
 
+func (n *EudicoEnsemble) GetDefaultKeyAddr() []address.Address {
+	var addrs []address.Address
+	for _, full := range n.active.fullnodes {
+		addr, err := full.WalletDefaultAddress(context.Background())
+		require.NoError(n.t, err)
+		addrs = append(addrs, addr)
+
+	}
+	return addrs
+}
+
 // InterconnectAll connects all miners and full nodes to one another.
 func (n *EudicoEnsemble) InterconnectAll() *EudicoEnsemble {
 	// connect full nodes to miners.
@@ -1151,6 +1164,14 @@ func EudicoEnsembleTwoMiners(t *testing.T, opts ...interface{}) (*TestFullNode, 
 		return &full, &miner, subnetMinerType, ens
 	}
 	ens = NewEudicoEnsemble(t, eopts...).FullNode(&full, nopts...).Start()
+	if options.rootConsensus == hierarchical.Mir {
+		addr, _ := full.WalletDefaultAddress(context.Background())
+		err := os.Setenv(mir.MirClientIDEnv, "/root:"+addr.String())
+		require.NoError(t, err)
+		// defer os.Unsetenv(mir.MirClientIDEnv) // nolint
+		err = os.Setenv(mir.MirClientsEnv, "/root:"+addr.String()+"@127.0.0.1:10000")
+		// defer os.Unsetenv(mir.MirClientsEnv) // nolint
+	}
 	return &full, rootMiner, subnetMinerType, ens
 }
 

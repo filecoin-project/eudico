@@ -16,7 +16,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
-	"github.com/filecoin-project/lotus/chain/consensus/mir"
 	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/itests/kit"
@@ -24,13 +23,6 @@ import (
 )
 
 func TestEudicoSubnetMir(t *testing.T) {
-	err := os.Setenv(mir.MirClientIDEnv, "0")
-	require.NoError(t, err)
-	defer os.Unsetenv(mir.MirClientIDEnv) // nolint
-	err = os.Setenv(mir.MirClientsEnv, "0@127.0.0.1:10000")
-	require.NoError(t, err)
-	defer os.Unsetenv(mir.MirClientsEnv) // nolint
-
 	t.Run("/root/mir-/subnet/dummy", func(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDummy())
 	})
@@ -304,6 +296,10 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("[*] %s addr balance: %d", addr, a.Balance)
 	require.Equal(t, 0, big.Cmp(injectedFils, a.Balance))
+
+	bl, err = kit.WaitSubnetActorBalance(ctx, subnetAddr, newAddr, sentFils, full)
+	require.NoError(t, err)
+	t.Logf(" [*] Sent funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
 
 	a, err = full.SubnetStateGetActor(ctx, subnetAddr, newAddr, types.EmptyTSK)
 	require.NoError(t, err)

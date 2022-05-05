@@ -65,8 +65,8 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		}
 	}
 
-	log.Infof("Mir miner params:\n\tnetwork name - %s\n\tsubnet ID - %s\n\tclientID - %s\n\tclients - %v",
-		netName, subnetID, clientID, validators)
+	log.Infof("Mir miner params:\n\tminer - %s\n\tnetwork name - %s\n\tsubnet ID - %s\n\tclientID - %s\n\tclients - %v",
+		miner, netName, subnetID, clientID, validators)
 
 	var miners []address.Address
 	for _, v := range validators {
