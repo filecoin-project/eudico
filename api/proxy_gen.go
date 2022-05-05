@@ -22,6 +22,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/paych"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -567,7 +568,7 @@ type HierarchicalCnsStruct struct {
 	Internal struct {
 		AbortAtomicExec func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 cid.Cid) (sca.ExecStatus, error) `perm:"write"`
 
-		AddSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 address.Address, p8 uint64) (address.Address, error) `perm:"write"`
+		AddSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 *hierarchical.ConsensusParams) (address.Address, error) `perm:"write"`
 
 		ComputeAndSubmitExec func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 cid.Cid) (sca.ExecStatus, error) `perm:"write"`
 
@@ -3551,14 +3552,14 @@ func (s *HierarchicalCnsStub) AbortAtomicExec(p0 context.Context, p1 address.Add
 	return *new(sca.ExecStatus), ErrNotSupported
 }
 
-func (s *HierarchicalCnsStruct) AddSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 address.Address, p8 uint64) (address.Address, error) {
+func (s *HierarchicalCnsStruct) AddSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 *hierarchical.ConsensusParams) (address.Address, error) {
 	if s.Internal.AddSubnet == nil {
 		return *new(address.Address), ErrNotSupported
 	}
-	return s.Internal.AddSubnet(p0, p1, p2, p3, p4, p5, p6, p7, p8)
+	return s.Internal.AddSubnet(p0, p1, p2, p3, p4, p5, p6, p7)
 }
 
-func (s *HierarchicalCnsStub) AddSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 address.Address, p8 uint64) (address.Address, error) {
+func (s *HierarchicalCnsStub) AddSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 *hierarchical.ConsensusParams) (address.Address, error) {
 	return *new(address.Address), ErrNotSupported
 }
 

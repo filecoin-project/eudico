@@ -65,13 +65,12 @@ func (a SubnetActor) State() cbor.Er {
 // ConstructParams specifies the configuration parameters for the
 // subnet actor constructor.
 type ConstructParams struct {
-	NetworkName      string                     // Name of the current network.
-	Name             string                     // Name for the subnet
-	Consensus        hierarchical.ConsensusType // Consensus for subnet.
-	MinMinerStake    abi.TokenAmount            // MinStake to give miner rights
-	DelegMiner       address.Address            // Miner in delegated consensus
-	CheckPeriod      abi.ChainEpoch             // Checkpointing period.
-	ValidatorsNumber uint64                     // Number of validators.
+	NetworkName     string                        // Name of the current network.
+	Name            string                        // Name for the subnet.
+	Consensus       hierarchical.ConsensusType    // Consensus for subnet.
+	ConsensusParams *hierarchical.ConsensusParams // Used parameters for the consensus protocol.
+	MinMinerStake   abi.TokenAmount               // MinStake to give miner rights.
+	CheckPeriod     abi.ChainEpoch                // Checkpointing period.
 }
 
 func (a SubnetActor) Constructor(rt runtime.Runtime, params *ConstructParams) *abi.EmptyValue {
@@ -80,7 +79,6 @@ func (a SubnetActor) Constructor(rt runtime.Runtime, params *ConstructParams) *a
 	st, err := ConstructSubnetState(adt.AsStore(rt), params)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
 	st.initGenesis(rt, params)
-
 	rt.StateCreate(st)
 	return nil
 }
@@ -102,7 +100,7 @@ func (st *SubnetState) initGenesis(rt runtime.Runtime, params *ConstructParams) 
 
 	// Getting actor ID from receiver.
 	netName := address.NewSubnetID(address.SubnetID(params.NetworkName), rt.Receiver())
-	err = WriteGenesis(netName, st.Consensus, params.DelegMiner, vreg, rem,
+	err = WriteGenesis(netName, st.Consensus, params.ConsensusParams.DelegMiner, vreg, rem,
 		params.CheckPeriod, rt.ValueReceived().Uint64(), buf)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed genesis")
 	st.Genesis = buf.Bytes()
@@ -147,13 +145,11 @@ func (a SubnetActor) Join(rt runtime.Runtime, v *Validator) *abi.EmptyValue {
 
 	rt.StateTransaction(&st, func() {
 		// Mutate state
-		if st.Consensus == hierarchical.Mir {
+		if st.MinValidators > 0 {
+			st.ValidatorSet = append(st.ValidatorSet, *v)
 
-			st.Validators = append(st.Validators, *v)
-
-			log.Debugf("Added Mir validator into the subnet state: %s: %s", v.ID, v.Address)
-			log.Debugf("%d Mir nodes have been registered", len(st.Validators))
-			log.Debug("Current Mir validators:", st.Validators)
+			log.Debugf("Added validator: %s", v.ID())
+			log.Debugf("%d validators have been registered", len(st.ValidatorSet))
 		}
 	})
 

@@ -161,18 +161,18 @@ var addCmd = &cli.Command{
 			parent = address.SubnetID(cctx.String("parent"))
 		}
 
-		var vals uint64
-		if cctx.IsSet("validators") {
-			vals = cctx.Uint64("validators")
+		var minVals uint64
+		if cctx.IsSet("min-validators") {
+			minVals = cctx.Uint64("min-validators")
 		}
 
 		// FIXME: This is a horrible workaround to avoid delegminer from
 		// not being set. But need to demo in 30 mins, so will fix it afterwards
 		// (we all know I'll come across this comment in 2 years and laugh at it).
-		delegminer := hierarchical.SubnetCoordActorAddr
+		delegMiner := hierarchical.SubnetCoordActorAddr
 		if cctx.IsSet("delegminer") {
 			d := cctx.String("delegminer")
-			delegminer, err = address.NewFromString(d)
+			delegMiner, err = address.NewFromString(d)
 			if err != nil {
 				return xerrors.Errorf("couldn't parse deleg miner address: %s", err)
 			}
@@ -181,7 +181,11 @@ var addCmd = &cli.Command{
 		}
 		minerStake := abi.NewStoragePower(1e8) // TODO: Make this value configurable in a flag/argument
 		checkperiod := abi.ChainEpoch(cctx.Int("checkperiod"))
-		actorAddr, err := api.AddSubnet(ctx, addr, parent, name, cns, minerStake, checkperiod, delegminer, vals)
+		params := &hierarchical.ConsensusParams{
+			DelegMiner:    delegMiner,
+			MinValidators: minVals,
+		}
+		actorAddr, err := api.AddSubnet(ctx, addr, parent, name, cns, minerStake, checkperiod, params)
 		if err != nil {
 			return err
 		}

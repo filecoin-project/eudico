@@ -193,7 +193,11 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	t.Logf("[*] %s balance: %d", addr, balance)
 
 	cns := uint64(subnetMinerType)
-	actorAddr, err := full.AddSubnet(ctx, addr, parent, subnetName, cns, minerStake, checkPeriod, addr, n)
+	p := &hierarchical.ConsensusParams{
+		MinValidators: n,
+		DelegMiner:    addr,
+	}
+	actorAddr, err := full.AddSubnet(ctx, addr, parent, subnetName, cns, minerStake, checkPeriod, p)
 	require.NoError(t, err)
 
 	subnetAddr := address.NewSubnetID(parent, actorAddr)

@@ -3,7 +3,6 @@ package subnetmgr
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/ipfs/go-blockservice"
@@ -328,7 +327,7 @@ func (s *SubnetMgr) Close(ctx context.Context) error {
 	for _, sh := range s.subnets {
 		err := sh.Close(ctx)
 		if err != nil {
-			log.Errorf("error closing subnet %s: %w", sh.ID, err)
+			log.Errorf("error closing subnet %s: %s", sh.ID, err)
 			// NOTE: Even if we fail to close a subnet we should continue
 			// and not return. We shouldn't stop half-way.
 			// return err
@@ -372,8 +371,7 @@ func (s *SubnetMgr) AddSubnet(
 	parent address.SubnetID, name string,
 	consensus uint64, minerStake abi.TokenAmount,
 	checkPeriod abi.ChainEpoch,
-	delegminer address.Address,
-	validatorsNumber uint64) (address.Address, error) {
+	consensusPparams *hierarchical.ConsensusParams) (address.Address, error) {
 
 	// Get the api for the parent network hosting the subnet actor
 	// for the subnet.
@@ -383,13 +381,15 @@ func (s *SubnetMgr) AddSubnet(
 	}
 	// Populate constructor parameters for subnet actor
 	addp := &subnet.ConstructParams{
-		NetworkName:      string(s.api.NetName),
-		MinMinerStake:    minerStake,
-		Name:             name,
-		Consensus:        hierarchical.ConsensusType(consensus),
-		DelegMiner:       delegminer,
-		CheckPeriod:      checkPeriod,
-		ValidatorsNumber: validatorsNumber,
+		NetworkName:   string(s.api.NetName),
+		MinMinerStake: minerStake,
+		Name:          name,
+		Consensus:     hierarchical.ConsensusType(consensus),
+		CheckPeriod:   checkPeriod,
+		ConsensusParams: &hierarchical.ConsensusParams{
+			DelegMiner:    consensusPparams.DelegMiner,
+			MinValidators: consensusPparams.MinValidators,
+		},
 	}
 
 	seraddp, err := actors.SerializeParams(addp)
@@ -434,7 +434,7 @@ func (s *SubnetMgr) JoinSubnet(
 	ctx context.Context, wallet address.Address,
 	value abi.TokenAmount,
 	id address.SubnetID,
-	valAddr string,
+	validatorNetAddr string,
 ) (cid.Cid, error) {
 
 	// TODO: Think a bit deeper the locking strategy for subnets.
@@ -465,18 +465,23 @@ func (s *SubnetMgr) JoinSubnet(
 		return cid.Undef, xerrors.Errorf("getting actor state: %w", err)
 	}
 
-	var v subnet.Validator
-	var params bytes.Buffer
-
-	if st.Consensus == hierarchical.Mir && st.ValidatorsNumber > 0 {
-		if valAddr == "" {
+	// Validator address is optional for Mir.
+	if st.Consensus == hierarchical.Mir && st.MinValidators > 0 {
+		if validatorNetAddr == "" {
 			return cid.Undef, xerrors.New("Mir validator address is not provided")
 		}
-		v.ID = fmt.Sprintf("%s:%s", id, wallet)
-		v.Address = valAddr
 	}
+	// Validator address is not supported for consensus other than Mir.
+	if st.Consensus != hierarchical.Mir && validatorNetAddr != "" {
+		if validatorNetAddr == "" {
+			return cid.Undef, xerrors.New("validator address is not supported")
+		}
+	}
+	var params bytes.Buffer
+	v := subnet.NewValidator(id, wallet, validatorNetAddr)
 	err = v.MarshalCBOR(&params)
 	if err != nil {
+		panic(err)
 		return cid.Undef, err
 	}
 
@@ -598,10 +603,10 @@ func (s *SubnetMgr) MineSubnet(
 		return err
 	}
 
-	if st.Consensus == hierarchical.Mir && int(st.ValidatorsNumber) > 0 {
-		log.Debugf("%d Mir validators joined subnet %s", st.ValidatorsNumber, id)
-		if len(st.Validators) != int(st.ValidatorsNumber) {
-			return xerrors.Errorf("Mir nodes - joined %d, wanted %d", len(st.Validators), st.ValidatorsNumber)
+	if int(st.MinValidators) > 0 {
+		log.Debugf("%d validators have joined subnet %s", len(st.ValidatorSet), id)
+		if len(st.ValidatorSet) != int(st.MinValidators) {
+			return xerrors.Errorf("joined validators - %d, required validators - %d", len(st.ValidatorSet), st.MinValidators)
 		}
 	}
 
@@ -695,11 +700,11 @@ func (s *SubnetMgr) ListSubnets(ctx context.Context, id address.SubnetID) ([]sca
 	var output []sca.SubnetOutput
 
 	for _, sn := range subnets {
-		act, err := sn.ID.Actor()
+		a, err := sn.ID.Actor()
 		if err != nil {
 			return nil, err
 		}
-		snAct, err := sapi.StateGetActor(ctx, act, types.EmptyTSK)
+		snAct, err := sapi.StateGetActor(ctx, a, types.EmptyTSK)
 		if err != nil {
 			return nil, err
 		}
@@ -799,24 +804,24 @@ func (s *SubnetMgr) getSubnet(id address.SubnetID) (*Subnet, error) {
 }
 
 func (s *SubnetMgr) GetSubnetAPI(id address.SubnetID) (v1api.FullNode, error) {
-	api := s.getAPI(id)
-	if api == nil {
+	sapi := s.getAPI(id)
+	if sapi == nil {
 		return nil, xerrors.Errorf("subnet manager not syncing with network")
 	}
-	return api, nil
+	return sapi, nil
 }
 
 func (s *SubnetMgr) GetSCAState(ctx context.Context, id address.SubnetID) (*sca.SCAState, blockadt.Store, error) {
-	api, err := s.GetSubnetAPI(id)
+	sapi, err := s.GetSubnetAPI(id)
 	if err != nil {
 		return nil, nil, err
 	}
 	var st sca.SCAState
-	subnetAct, err := api.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, types.EmptyTSK)
+	subnetAct, err := sapi.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, types.EmptyTSK)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("loading actor state: %w", err)
 	}
-	pbs := blockstore.NewAPIBlockstore(api)
+	pbs := blockstore.NewAPIBlockstore(sapi)
 	pcst := cbor.NewCborStore(pbs)
 	if err := pcst.Get(ctx, subnetAct.Head, &st); err != nil {
 		return nil, nil, xerrors.Errorf("getting actor state: %w", err)
@@ -825,35 +830,35 @@ func (s *SubnetMgr) GetSCAState(ctx context.Context, id address.SubnetID) (*sca.
 }
 
 func (s *SubnetMgr) SubnetChainNotify(ctx context.Context, id address.SubnetID) (<-chan []*api.HeadChange, error) {
-	api, err := s.GetSubnetAPI(id)
+	sapi, err := s.GetSubnetAPI(id)
 	if err != nil {
 		return nil, err
 	}
-	return api.ChainNotify(ctx)
+	return sapi.ChainNotify(ctx)
 }
 
 func (s *SubnetMgr) SubnetChainHead(ctx context.Context, id address.SubnetID) (*types.TipSet, error) {
-	api, err := s.GetSubnetAPI(id)
+	sapi, err := s.GetSubnetAPI(id)
 	if err != nil {
 		return nil, err
 	}
-	return api.ChainHead(ctx)
+	return sapi.ChainHead(ctx)
 }
 
 func (s *SubnetMgr) SubnetStateGetActor(ctx context.Context, id address.SubnetID, addr address.Address, tsk types.TipSetKey) (*types.Actor, error) {
-	api, err := s.GetSubnetAPI(id)
+	sapi, err := s.GetSubnetAPI(id)
 	if err != nil {
 		return nil, err
 	}
-	return api.StateGetActor(ctx, addr, tsk)
+	return sapi.StateGetActor(ctx, addr, tsk)
 }
 
 func (s *SubnetMgr) SubnetStateWaitMsg(ctx context.Context, id address.SubnetID, cid cid.Cid, confidence uint64, limit abi.ChainEpoch, allowReplaced bool) (*api.MsgLookup, error) {
-	api, err := s.GetSubnetAPI(id)
+	sapi, err := s.GetSubnetAPI(id)
 	if err != nil {
 		return nil, err
 	}
-	return api.StateWaitMsg(ctx, cid, confidence, limit, allowReplaced)
+	return sapi.StateWaitMsg(ctx, cid, confidence, limit, allowReplaced)
 }
 
 func (s *SubnetMgr) SubnetGetValidators(ctx context.Context, id address.SubnetID) (string, error) {
@@ -865,5 +870,5 @@ func (s *SubnetMgr) SubnetGetValidators(ctx context.Context, id address.SubnetID
 	if err != nil {
 		return "", err
 	}
-	return subnet.EncodeValInfo(st.Validators), nil
+	return subnet.EncodeValidatorInfo(st.ValidatorSet), nil
 }

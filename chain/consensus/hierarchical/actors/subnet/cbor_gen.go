@@ -136,23 +136,23 @@ func (t *SubnetState) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("failed to write cid field t.WindowChecks: %w", err)
 	}
 
-	// t.Validators ([]subnet.Validator) (slice)
-	if len(t.Validators) > cbg.MaxLength {
-		return xerrors.Errorf("Slice value in field t.Validators was too long")
+	// t.ValidatorSet ([]subnet.Validator) (slice)
+	if len(t.ValidatorSet) > cbg.MaxLength {
+		return xerrors.Errorf("Slice value in field t.ValidatorSet was too long")
 	}
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajArray, uint64(len(t.Validators))); err != nil {
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajArray, uint64(len(t.ValidatorSet))); err != nil {
 		return err
 	}
-	for _, v := range t.Validators {
+	for _, v := range t.ValidatorSet {
 		if err := v.MarshalCBOR(w); err != nil {
 			return err
 		}
 	}
 
-	// t.ValidatorsNumber (uint64) (uint64)
+	// t.MinValidators (uint64) (uint64)
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.ValidatorsNumber)); err != nil {
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.MinValidators)); err != nil {
 		return err
 	}
 
@@ -354,7 +354,7 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) error {
 		t.WindowChecks = c
 
 	}
-	// t.Validators ([]subnet.Validator) (slice)
+	// t.ValidatorSet ([]subnet.Validator) (slice)
 
 	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
 	if err != nil {
@@ -362,7 +362,7 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) error {
 	}
 
 	if extra > cbg.MaxLength {
-		return fmt.Errorf("t.Validators: array too large (%d)", extra)
+		return fmt.Errorf("t.ValidatorSet: array too large (%d)", extra)
 	}
 
 	if maj != cbg.MajArray {
@@ -370,7 +370,7 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) error {
 	}
 
 	if extra > 0 {
-		t.Validators = make([]Validator, extra)
+		t.ValidatorSet = make([]Validator, extra)
 	}
 
 	for i := 0; i < int(extra); i++ {
@@ -380,10 +380,10 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) error {
 			return err
 		}
 
-		t.Validators[i] = v
+		t.ValidatorSet[i] = v
 	}
 
-	// t.ValidatorsNumber (uint64) (uint64)
+	// t.MinValidators (uint64) (uint64)
 
 	{
 
@@ -394,13 +394,13 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) error {
 		if maj != cbg.MajUnsignedInt {
 			return fmt.Errorf("wrong type for uint64 field")
 		}
-		t.ValidatorsNumber = uint64(extra)
+		t.MinValidators = uint64(extra)
 
 	}
 	return nil
 }
 
-var lengthBufConstructParams = []byte{135}
+var lengthBufConstructParams = []byte{134}
 
 func (t *ConstructParams) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -448,11 +448,6 @@ func (t *ConstructParams) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.DelegMiner (address.Address) (struct)
-	if err := t.DelegMiner.MarshalCBOR(w); err != nil {
-		return err
-	}
-
 	// t.CheckPeriod (abi.ChainEpoch) (int64)
 	if t.CheckPeriod >= 0 {
 		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.CheckPeriod)); err != nil {
@@ -464,12 +459,10 @@ func (t *ConstructParams) MarshalCBOR(w io.Writer) error {
 		}
 	}
 
-	// t.ValidatorsNumber (uint64) (uint64)
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.ValidatorsNumber)); err != nil {
+	// t.ConsensusParams (hierarchical.ConsensusParams) (struct)
+	if err := t.ConsensusParams.MarshalCBOR(w); err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -487,7 +480,7 @@ func (t *ConstructParams) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 7 {
+	if extra != 6 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -534,15 +527,6 @@ func (t *ConstructParams) UnmarshalCBOR(r io.Reader) error {
 		}
 
 	}
-	// t.DelegMiner (address.Address) (struct)
-
-	{
-
-		if err := t.DelegMiner.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.DelegMiner: %w", err)
-		}
-
-	}
 	// t.CheckPeriod (abi.ChainEpoch) (int64)
 	{
 		maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
@@ -568,18 +552,23 @@ func (t *ConstructParams) UnmarshalCBOR(r io.Reader) error {
 
 		t.CheckPeriod = abi.ChainEpoch(extraI)
 	}
-	// t.ValidatorsNumber (uint64) (uint64)
+	// t.ConsensusParams (hierarchical.ConsensusParams) (struct)
 
 	{
 
-		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		b, err := br.ReadByte()
 		if err != nil {
 			return err
 		}
-		if maj != cbg.MajUnsignedInt {
-			return fmt.Errorf("wrong type for uint64 field")
+		if b != cbg.CborNull[0] {
+			if err := br.UnreadByte(); err != nil {
+				return err
+			}
+			t.ConsensusParams = new(hierarchical.ConsensusParams)
+			if err := t.ConsensusParams.UnmarshalCBOR(br); err != nil {
+				return xerrors.Errorf("unmarshaling t.ConsensusParams pointer: %w", err)
+			}
 		}
-		t.ValidatorsNumber = uint64(extra)
 
 	}
 	return nil
@@ -664,7 +653,7 @@ func (t *CheckVotes) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufValidator = []byte{130}
+var lengthBufValidator = []byte{131}
 
 func (t *Validator) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -677,27 +666,32 @@ func (t *Validator) MarshalCBOR(w io.Writer) error {
 
 	scratch := make([]byte, 9)
 
-	// t.ID (string) (string)
-	if len(t.ID) > cbg.MaxLength {
-		return xerrors.Errorf("Value in field t.ID was too long")
+	// t.Subnet (address.SubnetID) (string)
+	if len(t.Subnet) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.Subnet was too long")
 	}
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.ID))); err != nil {
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Subnet))); err != nil {
 		return err
 	}
-	if _, err := io.WriteString(w, string(t.ID)); err != nil {
+	if _, err := io.WriteString(w, string(t.Subnet)); err != nil {
 		return err
 	}
 
-	// t.Address (string) (string)
-	if len(t.Address) > cbg.MaxLength {
-		return xerrors.Errorf("Value in field t.Address was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Address))); err != nil {
+	// t.Addr (address.Address) (struct)
+	if err := t.Addr.MarshalCBOR(w); err != nil {
 		return err
 	}
-	if _, err := io.WriteString(w, string(t.Address)); err != nil {
+
+	// t.NetAddr (string) (string)
+	if len(t.NetAddr) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.NetAddr was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.NetAddr))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.NetAddr)); err != nil {
 		return err
 	}
 	return nil
@@ -717,11 +711,11 @@ func (t *Validator) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 2 {
+	if extra != 3 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.ID (string) (string)
+	// t.Subnet (address.SubnetID) (string)
 
 	{
 		sval, err := cbg.ReadStringBuf(br, scratch)
@@ -729,9 +723,18 @@ func (t *Validator) UnmarshalCBOR(r io.Reader) error {
 			return err
 		}
 
-		t.ID = string(sval)
+		t.Subnet = address.SubnetID(sval)
 	}
-	// t.Address (string) (string)
+	// t.Addr (address.Address) (struct)
+
+	{
+
+		if err := t.Addr.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Addr: %w", err)
+		}
+
+	}
+	// t.NetAddr (string) (string)
 
 	{
 		sval, err := cbg.ReadStringBuf(br, scratch)
@@ -739,7 +742,7 @@ func (t *Validator) UnmarshalCBOR(r io.Reader) error {
 			return err
 		}
 
-		t.Address = string(sval)
+		t.NetAddr = string(sval)
 	}
 	return nil
 }

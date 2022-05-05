@@ -9,6 +9,7 @@ import (
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	snmgr "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/manager"
@@ -28,9 +29,8 @@ func (a *HierarchicalAPI) AddSubnet(
 	parent address.SubnetID, name string,
 	consensus uint64, minerStake abi.TokenAmount,
 	checkPeriod abi.ChainEpoch,
-	dm address.Address,
-	n uint64) (address.Address, error) {
-	return a.Sub.AddSubnet(ctx, wallet, parent, name, consensus, minerStake, checkPeriod, dm, n)
+	params *hierarchical.ConsensusParams) (address.Address, error) {
+	return a.Sub.AddSubnet(ctx, wallet, parent, name, consensus, minerStake, checkPeriod, params)
 }
 
 func (a *HierarchicalAPI) JoinSubnet(ctx context.Context, wallet address.Address,

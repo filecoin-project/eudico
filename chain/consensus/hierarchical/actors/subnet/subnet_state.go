@@ -79,10 +79,10 @@ type SubnetState struct {
 	Checkpoints cid.Cid // HAMT[epoch]Checkpoint
 	// WindowChecks
 	WindowChecks cid.Cid // HAMT[cid]CheckVotes
-	// Validators contains information about BFT validators
-	Validators []Validator
-	// ValidatorsNumber initial number of validators to start a subnet with BFT-type consensus
-	ValidatorsNumber uint64
+	// ValidatorSet is a set of validators
+	ValidatorSet []Validator
+	// MinValidators is the minimal number of validators required to join before starting the subnet
+	MinValidators uint64
 }
 
 type CheckVotes struct {
@@ -139,17 +139,17 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 	parentID := address.SubnetID(params.NetworkName)
 
 	return &SubnetState{
-		ParentID:         parentID,
-		Consensus:        params.Consensus,
-		MinMinerStake:    params.MinMinerStake,
-		Miners:           make([]address.Address, 0),
-		Stake:            emptyStakeCid,
-		Status:           Instantiated,
-		CheckPeriod:      period,
-		Checkpoints:      emptyCheckpointsMapCid,
-		WindowChecks:     emptyWindowChecks,
-		Validators:       make([]Validator, 0),
-		ValidatorsNumber: params.ValidatorsNumber,
+		ParentID:      parentID,
+		Consensus:     params.Consensus,
+		MinMinerStake: params.MinMinerStake,
+		Miners:        make([]address.Address, 0),
+		Stake:         emptyStakeCid,
+		Status:        Instantiated,
+		CheckPeriod:   period,
+		Checkpoints:   emptyCheckpointsMapCid,
+		WindowChecks:  emptyWindowChecks,
+		ValidatorSet:  make([]Validator, 0),
+		MinValidators: params.ConsensusParams.MinValidators,
 	}, nil
 
 }

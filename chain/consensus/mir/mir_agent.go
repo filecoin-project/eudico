@@ -60,8 +60,6 @@ type MirAgent struct {
 }
 
 func NewMirAgent(ctx context.Context, id string, nodes string) (*MirAgent, error) {
-	// TODO: Are client ID and node ID the same in this case?
-	// TODO: Should mir use a different type for node ID?
 	if id == "" || nodes == "" {
 		return nil, xerrors.New("invalid ID or nodes")
 	}
@@ -69,7 +67,7 @@ func NewMirAgent(ctx context.Context, id string, nodes string) (*MirAgent, error
 	log.Debugf("Mir agent %v is being created", ownID)
 	defer log.Debugf("Mir agent %v has been created", ownID)
 
-	nodeIds, nodeAddrs, err := subnet.ParseValInfo(nodes)
+	nodeIds, nodeAddrs, err := subnet.ParseValidatorInfo(nodes)
 	if err != nil {
 		return nil, err
 	}

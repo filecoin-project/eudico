@@ -3,23 +3,23 @@ package sca
 //go:generate go run ./gen/gen.go
 
 import (
-	address "github.com/filecoin-project/go-address"
+	"github.com/ipfs/go-cid"
+	"golang.org/x/xerrors"
+
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/cbor"
 	"github.com/filecoin-project/go-state-types/exitcode"
-	types "github.com/filecoin-project/lotus/chain/types"
-	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
-	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
-	cid "github.com/ipfs/go-cid"
-	xerrors "golang.org/x/xerrors"
-
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
+	"github.com/filecoin-project/lotus/chain/types"
+	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
+	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
 )
 
 var _ runtime.VMActor = SubnetCoordActor{}
