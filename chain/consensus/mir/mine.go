@@ -182,7 +182,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 				tx := common.NewCrossMessageBytes(msgBytes, nil)
 				reqNo := mirtypes.ReqNo(msg.Msg.Nonce)
 
-				err = mirAgent.Node.SubmitRequest(ctx, mirtypes.ClientID(0), reqNo, tx, []byte{})
+				err = mirAgent.Node.SubmitRequest(ctx, mirtypes.ClientID(clientID), reqNo, tx, []byte{})
 				if err != nil {
 					log.Error("unable to submit a message to Mir:", err)
 					continue
