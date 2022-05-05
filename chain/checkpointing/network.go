@@ -129,7 +129,7 @@ func waitTimeOut(ctx context.Context, h protocol.Handler, network *Network, over
 	}
 }
 func LoopHandlerDKG(ctx context.Context, h protocol.Handler, network *Network, num int, file *os.File) {
-	defer timeTrack(time.Now(), "DKG", num, file)
+	defer timeTrack(time.Now(), "DKG-notimeout", num, file)
 	over := make(chan bool)
 
 	ctx, cancel := context.WithCancel(ctx)

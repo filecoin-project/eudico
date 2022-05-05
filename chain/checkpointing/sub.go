@@ -61,7 +61,7 @@ const initialValueInWallet = 50
 var sendall = false
 
 // this variable is the number of blocks (in eudico) we want between each checkpoints
-const checkpointFrequency = 100
+const checkpointFrequency = 25
 
 //change to true if regtest is used
 const Regtest = true
