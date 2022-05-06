@@ -1,33 +1,16 @@
 package mir
 
 import (
-	"fmt"
-
+	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/types"
-	t "github.com/filecoin-project/mir/pkg/types"
 )
 
 const (
 	nodeBasePort = 10000
 )
-
-// nolint
-func getConfig(n int) ([]t.NodeID, map[t.NodeID]string) {
-	var nodeIds []t.NodeID
-	for i := 0; i < n; i++ {
-		nodeIds = append(nodeIds, t.NewNodeIDFromInt(i))
-	}
-
-	nodeAddrs := make(map[t.NodeID]string)
-	for i := range nodeIds {
-		nodeAddrs[t.NewNodeIDFromInt(i)] = fmt.Sprintf("127.0.0.1:%d", nodeBasePort+i)
-	}
-
-	return nodeIds, nodeAddrs
-}
 
 // parseTx parses a raw byte transaction from Mir node into a Filecoin message.
 func parseTx(tx []byte) (msg interface{}, err error) {
@@ -39,13 +22,42 @@ func parseTx(tx []byte) (msg interface{}, err error) {
 	lastByte := tx[ln-1]
 	switch lastByte {
 	case common.SignedMessageType:
-		msg, err = types.DecodeSignedMessage(tx[:ln-1])
+		msg, err = types.DecodeSignedMessage(tx[:ln-1-32])
 	case common.CrossMessageType:
-		msg, err = types.DecodeUnverifiedCrossMessage(tx[:ln-1])
+		msg, err = types.DecodeUnverifiedCrossMessage(tx[:ln-1-32])
 	default:
 		err = xerrors.Errorf("unknown message type %d", lastByte)
 	}
 
+	return
+}
+
+// getMessagesFromMirBlockUnstable retrieves Filecoin messages from a Mir block while Mir code is unstable.
+func getMessagesFromMirBlockUnstable(b []Tx, seenMessages map[cid.Cid]bool) (msgs []*types.SignedMessage, crossMsgs []*types.Message) {
+	for _, tx := range b {
+		msg, err := parseTx(tx)
+		if err != nil {
+			log.Error("unable to parse a message from Mir block:", err)
+			continue
+		}
+
+		switch m := msg.(type) {
+		case *types.SignedMessage:
+			id := m.Cid()
+			if _, found := seenMessages[id]; !found {
+				msgs = append(msgs, m)
+				seenMessages[id] = true
+			}
+		case *types.UnverifiedCrossMsg:
+			id := m.Cid()
+			if _, found := seenMessages[id]; !found {
+				crossMsgs = append(crossMsgs, m.Msg)
+				seenMessages[id] = true
+			}
+		default:
+			panic("received an unknown message in Mir block")
+		}
+	}
 	return
 }
 

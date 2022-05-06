@@ -6,7 +6,9 @@ import (
 	"os"
 	"time"
 
+	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
+	"lukechampine.com/blake3"
 
 	"github.com/filecoin-project/go-address"
 	lapi "github.com/filecoin-project/lotus/api"
@@ -35,6 +37,8 @@ import (
 //    are received via state, after each validator joins the subnet.
 //    This is used to run Mir in a subnet.
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {
+	seenMessages := make(map[cid.Cid]bool)
+
 	log.Info("Mir miner started")
 	defer log.Info("Mir miner stopped")
 
@@ -69,6 +73,12 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	log.Infof("Mir miner params:\n\tminer - %s\n\tnetwork name - %s\n\tsubnet ID - %s\n\tclientID - %s\n\tvalidators - %v",
 		miner, netName, subnetID, clientID, validators)
 
+	nodeID, err := api.ID(ctx)
+	if err != nil {
+		log.Fatalf("unable to get a node ID: %s", err)
+	}
+	nodeIDBytes := blake3.Sum256([]byte(nodeID.String()))
+
 	// ----
 
 	mirAgent, err := NewMirAgent(ctx, clientID, validators)
@@ -100,7 +110,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			return merr
 		case mb := <-mirHead:
 			log.Debugf(">>>>> received %d messages in Mir block", len(mb))
-			msgs, crossMsgs := getMessagesFromMirBlock(mb)
+			msgs, crossMsgs := getMessagesFromMirBlockUnstable(mb, seenMessages)
 
 			log.Infof("[subnet: %s, epoch: %d] try to create a block", subnetID, base.Height()+1)
 			bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
@@ -158,14 +168,15 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 				}
 
 				reqNo := mirtypes.ReqNo(msg.Message.Nonce)
-				tx := common.NewSignedMessageBytes(msgBytes, nil)
+				tx := common.NewSignedMessageBytes(msgBytes, nodeIDBytes[:])
 
-				err = mirAgent.Node.SubmitRequest(ctx, mirtypes.ClientID(clientID), reqNo, tx, nil)
+				err = mirAgent.Node.SubmitRequest(ctx, mirtypes.ClientID(clientID), reqNo, tx, []byte{})
 				if err != nil {
 					log.Error("unable to submit a message to Mir:", err)
 					continue
 				}
 				log.Debugf("%v successfully sent a request (%v, %d) to Mir", clientID, msg.Message.From, reqNo)
+				log.Debugf("sent message %v", tx)
 			}
 
 			for _, msg := range crossMsgs {
@@ -175,7 +186,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 					continue
 				}
 
-				tx := common.NewCrossMessageBytes(msgBytes, nil)
+				tx := common.NewCrossMessageBytes(msgBytes, nodeIDBytes[:])
 				reqNo := mirtypes.ReqNo(msg.Msg.Nonce)
 
 				err = mirAgent.Node.SubmitRequest(ctx, mirtypes.ClientID(clientID), reqNo, tx, []byte{})
@@ -184,6 +195,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 					continue
 				}
 				log.Debugf("%v successfully sent a cross request (%v, %d) to Mir", clientID, msg.Msg.From, reqNo)
+				log.Debugf("sent cross message %v", tx)
 			}
 		}
 	}

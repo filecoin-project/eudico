@@ -40,13 +40,13 @@ func newMirLogger(logger *logging.ZapEventLogger) *mirLogger {
 func (m *mirLogger) Log(level mirLogging.LogLevel, text string, args ...interface{}) {
 	switch level {
 	case mirLogging.LevelError:
-		m.logger.Errorw(text, args)
+		m.logger.Errorw(text, "error", args)
 	case mirLogging.LevelInfo:
-		m.logger.Infow(text, args)
+		m.logger.Infow(text, "info", args)
 	case mirLogging.LevelWarn:
-		m.logger.Warnw(text, args)
+		m.logger.Warnw(text, "warn", args)
 	case mirLogging.LevelDebug:
-		m.logger.Debugw(text, args)
+		m.logger.Debugw(text, "debug", args)
 	}
 }
 
@@ -71,7 +71,7 @@ func NewMirAgent(ctx context.Context, clientID string, clients []hierarchical.Va
 	if err != nil {
 		return nil, err
 	}
-	log.Debug("Mir node config:", nodeIds, membership)
+	log.Debugf("Mir node config:\n%v\n%v", nodeIds, membership)
 
 	walPath := path.Join("eudico-wal", fmt.Sprintf("%v", clientID))
 	wal, err := simplewal.Open(walPath)

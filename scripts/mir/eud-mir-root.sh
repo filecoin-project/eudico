@@ -53,7 +53,7 @@ rm -rvf $NODE_3_PATH
 rm -rf ./eudico_daemon_*.log
 rm -rf ./eudico_miner_*.log
 
-LOG_LEVEL="info,mir-consensus=debug,mir-agent=error"
+LOG_LEVEL="info,mir-consensus=debug,mir-agent=info"
 
 tmux new-session -d -s "mir" \; \
   new-window   -t "mir" \; \
