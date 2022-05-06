@@ -45,37 +45,31 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	subnetID := address.SubnetID(netName)
 	clientID := fmt.Sprintf("%s:%s", subnetID, miner)
 
-	clientsStr := os.Getenv(MirClientsEnv)
-
 	var validators []hierarchical.Validator
 
-	if clientsStr != "" {
-		validators, err = hierarchical.ValidatorsFromString(clientsStr)
+	clientsEnv := os.Getenv(MirClientsEnv)
+	if clientsEnv != "" {
+		validators, err = hierarchical.ValidatorsFromString(clientsEnv)
 		if err != nil {
-			return xerrors.Errorf("failed get validators: %s", err)
+			return xerrors.Errorf("failed to get validators from string: %s", err)
 		}
 	} else {
 		if subnetID == address.RootSubnet {
-			return xerrors.New("can't be run in root net without static validators")
+			return xerrors.New("can't be run in root net without provided validators")
 		}
 		validators, err = api.SubnetGetValidators(ctx, subnetID)
 		if err != nil {
-			return xerrors.New("failed to get validator set")
-		}
-		if len(validators) == 0 {
-			return xerrors.New("empty validator set")
+			return xerrors.New("failed to get validators from state")
 		}
 	}
+	if len(validators) == 0 {
+		return xerrors.New("empty validator set")
+	}
 
-	log.Infof("Mir miner params:\n\tminer - %s\n\tnetwork name - %s\n\tsubnet ID - %s\n\tclientID - %s\n\tclients - %v",
+	log.Infof("Mir miner params:\n\tminer - %s\n\tnetwork name - %s\n\tsubnet ID - %s\n\tclientID - %s\n\tvalidators - %v",
 		miner, netName, subnetID, clientID, validators)
 
-	var miners []address.Address
-	for _, v := range validators {
-		miners = append(miners, v.Addr)
-	}
-
-	log.Info("Miners: ", miners)
+	// ----
 
 	mirAgent, err := NewMirAgent(ctx, clientID, validators)
 	if err != nil {
@@ -94,7 +88,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			continue
 		}
 
-		epochMiner := miners[int(base.Height())%len(miners)]
+		epochMiner := validators[int(base.Height())%len(validators)].Addr
 
 		log.Infof("Miner for %d epoch: %v", base.Height(), epochMiner)
 
