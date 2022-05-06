@@ -8,7 +8,6 @@ import (
 
 	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
-	"lukechampine.com/blake3"
 
 	"github.com/filecoin-project/go-address"
 	lapi "github.com/filecoin-project/lotus/api"
@@ -17,7 +16,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/types"
 	ltypes "github.com/filecoin-project/lotus/chain/types"
-	mirtypes "github.com/filecoin-project/mir/pkg/types"
+	t "github.com/filecoin-project/mir/pkg/types"
 )
 
 // Mine mines Filecoin blocks.
@@ -38,6 +37,7 @@ import (
 //    This is used to run Mir in a subnet.
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {
 	seenMessages := make(map[cid.Cid]bool)
+	var cache = newMessageCache()
 
 	log.Info("Mir miner started")
 	defer log.Info("Mir miner stopped")
@@ -72,12 +72,6 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 
 	log.Infof("Mir miner params:\n\tminer - %s\n\tnetwork name - %s\n\tsubnet ID - %s\n\tclientID - %s\n\tvalidators - %v",
 		miner, netName, subnetID, clientID, validators)
-
-	nodeID, err := api.ID(ctx)
-	if err != nil {
-		log.Fatalf("unable to get a node ID: %s", err)
-	}
-	nodeIDBytes := blake3.Sum256([]byte(nodeID.String()))
 
 	// ----
 
@@ -161,41 +155,54 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			log.Debugf("[subnet: %s, epoch: %d] retrieved %d crossmsgs from mempool", subnetID, base.Height()+1, len(crossMsgs))
 
 			for _, msg := range msgs {
-				msgBytes, err := msg.Serialize()
-				if err != nil {
-					log.Error("unable to serialize message:", err)
-					continue
-				}
+				id := msg.Cid().String()
 
-				reqNo := mirtypes.ReqNo(msg.Message.Nonce)
-				tx := common.NewSignedMessageBytes(msgBytes, nodeIDBytes[:])
+				if cache.shouldSendMessage(id) {
+					msgBytes, err := msg.Serialize()
+					if err != nil {
+						log.Error("unable to serialize message:", err)
+						continue
+					}
 
-				err = mirAgent.Node.SubmitRequest(ctx, mirtypes.ClientID(clientID), reqNo, tx, []byte{})
-				if err != nil {
-					log.Error("unable to submit a message to Mir:", err)
-					continue
+					reqNo := t.ReqNo(msg.Message.Nonce)
+					tx := common.NewSignedMessageBytes(msgBytes, nil)
+
+					err = mirAgent.SubmitRequest(ctx, reqNo, tx, []byte{})
+					if err != nil {
+						log.Error("unable to submit a message to Mir:", err)
+						continue
+					} else {
+						cache.addSentMessage(id, base.Height())
+						log.Debugf("%v successfully sent a request (%v, %d) to Mir", clientID, msg.Message.From, reqNo)
+						log.Debugf("successfully sent a message %s to Mir", id)
+					}
 				}
-				log.Debugf("%v successfully sent a request (%v, %d) to Mir", clientID, msg.Message.From, reqNo)
-				log.Debugf("sent message %v", tx)
 			}
 
 			for _, msg := range crossMsgs {
-				msgBytes, err := msg.Serialize()
-				if err != nil {
-					log.Error("unable to serialize cross-message:", err)
-					continue
+				id := msg.Cid().String()
+
+				if cache.shouldSendMessage(id) {
+					msgBytes, err := msg.Serialize()
+					if err != nil {
+						log.Error("unable to serialize cross-message:", err)
+						continue
+					}
+
+					tx := common.NewCrossMessageBytes(msgBytes, nil)
+					reqNo := t.ReqNo(msg.Msg.Nonce)
+
+					err = mirAgent.SubmitRequest(ctx, reqNo, tx, []byte{})
+					if err != nil {
+						log.Error("unable to submit a message to Mir:", err)
+						continue
+					} else {
+						cache.addSentMessage(id, base.Height())
+						log.Debugf("%v successfully sent a cross request (%v, %d) to Mir", clientID, msg.Msg.From, reqNo)
+						log.Debugf("successfully sent a cross request %s to Mir", id)
+					}
 				}
 
-				tx := common.NewCrossMessageBytes(msgBytes, nodeIDBytes[:])
-				reqNo := mirtypes.ReqNo(msg.Msg.Nonce)
-
-				err = mirAgent.Node.SubmitRequest(ctx, mirtypes.ClientID(clientID), reqNo, tx, []byte{})
-				if err != nil {
-					log.Error("unable to submit a message to Mir:", err)
-					continue
-				}
-				log.Debugf("%v successfully sent a cross request (%v, %d) to Mir", clientID, msg.Msg.From, reqNo)
-				log.Debugf("sent cross message %v", tx)
 			}
 		}
 	}
@@ -208,7 +215,6 @@ func (bft *Mir) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.BlockTe
 		return nil, err
 	}
 
-	// TODO: we don't sign blocks mined by Mir validators
-
+	// We don't sign blocks mined by Mir validators
 	return b, nil
 }

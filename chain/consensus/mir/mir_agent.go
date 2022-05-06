@@ -25,7 +25,7 @@ import (
 // agentLog is a logger accessed by Mir.
 var agentLog = logging.Logger("mir-agent")
 
-// mirLogger implement Mir's Log interface.
+// mirLogger implements Mir's Log interface.
 type mirLogger struct {
 	logger *logging.ZapEventLogger
 }
@@ -52,6 +52,7 @@ func (m *mirLogger) Log(level mirLogging.LogLevel, text string, args ...interfac
 
 // MirAgent manages and provides direct access to a Mir node abstraction participating in consensus.
 type MirAgent struct {
+	OwnID    string
 	Node     *mir.Node
 	Wal      *simplewal.WAL
 	Net      *grpctransport.GrpcTransport
@@ -59,33 +60,29 @@ type MirAgent struct {
 	stopChan chan struct{}
 }
 
-func NewMirAgent(ctx context.Context, clientID string, clients []hierarchical.Validator) (*MirAgent, error) {
-	if clientID == "" || clients == nil {
+func NewMirAgent(ctx context.Context, ownID string, clients []hierarchical.Validator) (*MirAgent, error) {
+	if ownID == "" || clients == nil {
 		return nil, xerrors.New("invalid node ID or clients")
 	}
-	ownID := t.NodeID(clientID)
 	log.Debugf("Mir agent %v is being created", ownID)
 	defer log.Debugf("Mir agent %v has been created", ownID)
 
-	nodeIds, membership, err := hierarchical.ValidatorMembership(clients)
+	nodeIds, nodeAddrs, err := hierarchical.ValidatorMembership(clients)
 	if err != nil {
 		return nil, err
 	}
-	log.Debugf("Mir node config:\n%v\n%v", nodeIds, membership)
+	log.Debugf("Mir node config:\n%v\n%v", nodeIds, nodeAddrs)
 
-	walPath := path.Join("eudico-wal", fmt.Sprintf("%v", clientID))
+	walPath := path.Join("eudico-wal", fmt.Sprintf("%v", ownID))
 	wal, err := simplewal.Open(walPath)
 	if err != nil {
 		return nil, err
 	}
-
 	if err := os.MkdirAll(walPath, 0700); err != nil {
 		return nil, err
 	}
 
-	// TODO: Suggestion: Figure out how to make this a general interface where
-	//  we can hook libp2p instead of making it grpc specific.
-	net := grpctransport.NewGrpcTransport(membership, ownID, nil)
+	net := grpctransport.NewGrpcTransport(nodeAddrs, t.NodeID(ownID), newMirLogger(agentLog))
 	if err := net.Start(); err != nil {
 		return nil, err
 	}
@@ -96,7 +93,7 @@ func NewMirAgent(ctx context.Context, clientID string, clients []hierarchical.Va
 
 	// Instantiate the ISS protocol module with default configuration.
 	issConfig := iss.DefaultConfig(nodeIds)
-	issProtocol, err := iss.New(ownID, issConfig, newMirLogger(agentLog))
+	issProtocol, err := iss.New(t.NodeID(ownID), issConfig, newMirLogger(agentLog))
 	if err != nil {
 		return nil, xerrors.Errorf("could not instantiate ISS protocol module: %w", err)
 	}
@@ -104,7 +101,7 @@ func NewMirAgent(ctx context.Context, clientID string, clients []hierarchical.Va
 	app := NewApplication(reqStore)
 
 	node, err := mir.NewNode(
-		ownID,
+		t.NodeID(ownID),
 		&mir.NodeConfig{
 			Logger: newMirLogger(agentLog),
 		},
@@ -121,6 +118,7 @@ func NewMirAgent(ctx context.Context, clientID string, clients []hierarchical.Va
 	}
 
 	a := MirAgent{
+		OwnID:    ownID,
 		Node:     node,
 		Wal:      wal,
 		Net:      net,
@@ -166,4 +164,8 @@ func (m *MirAgent) Stop() {
 	m.Net.Stop()
 	close(m.stopChan)
 	close(m.App.ChainNotify)
+}
+
+func (m *MirAgent) SubmitRequest(ctx context.Context, reqNo t.ReqNo, data []byte, auth []byte) error {
+	return m.Node.SubmitRequest(ctx, t.ClientID(m.OwnID), reqNo, data, auth)
 }

@@ -21,6 +21,9 @@ func NewApplication(reqStore modules.RequestStore) *Application {
 }
 
 func (app *Application) Apply(batch *requestpb.Batch) error {
+	if len(batch.Requests) > 0 {
+		panic("it works")
+	}
 	var block []Tx
 
 	for _, reqRef := range batch.Requests {

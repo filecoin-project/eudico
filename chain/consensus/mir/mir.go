@@ -83,7 +83,6 @@ func NewConsensus(
 }
 
 func (bft *Mir) ValidateBlock(ctx context.Context, b *types.FullBlock) (err error) {
-
 	log.Infof("starting block validation process at @%d", b.Header.Height)
 
 	if err := common.BlockSanityChecks(hierarchical.Mir, b.Header); err != nil {
@@ -214,7 +213,6 @@ func (bft *Mir) minerIsValid(maddr address.Address) error {
 	case address.SECP256K1:
 		return nil
 	}
-
 	return xerrors.Errorf("miner address must be a key")
 }
 
