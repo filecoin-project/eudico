@@ -22,6 +22,12 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
+func TestEudicoSubnetMir22(t *testing.T) {
+	t.Run("/root/mir-/subnet/dummy", func(t *testing.T) {
+		runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDummy())
+	})
+}
+
 func TestEudicoSubnetMir(t *testing.T) {
 	t.Run("/root/mir-/subnet/dummy", func(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDummy())
@@ -126,13 +132,6 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Stop test and cancel mining, if we receive at least one error from error channel.
-	errChan := make(chan error, 1)
-	go func() {
-		<-errChan
-		cancel()
-	}()
-
 	full, rootMiner, subnetMinerType, ens := kit.EudicoEnsembleTwoMiners(t, ts.opts...)
 	n, valAddr := ens.ValidatorInfo()
 
@@ -154,7 +153,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 			err := miner(ctx, addr, full)
 			if err != nil {
 				t.Error(err)
-				errChan <- err
+				cancel()
 				return
 			}
 		}()
@@ -217,7 +216,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 		err := full.MineSubnet(ctx, addr, subnetAddr, false)
 		if err != nil {
 			t.Error(err)
-			errChan <- err
+			cancel()
 			return
 		}
 	}()

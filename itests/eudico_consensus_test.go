@@ -75,7 +75,11 @@ func (ts *eudicoConsensusSuite) testDummyMining(t *testing.T) {
 
 	go func() {
 		err = dummy.Mine(ctx, l[0], full)
-		require.NoError(t, err)
+		if err != nil {
+			t.Error(err)
+			cancel()
+			return
+		}
 	}()
 
 	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 10, address.RootSubnet, full)
@@ -91,14 +95,6 @@ func runMirConsensusTests(t *testing.T, opts ...interface{}) {
 func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	// Stop test and cancel mining, if we receive at least one error from error channel.
-	// TODO: implement the same for all tests
-	errChan := make(chan error, 1)
-	go func() {
-		<-errChan
-		cancel()
-	}()
 
 	full, ens := kit.EudicoEnsembleFullNodeOnly(t, ts.opts...)
 	defer func() {
@@ -126,7 +122,7 @@ func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
 		}
 		if err != nil {
 			t.Error(err)
-			errChan <- err
+			cancel()
 			return
 		}
 	}()
