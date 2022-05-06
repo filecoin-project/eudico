@@ -347,8 +347,7 @@ func (n *EudicoEnsemble) Stop() error {
 
 	if n.options.subnetConsensus == hierarchical.Mir ||
 		n.options.rootConsensus == hierarchical.Mir {
-		os.Unsetenv(mir.MirClientIDEnv) // nolint
-		os.Unsetenv(mir.MirClientsEnv)  // nolint
+		os.Unsetenv(mir.MirClientsEnv) // nolint
 		return n.stopMir()
 	}
 	return nil
@@ -1165,8 +1164,7 @@ func EudicoEnsembleTwoMiners(t *testing.T, opts ...interface{}) (*TestFullNode, 
 	}
 	ens = NewEudicoEnsemble(t, eopts...).FullNode(&full, nopts...).Start()
 	if options.rootConsensus == hierarchical.Mir {
-		addr, _ := full.WalletDefaultAddress(context.Background())
-		err := os.Setenv(mir.MirClientIDEnv, "/root:"+addr.String())
+		addr, err := full.WalletDefaultAddress(context.Background())
 		require.NoError(t, err)
 		err = os.Setenv(mir.MirClientsEnv, "/root:"+addr.String()+"@127.0.0.1:10000")
 		require.NoError(t, err)

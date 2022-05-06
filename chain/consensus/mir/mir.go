@@ -39,7 +39,6 @@ const (
 	MaxHeightDrift = 5
 	SubmitInterval = 300 * time.Millisecond
 	MirClientsEnv  = "EUDICO_MIR_CLIENTS"
-	MirClientIDEnv = "EUDICO_MIR_ID"
 )
 
 var (

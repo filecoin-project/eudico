@@ -113,10 +113,6 @@ func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
 	}
 
 	mirNodeID := fmt.Sprintf("%s:%s", address.RootSubnet, l[0].String())
-	if err := os.Setenv(mir.MirClientIDEnv, mirNodeID); err != nil {
-		require.NoError(t, err)
-	}
-	defer os.Unsetenv(mir.MirClientIDEnv) // nolint
 
 	if err := os.Setenv(mir.MirClientsEnv, fmt.Sprintf("%s@%s", mirNodeID, "127.0.0.1:10000")); err != nil {
 		require.NoError(t, err)

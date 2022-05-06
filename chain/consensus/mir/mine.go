@@ -43,13 +43,13 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		return err
 	}
 	subnetID := address.SubnetID(netName)
+	clientID := fmt.Sprintf("%s:%s", subnetID, miner)
 
-	clientID := os.Getenv(MirClientIDEnv)
 	clientsStr := os.Getenv(MirClientsEnv)
 
 	var validators []hierarchical.Validator
 
-	if clientID != "" && clientsStr != "" {
+	if clientsStr != "" {
 		validators, err = hierarchical.ValidatorsFromString(clientsStr)
 		if err != nil {
 			return xerrors.Errorf("failed get validators: %s", err)
@@ -58,7 +58,6 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		if subnetID == address.RootSubnet {
 			return xerrors.New("can't be run in root net without static validators")
 		}
-		clientID = fmt.Sprintf("%s:%s", subnetID, miner)
 		validators, err = api.SubnetGetValidators(ctx, subnetID)
 		if err != nil {
 			return xerrors.New("failed to get validator set")
