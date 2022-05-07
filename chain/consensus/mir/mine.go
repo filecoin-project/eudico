@@ -6,7 +6,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
@@ -36,9 +35,6 @@ import (
 //    are received via state, after each validator joins the subnet.
 //    This is used to run Mir in a subnet.
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {
-	seenMessages := make(map[cid.Cid]bool)
-	var cache = newMessageCache()
-
 	log.Info("Mir miner started")
 	defer log.Info("Mir miner stopped")
 
@@ -104,7 +100,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			return merr
 		case mb := <-mirHead:
 			log.Debugf(">>>>> received %d messages in Mir block", len(mb))
-			msgs, crossMsgs := getMessagesFromMirBlockUnstable(mb, seenMessages)
+			msgs, crossMsgs := getMessagesFromMirBlock(mb)
 
 			log.Infof("[subnet: %s, epoch: %d] try to create a block", subnetID, base.Height()+1)
 			bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
@@ -155,55 +151,43 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			log.Debugf("[subnet: %s, epoch: %d] retrieved %d crossmsgs from mempool", subnetID, base.Height()+1, len(crossMsgs))
 
 			for _, msg := range msgs {
-				id := msg.Cid().String()
 
-				if cache.shouldSendMessage(id) {
-					msgBytes, err := msg.Serialize()
-					if err != nil {
-						log.Error("unable to serialize message:", err)
-						continue
-					}
-
-					reqNo := t.ReqNo(msg.Message.Nonce)
-					tx := common.NewSignedMessageBytes(msgBytes, nil)
-
-					err = mirAgent.SubmitRequest(ctx, reqNo, tx, []byte{})
-					if err != nil {
-						log.Error("unable to submit a message to Mir:", err)
-						continue
-					} else {
-						cache.addSentMessage(id, base.Height())
-						log.Debugf("%v successfully sent a request (%v, %d) to Mir", clientID, msg.Message.From, reqNo)
-						log.Debugf("successfully sent a message %s to Mir", id)
-					}
+				msgBytes, err := msg.Serialize()
+				if err != nil {
+					log.Error("unable to serialize message:", err)
+					continue
 				}
+
+				reqNo := t.ReqNo(msg.Message.Nonce)
+				tx := common.NewSignedMessageBytes(msgBytes, nil)
+
+				err = mirAgent.Node.SubmitRequest(ctx, t.ClientID("1"), reqNo, tx, []byte{})
+				if err != nil {
+					log.Error("unable to submit a message to Mir:", err)
+					continue
+				}
+				log.Debugf("successfully sent message %s to Mir", msg.Message.Cid())
+
 			}
 
 			for _, msg := range crossMsgs {
-				id := msg.Cid().String()
-
-				if cache.shouldSendMessage(id) {
-					msgBytes, err := msg.Serialize()
-					if err != nil {
-						log.Error("unable to serialize cross-message:", err)
-						continue
-					}
-
-					tx := common.NewCrossMessageBytes(msgBytes, nil)
-					reqNo := t.ReqNo(msg.Msg.Nonce)
-
-					err = mirAgent.SubmitRequest(ctx, reqNo, tx, []byte{})
-					if err != nil {
-						log.Error("unable to submit a message to Mir:", err)
-						continue
-					} else {
-						cache.addSentMessage(id, base.Height())
-						log.Debugf("%v successfully sent a cross request (%v, %d) to Mir", clientID, msg.Msg.From, reqNo)
-						log.Debugf("successfully sent a cross request %s to Mir", id)
-					}
+				msgBytes, err := msg.Serialize()
+				if err != nil {
+					log.Error("unable to serialize cross-message:", err)
+					continue
 				}
 
+				tx := common.NewCrossMessageBytes(msgBytes, nil)
+				reqNo := t.ReqNo(msg.Msg.Nonce)
+
+				err = mirAgent.Node.SubmitRequest(ctx, t.ClientID("1"), reqNo, tx, []byte{})
+				if err != nil {
+					log.Error("unable to submit a message to Mir:", err)
+					continue
+				}
+				log.Debugf("successfully sent message %s to Mir", msg.Cid())
 			}
+
 		}
 	}
 }

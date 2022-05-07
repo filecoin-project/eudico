@@ -52,12 +52,11 @@ func (m *mirLogger) Log(level mirLogging.LogLevel, text string, args ...interfac
 
 // MirAgent manages and provides direct access to a Mir node abstraction participating in consensus.
 type MirAgent struct {
-	OwnID    string
-	Node     *mir.Node
-	Wal      *simplewal.WAL
-	Net      *grpctransport.GrpcTransport
-	App      *Application
-	stopChan chan struct{}
+	OwnID string
+	Node  *mir.Node
+	Wal   *simplewal.WAL
+	Net   *grpctransport.GrpcTransport
+	App   *Application
 }
 
 func NewMirAgent(ctx context.Context, ownID string, clients []hierarchical.Validator) (*MirAgent, error) {
@@ -118,12 +117,11 @@ func NewMirAgent(ctx context.Context, ownID string, clients []hierarchical.Valid
 	}
 
 	a := MirAgent{
-		OwnID:    ownID,
-		Node:     node,
-		Wal:      wal,
-		Net:      net,
-		App:      app,
-		stopChan: make(chan struct{}),
+		OwnID: ownID,
+		Node:  node,
+		Wal:   wal,
+		Net:   net,
+		App:   app,
 	}
 
 	return &a, nil
@@ -146,7 +144,7 @@ func (m *MirAgent) Start(ctx context.Context) chan error {
 	}()
 
 	go func() {
-		errChan <- m.Node.Run(ctx, time.NewTicker(100*time.Millisecond).C)
+		errChan <- m.Node.Run(ctx, time.NewTicker(1000*time.Millisecond).C)
 		agentCancel()
 	}()
 
@@ -162,10 +160,5 @@ func (m *MirAgent) Stop() {
 		log.Errorf("Could not close write-ahead log: %s", err)
 	}
 	m.Net.Stop()
-	close(m.stopChan)
 	close(m.App.ChainNotify)
-}
-
-func (m *MirAgent) SubmitRequest(ctx context.Context, reqNo t.ReqNo, data []byte, auth []byte) error {
-	return m.Node.SubmitRequest(ctx, t.ClientID(m.OwnID), reqNo, data, auth)
 }
