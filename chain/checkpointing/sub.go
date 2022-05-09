@@ -472,9 +472,10 @@ func (c *CheckpointingSub) matchNewConfig(ctx context.Context, oldTs, newTs *typ
 func (c *CheckpointingSub) matchCheckpoint(ctx context.Context, oldTs, newTs *types.TipSet, oldSt, newSt mpower.State, diff *diffInfo) (bool, error) {
 	// we are checking that the list of mocked actor is not empty before starting the checkpoint
 	
-	//if c.newDKGComplete && newTs.Height()%checkpointFrequency == 0 && len(oldSt.Miners) > 0 && (c.taprootConfig != nil || c.newTaprootConfig != nil) && len(newSt.PublicKey)>0 {
-	if newTs.Height()%checkpointFrequency == 0 && len(oldSt.Miners) > 0 && (c.taprootConfig != nil || c.newTaprootConfig != nil) && len(newSt.PublicKey)>0 {
-	
+	if c.newDKGComplete && newTs.Height()%checkpointFrequency == 0 && len(oldSt.Miners) > 0 && (c.taprootConfig != nil || c.newTaprootConfig != nil) && len(newSt.PublicKey)>0 {
+	//if newTs.Height()%checkpointFrequency == 0 && len(oldSt.Miners) > 0 && (c.taprootConfig != nil || c.newTaprootConfig != nil) && len(newSt.PublicKey)>0 {
+	//if newTs.Height()%checkpointFrequency == 0 && len(oldSt.Miners) > 0 && (c.taprootConfig != nil || c.newTaprootConfig != nil) {
+
 		log.Infow("New checkpoint to start")
 		cp := oldTs.Key().Bytes() // this is the checkpoint
 		diff.cp = cp
