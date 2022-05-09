@@ -564,7 +564,7 @@ func (c *CheckpointingSub) triggerChange(ctx context.Context, diff *diffInfo) (m
 		// so that the new key is updated
 		fmt.Println("Checkpoint participants: ", c.participants)
 		for _, participant := range(c.participants){
-			if c.host.ID().String()==participant && c.host.ID().String()  {
+			if c.host.ID().String()==participant  {
 				err = c.CreateCheckpoint(ctx, diff.cp, diff.hash, c.participants)
 				if err != nil {
 					log.Errorw("could not create checkpoint: %v", err)
