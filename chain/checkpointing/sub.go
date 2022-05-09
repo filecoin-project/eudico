@@ -554,6 +554,7 @@ func (c *CheckpointingSub) triggerChange(ctx context.Context, diff *diffInfo) (m
 		}
 
 		log.Infow("Successful DKG")
+		diff.newPublicKey = []byte(c.newTaprootConfig.PublicKey)
 	}
 
 	// trigger the new checkpoint
@@ -742,6 +743,10 @@ func (c *CheckpointingSub) GenerateNewKeys(ctx context.Context, participants []s
 		// 	fmt.Println("message to update list of miners sentsent")
 		// }
 	}
+	c.newDKGComplete = true
+	c.newKey = []byte(c.newTaprootConfig.PublicKey)
+	c.keysUpdated = false
+	
 	return nil
 }
 
