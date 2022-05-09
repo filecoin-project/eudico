@@ -198,8 +198,7 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 	// Wrap the ds with prefix
 	sh.ds = nsds.Wrap(s.ds, ds.NewKey(sh.ID.String()))
 	// TODO: We should not use the metadata datastore here. We need
-	// to create the corresponding blockstores. Deferring once we
-	// figure out if it works.
+	// to create the corresponding blockstores. Deferring once we figure out if it works.
 	sh.bs = blockstore.FromDatastore(s.ds)
 
 	// Instantiate new cross-msg resolver
@@ -255,16 +254,15 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 	}
 	// Start syncer for the subnet
 	sh.syncer.Start()
-	// Hello protocol needs to run after the syncer is intialized and the genesis
-	// is created but before we set-up the gossipsub topics to listen for
-	// new blocks and messages.
+	// Hello protocol needs to run after the syncer is initialized and the genesis
+	// is created, but before we set up the gossipsub topics to listen for new blocks and messages.
 	err = sh.runHello(ctx)
 	if err != nil {
 		return xerrors.Errorf("Error starting hello protocol for subnet %s: %s", sh.ID, err)
 	}
 
-	// FIXME: Consider inheriting Bitswap ChainBlockService instead of using
-	// offline.Exchange here. See builder_chain to undertand how is built.
+	// FIXME: Consider inheriting Bitswap ChainBlockService instead of using offline.Exchange here.
+	//  See builder_chain to undertand how is built.
 	bserv := blockservice.New(sh.bs, offline.Exchange(sh.bs))
 	prov := messagepool.NewProvider(sh.sm, s.pubsub)
 
@@ -343,23 +341,22 @@ func BuildSubnetMgr(mctx helpers.MetricsCtx, lc fx.Lifecycle, s *SubnetMgr) {
 
 	lc.Append(fx.Hook{
 		OnStop: func(ctx context.Context) error {
-			// NOTE: Closing subneting sub here. Whatever the hell that means...
+			// NOTE: Closing subnetting sub here. Whatever the hell that means...
 			// It may be worth revisiting this.
 			return s.Close(ctx)
 		},
 	})
 }
 
-func (s *SubnetMgr) GetActorState(ctx context.Context, id address.SubnetID, actor address.Address) (*subnet.SubnetState, error) {
-	// Get the api for the parent network hosting the subnet actor
-	// for the subnet.
+func (s *SubnetMgr) GetSubnetState(ctx context.Context, id address.SubnetID, actor address.Address) (*subnet.SubnetState, error) {
+	// Get the api for the parent network hosting the subnet actor for the subnet.
 	parentAPI, err := s.getParentAPI(id)
 	if err != nil {
 		return nil, err
 	}
-	// Get actor state to check if the subnet is active and we are in the list
-	// of miners
-	st, err := parentAPI.getActorState(ctx, actor)
+
+	// Get actor state to check if the subnet is active and we are in the list of miners.
+	st, err := parentAPI.getSubnetState(ctx, actor)
 	if err != nil {
 		return nil, err
 	}
@@ -371,10 +368,9 @@ func (s *SubnetMgr) AddSubnet(
 	parent address.SubnetID, name string,
 	consensus uint64, minerStake abi.TokenAmount,
 	checkPeriod abi.ChainEpoch,
-	consensusPparams *hierarchical.ConsensusParams) (address.Address, error) {
+	consensusParams *hierarchical.ConsensusParams) (address.Address, error) {
 
-	// Get the api for the parent network hosting the subnet actor
-	// for the subnet.
+	// Get the api for the parent network hosting the subnet actor for the subnet.
 	parentAPI := s.getAPI(parent)
 	if parentAPI == nil {
 		return address.Undef, xerrors.Errorf("not syncing with parent network")
@@ -387,8 +383,8 @@ func (s *SubnetMgr) AddSubnet(
 		Consensus:     hierarchical.ConsensusType(consensus),
 		CheckPeriod:   checkPeriod,
 		ConsensusParams: &hierarchical.ConsensusParams{
-			DelegMiner:    consensusPparams.DelegMiner,
-			MinValidators: consensusPparams.MinValidators,
+			DelegMiner:    consensusParams.DelegMiner,
+			MinValidators: consensusParams.MinValidators,
 		},
 	}
 
@@ -447,8 +443,7 @@ func (s *SubnetMgr) JoinSubnet(
 		return cid.Undef, err
 	}
 
-	// Get the api for the parent network hosting the subnet actor
-	// for the subnet.
+	// Get the api for the parent network hosting the subnet actor for the subnet.
 	parentAPI, err := s.getParentAPI(id)
 	if err != nil {
 		return cid.Undef, err
@@ -535,7 +530,7 @@ func (s *SubnetMgr) syncSubnet(ctx context.Context, id address.SubnetID, parentA
 	}
 
 	// Get genesis from actor state.
-	st, err := parentAPI.getActorState(ctx, SubnetActor)
+	st, err := parentAPI.getSubnetState(ctx, SubnetActor)
 	if err != nil {
 		return err
 	}
@@ -591,7 +586,7 @@ func (s *SubnetMgr) MineSubnet(
 		return sh.stopMining(ctx)
 	}
 
-	st, err := s.GetActorState(ctx, id, SubnetActor)
+	st, err := s.GetSubnetState(ctx, id, SubnetActor)
 	if err != nil {
 		return err
 	}
@@ -632,8 +627,7 @@ func (s *SubnetMgr) LeaveSubnet(
 		return cid.Undef, err
 	}
 
-	// Get the api for the parent network hosting the subnet actor
-	// for the subnet.
+	// Get the api for the parent network hosting the subnet actor for the subnet.
 	parentAPI, err := s.getParentAPI(id)
 	if err != nil {
 		return cid.Undef, err
@@ -659,8 +653,7 @@ func (s *SubnetMgr) LeaveSubnet(
 		return cid.Undef, aerr
 	}
 
-	// See if we are already syncing with that chain. If this
-	// is the case we can remove the subnet
+	// See if we are already syncing with that chain. If this is the case we can remove the subnet
 	if sh, _ := s.getSubnet(id); sh != nil {
 		log.Infow("Stop syncing with subnet", "subnetID", id)
 		delete(s.subnets, id)
@@ -738,8 +731,7 @@ func (s *SubnetMgr) KillSubnet(
 		return cid.Undef, err
 	}
 
-	// Get the api for the parent network hosting the subnet actor
-	// for the subnet.
+	// Get the api for the parent network hosting the subnet actor for the subnet.
 	parentAPI, err := s.getParentAPI(id)
 	if err != nil {
 		return cid.Undef, err
@@ -860,12 +852,12 @@ func (s *SubnetMgr) SubnetStateWaitMsg(ctx context.Context, id address.SubnetID,
 	return sapi.StateWaitMsg(ctx, cid, confidence, limit, allowReplaced)
 }
 
-func (s *SubnetMgr) SubnetGetValidators(ctx context.Context, id address.SubnetID) ([]hierarchical.Validator, error) {
+func (s *SubnetMgr) SubnetStateGetValidators(ctx context.Context, id address.SubnetID) ([]hierarchical.Validator, error) {
 	actor, err := id.Actor()
 	if err != nil {
 		return nil, err
 	}
-	st, err := s.GetActorState(ctx, id, actor)
+	st, err := s.GetSubnetState(ctx, id, actor)
 	if err != nil {
 		return nil, err
 	}

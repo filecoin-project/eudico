@@ -604,9 +604,9 @@ type HierarchicalCnsStruct struct {
 
 		SubnetChainNotify func(p0 context.Context, p1 address.SubnetID) (<-chan []*HeadChange, error) `perm:"read"`
 
-		SubnetGetValidators func(p0 context.Context, p1 address.SubnetID) ([]hierarchical.Validator, error) `perm:"read"`
-
 		SubnetStateGetActor func(p0 context.Context, p1 address.SubnetID, p2 address.Address, p3 types.TipSetKey) (*types.Actor, error) `perm:"read"`
+
+		SubnetStateGetValidators func(p0 context.Context, p1 address.SubnetID) ([]hierarchical.Validator, error) `perm:"read"`
 
 		SubnetStateWaitMsg func(p0 context.Context, p1 address.SubnetID, p2 cid.Cid, p3 uint64, p4 abi.ChainEpoch, p5 bool) (*MsgLookup, error) `perm:"read"`
 
@@ -3750,17 +3750,6 @@ func (s *HierarchicalCnsStub) SubnetChainNotify(p0 context.Context, p1 address.S
 	return nil, ErrNotSupported
 }
 
-func (s *HierarchicalCnsStruct) SubnetGetValidators(p0 context.Context, p1 address.SubnetID) ([]hierarchical.Validator, error) {
-	if s.Internal.SubnetGetValidators == nil {
-		return *new([]hierarchical.Validator), ErrNotSupported
-	}
-	return s.Internal.SubnetGetValidators(p0, p1)
-}
-
-func (s *HierarchicalCnsStub) SubnetGetValidators(p0 context.Context, p1 address.SubnetID) ([]hierarchical.Validator, error) {
-	return *new([]hierarchical.Validator), ErrNotSupported
-}
-
 func (s *HierarchicalCnsStruct) SubnetStateGetActor(p0 context.Context, p1 address.SubnetID, p2 address.Address, p3 types.TipSetKey) (*types.Actor, error) {
 	if s.Internal.SubnetStateGetActor == nil {
 		return nil, ErrNotSupported
@@ -3770,6 +3759,17 @@ func (s *HierarchicalCnsStruct) SubnetStateGetActor(p0 context.Context, p1 addre
 
 func (s *HierarchicalCnsStub) SubnetStateGetActor(p0 context.Context, p1 address.SubnetID, p2 address.Address, p3 types.TipSetKey) (*types.Actor, error) {
 	return nil, ErrNotSupported
+}
+
+func (s *HierarchicalCnsStruct) SubnetStateGetValidators(p0 context.Context, p1 address.SubnetID) ([]hierarchical.Validator, error) {
+	if s.Internal.SubnetStateGetValidators == nil {
+		return *new([]hierarchical.Validator), ErrNotSupported
+	}
+	return s.Internal.SubnetStateGetValidators(p0, p1)
+}
+
+func (s *HierarchicalCnsStub) SubnetStateGetValidators(p0 context.Context, p1 address.SubnetID) ([]hierarchical.Validator, error) {
+	return *new([]hierarchical.Validator), ErrNotSupported
 }
 
 func (s *HierarchicalCnsStruct) SubnetStateWaitMsg(p0 context.Context, p1 address.SubnetID, p2 cid.Cid, p3 uint64, p4 abi.ChainEpoch, p5 bool) (*MsgLookup, error) {

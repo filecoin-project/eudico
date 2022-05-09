@@ -3190,21 +3190,6 @@ func (mr *MockFullNodeMockRecorder) SubnetChainNotify(arg0, arg1 interface{}) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubnetChainNotify", reflect.TypeOf((*MockFullNode)(nil).SubnetChainNotify), arg0, arg1)
 }
 
-// SubnetGetValidators mocks base method.
-func (m *MockFullNode) SubnetGetValidators(arg0 context.Context, arg1 address.SubnetID) ([]hierarchical.Validator, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SubnetGetValidators", arg0, arg1)
-	ret0, _ := ret[0].([]hierarchical.Validator)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// SubnetGetValidators indicates an expected call of SubnetGetValidators.
-func (mr *MockFullNodeMockRecorder) SubnetGetValidators(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubnetGetValidators", reflect.TypeOf((*MockFullNode)(nil).SubnetGetValidators), arg0, arg1)
-}
-
 // SubnetStateGetActor mocks base method.
 func (m *MockFullNode) SubnetStateGetActor(arg0 context.Context, arg1 address.SubnetID, arg2 address.Address, arg3 types.TipSetKey) (*types.Actor, error) {
 	m.ctrl.T.Helper()
@@ -3218,6 +3203,21 @@ func (m *MockFullNode) SubnetStateGetActor(arg0 context.Context, arg1 address.Su
 func (mr *MockFullNodeMockRecorder) SubnetStateGetActor(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubnetStateGetActor", reflect.TypeOf((*MockFullNode)(nil).SubnetStateGetActor), arg0, arg1, arg2, arg3)
+}
+
+// SubnetStateGetValidators mocks base method.
+func (m *MockFullNode) SubnetStateGetValidators(arg0 context.Context, arg1 address.SubnetID) ([]hierarchical.Validator, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubnetStateGetValidators", arg0, arg1)
+	ret0, _ := ret[0].([]hierarchical.Validator)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubnetStateGetValidators indicates an expected call of SubnetStateGetValidators.
+func (mr *MockFullNodeMockRecorder) SubnetStateGetValidators(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubnetStateGetValidators", reflect.TypeOf((*MockFullNode)(nil).SubnetStateGetValidators), arg0, arg1)
 }
 
 // SubnetStateWaitMsg mocks base method.

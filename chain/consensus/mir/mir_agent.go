@@ -144,7 +144,7 @@ func (m *MirAgent) Start(ctx context.Context) chan error {
 	}()
 
 	go func() {
-		errChan <- m.Node.Run(ctx, time.NewTicker(1000*time.Millisecond).C)
+		errChan <- m.Node.Run(ctx, time.NewTicker(50*time.Millisecond).C)
 		agentCancel()
 	}()
 

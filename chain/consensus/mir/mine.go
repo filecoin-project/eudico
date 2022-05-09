@@ -57,7 +57,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		if subnetID == address.RootSubnet {
 			return xerrors.New("can't be run in root net without provided validators")
 		}
-		validators, err = api.SubnetGetValidators(ctx, subnetID)
+		validators, err = api.SubnetStateGetValidators(ctx, subnetID)
 		if err != nil {
 			return xerrors.New("failed to get validators from state")
 		}
@@ -161,12 +161,14 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 				reqNo := t.ReqNo(msg.Message.Nonce)
 				tx := common.NewSignedMessageBytes(msgBytes, nil)
 
-				err = mirAgent.Node.SubmitRequest(ctx, t.ClientID("1"), reqNo, tx, []byte{})
+				clientID := fmt.Sprintf("%s:%s", subnetID, msg.Message.From.String())
+
+				err = mirAgent.Node.SubmitRequest(ctx, t.ClientID(clientID), reqNo, tx, []byte{})
 				if err != nil {
 					log.Error("unable to submit a message to Mir:", err)
 					continue
 				}
-				log.Debugf("successfully sent message %s to Mir", msg.Message.Cid())
+				log.Debugf("successfully sent message %s from %s to Mir", msg.Message.Cid(), clientID)
 
 			}
 
@@ -178,14 +180,21 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 				}
 
 				tx := common.NewCrossMessageBytes(msgBytes, nil)
-				reqNo := t.ReqNo(msg.Msg.Nonce)
+				reqNo := t.ReqNo(msg.Message.Nonce)
 
-				err = mirAgent.Node.SubmitRequest(ctx, t.ClientID("1"), reqNo, tx, []byte{})
+				msn, err := msg.Message.From.Subnet()
+				if err != nil {
+					log.Error("unable to get subnet from a message:", err)
+					continue
+				}
+				clientID := fmt.Sprintf("%s:%s", msn, msg.Message.From.String())
+
+				err = mirAgent.Node.SubmitRequest(ctx, t.ClientID(clientID), reqNo, tx, []byte{})
 				if err != nil {
 					log.Error("unable to submit a message to Mir:", err)
 					continue
 				}
-				log.Debugf("successfully sent message %s to Mir", msg.Cid())
+				log.Debugf("successfully sent message %s from %s to Mir", msg.Cid(), clientID)
 			}
 
 		}

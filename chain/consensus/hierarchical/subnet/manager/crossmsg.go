@@ -156,15 +156,15 @@ func (s *SubnetMgr) GetUnverifiedCrossMsgsPool(
 
 	for _, msg := range topdown {
 		out = append(out, &types.UnverifiedCrossMsg{
-			Type: uint64(hierarchical.TopDown),
-			Msg:  msg,
+			Type:    uint64(hierarchical.TopDown),
+			Message: msg,
 		})
 	}
 
 	for _, msg := range bottomup {
 		out = append(out, &types.UnverifiedCrossMsg{
-			Type: uint64(hierarchical.BottomUp),
-			Msg:  msg,
+			Type:    uint64(hierarchical.BottomUp),
+			Message: msg,
 		})
 	}
 

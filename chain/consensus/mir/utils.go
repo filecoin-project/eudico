@@ -44,7 +44,7 @@ func getMessagesFromMirBlock(b []Tx) (msgs []*types.SignedMessage, crossMsgs []*
 		case *types.SignedMessage:
 			msgs = append(msgs, m)
 		case *types.UnverifiedCrossMsg:
-			crossMsgs = append(crossMsgs, m.Msg)
+			crossMsgs = append(crossMsgs, m.Message)
 		default:
 			log.Error("received an unknown message in Mir block")
 		}

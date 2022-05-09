@@ -60,7 +60,8 @@ type API struct {
 	*SubnetMgr
 }
 
-func (n *API) getActorState(ctx context.Context, actor address.Address) (*subnet.SubnetState, error) {
+// getSubnetState returns subnet actor state for the specified subnet.
+func (n *API) getSubnetState(ctx context.Context, actor address.Address) (*subnet.SubnetState, error) {
 	act, err := n.StateGetActor(ctx, actor, types.EmptyTSK)
 	if err != nil {
 		return nil, err
