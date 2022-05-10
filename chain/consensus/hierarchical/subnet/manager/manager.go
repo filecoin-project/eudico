@@ -96,7 +96,7 @@ type SubnetMgr struct {
 func NewSubnetMgr(
 	mctx helpers.MetricsCtx,
 	lc fx.Lifecycle,
-	// api impl.FullNodeAPI,
+// api impl.FullNodeAPI,
 	self peer.ID,
 	pubsub *pubsub.PubSub,
 	ds dtypes.MetadataDS,
@@ -197,8 +197,8 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 
 	// Wrap the ds with prefix
 	sh.ds = nsds.Wrap(s.ds, ds.NewKey(sh.ID.String()))
-	// TODO: We should not use the metadata datastore here. We need
-	// to create the corresponding blockstores. Deferring once we figure out if it works.
+	// TODO: We should not use the metadata datastore here.
+	//  We need to create the corresponding blockstores. Deferring once we figure out if it works.
 	sh.bs = blockstore.FromDatastore(s.ds)
 
 	// Instantiate new cross-msg resolver
@@ -502,8 +502,8 @@ func (s *SubnetMgr) JoinSubnet(
 		return cid.Undef, aerr
 	}
 
-	// See if we are already syncing with that chain. If this
-	// is the case we don't have to do much after the stake has been added.
+	// See if we are already syncing with that chain.
+	// If this is the case we don't have to do much after the stake has been added.
 	if s.getAPI(id) != nil {
 		log.Infow("Already joined subnet %v. Adding more stake to subnet", "subnetID", id)
 		return smsg.Cid(), nil
@@ -543,8 +543,7 @@ func (s *SubnetMgr) SyncSubnet(ctx context.Context, id address.SubnetID, stop bo
 	if stop {
 		return s.stopSyncSubnet(ctx, id)
 	}
-	// Get the api for the parent network hosting the subnet actor
-	// for the subnet.
+	// Get the api for the parent network hosting the subnet actor for the subnet.
 	parentAPI, err := s.getParentAPI(id)
 	if err != nil {
 		return err
