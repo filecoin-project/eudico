@@ -7,10 +7,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
-const (
-	nodeBasePort = 10000
-)
-
 // parseTx parses a raw byte transaction from Mir node into a Filecoin message.
 func parseTx(tx []byte) (msg interface{}, err error) {
 	ln := len(tx)
