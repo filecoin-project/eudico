@@ -22,16 +22,6 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
-func TestEudicoSubnetMir22(t *testing.T) {
-	t.Run("/root/mir-/subnet/dummy", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDummy())
-	})
-
-	t.Run("/root/dummy-/subnet/mir", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetMir(), kit.MinValidators(1), kit.ValidatorAddress("127.0.0.1:11001"))
-	})
-}
-
 func TestEudicoSubnetMir(t *testing.T) {
 	t.Run("/root/mir-/subnet/dummy", func(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDummy())

@@ -39,7 +39,6 @@ import (
 const (
 	MaxHeightDrift = 5
 	SubmitInterval = 5000 * time.Millisecond
-	MirTimer       = 1200 * time.Millisecond
 	MirMinersEnv   = "EUDICO_MIR_MINERS"
 )
 

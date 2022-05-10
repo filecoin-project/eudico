@@ -41,7 +41,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 		log.Fatal(err)
 	}
 	log.Infof("Mir miner %s started", m.mirID())
-	defer log.Info("Mir miner %s completed", m.mirID())
+	defer log.Infof("Mir miner %s completed", m.mirID())
 
 	log.Infof("Miner info:\n\twallet - %s\n\tnetwork - %s\n\tsubnet - %s\n\tMir ID - %s\n\tvalidators - %v",
 		m.addr, m.netName, m.subnetID, m.mirID(), m.validators)
