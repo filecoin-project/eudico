@@ -60,7 +60,7 @@ func getMessageMapFromTendermintBlock(tb *tmtypes.Block) (map[cid.Cid]bool, erro
 			// Here we must use encapsulated Messsage instead of full message
 			// because cross-messages in Filecoin blocks are untyped:
 			// they don't have top-down or bottom-up information.
-			msgs[m.Msg.Cid()] = true
+			msgs[m.Message.Cid()] = true
 		case *types.SignedMessage:
 			msgs[m.Cid()] = true
 		default:

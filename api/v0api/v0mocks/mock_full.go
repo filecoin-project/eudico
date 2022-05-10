@@ -23,6 +23,7 @@ import (
 	apitypes "github.com/filecoin-project/lotus/api/types"
 	v0api "github.com/filecoin-project/lotus/api/v0api"
 	miner "github.com/filecoin-project/lotus/chain/actors/builtin/miner"
+	hierarchical "github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	sca "github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	schema "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	types "github.com/filecoin-project/lotus/chain/types"
@@ -80,7 +81,7 @@ func (mr *MockFullNodeMockRecorder) AbortAtomicExec(arg0, arg1, arg2, arg3 inter
 }
 
 // AddSubnet mocks base method.
-func (m *MockFullNode) AddSubnet(arg0 context.Context, arg1 address.Address, arg2 address.SubnetID, arg3 string, arg4 uint64, arg5 big.Int, arg6 abi.ChainEpoch, arg7 address.Address) (address.Address, error) {
+func (m *MockFullNode) AddSubnet(arg0 context.Context, arg1 address.Address, arg2 address.SubnetID, arg3 string, arg4 uint64, arg5 big.Int, arg6 abi.ChainEpoch, arg7 *hierarchical.ConsensusParams) (address.Address, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddSubnet", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
 	ret0, _ := ret[0].(address.Address)
@@ -1075,18 +1076,18 @@ func (mr *MockFullNodeMockRecorder) InitAtomicExec(arg0, arg1, arg2, arg3 interf
 }
 
 // JoinSubnet mocks base method.
-func (m *MockFullNode) JoinSubnet(arg0 context.Context, arg1 address.Address, arg2 big.Int, arg3 address.SubnetID) (cid.Cid, error) {
+func (m *MockFullNode) JoinSubnet(arg0 context.Context, arg1 address.Address, arg2 big.Int, arg3 address.SubnetID, arg4 string) (cid.Cid, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "JoinSubnet", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "JoinSubnet", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(cid.Cid)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // JoinSubnet indicates an expected call of JoinSubnet.
-func (mr *MockFullNodeMockRecorder) JoinSubnet(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MockFullNodeMockRecorder) JoinSubnet(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "JoinSubnet", reflect.TypeOf((*MockFullNode)(nil).JoinSubnet), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "JoinSubnet", reflect.TypeOf((*MockFullNode)(nil).JoinSubnet), arg0, arg1, arg2, arg3, arg4)
 }
 
 // KillSubnet mocks base method.
@@ -3130,6 +3131,21 @@ func (m *MockFullNode) SubnetStateGetActor(arg0 context.Context, arg1 address.Su
 func (mr *MockFullNodeMockRecorder) SubnetStateGetActor(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubnetStateGetActor", reflect.TypeOf((*MockFullNode)(nil).SubnetStateGetActor), arg0, arg1, arg2, arg3)
+}
+
+// SubnetStateGetValidators mocks base method.
+func (m *MockFullNode) SubnetStateGetValidators(arg0 context.Context, arg1 address.SubnetID) ([]hierarchical.Validator, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubnetStateGetValidators", arg0, arg1)
+	ret0, _ := ret[0].([]hierarchical.Validator)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubnetStateGetValidators indicates an expected call of SubnetStateGetValidators.
+func (mr *MockFullNodeMockRecorder) SubnetStateGetValidators(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubnetStateGetValidators", reflect.TypeOf((*MockFullNode)(nil).SubnetStateGetValidators), arg0, arg1)
 }
 
 // SubnetStateWaitMsg mocks base method.

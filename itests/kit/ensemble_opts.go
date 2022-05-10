@@ -27,6 +27,9 @@ type ensembleOpts struct {
 
 	rootConsensus   hierarchical.ConsensusType
 	subnetConsensus hierarchical.ConsensusType
+
+	minValidators    uint64
+	validatorAddress string
 }
 
 var DefaultEnsembleOpts = ensembleOpts{
@@ -35,6 +38,23 @@ var DefaultEnsembleOpts = ensembleOpts{
 		Height:  -1,
 		Network: build.NewestNetworkVersion,
 	}},
+	minValidators: 0,
+}
+
+// MinValidators sets the minimum number of validators in a subnet.
+func MinValidators(n uint64) EnsembleOpt {
+	return func(opts *ensembleOpts) error {
+		opts.minValidators = n
+		return nil
+	}
+}
+
+// ValidatorAddress sets validator address.
+func ValidatorAddress(addr string) EnsembleOpt {
+	return func(opts *ensembleOpts) error {
+		opts.validatorAddress = addr
+		return nil
+	}
 }
 
 // RootTSPoW activates PoW consensus protocol for the root subnet in Eudico.

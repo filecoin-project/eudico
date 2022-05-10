@@ -5,26 +5,27 @@ package subnet
 import (
 	"bytes"
 
-	address "github.com/filecoin-project/go-address"
+	"github.com/ipfs/go-cid"
+	logging "github.com/ipfs/go-log/v2"
+
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/cbor"
 	"github.com/filecoin-project/go-state-types/exitcode"
-	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
-	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
-	cid "github.com/ipfs/go-cid"
-	logging "github.com/ipfs/go-log/v2"
-
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	checkpoint "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
+	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
+	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
 )
 
 var _ runtime.VMActor = SubnetActor{}
+
 var _ SubnetIface = SubnetActor{}
 
 var log = logging.Logger("subnet-actor")
@@ -64,12 +65,12 @@ func (a SubnetActor) State() cbor.Er {
 // ConstructParams specifies the configuration parameters for the
 // subnet actor constructor.
 type ConstructParams struct {
-	NetworkName   string                     // Name of the current network.
-	Name          string                     // Name for the subnet
-	Consensus     hierarchical.ConsensusType // Consensus for subnet.
-	MinMinerStake abi.TokenAmount            // MinStake to give miner rights
-	DelegMiner    address.Address            // Miner in delegated consensus
-	CheckPeriod   abi.ChainEpoch             // Checkpointing period.
+	NetworkName     string                        // Name of the current network.
+	Name            string                        // Name for the subnet.
+	Consensus       hierarchical.ConsensusType    // Consensus for subnet.
+	ConsensusParams *hierarchical.ConsensusParams // Used parameters for the consensus protocol.
+	MinMinerStake   abi.TokenAmount               // MinStake to give miner rights.
+	CheckPeriod     abi.ChainEpoch                // Checkpointing period.
 }
 
 func (a SubnetActor) Constructor(rt runtime.Runtime, params *ConstructParams) *abi.EmptyValue {
@@ -78,7 +79,6 @@ func (a SubnetActor) Constructor(rt runtime.Runtime, params *ConstructParams) *a
 	st, err := ConstructSubnetState(adt.AsStore(rt), params)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
 	st.initGenesis(rt, params)
-
 	rt.StateCreate(st)
 	return nil
 }
@@ -87,20 +87,20 @@ func (st *SubnetState) initGenesis(rt runtime.Runtime, params *ConstructParams) 
 	// Build genesis for the subnet assigning delegMiner
 	buf := new(bytes.Buffer)
 
-	// TODO: Hardcoding the verifyregRoot address here for now.
+	// TODO: Hard coding the verifyregRoot address here for now.
 	// We'll accept it as param in SubnetActor.Add in the next
 	// iteration (when we need it).
 	vreg, err := address.NewFromString("t3w4spg6jjgfp4adauycfa3fg5mayljflf6ak2qzitflcqka5sst7b7u2bagle3ttnddk6dn44rhhncijboc4q")
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed parsin vreg addr")
 
-	// TODO: Same here, hardcoding an address
+	// TODO: Same here, hard coding an address
 	// until we need to set it in AddParams.
 	rem, err := address.NewFromString("t3tf274q6shnudgrwrwkcw5lzw3u247234wnep37fqx4sobyh2susfvs7qzdwxj64uaizztosuggvyump4xf7a")
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed parsin rem addr")
 
-	// Getting actor ID from recceiver.
+	// Getting actor ID from receiver.
 	netName := address.NewSubnetID(address.SubnetID(params.NetworkName), rt.Receiver())
-	err = WriteGenesis(netName, st.Consensus, params.DelegMiner, vreg, rem,
+	err = WriteGenesis(netName, st.Consensus, params.ConsensusParams.DelegMiner, vreg, rem,
 		params.CheckPeriod, rt.ValueReceived().Uint64(), buf)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed genesis")
 	st.Genesis = buf.Bytes()
@@ -108,7 +108,7 @@ func (st *SubnetState) initGenesis(rt runtime.Runtime, params *ConstructParams) 
 
 // Join adds stake to the subnet and/or joins if the source is still not part of it.
 // TODO: Join may not be the best name for this function, consider changing it.
-func (a SubnetActor) Join(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
+func (a SubnetActor) Join(rt runtime.Runtime, v *hierarchical.Validator) *abi.EmptyValue {
 	rt.ValidateImmediateCallerAcceptAny()
 	sourceAddr := rt.Caller()
 	value := rt.ValueReceived()
@@ -142,6 +142,16 @@ func (a SubnetActor) Join(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue
 			}
 		}
 	}
+
+	rt.StateTransaction(&st, func() {
+		// Mutate state
+		if st.MinValidators > 0 {
+			st.ValidatorSet = append(st.ValidatorSet, *v)
+
+			log.Debugf("Added validator: %s", v.ID())
+			log.Debugf("%d validators have been registered", len(st.ValidatorSet))
+		}
+	})
 
 	rt.StateTransaction(&st, func() {
 		// Mutate state
@@ -462,7 +472,7 @@ func (st *SubnetState) rmStake(rt runtime.Runtime, sourceAddr address.Address, s
 
 	// We are removing what we return to the miner, the rest stays
 	// in the subnet, right now the leavingCoeff==1 so there won't be
-	// balance letf, we'll need to figure out how to distribute this
+	// balance left, we'll need to figure out how to distribute this
 	// in the future.
 	st.TotalStake = big.Sub(st.TotalStake, retFunds)
 

@@ -369,7 +369,7 @@ func (tm *Tendermint) getEudicoMessagesFromTendermintBlock(b *tmtypes.Block) ([]
 		case *types.UnverifiedCrossMsg:
 			id := m.Cid()
 			if _, found := tm.seenMessages[id]; !found {
-				crossMsgs = append(crossMsgs, m.Msg)
+				crossMsgs = append(crossMsgs, m.Message)
 				tm.seenMessages[id] = true
 			}
 		case *RegistrationMessageRequest:

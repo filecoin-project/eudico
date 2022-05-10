@@ -104,6 +104,12 @@ eudico: $(BUILD_DEPS)
 .PHONY: eudico
 BINS+=eudico
 
+# Run hierarchical unit tests
+eudico-hc-test: GOFLAGS+=-tags=2k
+eudico-hc-test:
+	go test $(GOFLAGS) -count=1 -timeout=0 -v  ./chain/consensus/...
+.PHONY: eudico-hc-tes
+
 # Run integration tests for Eudico
 eudico-subnet-test: GOFLAGS+=-tags=2k
 eudico-subnet-test:

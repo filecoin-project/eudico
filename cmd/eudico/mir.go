@@ -33,12 +33,12 @@ func NewRootMirConsensus(ctx context.Context, sm *stmgr.StateManager, beacon bea
 	return mir.NewConsensus(ctx, sm, nil, beacon, r, verifier, genesis, netName)
 }
 
-var mirbftCmd = &cli.Command{
+var mirCmd = &cli.Command{
 	Name:  "mir",
 	Usage: "Mir consensus",
 	Subcommands: []*cli.Command{
-		mirbftGenesisCmd,
-		mirbftMinerCmd,
+		mirGenesisCmd,
+		mirMinerCmd,
 
 		daemonCmd(node.Options(
 			node.Override(new(consensus.Consensus), NewRootMirConsensus),
@@ -50,7 +50,7 @@ var mirbftCmd = &cli.Command{
 	},
 }
 
-var mirbftGenesisCmd = &cli.Command{
+var mirGenesisCmd = &cli.Command{
 	Name:      "genesis",
 	Usage:     "Generate genesis for Mir consensus",
 	ArgsUsage: "[outfile]",
@@ -74,7 +74,7 @@ var mirbftGenesisCmd = &cli.Command{
 	},
 }
 
-var mirbftMinerCmd = &cli.Command{
+var mirMinerCmd = &cli.Command{
 	Name:  "miner",
 	Usage: "run Mir consensus miner",
 	Flags: []cli.Flag{

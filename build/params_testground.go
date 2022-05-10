@@ -11,9 +11,10 @@ package build
 import (
 	"math/big"
 
+	"github.com/ipfs/go-cid"
+
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/network"
-	"github.com/ipfs/go-cid"
 
 	builtin2 "github.com/filecoin-project/specs-actors/v2/actors/builtin"
 
@@ -33,6 +34,7 @@ var (
 	MinimumBaseFee        = int64(100)
 	BlockDelaySecs        = uint64(builtin2.EpochDurationSeconds)
 	PropagationDelaySecs  = uint64(6)
+	MirTimer              = 1000
 
 	AllowableClockDriftSecs = uint64(1)
 

@@ -102,7 +102,7 @@ const (
 	TendermintConsensusKeyFile         = TendermintConsensusTestDir + "/config/priv_validator_key.json"
 	TendermintApplicationAddress       = "tcp://127.0.0.1:26658"
 
-	MirBFTConsensusGenesisTestFile = "../testdata/mirbft.gen"
+	MirBFTConsensusGenesisTestFile = "../testdata/mir.gen"
 
 	FilcnsConsensusGenesisTestFile = "../testdata/filcns.gen"
 )
@@ -168,6 +168,11 @@ func NewEudicoEnsemble(t *testing.T, opts ...EnsembleOpt) *EudicoEnsemble {
 	}
 
 	return n
+}
+
+// ValidatorInfo returns information validator information.
+func (n *EudicoEnsemble) ValidatorInfo(opts ...NodeOpt) (uint64, string) {
+	return n.options.minValidators, n.options.validatorAddress
 }
 
 // FullNode enrolls a new full node.
@@ -339,6 +344,12 @@ func (n *EudicoEnsemble) Stop() error {
 		n.options.rootConsensus == hierarchical.Tendermint {
 		return n.stopTendermint()
 	}
+
+	if n.options.subnetConsensus == hierarchical.Mir ||
+		n.options.rootConsensus == hierarchical.Mir {
+		os.Unsetenv(mir.MirMinersEnv) // nolint
+		return n.stopMir()
+	}
 	return nil
 }
 
@@ -427,6 +438,12 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 	if n.options.subnetConsensus == hierarchical.Tendermint ||
 		n.options.rootConsensus == hierarchical.Tendermint {
 		terr := n.startTendermint()
+		require.NoError(n.t, terr)
+	}
+
+	if n.options.subnetConsensus == hierarchical.Mir ||
+		n.options.rootConsensus == hierarchical.Mir {
+		terr := n.startMir()
 		require.NoError(n.t, terr)
 	}
 
@@ -843,6 +860,17 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 	return n
 }
 
+func (n *EudicoEnsemble) GetDefaultKeyAddr() []address.Address {
+	var addrs []address.Address
+	for _, full := range n.active.fullnodes {
+		addr, err := full.WalletDefaultAddress(context.Background())
+		require.NoError(n.t, err)
+		addrs = append(addrs, addr)
+
+	}
+	return addrs
+}
+
 // InterconnectAll connects all miners and full nodes to one another.
 func (n *EudicoEnsemble) InterconnectAll() *EudicoEnsemble {
 	// connect full nodes to miners.
@@ -1016,6 +1044,13 @@ func (n *EudicoEnsemble) removeTendermintFiles() error {
 	return nil
 }
 
+func (n *EudicoEnsemble) removeMirFiles() error {
+	if err := os.RemoveAll("./eudico-wal"); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (n *EudicoEnsemble) stopTendermint() error {
 	if n.tendermintAppServer == nil {
 		return xerrors.New("tendermint server is not running")
@@ -1035,6 +1070,14 @@ func (n *EudicoEnsemble) stopTendermint() error {
 		err1,
 		err2,
 	)
+}
+
+func (n *EudicoEnsemble) startMir() error {
+	return n.removeMirFiles()
+}
+
+func (n *EudicoEnsemble) stopMir() error {
+	return n.removeMirFiles()
 }
 
 // EudicoEnsembleMinimal creates and starts an EudicoEnsemble with a single full node and a single miner.
@@ -1120,6 +1163,12 @@ func EudicoEnsembleTwoMiners(t *testing.T, opts ...interface{}) (*TestFullNode, 
 		return &full, &miner, subnetMinerType, ens
 	}
 	ens = NewEudicoEnsemble(t, eopts...).FullNode(&full, nopts...).Start()
+	if options.rootConsensus == hierarchical.Mir {
+		addr, err := full.WalletDefaultAddress(context.Background())
+		require.NoError(t, err)
+		err = os.Setenv(mir.MirMinersEnv, "/root:"+addr.String()+"@127.0.0.1:10000")
+		require.NoError(t, err)
+	}
 	return &full, rootMiner, subnetMinerType, ens
 }
 

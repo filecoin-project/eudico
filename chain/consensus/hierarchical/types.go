@@ -13,6 +13,11 @@ import (
 // ConsensusType for subnet.
 type ConsensusType uint64
 
+type ConsensusParams struct {
+	DelegMiner    address.Address // Miner in delegated consensus.
+	MinValidators uint64          // Min number of validators required to start a network.
+}
+
 // List of supported/implemented consensus for subnets.
 const (
 	Delegated ConsensusType = iota

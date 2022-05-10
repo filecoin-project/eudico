@@ -10,6 +10,8 @@ import (
 	logging "github.com/ipfs/go-log/v2"
 	"golang.org/x/xerrors"
 
+	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/mir"
 	mirCrypto "github.com/filecoin-project/mir/pkg/crypto"
 	"github.com/filecoin-project/mir/pkg/grpctransport"
@@ -24,7 +26,7 @@ import (
 // agentLog is a logger accessed by Mir.
 var agentLog = logging.Logger("mir-agent")
 
-// mirLogger implement Mir's Log interface.
+// mirLogger implements Mir's Log interface.
 type mirLogger struct {
 	logger *logging.ZapEventLogger
 }
@@ -39,58 +41,59 @@ func newMirLogger(logger *logging.ZapEventLogger) *mirLogger {
 func (m *mirLogger) Log(level mirLogging.LogLevel, text string, args ...interface{}) {
 	switch level {
 	case mirLogging.LevelError:
-		m.logger.Errorw(text, args)
+		m.logger.Errorw(text, "error", args)
 	case mirLogging.LevelInfo:
-		m.logger.Infow(text, args)
+		m.logger.Infow(text, "info", args)
 	case mirLogging.LevelWarn:
-		m.logger.Warnw(text, args)
+		m.logger.Warnw(text, "warn", args)
 	case mirLogging.LevelDebug:
-		m.logger.Debugw(text, args)
+		m.logger.Debugw(text, "debug", args)
 	}
 }
 
 // MirAgent manages and provides direct access to a Mir node abstraction participating in consensus.
 type MirAgent struct {
-	Node     *mir.Node
-	Wal      *simplewal.WAL
-	Net      *grpctransport.GrpcTransport
-	App      *Application
-	stopChan chan struct{}
+	OwnID string
+	Node  *mir.Node
+	Wal   *simplewal.WAL
+	Net   *grpctransport.GrpcTransport
+	App   *Application
 }
 
-func NewMirAgent(id string, n int) (*MirAgent, error) {
-	// TODO: Are client ID and node ID the same in this case?
-	// TODO: Should mirbft use a different type for node ID?
-	ownID := t.NodeID(id)
+func NewMirAgent(ctx context.Context, ownID string, nodes []hierarchical.Validator) (*MirAgent, error) {
+	if ownID == "" || nodes == nil {
+		return nil, xerrors.New("invalid node ID or nodes")
+	}
 	log.Debugf("Mir agent %v is being created", ownID)
 	defer log.Debugf("Mir agent %v has been created", ownID)
 
-	nodeIds, nodeAddrs := getConfig(n)
-	log.Debug("Mir node config:", nodeIds, nodeAddrs)
+	nodeIds, nodeAddrs, err := hierarchical.ValidatorMembership(nodes)
+	if err != nil {
+		return nil, err
+	}
+	log.Debugf("Mir node config:\n%v\n%v", nodeIds, nodeAddrs)
 
-	walPath := path.Join("eudico-wal", fmt.Sprintf("%v", id))
+	walPath := path.Join("eudico-wal", fmt.Sprintf("%v", ownID))
 	wal, err := simplewal.Open(walPath)
 	if err != nil {
 		return nil, err
 	}
-
 	if err := os.MkdirAll(walPath, 0700); err != nil {
 		return nil, err
 	}
 
-	// TODO: Suggestion: Figure out how to make this a general interface where
-	//  we can hook libp2p instead of making it grpc specific.
-	net := grpctransport.NewGrpcTransport(nodeAddrs, ownID, nil)
+	net := grpctransport.NewGrpcTransport(nodeAddrs, t.NodeID(ownID), newMirLogger(agentLog))
 	if err := net.Start(); err != nil {
 		return nil, err
 	}
-	net.Connect()
+	net.Connect(ctx)
+	log.Debug("Mir network transport connected")
 
 	reqStore := reqstore.NewVolatileRequestStore()
 
 	// Instantiate the ISS protocol module with default configuration.
 	issConfig := iss.DefaultConfig(nodeIds)
-	issProtocol, err := iss.New(ownID, issConfig, newMirLogger(agentLog))
+	issProtocol, err := iss.New(t.NodeID(ownID), issConfig, newMirLogger(agentLog))
 	if err != nil {
 		return nil, xerrors.Errorf("could not instantiate ISS protocol module: %w", err)
 	}
@@ -98,7 +101,7 @@ func NewMirAgent(id string, n int) (*MirAgent, error) {
 	app := NewApplication(reqStore)
 
 	node, err := mir.NewNode(
-		ownID,
+		t.NodeID(ownID),
 		&mir.NodeConfig{
 			Logger: newMirLogger(agentLog),
 		},
@@ -115,11 +118,11 @@ func NewMirAgent(id string, n int) (*MirAgent, error) {
 	}
 
 	a := MirAgent{
-		Node:     node,
-		Wal:      wal,
-		Net:      net,
-		App:      app,
-		stopChan: make(chan struct{}),
+		OwnID: ownID,
+		Node:  node,
+		Wal:   wal,
+		Net:   net,
+		App:   app,
 	}
 
 	return &a, nil
@@ -142,7 +145,7 @@ func (m *MirAgent) Start(ctx context.Context) chan error {
 	}()
 
 	go func() {
-		errChan <- m.Node.Run(ctx, time.NewTicker(100*time.Millisecond).C)
+		errChan <- m.Node.Run(ctx, time.NewTicker(time.Duration(build.MirTimer)*time.Millisecond).C)
 		agentCancel()
 	}()
 
@@ -158,6 +161,5 @@ func (m *MirAgent) Stop() {
 		log.Errorf("Could not close write-ahead log: %s", err)
 	}
 	m.Net.Stop()
-	close(m.stopChan)
 	close(m.App.ChainNotify)
 }

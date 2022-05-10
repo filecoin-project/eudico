@@ -3,6 +3,7 @@ package itests
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -21,13 +22,6 @@ import (
 	"github.com/filecoin-project/lotus/itests/kit"
 	mapi "github.com/filecoin-project/mir"
 )
-
-func TestEudicoConsensus1(t *testing.T) {
-
-	t.Run("mir", func(t *testing.T) {
-		runMirConsensusTests(t, kit.ThroughRPC(), kit.RootMir())
-	})
-}
 
 func TestEudicoConsensus(t *testing.T) {
 	t.Run("dummy", func(t *testing.T) {
@@ -81,7 +75,11 @@ func (ts *eudicoConsensusSuite) testDummyMining(t *testing.T) {
 
 	go func() {
 		err = dummy.Mine(ctx, l[0], full)
-		require.NoError(t, err)
+		if err != nil {
+			t.Error(err)
+			cancel()
+			return
+		}
 	}()
 
 	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 10, address.RootSubnet, full)
@@ -89,12 +87,6 @@ func (ts *eudicoConsensusSuite) testDummyMining(t *testing.T) {
 }
 
 func runMirConsensusTests(t *testing.T, opts ...interface{}) {
-	if err := os.Setenv("EUDICO_MIR_ID", "0"); err != nil {
-		require.NoError(t, err)
-	}
-	if err := os.Setenv("EUDICO_MIR_NODES", "1"); err != nil {
-		require.NoError(t, err)
-	}
 	ts := eudicoConsensusSuite{opts: opts}
 
 	t.Run("testMirMining", ts.testMirMining)
@@ -104,7 +96,11 @@ func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	full, _ := kit.EudicoEnsembleFullNodeOnly(t, ts.opts...)
+	full, ens := kit.EudicoEnsembleFullNodeOnly(t, ts.opts...)
+	defer func() {
+		err := ens.Stop()
+		require.NoError(t, err)
+	}()
 
 	l, err := full.WalletList(ctx)
 	require.NoError(t, err)
@@ -112,18 +108,32 @@ func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
 		t.Fatal("wallet key list is empty")
 	}
 
+	mirNodeID := fmt.Sprintf("%s:%s", address.RootSubnet, l[0].String())
+
+	if err := os.Setenv(mir.MirMinersEnv, fmt.Sprintf("%s@%s", mirNodeID, "127.0.0.1:10000")); err != nil {
+		require.NoError(t, err)
+	}
+	defer os.Unsetenv(mir.MirMinersEnv) // nolint
+
 	go func() {
 		err = mir.Mine(ctx, l[0], full)
 		if xerrors.Is(mapi.ErrStopped, err) {
 			return
 		}
-		require.NoError(t, err)
+		if err != nil {
+			t.Error(err)
+			cancel()
+			return
+		}
 	}()
 
 	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 10, address.RootSubnet, full)
 	if xerrors.Is(mapi.ErrStopped, err) {
 		return
 	}
+	require.NoError(t, err)
+
+	err = ens.Stop()
 	require.NoError(t, err)
 }
 

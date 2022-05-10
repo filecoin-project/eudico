@@ -22,15 +22,26 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
-func TestEudicoSubnet(t *testing.T) {
-	if err := os.Setenv("EUDICO_MIR_ID", "0"); err != nil {
-		require.NoError(t, err)
-	}
-	if err := os.Setenv("EUDICO_MIR_NODES", "1"); err != nil {
-		require.NoError(t, err)
-	}
+func TestEudicoSubnetMir(t *testing.T) {
+	t.Run("/root/mir-/subnet/dummy", func(t *testing.T) {
+		runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDummy())
+	})
 
-	// Sanity test with Dummy consensus.
+	t.Run("/root/dummy-/subnet/mir", func(t *testing.T) {
+		runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetMir(), kit.MinValidators(1), kit.ValidatorAddress("127.0.0.1:11001"))
+	})
+
+	t.Run("/root/mir-/subnet/delegated", func(t *testing.T) {
+		runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDelegated())
+	})
+
+	t.Run("/root/delegated-/subnet/mir", func(t *testing.T) {
+		runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetMir(), kit.MinValidators(1), kit.ValidatorAddress("127.0.0.1:11002"))
+	})
+}
+
+func TestEudicoSubnet(t *testing.T) {
+	// Sanity test with Dummy consensus
 
 	t.Run("/root/dummy-/subnet/dummy", func(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetDummy())
@@ -57,14 +68,6 @@ func TestEudicoSubnet(t *testing.T) {
 	}
 
 	if os.Getenv("FULL_ITESTS") != "" {
-		// Mir in Root
-
-		t.Run("/root/mir-/subnet/delegated", func(t *testing.T) {
-			runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDelegated())
-		})
-		t.Run("/root/delegated-/subnet/mir", func(t *testing.T) {
-			runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetMir())
-		})
 
 		// PoW in Root
 
@@ -124,6 +127,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	defer cancel()
 
 	full, rootMiner, subnetMinerType, ens := kit.EudicoEnsembleTwoMiners(t, ts.opts...)
+	n, valAddr := ens.ValidatorInfo()
 
 	addr, err := full.WalletDefaultAddress(ctx)
 	require.NoError(t, err)
@@ -140,8 +144,12 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 		bm.MineBlocks(ctx, 1*time.Second)
 	case kit.EudicoRootMiner:
 		go func() {
-			err = miner(ctx, addr, full)
-			require.NoError(t, err)
+			err := miner(ctx, addr, full)
+			if err != nil {
+				t.Error(err)
+				cancel()
+				return
+			}
 		}()
 	default:
 		t.Fatal("unsupported root consensus")
@@ -161,7 +169,12 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("[*] %s balance: %d", addr, balance)
 
-	actorAddr, err := full.AddSubnet(ctx, addr, parent, subnetName, uint64(subnetMinerType), minerStake, checkPeriod, addr)
+	cns := uint64(subnetMinerType)
+	p := &hierarchical.ConsensusParams{
+		MinValidators: n,
+		DelegMiner:    addr,
+	}
+	actorAddr, err := full.AddSubnet(ctx, addr, parent, subnetName, cns, minerStake, checkPeriod, p)
 	require.NoError(t, err)
 
 	subnetAddr := address.NewSubnetID(parent, actorAddr)
@@ -178,7 +191,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	_, err = full.StateLookupID(ctx, addr, types.EmptyTSK)
 	require.NoError(t, err)
 
-	sc, err := full.JoinSubnet(ctx, addr, big.Int(val), subnetAddr)
+	sc, err := full.JoinSubnet(ctx, addr, big.Int(val), subnetAddr, valAddr)
 	require.NoError(t, err)
 	t1 := time.Now()
 	c, err := full.StateWaitMsg(ctx, sc, 1, 100, false)
@@ -194,8 +207,12 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	require.Equal(t, subnetMinerType, sn[0].Consensus)
 
 	go func() {
-		err = full.MineSubnet(ctx, addr, subnetAddr, false)
-		require.NoError(t, err)
+		err := full.MineSubnet(ctx, addr, subnetAddr, false)
+		if err != nil {
+			t.Error(err)
+			cancel()
+			return
+		}
 	}()
 
 	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 4, subnetAddr, full)
@@ -264,6 +281,10 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("[*] %s addr balance: %d", addr, a.Balance)
 	require.Equal(t, 0, big.Cmp(injectedFils, a.Balance))
+
+	bl, err = kit.WaitSubnetActorBalance(ctx, subnetAddr, newAddr, sentFils, full)
+	require.NoError(t, err)
+	t.Logf(" [*] Sent funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
 
 	a, err = full.SubnetStateGetActor(ctx, subnetAddr, newAddr, types.EmptyTSK)
 	require.NoError(t, err)

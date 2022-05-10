@@ -2,6 +2,7 @@ package tendermint
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	tmclient "github.com/tendermint/tendermint/rpc/client/http"
@@ -21,9 +22,6 @@ const (
 )
 
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {
-	log.Info("starting Tendermint miner: ", miner.String())
-	defer log.Info("shutdown Tendermint miner: ", miner.String())
-
 	var cache = newMessageCache()
 
 	tendermintClient, err := tmclient.New(NodeAddr())
@@ -36,8 +34,13 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		return err
 	}
 	subnetID := address.SubnetID(nn)
+	minerID := fmt.Sprintf("%s:%s", subnetID, miner)
 
-	log.Infof("Tendermint miner params: network name - %s, subnet ID - %s", nn, subnetID)
+	log.Infof("Tendermint miner %s started", minerID)
+	defer log.Infof("Tendermint miner %s completed", minerID)
+
+	log.Infof("Tendermint miner params:\n\tnetwork name - %s\n\tsubnet ID - %s\n\tadddress - %s",
+		nn, subnetID, miner)
 
 	// It is a workaround to address this bug: https://github.com/tendermint/tendermint/issues/7185.
 	// If a message is sent to a Tendermint node at least twice then the Tendermint node hangs.
