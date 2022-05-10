@@ -59,14 +59,14 @@ type MirAgent struct {
 	App   *Application
 }
 
-func NewMirAgent(ctx context.Context, ownID string, clients []hierarchical.Validator) (*MirAgent, error) {
-	if ownID == "" || clients == nil {
-		return nil, xerrors.New("invalid node ID or clients")
+func NewMirAgent(ctx context.Context, ownID string, nodes []hierarchical.Validator) (*MirAgent, error) {
+	if ownID == "" || nodes == nil {
+		return nil, xerrors.New("invalid node ID or nodes")
 	}
 	log.Debugf("Mir agent %v is being created", ownID)
 	defer log.Debugf("Mir agent %v has been created", ownID)
 
-	nodeIds, nodeAddrs, err := hierarchical.ValidatorMembership(clients)
+	nodeIds, nodeAddrs, err := hierarchical.ValidatorMembership(nodes)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +144,7 @@ func (m *MirAgent) Start(ctx context.Context) chan error {
 	}()
 
 	go func() {
-		errChan <- m.Node.Run(ctx, time.NewTicker(50*time.Millisecond).C)
+		errChan <- m.Node.Run(ctx, time.NewTicker(MirTimer).C)
 		agentCancel()
 	}()
 

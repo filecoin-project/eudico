@@ -74,7 +74,7 @@ tmux new-session -d -s "mir" \; \
         export EUDICO_PATH=$NODE_0_PATH
         ./eudico mir daemon --genesis=$BLOCK0 --api=$NODE_0_API 2>&1 | tee $NODE_0_DAEMON_LOG" Enter \; \
   send-keys -t "mir:0.1" "
-        export EUDICO_MIR_CLIENTS=$NODES
+        export EUDICO_MIR_MINERS=$NODES
         export EUDICO_PATH=$NODE_0_PATH
         export GOLOG_LOG_LEVEL=$LOG_LEVEL
         ./eudico wait-api;
@@ -90,7 +90,7 @@ tmux new-session -d -s "mir" \; \
         ./eudico mir daemon --genesis=$BLOCK0 --api=$NODE_1_API 2>&1 | tee $NODE_1_DAEMON_LOG" Enter \; \
   send-keys -t "mir:0.3" "
         export GOLOG_LOG_LEVEL=$LOG_LEVEL
-        export EUDICO_MIR_CLIENTS=$NODES
+        export EUDICO_MIR_MINERS=$NODES
         export EUDICO_PATH=$NODE_1_PATH
         ./eudico wait-api;
         ./eudico net listen | grep '/ip6/::1/' > $NODE_1_NETADDR; sleep 2; \
@@ -106,7 +106,7 @@ tmux new-session -d -s "mir" \; \
         ./eudico mir daemon --genesis=$BLOCK0 --api=$NODE_2_API 2>&1 | tee $NODE_2_DAEMON_LOG" Enter \; \
     send-keys -t "mir:1.1" "
         export GOLOG_LOG_LEVEL=$LOG_LEVEL
-        export EUDICO_MIR_CLIENTS=$NODES
+        export EUDICO_MIR_MINERS=$NODES
         export EUDICO_PATH=$NODE_2_PATH
         ./eudico wait-api;
         ./eudico net listen | grep '/ip6/::1/' > $NODE_2_NETADDR; sleep 2;
@@ -121,7 +121,7 @@ tmux new-session -d -s "mir" \; \
         ./eudico mir daemon --genesis=$BLOCK0 --api=$NODE_3_API 2>&1 | tee $NODE_3_DAEMON_LOG" Enter \; \
     send-keys -t "mir:1.3" "
        export GOLOG_LOG_LEVEL=$LOG_LEVEL
-       export EUDICO_MIR_CLIENTS=$NODES
+       export EUDICO_MIR_MINERS=$NODES
        export EUDICO_PATH=$NODE_3_PATH
        ./eudico wait-api;
        ./eudico net listen | grep '/ip6/::1/' > $NODE_3_NETADDR; sleep 2;

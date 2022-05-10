@@ -18,6 +18,7 @@ import (
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
+	lapi "github.com/filecoin-project/lotus/api"
 	bstore "github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain"
@@ -38,7 +39,8 @@ import (
 const (
 	MaxHeightDrift = 5
 	SubmitInterval = 5000 * time.Millisecond
-	MirClientsEnv  = "EUDICO_MIR_CLIENTS"
+	MirTimer       = 1200 * time.Millisecond
+	MirMinersEnv   = "EUDICO_MIR_MINERS"
 )
 
 var (
@@ -80,6 +82,17 @@ func NewConsensus(
 		netName:  subnetID,
 		resolver: r,
 	}, nil
+}
+
+// CreateBlock creates a final Filecoin block from the input block template.
+func (bft *Mir) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.BlockTemplate) (*types.FullBlock, error) {
+	b, err := common.PrepareBlockForSignature(ctx, bft.sm, bt)
+	if err != nil {
+		return nil, err
+	}
+
+	// We don't sign blocks mined by Mir validators
+	return b, nil
 }
 
 func (bft *Mir) ValidateBlock(ctx context.Context, b *types.FullBlock) (err error) {

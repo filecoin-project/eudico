@@ -36,7 +36,7 @@ func getMessagesFromMirBlock(b []Tx) (msgs []*types.SignedMessage, crossMsgs []*
 	for _, tx := range b {
 		msg, err := parseTx(tx)
 		if err != nil {
-			log.Error("unable to parse a message from Mir block:", err)
+			log.Error("unable to parse a Mir block tx:", err)
 			continue
 		}
 
@@ -46,7 +46,7 @@ func getMessagesFromMirBlock(b []Tx) (msgs []*types.SignedMessage, crossMsgs []*
 		case *types.UnverifiedCrossMsg:
 			crossMsgs = append(crossMsgs, m.Message)
 		default:
-			log.Error("received an unknown message in Mir block")
+			log.Error("received unknown tx in Mir block")
 		}
 	}
 	return
