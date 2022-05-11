@@ -207,7 +207,8 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	require.Equal(t, subnetMinerType, sn[0].Consensus)
 
 	go func() {
-		err := full.MineSubnet(ctx, addr, subnetAddr, false)
+		mp := hierarchical.MiningParams{}
+		err := full.MineSubnet(ctx, addr, subnetAddr, false, &mp)
 		if err != nil {
 			t.Error(err)
 			cancel()
@@ -316,7 +317,8 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	// Stop mining
 
 	t.Log("[*] Stop mining")
-	err = full.MineSubnet(ctx, addr, subnetAddr, true)
+	mp := hierarchical.MiningParams{}
+	err = full.MineSubnet(ctx, addr, subnetAddr, true, &mp)
 	require.NoError(t, err)
 
 	newHeads, err := full.SubnetChainNotify(ctx, subnetAddr)

@@ -562,7 +562,9 @@ func (s *SubnetMgr) stopSyncSubnet(ctx context.Context, id address.SubnetID) err
 
 func (s *SubnetMgr) MineSubnet(
 	ctx context.Context, wallet address.Address,
-	id address.SubnetID, stop bool) error {
+	id address.SubnetID, stop bool,
+	params *hierarchical.MiningParams,
+) error {
 
 	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.RLock()
@@ -606,7 +608,7 @@ func (s *SubnetMgr) MineSubnet(
 	if st.IsMiner(walletID) && st.Status != subnet.Killed {
 		log.Infow("Starting to mine subnet", "subnetID", id)
 		// We need to start mining from the context of the subnet manager.
-		return sh.mine(s.ctx, wallet)
+		return sh.mine(s.ctx, wallet, params)
 	}
 
 	return xerrors.Errorf("Address %v Not a miner in subnet, or subnet already killed", wallet)

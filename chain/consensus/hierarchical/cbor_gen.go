@@ -183,3 +183,83 @@ func (t *Validator) UnmarshalCBOR(r io.Reader) error {
 	}
 	return nil
 }
+
+var lengthBufMiningParams = []byte{130}
+
+func (t *MiningParams) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufMiningParams); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.LogLevel (string) (string)
+	if len(t.LogLevel) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.LogLevel was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.LogLevel))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.LogLevel)); err != nil {
+		return err
+	}
+
+	// t.LogFileName (string) (string)
+	if len(t.LogFileName) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.LogFileName was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.LogFileName))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.LogFileName)); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *MiningParams) UnmarshalCBOR(r io.Reader) error {
+	*t = MiningParams{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 2 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.LogLevel (string) (string)
+
+	{
+		sval, err := cbg.ReadStringBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+
+		t.LogLevel = string(sval)
+	}
+	// t.LogFileName (string) (string)
+
+	{
+		sval, err := cbg.ReadStringBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+
+		t.LogFileName = string(sval)
+	}
+	return nil
+}

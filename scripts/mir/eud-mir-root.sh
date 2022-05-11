@@ -57,7 +57,7 @@ rm -rvf $NODE_3_NETADDR
 rm -rf ./eudico_daemon_*.log
 rm -rf ./eudico_miner_*.log
 
-LOG_LEVEL="info,mir-consensus=debug,mir-agent=debug"
+LOG_LEVEL="info,mir-consensus=debug,mir-agent=info"
 
 tmux new-session -d -s "mir" \; \
   new-window   -t "mir" \; \
@@ -78,7 +78,7 @@ tmux new-session -d -s "mir" \; \
         export EUDICO_PATH=$NODE_0_PATH
         export GOLOG_LOG_LEVEL=$LOG_LEVEL
         ./eudico wait-api;
-        ./eudico net listen | grep '/ip6/::1/' > $NODE_0_NETADDR; sleep 2;
+        ./eudico net listen | grep '/ip6/::1/' > $NODE_0_NETADDR; sleep 3;
         ./eudico net connect \$(cat $NODE_1_NETADDR);
         ./eudico net connect \$(cat $NODE_2_NETADDR);
         ./eudico net connect \$(cat $NODE_3_NETADDR);
@@ -93,7 +93,7 @@ tmux new-session -d -s "mir" \; \
         export EUDICO_MIR_MINERS=$NODES
         export EUDICO_PATH=$NODE_1_PATH
         ./eudico wait-api;
-        ./eudico net listen | grep '/ip6/::1/' > $NODE_1_NETADDR; sleep 2; \
+        ./eudico net listen | grep '/ip6/::1/' > $NODE_1_NETADDR; sleep 3; \
         ./eudico net connect \$(cat $NODE_0_NETADDR);
         ./eudico net connect \$(cat $NODE_2_NETADDR);
         ./eudico net connect \$(cat $NODE_3_NETADDR);
@@ -109,7 +109,7 @@ tmux new-session -d -s "mir" \; \
         export EUDICO_MIR_MINERS=$NODES
         export EUDICO_PATH=$NODE_2_PATH
         ./eudico wait-api;
-        ./eudico net listen | grep '/ip6/::1/' > $NODE_2_NETADDR; sleep 2;
+        ./eudico net listen | grep '/ip6/::1/' > $NODE_2_NETADDR; sleep 3;
         ./eudico net connect \$(cat $NODE_0_NETADDR);
         ./eudico net connect \$(cat $NODE_1_NETADDR);
         ./eudico net connect \$(cat $NODE_3_NETADDR);
@@ -124,7 +124,7 @@ tmux new-session -d -s "mir" \; \
        export EUDICO_MIR_MINERS=$NODES
        export EUDICO_PATH=$NODE_3_PATH
        ./eudico wait-api;
-       ./eudico net listen | grep '/ip6/::1/' > $NODE_3_NETADDR; sleep 2;
+       ./eudico net listen | grep '/ip6/::1/' > $NODE_3_NETADDR; sleep 3;
        ./eudico net connect \$(cat $NODE_0_NETADDR);
        ./eudico net connect \$(cat $NODE_1_NETADDR);
         ./eudico net connect \$(cat $NODE_2_NETADDR);

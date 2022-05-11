@@ -18,6 +18,11 @@ type ConsensusParams struct {
 	MinValidators uint64          // Min number of validators required to start a network.
 }
 
+type MiningParams struct {
+	LogLevel    string
+	LogFileName string
+}
+
 // List of supported/implemented consensus for subnets.
 const (
 	Delegated ConsensusType = iota
