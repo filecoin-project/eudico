@@ -258,15 +258,29 @@ func (sh *Subnet) isMining() bool {
 
 func (sh *Subnet) mine(ctx context.Context, wallet address.Address) error {
 	if sh.miningCtx != nil {
-		log.Warnw("already mining in subnet", "subnetID", sh.ID)
+		log.Warnw("Already mining in subnet", "subnetID", sh.ID)
 		return nil
 	}
 
+	errChan := make(chan error, 1)
 	mctx, cancel := context.WithCancel(ctx)
-	if err := subcns.Mine(mctx, sh.api, wallet, sh.consType); err != nil {
-		cancel()
-		return err
-	}
+
+	// This goroutine exists to log information about error occurred and cancel the mining.
+	go func() {
+		err := <-errChan
+		if err != nil {
+			cancel()
+			log.Errorw("Mining in subnet error", "subnetID", sh.ID, "error", err)
+			return
+		}
+		log.Infow("Completed mining in subnet", "subnetID", sh.ID, "consensus", sh.consType)
+	}()
+
+	// This goroutine is performing mining in the subnet.
+	go func() {
+		errChan <- subcns.Mine(mctx, sh.api, wallet, sh.consType)
+	}()
+
 	// Set context and cancel for mining if started successfully
 	sh.miningCtx, sh.miningCncl = mctx, cancel
 	log.Infow("Started mining in subnet", "subnetID", sh.ID, "consensus", sh.consType)

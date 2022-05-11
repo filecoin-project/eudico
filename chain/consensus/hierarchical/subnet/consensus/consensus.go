@@ -24,9 +24,6 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
-// MirNodeNumber defines the number of Mir nodes that must join subnet to launch consensus protocol.
-const MirNodeNumber = 2
-
 // Weight defines consensus weight function.
 // TODO // FIXME: Make an SubnetConsensus interface from this functions
 // to avoid having to use so many switch/cases. Deferring to the next
@@ -72,23 +69,20 @@ func New(
 	}
 }
 
-func Mine(ctx context.Context, api v1api.FullNode, wallet address.Address, cnsType hierarchical.ConsensusType) error {
-	var err error
-	go func() {
-		switch cnsType {
-		case hierarchical.Delegated:
-			err = delegcns.Mine(ctx, wallet, api)
-		case hierarchical.PoW:
-			err = tspow.Mine(ctx, wallet, api)
-		case hierarchical.Tendermint:
-			err = tendermint.Mine(ctx, wallet, api)
-		case hierarchical.Mir:
-			err = mir.Mine(ctx, wallet, api)
-		case hierarchical.Dummy:
-			err = dummy.Mine(ctx, wallet, api)
-		default:
-			err = xerrors.New("consensus type not supported")
-		}
-	}()
-	return err
+func Mine(ctx context.Context, api v1api.FullNode, wallet address.Address, cnsType hierarchical.ConsensusType) (err error) {
+	switch cnsType {
+	case hierarchical.Delegated:
+		err = delegcns.Mine(ctx, wallet, api)
+	case hierarchical.PoW:
+		err = tspow.Mine(ctx, wallet, api)
+	case hierarchical.Tendermint:
+		err = tendermint.Mine(ctx, wallet, api)
+	case hierarchical.Mir:
+		err = mir.Mine(ctx, wallet, api)
+	case hierarchical.Dummy:
+		err = dummy.Mine(ctx, wallet, api)
+	default:
+		err = xerrors.New("consensus type not supported")
+	}
+	return
 }

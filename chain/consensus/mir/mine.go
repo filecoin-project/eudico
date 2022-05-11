@@ -38,7 +38,7 @@ import (
 func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 	m, err := newMiner(ctx, addr, api)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	log.Infof("Mir miner %s started", m.mirID())
 	defer log.Infof("Mir miner %s completed", m.mirID())
