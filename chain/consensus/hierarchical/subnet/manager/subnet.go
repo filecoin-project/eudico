@@ -265,7 +265,7 @@ func (sh *Subnet) mine(ctx context.Context, wallet address.Address) error {
 	errChan := make(chan error, 1)
 	mctx, cancel := context.WithCancel(ctx)
 
-	// This goroutine exists to log information about error occured and cancel the mining.
+	// This goroutine exists to log information about error occurred and cancel the mining.
 	go func() {
 		err := <-errChan
 		if err != nil {
