@@ -11,8 +11,10 @@ import (
 	"github.com/filecoin-project/go-address"
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
+	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/platform/logging"
 	"github.com/filecoin-project/lotus/chain/types"
 	ltypes "github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
@@ -36,6 +38,8 @@ import (
 //    are received via state, after each validator joins the subnet.
 //    This is used to run Mir in a subnet.
 func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
+	log = logging.FromContext(ctx, log)
+
 	m, err := newMiner(ctx, addr, api)
 	if err != nil {
 		return err
@@ -45,6 +49,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 
 	log.Infof("Miner info:\n\twallet - %s\n\tnetwork - %s\n\tsubnet - %s\n\tMir ID - %s\n\tvalidators - %v",
 		m.addr, m.netName, m.subnetID, m.mirID(), m.validators)
+	log.Info("Mir timer:", build.MirTimer)
 
 	mirAgent, err := NewMirAgent(ctx, m.mirID(), m.validators)
 	if err != nil {
@@ -197,7 +202,7 @@ func newMiner(ctx context.Context, addr address.Address, api v1api.FullNode) (*m
 		}
 	} else {
 		if subnetID == address.RootSubnet {
-			return nil, xerrors.New("can't be run in root net without provided validators")
+			return nil, xerrors.New("can't be run in the rootnet without validators")
 		}
 		validators, err = api.SubnetStateGetValidators(ctx, subnetID)
 		if err != nil {

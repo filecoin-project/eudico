@@ -23,6 +23,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	subcns "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/consensus"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
+	"github.com/filecoin-project/lotus/chain/consensus/platform/logging"
 	"github.com/filecoin-project/lotus/chain/events"
 	"github.com/filecoin-project/lotus/chain/messagepool"
 	"github.com/filecoin-project/lotus/chain/stmgr"
@@ -256,7 +257,7 @@ func (sh *Subnet) isMining() bool {
 	return sh.miningCtx != nil
 }
 
-func (sh *Subnet) mine(ctx context.Context, wallet address.Address) error {
+func (sh *Subnet) mine(ctx context.Context, wallet address.Address, params *hierarchical.MiningParams) error {
 	if sh.miningCtx != nil {
 		log.Warnw("Already mining in subnet", "subnetID", sh.ID)
 		return nil
@@ -264,6 +265,13 @@ func (sh *Subnet) mine(ctx context.Context, wallet address.Address) error {
 
 	errChan := make(chan error, 1)
 	mctx, cancel := context.WithCancel(ctx)
+
+	if params.LogFileName != "" {
+		logger, err := logging.NewFileLogger(params.LogLevel, params.LogFileName)
+		if err == nil {
+			mctx = logging.WithLogger(mctx, logger)
+		}
+	}
 
 	// This goroutine exists to log information about error occurred and cancel the mining.
 	go func() {

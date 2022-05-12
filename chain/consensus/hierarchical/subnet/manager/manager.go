@@ -388,6 +388,10 @@ func (s *SubnetMgr) AddSubnet(
 		},
 	}
 
+	if consensus == uint64(hierarchical.Mir) && consensusParams.MinValidators == 0 {
+		return address.Undef, xerrors.New("min number of validators must be more than 0")
+	}
+
 	seraddp, err := actors.SerializeParams(addp)
 	if err != nil {
 		return address.Undef, err
@@ -461,9 +465,9 @@ func (s *SubnetMgr) JoinSubnet(
 	}
 
 	// Validator address is optional for Mir.
-	if st.Consensus == hierarchical.Mir && st.MinValidators > 0 {
+	if st.Consensus == hierarchical.Mir {
 		if validatorNetAddr == "" {
-			return cid.Undef, xerrors.New("Mir validator address is not provided")
+			return cid.Undef, xerrors.New("Mir validator address must be provided")
 		}
 	}
 	// Validator address is not supported for consensus other than Mir.
@@ -562,7 +566,9 @@ func (s *SubnetMgr) stopSyncSubnet(ctx context.Context, id address.SubnetID) err
 
 func (s *SubnetMgr) MineSubnet(
 	ctx context.Context, wallet address.Address,
-	id address.SubnetID, stop bool) error {
+	id address.SubnetID, stop bool,
+	params *hierarchical.MiningParams,
+) error {
 
 	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.RLock()
@@ -606,7 +612,7 @@ func (s *SubnetMgr) MineSubnet(
 	if st.IsMiner(walletID) && st.Status != subnet.Killed {
 		log.Infow("Starting to mine subnet", "subnetID", id)
 		// We need to start mining from the context of the subnet manager.
-		return sh.mine(s.ctx, wallet)
+		return sh.mine(s.ctx, wallet, params)
 	}
 
 	return xerrors.Errorf("Address %v Not a miner in subnet, or subnet already killed", wallet)

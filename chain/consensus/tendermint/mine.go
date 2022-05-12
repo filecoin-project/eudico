@@ -14,6 +14,7 @@ import (
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
+	"github.com/filecoin-project/lotus/chain/consensus/platform/logging"
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
@@ -22,6 +23,8 @@ const (
 )
 
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {
+	log = logging.FromContext(ctx, log)
+
 	var cache = newMessageCache()
 
 	tendermintClient, err := tmclient.New(NodeAddr())
@@ -94,7 +97,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 						continue
 					} else {
 						cache.addSentMessage(id, base.Height())
-						log.Debugf("successfully sent a message %s to Tendermint", id)
+						log.Debugf("successfully sent a message %v to Tendermint", id)
 					}
 				}
 			}
@@ -108,7 +111,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			for _, msg := range crossMsgs {
 				id := msg.Cid().String()
 
-				log.Debugf("[subnet: %s, epoch: %d] >>>>> cross msg to send: %s", id, subnetID, base.Height()+1)
+				log.Debugf("[subnet: %s, epoch: %s] >>>>> cross msg to send: %s", id, subnetID, base.Height()+1)
 
 				if cache.shouldSendMessage(id) {
 					msgBytes, err := msg.Serialize()

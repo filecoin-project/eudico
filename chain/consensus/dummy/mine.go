@@ -8,13 +8,16 @@ import (
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
+	"github.com/filecoin-project/lotus/chain/consensus/platform/logging"
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {
-	netName, nerr := api.StateNetworkName(ctx)
-	if nerr != nil {
-		return nerr
+	log = logging.FromContext(ctx, log)
+
+	netName, err := api.StateNetworkName(ctx)
+	if err != nil {
+		return err
 	}
 	subnetID := address.SubnetID(netName)
 

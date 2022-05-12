@@ -1326,17 +1326,17 @@ func (mr *MockFullNodeMockRecorder) MarketWithdraw(arg0, arg1, arg2, arg3 interf
 }
 
 // MineSubnet mocks base method.
-func (m *MockFullNode) MineSubnet(arg0 context.Context, arg1 address.Address, arg2 address.SubnetID, arg3 bool) error {
+func (m *MockFullNode) MineSubnet(arg0 context.Context, arg1 address.Address, arg2 address.SubnetID, arg3 bool, arg4 *hierarchical.MiningParams) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MineSubnet", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "MineSubnet", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // MineSubnet indicates an expected call of MineSubnet.
-func (mr *MockFullNodeMockRecorder) MineSubnet(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MockFullNodeMockRecorder) MineSubnet(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MineSubnet", reflect.TypeOf((*MockFullNode)(nil).MineSubnet), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MineSubnet", reflect.TypeOf((*MockFullNode)(nil).MineSubnet), arg0, arg1, arg2, arg3, arg4)
 }
 
 // MinerCreateBlock mocks base method.

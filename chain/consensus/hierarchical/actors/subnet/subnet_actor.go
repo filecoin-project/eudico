@@ -146,6 +146,7 @@ func (a SubnetActor) Join(rt runtime.Runtime, v *hierarchical.Validator) *abi.Em
 	rt.StateTransaction(&st, func() {
 		// Mutate state
 		if st.MinValidators > 0 {
+			// TODO: we don't check that validators with equal addresses or network addresses already exist.
 			st.ValidatorSet = append(st.ValidatorSet, *v)
 
 			log.Debugf("Added validator: %s", v.ID())

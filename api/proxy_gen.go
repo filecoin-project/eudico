@@ -596,7 +596,7 @@ type HierarchicalCnsStruct struct {
 
 		LockState func(p0 context.Context, p1 address.Address, p2 address.Address, p3 address.SubnetID, p4 abi.MethodNum) (cid.Cid, error) `perm:"write"`
 
-		MineSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 bool) error `perm:"read"`
+		MineSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 bool, p4 *hierarchical.MiningParams) error `perm:"read"`
 
 		ReleaseFunds func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) `perm:"write"`
 
@@ -3706,14 +3706,14 @@ func (s *HierarchicalCnsStub) LockState(p0 context.Context, p1 address.Address, 
 	return *new(cid.Cid), ErrNotSupported
 }
 
-func (s *HierarchicalCnsStruct) MineSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 bool) error {
+func (s *HierarchicalCnsStruct) MineSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 bool, p4 *hierarchical.MiningParams) error {
 	if s.Internal.MineSubnet == nil {
 		return ErrNotSupported
 	}
-	return s.Internal.MineSubnet(p0, p1, p2, p3)
+	return s.Internal.MineSubnet(p0, p1, p2, p3, p4)
 }
 
-func (s *HierarchicalCnsStub) MineSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 bool) error {
+func (s *HierarchicalCnsStub) MineSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 bool, p4 *hierarchical.MiningParams) error {
 	return ErrNotSupported
 }
 

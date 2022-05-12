@@ -43,8 +43,8 @@ func (a *HierarchicalAPI) SyncSubnet(ctx context.Context, id address.SubnetID, s
 }
 
 func (a *HierarchicalAPI) MineSubnet(ctx context.Context, wallet address.Address,
-	id address.SubnetID, stop bool) error {
-	return a.Sub.MineSubnet(ctx, wallet, id, stop)
+	id address.SubnetID, stop bool, params *hierarchical.MiningParams) error {
+	return a.Sub.MineSubnet(ctx, wallet, id, stop, params)
 }
 
 func (a *HierarchicalAPI) LeaveSubnet(ctx context.Context, wallet address.Address,

@@ -117,8 +117,8 @@ var addCmd = &cli.Command{
 			Usage: "optionally specify miner for delegated consensus",
 		},
 		&cli.Uint64Flag{
-			Name:  "validators",
-			Usage: "optionally specify number of validators in Mir",
+			Name:  "min-validators",
+			Usage: "optionally specify number of validators in subnet",
 			Value: 0,
 		},
 	},
@@ -322,6 +322,16 @@ var mineCmd = &cli.Command{
 			Name:  "stop",
 			Usage: "use this flag to stop mining a subnet",
 		},
+		&cli.StringFlag{
+			Name:  "log-file",
+			Usage: "use this file for logging",
+			Value: "",
+		},
+		&cli.StringFlag{
+			Name:  "log-level",
+			Usage: "logging level",
+			Value: "",
+		},
 	},
 	Action: func(cctx *cli.Context) error {
 
@@ -351,7 +361,12 @@ var mineCmd = &cli.Command{
 			subnet = cctx.String("subnet")
 		}
 
-		err = api.MineSubnet(ctx, addr, address.SubnetID(subnet), cctx.Bool("stop"))
+		params := &hierarchical.MiningParams{
+			LogFileName: cctx.String("log-file"),
+			LogLevel:    cctx.String("log-level"),
+		}
+
+		err = api.MineSubnet(ctx, addr, address.SubnetID(subnet), cctx.Bool("stop"), params)
 		if err != nil {
 			return err
 		}
