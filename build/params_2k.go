@@ -113,4 +113,4 @@ const BootstrapPeerThreshold = 1
 
 var WhitelistedBlock = cid.Undef
 
-const MirTimer = 200
+const MirTimer = 1300

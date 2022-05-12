@@ -388,6 +388,10 @@ func (s *SubnetMgr) AddSubnet(
 		},
 	}
 
+	if consensus == uint64(hierarchical.Mir) && consensusParams.MinValidators == 0 {
+		return address.Undef, xerrors.New("min number of validators must be more than 0")
+	}
+
 	seraddp, err := actors.SerializeParams(addp)
 	if err != nil {
 		return address.Undef, err
@@ -461,9 +465,9 @@ func (s *SubnetMgr) JoinSubnet(
 	}
 
 	// Validator address is optional for Mir.
-	if st.Consensus == hierarchical.Mir && st.MinValidators > 0 {
+	if st.Consensus == hierarchical.Mir {
 		if validatorNetAddr == "" {
-			return cid.Undef, xerrors.New("Mir validator address is not provided")
+			return cid.Undef, xerrors.New("Mir validator address must be provided")
 		}
 	}
 	// Validator address is not supported for consensus other than Mir.

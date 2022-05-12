@@ -79,9 +79,6 @@ tmux new-session -d -s "mir" \; \
         export GOLOG_LOG_LEVEL=$LOG_LEVEL
         ./eudico wait-api;
         ./eudico net listen | grep '/ip6/::1/' > $NODE_0_NETADDR; sleep 3;
-        ./eudico net connect \$(cat $NODE_1_NETADDR);
-        ./eudico net connect \$(cat $NODE_2_NETADDR);
-        ./eudico net connect \$(cat $NODE_3_NETADDR);
         ./eudico wallet import --as-default $NODE_0_KEY
         ./eudico mir miner --default-key 2>&1 | tee $NODE_0_MINER_LOG" Enter \; \
   send-keys -t "mir:0.2" "
@@ -95,8 +92,6 @@ tmux new-session -d -s "mir" \; \
         ./eudico wait-api;
         ./eudico net listen | grep '/ip6/::1/' > $NODE_1_NETADDR; sleep 3; \
         ./eudico net connect \$(cat $NODE_0_NETADDR);
-        ./eudico net connect \$(cat $NODE_2_NETADDR);
-        ./eudico net connect \$(cat $NODE_3_NETADDR);
         ./eudico wallet import --as-default $NODE_1_KEY
         ./eudico mir miner --default-key 2>&1 | tee $NODE_1_MINER_LOG" Enter \; \
   \
@@ -111,8 +106,6 @@ tmux new-session -d -s "mir" \; \
         ./eudico wait-api;
         ./eudico net listen | grep '/ip6/::1/' > $NODE_2_NETADDR; sleep 3;
         ./eudico net connect \$(cat $NODE_0_NETADDR);
-        ./eudico net connect \$(cat $NODE_1_NETADDR);
-        ./eudico net connect \$(cat $NODE_3_NETADDR);
         ./eudico wallet import --as-default $NODE_2_KEY
         ./eudico mir miner --default-key 2>&1 | tee $NODE_2_MINER_LOG" Enter \; \
     send-keys -t "mir:1.2" "
@@ -126,8 +119,6 @@ tmux new-session -d -s "mir" \; \
        ./eudico wait-api;
        ./eudico net listen | grep '/ip6/::1/' > $NODE_3_NETADDR; sleep 3;
        ./eudico net connect \$(cat $NODE_0_NETADDR);
-       ./eudico net connect \$(cat $NODE_1_NETADDR);
-        ./eudico net connect \$(cat $NODE_2_NETADDR);
        ./eudico wallet import --as-default $NODE_3_KEY
        ./eudico mir miner --default-key 2>&1  | tee $NODE_3_MINER_LOG" Enter \; \
   attach-session -t "mir:0.1"

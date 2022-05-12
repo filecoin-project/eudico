@@ -13,7 +13,7 @@ type contextKey string
 const loggerKey = contextKey("logger")
 
 func FromContext(ctx context.Context, logger *logging.ZapEventLogger) *logging.ZapEventLogger {
-	if logger, ok := ctx.Value("loggerKey").(*logging.ZapEventLogger); ok {
+	if logger, ok := ctx.Value(loggerKey).(*logging.ZapEventLogger); ok {
 		return logger
 	}
 	return logger

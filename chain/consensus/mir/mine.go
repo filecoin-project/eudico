@@ -11,6 +11,7 @@ import (
 	"github.com/filecoin-project/go-address"
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
+	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/platform/logging"
@@ -48,6 +49,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 
 	log.Infof("Miner info:\n\twallet - %s\n\tnetwork - %s\n\tsubnet - %s\n\tMir ID - %s\n\tvalidators - %v",
 		m.addr, m.netName, m.subnetID, m.mirID(), m.validators)
+	log.Info("Mir timer:", build.MirTimer)
 
 	mirAgent, err := NewMirAgent(ctx, m.mirID(), m.validators)
 	if err != nil {

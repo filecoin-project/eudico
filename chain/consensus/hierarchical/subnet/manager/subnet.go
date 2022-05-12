@@ -267,10 +267,9 @@ func (sh *Subnet) mine(ctx context.Context, wallet address.Address, params *hier
 	mctx, cancel := context.WithCancel(ctx)
 
 	if params.LogFileName != "" {
-		newLogger, err := logging.NewFileLogger(params.LogLevel, params.LogFileName)
+		logger, err := logging.NewFileLogger(params.LogLevel, params.LogFileName)
 		if err == nil {
-			log = newLogger
-			mctx = logging.WithLogger(mctx, log)
+			mctx = logging.WithLogger(mctx, logger)
 		}
 	}
 
