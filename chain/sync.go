@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Gurpartap/async"
+	"github.com/filecoin-project/pubsub"
 	"github.com/hashicorp/go-multierror"
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
@@ -18,7 +19,6 @@ import (
 	"github.com/libp2p/go-libp2p-core/connmgr"
 	"github.com/libp2p/go-libp2p-core/peer"
 	cbg "github.com/whyrusleeping/cbor-gen"
-	"github.com/whyrusleeping/pubsub"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/trace"
 	"golang.org/x/xerrors"
@@ -259,7 +259,7 @@ func (syncer *Syncer) IncomingBlocks(ctx context.Context) (<-chan *types.BlockHe
 	out := make(chan *types.BlockHeader, 10)
 
 	go func() {
-		defer syncer.incoming.Unsub(sub, LocalIncoming)
+		defer syncer.incoming.Unsub(sub)
 
 		for {
 			select {
@@ -1292,26 +1292,4 @@ func (syncer *Syncer) UnmarkAllBad() {
 func (syncer *Syncer) CheckBadBlockCache(blk cid.Cid) (string, bool) {
 	bbr, ok := syncer.bad.Has(blk)
 	return bbr.String(), ok
-}
-
-func (syncer *Syncer) getLatestBeaconEntry(ctx context.Context, ts *types.TipSet) (*types.BeaconEntry, error) {
-	cur := ts
-	for i := 0; i < 20; i++ {
-		cbe := cur.Blocks()[0].BeaconEntries
-		if len(cbe) > 0 {
-			return &cbe[len(cbe)-1], nil
-		}
-
-		if cur.Height() == 0 {
-			return nil, xerrors.Errorf("made it back to genesis block without finding beacon entry")
-		}
-
-		next, err := syncer.store.LoadTipSet(ctx, cur.Parents())
-		if err != nil {
-			return nil, xerrors.Errorf("failed to load parents when searching back for latest beacon entry: %w", err)
-		}
-		cur = next
-	}
-
-	return nil, xerrors.Errorf("found NO beacon entries in the 20 latest tipsets")
 }

@@ -131,6 +131,10 @@
   * [NetLimit](#NetLimit)
   * [NetPeerInfo](#NetPeerInfo)
   * [NetPeers](#NetPeers)
+  * [NetPing](#NetPing)
+  * [NetProtectAdd](#NetProtectAdd)
+  * [NetProtectList](#NetProtectList)
+  * [NetProtectRemove](#NetProtectRemove)
   * [NetPubsubScores](#NetPubsubScores)
   * [NetSetLimit](#NetSetLimit)
   * [NetStat](#NetStat)
@@ -161,6 +165,7 @@
   * [StateDealProviderCollateralBounds](#StateDealProviderCollateralBounds)
   * [StateDecodeParams](#StateDecodeParams)
   * [StateGetActor](#StateGetActor)
+  * [StateGetNetworkParams](#StateGetNetworkParams)
   * [StateGetRandomnessFromBeacon](#StateGetRandomnessFromBeacon)
   * [StateGetRandomnessFromTickets](#StateGetRandomnessFromTickets)
   * [StateGetReceipt](#StateGetReceipt)
@@ -3905,6 +3910,66 @@ Response:
 ]
 ```
 
+### NetPing
+
+
+Perms: read
+
+Inputs:
+```json
+[
+  "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf"
+]
+```
+
+Response: `60000000000`
+
+### NetProtectAdd
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  [
+    "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf"
+  ]
+]
+```
+
+Response: `{}`
+
+### NetProtectList
+
+
+Perms: read
+
+Inputs: `null`
+
+Response:
+```json
+[
+  "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf"
+]
+```
+
+### NetProtectRemove
+
+
+Perms: admin
+
+Inputs:
+```json
+[
+  [
+    "12D3KooWGzxzKZYveHXtpG6AsrUJBcWxHBFS2HsEoGTxrMLvKXtf"
+  ]
+]
+```
+
+Response: `{}`
+
 ### NetPubsubScores
 
 
@@ -4061,6 +4126,8 @@ Response:
   "To": "f01234",
   "ConfirmedAmt": "0",
   "PendingAmt": "0",
+  "NonReservedAmt": "0",
+  "PendingAvailableAmt": "0",
   "PendingWaitSentinel": null,
   "QueuedAmt": "0",
   "VoucherReedeemedAmt": "0"
@@ -4088,6 +4155,8 @@ Response:
   "To": "f01234",
   "ConfirmedAmt": "0",
   "PendingAmt": "0",
+  "NonReservedAmt": "0",
+  "PendingAvailableAmt": "0",
   "PendingWaitSentinel": null,
   "QueuedAmt": "0",
   "VoucherReedeemedAmt": "0"
@@ -5114,6 +5183,49 @@ Response:
   },
   "Nonce": 42,
   "Balance": "0"
+}
+```
+
+### StateGetNetworkParams
+StateGetNetworkParams return current network params
+
+
+Perms: read
+
+Inputs: `null`
+
+Response:
+```json
+{
+  "NetworkName": "lotus",
+  "BlockDelaySecs": 42,
+  "ConsensusMinerMinPower": "0",
+  "SupportedProofTypes": [
+    8
+  ],
+  "PreCommitChallengeDelay": 10101,
+  "ForkUpgradeParams": {
+    "UpgradeSmokeHeight": 10101,
+    "UpgradeBreezeHeight": 10101,
+    "UpgradeIgnitionHeight": 10101,
+    "UpgradeLiftoffHeight": 10101,
+    "UpgradeAssemblyHeight": 10101,
+    "UpgradeRefuelHeight": 10101,
+    "UpgradeTapeHeight": 10101,
+    "UpgradeKumquatHeight": 10101,
+    "UpgradePriceListOopsHeight": 10101,
+    "BreezeGasTampingDuration": 10101,
+    "UpgradeCalicoHeight": 10101,
+    "UpgradePersianHeight": 10101,
+    "UpgradeOrangeHeight": 10101,
+    "UpgradeClausHeight": 10101,
+    "UpgradeTrustHeight": 10101,
+    "UpgradeNorwegianHeight": 10101,
+    "UpgradeTurboHeight": 10101,
+    "UpgradeHyperdriveHeight": 10101,
+    "UpgradeChocolateHeight": 10101,
+    "UpgradeOhSnapHeight": 10101
+  }
 }
 ```
 

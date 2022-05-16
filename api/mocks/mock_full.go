@@ -8,12 +8,12 @@ import (
 	context "context"
 	json "encoding/json"
 	reflect "reflect"
+	time "time"
 
 	address "github.com/filecoin-project/go-address"
 	bitfield "github.com/filecoin-project/go-bitfield"
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	retrievalmarket "github.com/filecoin-project/go-fil-markets/retrievalmarket"
-	storagemarket "github.com/filecoin-project/go-fil-markets/storagemarket"
 	auth "github.com/filecoin-project/go-jsonrpc/auth"
 	abi "github.com/filecoin-project/go-state-types/abi"
 	big "github.com/filecoin-project/go-state-types/big"
@@ -778,10 +778,10 @@ func (mr *MockFullNodeMockRecorder) ClientMinerQueryOffer(arg0, arg1, arg2, arg3
 }
 
 // ClientQueryAsk mocks base method.
-func (m *MockFullNode) ClientQueryAsk(arg0 context.Context, arg1 peer.ID, arg2 address.Address) (*storagemarket.StorageAsk, error) {
+func (m *MockFullNode) ClientQueryAsk(arg0 context.Context, arg1 peer.ID, arg2 address.Address) (*api.StorageAsk, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ClientQueryAsk", arg0, arg1, arg2)
-	ret0, _ := ret[0].(*storagemarket.StorageAsk)
+	ret0, _ := ret[0].(*api.StorageAsk)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -2098,6 +2098,64 @@ func (mr *MockFullNodeMockRecorder) NetPeers(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NetPeers", reflect.TypeOf((*MockFullNode)(nil).NetPeers), arg0)
 }
 
+// NetPing mocks base method.
+func (m *MockFullNode) NetPing(arg0 context.Context, arg1 peer.ID) (time.Duration, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NetPing", arg0, arg1)
+	ret0, _ := ret[0].(time.Duration)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// NetPing indicates an expected call of NetPing.
+func (mr *MockFullNodeMockRecorder) NetPing(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NetPing", reflect.TypeOf((*MockFullNode)(nil).NetPing), arg0, arg1)
+}
+
+// NetProtectAdd mocks base method.
+func (m *MockFullNode) NetProtectAdd(arg0 context.Context, arg1 []peer.ID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NetProtectAdd", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// NetProtectAdd indicates an expected call of NetProtectAdd.
+func (mr *MockFullNodeMockRecorder) NetProtectAdd(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NetProtectAdd", reflect.TypeOf((*MockFullNode)(nil).NetProtectAdd), arg0, arg1)
+}
+
+// NetProtectList mocks base method.
+func (m *MockFullNode) NetProtectList(arg0 context.Context) ([]peer.ID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NetProtectList", arg0)
+	ret0, _ := ret[0].([]peer.ID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// NetProtectList indicates an expected call of NetProtectList.
+func (mr *MockFullNodeMockRecorder) NetProtectList(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NetProtectList", reflect.TypeOf((*MockFullNode)(nil).NetProtectList), arg0)
+}
+
+// NetProtectRemove mocks base method.
+func (m *MockFullNode) NetProtectRemove(arg0 context.Context, arg1 []peer.ID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NetProtectRemove", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// NetProtectRemove indicates an expected call of NetProtectRemove.
+func (mr *MockFullNodeMockRecorder) NetProtectRemove(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NetProtectRemove", reflect.TypeOf((*MockFullNode)(nil).NetProtectRemove), arg0, arg1)
+}
+
 // NetPubsubScores mocks base method.
 func (m *MockFullNode) NetPubsubScores(arg0 context.Context) ([]api.PubsubScore, error) {
 	m.ctrl.T.Helper()
@@ -2217,19 +2275,34 @@ func (mr *MockFullNodeMockRecorder) PaychCollect(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PaychCollect", reflect.TypeOf((*MockFullNode)(nil).PaychCollect), arg0, arg1)
 }
 
-// PaychGet mocks base method.
-func (m *MockFullNode) PaychGet(arg0 context.Context, arg1, arg2 address.Address, arg3 big.Int) (*api.ChannelInfo, error) {
+// PaychFund mocks base method.
+func (m *MockFullNode) PaychFund(arg0 context.Context, arg1, arg2 address.Address, arg3 big.Int) (*api.ChannelInfo, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PaychGet", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "PaychFund", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(*api.ChannelInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PaychFund indicates an expected call of PaychFund.
+func (mr *MockFullNodeMockRecorder) PaychFund(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PaychFund", reflect.TypeOf((*MockFullNode)(nil).PaychFund), arg0, arg1, arg2, arg3)
+}
+
+// PaychGet mocks base method.
+func (m *MockFullNode) PaychGet(arg0 context.Context, arg1, arg2 address.Address, arg3 big.Int, arg4 api.PaychGetOpts) (*api.ChannelInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PaychGet", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(*api.ChannelInfo)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // PaychGet indicates an expected call of PaychGet.
-func (mr *MockFullNodeMockRecorder) PaychGet(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MockFullNodeMockRecorder) PaychGet(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PaychGet", reflect.TypeOf((*MockFullNode)(nil).PaychGet), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PaychGet", reflect.TypeOf((*MockFullNode)(nil).PaychGet), arg0, arg1, arg2, arg3, arg4)
 }
 
 // PaychGetWaitReady mocks base method.
@@ -2590,6 +2663,21 @@ func (mr *MockFullNodeMockRecorder) StateGetActor(arg0, arg1, arg2 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StateGetActor", reflect.TypeOf((*MockFullNode)(nil).StateGetActor), arg0, arg1, arg2)
 }
 
+// StateGetNetworkParams mocks base method.
+func (m *MockFullNode) StateGetNetworkParams(arg0 context.Context) (*api.NetworkParams, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StateGetNetworkParams", arg0)
+	ret0, _ := ret[0].(*api.NetworkParams)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// StateGetNetworkParams indicates an expected call of StateGetNetworkParams.
+func (mr *MockFullNodeMockRecorder) StateGetNetworkParams(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StateGetNetworkParams", reflect.TypeOf((*MockFullNode)(nil).StateGetNetworkParams), arg0)
+}
+
 // StateGetRandomnessFromBeacon mocks base method.
 func (m *MockFullNode) StateGetRandomnessFromBeacon(arg0 context.Context, arg1 crypto.DomainSeparationTag, arg2 abi.ChainEpoch, arg3 []byte, arg4 types.TipSetKey) (abi.Randomness, error) {
 	m.ctrl.T.Helper()
@@ -2678,6 +2766,21 @@ func (m *MockFullNode) StateLookupID(arg0 context.Context, arg1 address.Address,
 func (mr *MockFullNodeMockRecorder) StateLookupID(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StateLookupID", reflect.TypeOf((*MockFullNode)(nil).StateLookupID), arg0, arg1, arg2)
+}
+
+// StateLookupRobustAddress mocks base method.
+func (m *MockFullNode) StateLookupRobustAddress(arg0 context.Context, arg1 address.Address, arg2 types.TipSetKey) (address.Address, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StateLookupRobustAddress", arg0, arg1, arg2)
+	ret0, _ := ret[0].(address.Address)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// StateLookupRobustAddress indicates an expected call of StateLookupRobustAddress.
+func (mr *MockFullNodeMockRecorder) StateLookupRobustAddress(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StateLookupRobustAddress", reflect.TypeOf((*MockFullNode)(nil).StateLookupRobustAddress), arg0, arg1, arg2)
 }
 
 // StateMarketBalance mocks base method.

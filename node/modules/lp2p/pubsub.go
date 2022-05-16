@@ -295,54 +295,75 @@ func GossipSub(in GossipIn) (service *pubsub.PubSub, err error) {
 	// // See: https://github.com/filecoin-project/eudico/issues/24
 	//
 	// drandTopicParams := &pubsub.TopicScoreParams{
-	//         // expected 2 beaconsn/min
-	//         TopicWeight: 0.5, // 5x block topic; max cap is 62.5
-	//
-	//         // 1 tick per second, maxes at 1 after 1 hour
-	//         TimeInMeshWeight:  0.00027, // ~1/3600
-	//         TimeInMeshQuantum: time.Second,
-	//         TimeInMeshCap:     1,
-	//
-	//         // deliveries decay after 1 hour, cap at 25 beacons
-	//         FirstMessageDeliveriesWeight: 5, // max value is 125
-	//         FirstMessageDeliveriesDecay:  pubsub.ScoreParameterDecay(time.Hour),
-	//         FirstMessageDeliveriesCap:    25, // the maximum expected in an hour is ~26, including the decay
-	//
-	//         // Mesh Delivery Failure is currently turned off for beacons
-	//         // This is on purpose as
-	//         // - the traffic is very low for meaningful distribution of incoming edges.
-	//         // - the reaction time needs to be very slow -- in the order of 10 min at least
-	//         //   so we might as well let opportunistic grafting repair the mesh on its own
-	//         //   pace.
-	//         // - the network is too small, so large asymmetries can be expected between mesh
-	//         //   edges.
-	//         // We should revisit this once the network grows.
-	//
-	//         // invalid messages decay after 1 hour
-	//         InvalidMessageDeliveriesWeight: -1000,
-	//         InvalidMessageDeliveriesDecay:  pubsub.ScoreParameterDecay(time.Hour),
-	// }
+	// 		// expected 2 beaconsn/min
+	// 		TopicWeight: 0.5, // 5x block topic; max cap is 62.5
+
+	// 		// 1 tick per second, maxes at 1 after 1 hour
+	// 		TimeInMeshWeight:  0.00027, // ~1/3600
+	// 		TimeInMeshQuantum: time.Second,
+	// 		TimeInMeshCap:     1,
+
+	// 		// deliveries decay after 1 hour, cap at 25 beacons
+	// 		FirstMessageDeliveriesWeight: 5, // max value is 125
+	// 		FirstMessageDeliveriesDecay:  pubsub.ScoreParameterDecay(time.Hour),
+	// 		FirstMessageDeliveriesCap:    25, // the maximum expected in an hour is ~26, including the decay
+
+	// 		// Mesh Delivery Failure is currently turned off for beacons
+	// 		// This is on purpose as
+	// 		// - the traffic is very low for meaningful distribution of incoming edges.
+	// 		// - the reaction time needs to be very slow -- in the order of 10 min at least
+	// 		//   so we might as well let opportunistic grafting repair the mesh on its own
+	// 		//   pace.
+	// 		// - the network is too small, so large asymmetries can be expected between mesh
+	// 		//   edges.
+	// 		// We should revisit this once the network grows.
+
+	// 		// invalid messages decay after 1 hour
+	// 		InvalidMessageDeliveriesWeight: -1000,
+	// 		InvalidMessageDeliveriesDecay:  pubsub.ScoreParameterDecay(time.Hour),
+	// 	}
+
+	// 	ingestTopicParams := &pubsub.TopicScoreParams{
+	// 		// expected ~0.5 confirmed deals / min. sampled
+	// 		TopicWeight: 0.1,
+
+	// 		TimeInMeshWeight:  0.00027, // ~1/3600
+	// 		TimeInMeshQuantum: time.Second,
+	// 		TimeInMeshCap:     1,
+
+	// 		FirstMessageDeliveriesWeight: 0.5,
+	// 		FirstMessageDeliveriesDecay:  pubsub.ScoreParameterDecay(time.Hour),
+	// 		FirstMessageDeliveriesCap:    100, // allowing for burstiness
+
+	// 		InvalidMessageDeliveriesWeight: -1000,
+	// 		InvalidMessageDeliveriesDecay:  pubsub.ScoreParameterDecay(time.Hour),
+	// 	}
+
 	// var drandTopics []string
 	// for _, d := range in.Dr {
-	//         topic, err := getDrandTopic(d.Config.ChainInfoJSON)
-	//         if err != nil {
-	//                 return nil, err
-	//         }
-	//         topicParams[topic] = drandTopicParams
-	//         pgTopicWeights[topic] = 5
-	//         drandTopics = append(drandTopics, topic)
+	// 	topic, err := getDrandTopic(d.Config.ChainInfoJSON)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	topicParams[topic] = drandTopicParams
+	// 	pgTopicWeights[topic] = 5
+	// 	drandTopics = append(drandTopics, topic)
 	// }
-	//
+
+	// // Index ingestion whitelist
+	// topicParams[build.IndexerIngestTopic(in.Nn)] = ingestTopicParams
+
 	// allowTopics := []string{
-	//         build.BlocksTopic(in.Nn),
-	//         build.MessagesTopic(in.Nn),
+	// 	build.BlocksTopic(in.Nn),
+	// 	build.MessagesTopic(in.Nn),
+	// 	build.IndexerIngestTopic(in.Nn),
 	// }
 	// allowTopics = append(allowTopics, drandTopics...)
 	// options = append(options,
-	//         pubsub.WithSubscriptionFilter(
-	//                 pubsub.WrapLimitSubscriptionFilter(
-	//                         pubsub.NewAllowlistSubscriptionFilter(allowTopics...),
-	//                         100)))
+	// 	pubsub.WithSubscriptionFilter(
+	// 		pubsub.WrapLimitSubscriptionFilter(
+	// 			pubsub.NewAllowlistSubscriptionFilter(allowTopics...),
+	// 			100)))
 
 	// tracer
 	if in.Cfg.RemoteTracer != "" {

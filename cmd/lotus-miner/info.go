@@ -35,6 +35,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin/reward"
 	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
+	"github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
 	"github.com/filecoin-project/lotus/journal/alerting"
 )
 
@@ -126,7 +127,7 @@ func infoCmdAct(cctx *cli.Context) error {
 
 	alerts, err := minerApi.LogAlerts(ctx)
 	if err != nil {
-		return xerrors.Errorf("getting alerts: %w", err)
+		fmt.Printf("ERROR: getting alerts: %s\n", err)
 	}
 
 	activeAlerts := make([]alerting.Alert, 0)
@@ -343,6 +344,41 @@ func handleMiningInfo(ctx context.Context, cctx *cli.Context, fullapi v0api.Full
 		}
 	}
 
+	{
+		fmt.Println()
+
+		ws, err := nodeApi.WorkerStats(ctx)
+		if err != nil {
+			return xerrors.Errorf("getting worker stats: %w", err)
+		}
+
+		workersByType := map[string]int{
+			sealtasks.WorkerSealing:     0,
+			sealtasks.WorkerWindowPoSt:  0,
+			sealtasks.WorkerWinningPoSt: 0,
+		}
+
+	wloop:
+		for _, st := range ws {
+			if !st.Enabled {
+				continue
+			}
+
+			for _, task := range st.Tasks {
+				if task.WorkerType() != sealtasks.WorkerSealing {
+					workersByType[task.WorkerType()]++
+					continue wloop
+				}
+			}
+			workersByType[sealtasks.WorkerSealing]++
+		}
+
+		fmt.Printf("Workers: Seal(%d) WdPoSt(%d) WinPoSt(%d)\n",
+			workersByType[sealtasks.WorkerSealing],
+			workersByType[sealtasks.WorkerWindowPoSt],
+			workersByType[sealtasks.WorkerWinningPoSt])
+	}
+
 	if cctx.IsSet("blocks") {
 		fmt.Println("Produced newest blocks:")
 		err = producedBlocks(ctx, cctx.Int("blocks"), maddr, fullapi)
@@ -350,9 +386,6 @@ func handleMiningInfo(ctx context.Context, cctx *cli.Context, fullapi v0api.Full
 			return err
 		}
 	}
-	// TODO: grab actr state / info
-	//  * Sealed sectors (count / bytes)
-	//  * Power
 
 	return nil
 }
@@ -466,6 +499,8 @@ var stateOrder = map[sealing.SectorState]stateMeta{}
 var stateList = []stateMeta{
 	{col: 39, state: "Total"},
 	{col: color.FgGreen, state: sealing.Proving},
+	{col: color.FgGreen, state: sealing.Available},
+	{col: color.FgGreen, state: sealing.UpdateActivating},
 
 	{col: color.FgBlue, state: sealing.Empty},
 	{col: color.FgBlue, state: sealing.WaitDeals},
@@ -496,6 +531,7 @@ var stateList = []stateMeta{
 	{col: color.FgYellow, state: sealing.SubmitReplicaUpdate},
 	{col: color.FgYellow, state: sealing.ReplicaUpdateWait},
 	{col: color.FgYellow, state: sealing.FinalizeReplicaUpdate},
+	{col: color.FgYellow, state: sealing.ReleaseSectorKey},
 
 	{col: color.FgCyan, state: sealing.Terminating},
 	{col: color.FgCyan, state: sealing.TerminateWait},
@@ -524,6 +560,8 @@ var stateList = []stateMeta{
 	{col: color.FgRed, state: sealing.SnapDealsAddPieceFailed},
 	{col: color.FgRed, state: sealing.SnapDealsDealsExpired},
 	{col: color.FgRed, state: sealing.ReplicaUpdateFailed},
+	{col: color.FgRed, state: sealing.ReleaseSectorKeyFailed},
+	{col: color.FgRed, state: sealing.FinalizeReplicaUpdateFailed},
 }
 
 func init() {
