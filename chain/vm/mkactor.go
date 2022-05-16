@@ -49,7 +49,7 @@ func init() {
 
 var EmptyObjectCid cid.Cid
 
-func (vm *VM) CreateAccountActor(ctx context.Context, msg *types.Message, addr address.Address) (*types.Actor, address.Address, aerrors.ActorError) {
+func (vm *LegacyVM) CreateAccountActor(ctx context.Context, msg *types.Message, addr address.Address) (*types.Actor, address.Address, aerrors.ActorError) {
 	rt := vm.makeRuntime(ctx, msg, nil)
 	return TryCreateAccountActor(rt, addr)
 }

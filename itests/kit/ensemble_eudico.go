@@ -774,11 +774,11 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 
 			// disable resource filtering so that local worker gets assigned tasks
 			// regardless of system pressure.
-			node.Override(new(sectorstorage.SealerConfig), func() sectorstorage.SealerConfig {
-				scfg := config.DefaultStorageMiner()
-				scfg.Storage.ResourceFiltering = sectorstorage.ResourceFilteringDisabled
-				return scfg.Storage
-			}),
+			// node.Override(new(sectorstorage.SealerConfig), func() sectorstorage.SealerConfig {
+			//         scfg := config.DefaultStorageMiner()
+			//         scfg.Storage.ResourceFiltering = sectorstorage.ResourceFilteringDisabled
+			//         return scfg.Storage
+			// }),
 
 			// upgrades
 			node.Override(new(stmgr.UpgradeSchedule), n.options.upgradeSchedule),

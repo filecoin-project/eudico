@@ -2,6 +2,7 @@ package crossmsg
 
 import (
 	"context"
+	"os"
 	"sort"
 	"time"
 
@@ -145,7 +146,7 @@ func checkTopDownMsg(pstore blockadt.Store, parentSCA, snSCA *sca.SCAState, msg 
 
 }
 
-func ApplyCrossMsg(ctx context.Context, vmi *vm.VM, submgr subnet.SubnetMgr,
+func ApplyCrossMsg(ctx context.Context, vmi vm.Interface, submgr subnet.SubnetMgr,
 	em stmgr.ExecMonitor, msg *types.Message,
 	ts *types.TipSet) error {
 	switch hierarchical.GetMsgType(msg) {
@@ -157,7 +158,7 @@ func ApplyCrossMsg(ctx context.Context, vmi *vm.VM, submgr subnet.SubnetMgr,
 	return xerrors.Errorf("Unknown cross-msg type")
 }
 
-func applyMsg(ctx context.Context, vmi *vm.VM, em stmgr.ExecMonitor,
+func applyMsg(ctx context.Context, vmi vm.Interface, em stmgr.ExecMonitor,
 	msg *types.Message, ts *types.TipSet) error {
 	// Serialize params
 	params := &sca.CrossMsgParams{
@@ -184,17 +185,21 @@ func applyMsg(ctx context.Context, vmi *vm.VM, em stmgr.ExecMonitor,
 	// TODO: When handling arbitrary cross-messages, we should check if
 	// we need to trigger the state change in this subnet, if not we may not
 	// need to do this.
-	rto, err := params.Msg.To.RawAddr()
-	if err != nil {
-		return err
-	}
-	st := vmi.StateTree()
-	_, acterr := st.GetActor(rto)
-	if acterr != nil {
-		log.Debugw("Initializing To address for crossmsg", "address", rto)
-		_, _, err := vmi.CreateAccountActor(ctx, apply, rto)
+	// NOTE: If we are still using the legacy-vm, we need to initialize
+	// the account actor before sending funds or send messages to them.
+	if os.Getenv("LOTUS_USE_FVM_EXPERIMENTAL") != "1" {
+		rto, err := params.Msg.To.RawAddr()
 		if err != nil {
-			return xerrors.Errorf("failed to initialize address for crossmsg: %w", err)
+			return err
+		}
+		st := vmi.(*vm.LegacyVM).StateTree()
+		_, acterr := st.GetActor(rto)
+		if acterr != nil {
+			log.Debugw("Initializing To address for crossmsg", "address", rto)
+			_, _, err := vmi.(*vm.LegacyVM).CreateAccountActor(ctx, apply, rto)
+			if err != nil {
+				return xerrors.Errorf("failed to initialize address for crossmsg: %w", err)
+			}
 		}
 	}
 
