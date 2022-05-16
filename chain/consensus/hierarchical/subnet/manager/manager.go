@@ -61,7 +61,7 @@ var _ subiface.SubnetMgr = &SubnetMgr{}
 
 var log = logging.Logger("subnetMgr")
 
-// SubnetMgr is the subneting manager in the root chain
+// SubnetMgr is the subneting manager in the root chain.
 type SubnetMgr struct {
 	ctx context.Context
 	// Listener for events of the root chain.
@@ -96,7 +96,7 @@ type SubnetMgr struct {
 func NewSubnetMgr(
 	mctx helpers.MetricsCtx,
 	lc fx.Lifecycle,
-	//api impl.FullNodeAPI,
+	// api impl.FullNodeAPI,
 	self peer.ID,
 	pubsub *pubsub.PubSub,
 	ds dtypes.MetadataDS,
@@ -197,9 +197,8 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 
 	// Wrap the ds with prefix
 	sh.ds = nsds.Wrap(s.ds, ds.NewKey(sh.ID.String()))
-	// TODO: We should not use the metadata datastore here. We need
-	// to create the corresponding blockstores. Deferring once we
-	// figure out if it works.
+	// TODO: We should not use the metadata datastore here.
+	//  We need to create the corresponding blockstores. Deferring once we figure out if it works.
 	sh.bs = blockstore.FromDatastore(s.ds)
 
 	// Instantiate new cross-msg resolver
@@ -255,16 +254,15 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 	}
 	// Start syncer for the subnet
 	sh.syncer.Start()
-	// Hello protocol needs to run after the syncer is intialized and the genesis
-	// is created but before we set-up the gossipsub topics to listen for
-	// new blocks and messages.
+	// Hello protocol needs to run after the syncer is initialized and the genesis
+	// is created, but before we set up the gossipsub topics to listen for new blocks and messages.
 	err = sh.runHello(ctx)
 	if err != nil {
 		return xerrors.Errorf("Error starting hello protocol for subnet %s: %s", sh.ID, err)
 	}
 
-	// FIXME: Consider inheriting Bitswap ChainBlockService instead of using
-	// offline.Exchange here. See builder_chain to undertand how is built.
+	// FIXME: Consider inheriting Bitswap ChainBlockService instead of using offline.Exchange here.
+	//  See builder_chain to undertand how is built.
 	bserv := blockservice.New(sh.bs, offline.Exchange(sh.bs))
 	prov := messagepool.NewProvider(sh.sm, s.pubsub)
 
@@ -280,7 +278,7 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 		return xerrors.Errorf("error initializing cross-msg resolver: %s", err)
 	}
 
-	// This functions create a new pubsub topic for the subnet to start
+	// These functions create a new pubsub topic for the subnet to start
 	// listening to new messages and blocks for the subnet.
 	err = sh.HandleIncomingBlocks(ctx, bserv)
 	if err != nil {
@@ -327,7 +325,7 @@ func (s *SubnetMgr) Close(ctx context.Context) error {
 	for _, sh := range s.subnets {
 		err := sh.Close(ctx)
 		if err != nil {
-			log.Errorf("error closing subnet %s: %w", sh.ID, err)
+			log.Errorf("error closing subnet %s: %s", sh.ID, err)
 			// NOTE: Even if we fail to close a subnet we should continue
 			// and not return. We shouldn't stop half-way.
 			// return err
@@ -343,11 +341,26 @@ func BuildSubnetMgr(mctx helpers.MetricsCtx, lc fx.Lifecycle, s *SubnetMgr) {
 
 	lc.Append(fx.Hook{
 		OnStop: func(ctx context.Context) error {
-			// NOTE: Closing subneting sub here. Whatever the hell that means...
+			// NOTE: Closing subnetting sub here. Whatever the hell that means...
 			// It may be worth revisiting this.
 			return s.Close(ctx)
 		},
 	})
+}
+
+func (s *SubnetMgr) GetSubnetState(ctx context.Context, id address.SubnetID, actor address.Address) (*subnet.SubnetState, error) {
+	// Get the api for the parent network hosting the subnet actor for the subnet.
+	parentAPI, err := s.getParentAPI(id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get actor state to check if the subnet is active and we are in the list of miners.
+	st, err := parentAPI.getSubnetState(ctx, actor)
+	if err != nil {
+		return nil, err
+	}
+	return st, nil
 }
 
 func (s *SubnetMgr) AddSubnet(
@@ -355,10 +368,9 @@ func (s *SubnetMgr) AddSubnet(
 	parent address.SubnetID, name string,
 	consensus uint64, minerStake abi.TokenAmount,
 	checkPeriod abi.ChainEpoch,
-	delegminer address.Address) (address.Address, error) {
+	consensusParams *hierarchical.ConsensusParams) (address.Address, error) {
 
-	// Get the api for the parent network hosting the subnet actor
-	// for the subnet.
+	// Get the api for the parent network hosting the subnet actor for the subnet.
 	parentAPI := s.getAPI(parent)
 	if parentAPI == nil {
 		return address.Undef, xerrors.Errorf("not syncing with parent network")
@@ -369,8 +381,15 @@ func (s *SubnetMgr) AddSubnet(
 		MinMinerStake: minerStake,
 		Name:          name,
 		Consensus:     hierarchical.ConsensusType(consensus),
-		DelegMiner:    delegminer,
 		CheckPeriod:   checkPeriod,
+		ConsensusParams: &hierarchical.ConsensusParams{
+			DelegMiner:    consensusParams.DelegMiner,
+			MinValidators: consensusParams.MinValidators,
+		},
+	}
+
+	if consensus == uint64(hierarchical.Mir) && consensusParams.MinValidators == 0 {
+		return address.Undef, xerrors.New("min number of validators must be more than 0")
 	}
 
 	seraddp, err := actors.SerializeParams(addp)
@@ -414,7 +433,9 @@ func (s *SubnetMgr) AddSubnet(
 func (s *SubnetMgr) JoinSubnet(
 	ctx context.Context, wallet address.Address,
 	value abi.TokenAmount,
-	id address.SubnetID) (cid.Cid, error) {
+	id address.SubnetID,
+	validatorNetAddr string,
+) (cid.Cid, error) {
 
 	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.Lock()
@@ -426,9 +447,38 @@ func (s *SubnetMgr) JoinSubnet(
 		return cid.Undef, err
 	}
 
-	// Get the api for the parent network hosting the subnet actor
-	// for the subnet.
+	// Get the api for the parent network hosting the subnet actor for the subnet.
 	parentAPI, err := s.getParentAPI(id)
+	if err != nil {
+		return cid.Undef, err
+	}
+
+	var st subnet.SubnetState
+	subnetAct, err := parentAPI.StateGetActor(ctx, SubnetActor, types.EmptyTSK)
+	if err != nil {
+		return cid.Undef, xerrors.Errorf("loading actor state: %w", err)
+	}
+	pbs := blockstore.NewAPIBlockstore(parentAPI)
+	pcst := cbor.NewCborStore(pbs)
+	if err := pcst.Get(ctx, subnetAct.Head, &st); err != nil {
+		return cid.Undef, xerrors.Errorf("getting actor state: %w", err)
+	}
+
+	// Validator address is optional for Mir.
+	if st.Consensus == hierarchical.Mir {
+		if validatorNetAddr == "" {
+			return cid.Undef, xerrors.New("Mir validator address must be provided")
+		}
+	}
+	// Validator address is not supported for consensus other than Mir.
+	if st.Consensus != hierarchical.Mir && validatorNetAddr != "" {
+		if validatorNetAddr == "" {
+			return cid.Undef, xerrors.New("validator address is not supported")
+		}
+	}
+	var params bytes.Buffer
+	v := hierarchical.NewValidator(id, wallet, validatorNetAddr)
+	err = v.MarshalCBOR(&params)
 	if err != nil {
 		return cid.Undef, err
 	}
@@ -440,7 +490,7 @@ func (s *SubnetMgr) JoinSubnet(
 		From:   wallet,
 		Value:  value,
 		Method: subnet.Methods.Join,
-		Params: nil,
+		Params: params.Bytes(),
 	}, nil)
 	if aerr != nil {
 		log.Errorw("Error pushing join subnet message to parent api", "err", aerr)
@@ -456,8 +506,8 @@ func (s *SubnetMgr) JoinSubnet(
 		return cid.Undef, aerr
 	}
 
-	// See if we are already syncing with that chain. If this
-	// is the case we don't have to do much after the stake has been added.
+	// See if we are already syncing with that chain.
+	// If this is the case we don't have to do much after the stake has been added.
 	if s.getAPI(id) != nil {
 		log.Infow("Already joined subnet %v. Adding more stake to subnet", "subnetID", id)
 		return smsg.Cid(), nil
@@ -484,7 +534,7 @@ func (s *SubnetMgr) syncSubnet(ctx context.Context, id address.SubnetID, parentA
 	}
 
 	// Get genesis from actor state.
-	st, err := parentAPI.getActorState(ctx, SubnetActor)
+	st, err := parentAPI.getSubnetState(ctx, SubnetActor)
 	if err != nil {
 		return err
 	}
@@ -497,8 +547,7 @@ func (s *SubnetMgr) SyncSubnet(ctx context.Context, id address.SubnetID, stop bo
 	if stop {
 		return s.stopSyncSubnet(ctx, id)
 	}
-	// Get the api for the parent network hosting the subnet actor
-	// for the subnet.
+	// Get the api for the parent network hosting the subnet actor for the subnet.
 	parentAPI, err := s.getParentAPI(id)
 	if err != nil {
 		return err
@@ -517,7 +566,9 @@ func (s *SubnetMgr) stopSyncSubnet(ctx context.Context, id address.SubnetID) err
 
 func (s *SubnetMgr) MineSubnet(
 	ctx context.Context, wallet address.Address,
-	id address.SubnetID, stop bool) error {
+	id address.SubnetID, stop bool,
+	params *hierarchical.MiningParams,
+) error {
 
 	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.RLock()
@@ -540,15 +591,7 @@ func (s *SubnetMgr) MineSubnet(
 		return sh.stopMining(ctx)
 	}
 
-	// Get the api for the parent network hosting the subnet actor
-	// for the subnet.
-	parentAPI, err := s.getParentAPI(id)
-	if err != nil {
-		return err
-	}
-	// Get actor state to check if the subnet is active and we are in the list
-	// of miners
-	st, err := parentAPI.getActorState(ctx, SubnetActor)
+	st, err := s.GetSubnetState(ctx, id, SubnetActor)
 	if err != nil {
 		return err
 	}
@@ -559,10 +602,17 @@ func (s *SubnetMgr) MineSubnet(
 		return err
 	}
 
+	if int(st.MinValidators) > 0 {
+		log.Debugf("%d validators have joined subnet %s", len(st.ValidatorSet), id)
+		if len(st.ValidatorSet) != int(st.MinValidators) {
+			return xerrors.Errorf("joined validators - %d, required validators - %d", len(st.ValidatorSet), st.MinValidators)
+		}
+	}
+
 	if st.IsMiner(walletID) && st.Status != subnet.Killed {
 		log.Infow("Starting to mine subnet", "subnetID", id)
 		// We need to start mining from the context of the subnet manager.
-		return sh.mine(s.ctx, wallet)
+		return sh.mine(s.ctx, wallet, params)
 	}
 
 	return xerrors.Errorf("Address %v Not a miner in subnet, or subnet already killed", wallet)
@@ -582,8 +632,7 @@ func (s *SubnetMgr) LeaveSubnet(
 		return cid.Undef, err
 	}
 
-	// Get the api for the parent network hosting the subnet actor
-	// for the subnet.
+	// Get the api for the parent network hosting the subnet actor for the subnet.
 	parentAPI, err := s.getParentAPI(id)
 	if err != nil {
 		return cid.Undef, err
@@ -609,8 +658,7 @@ func (s *SubnetMgr) LeaveSubnet(
 		return cid.Undef, aerr
 	}
 
-	// See if we are already syncing with that chain. If this
-	// is the case we can remove the subnet
+	// See if we are already syncing with that chain. If this is the case we can remove the subnet
 	if sh, _ := s.getSubnet(id); sh != nil {
 		log.Infow("Stop syncing with subnet", "subnetID", id)
 		delete(s.subnets, id)
@@ -649,11 +697,11 @@ func (s *SubnetMgr) ListSubnets(ctx context.Context, id address.SubnetID) ([]sca
 	var output []sca.SubnetOutput
 
 	for _, sn := range subnets {
-		act, err := sn.ID.Actor()
+		a, err := sn.ID.Actor()
 		if err != nil {
 			return nil, err
 		}
-		snAct, err := sapi.StateGetActor(ctx, act, types.EmptyTSK)
+		snAct, err := sapi.StateGetActor(ctx, a, types.EmptyTSK)
 		if err != nil {
 			return nil, err
 		}
@@ -688,8 +736,7 @@ func (s *SubnetMgr) KillSubnet(
 		return cid.Undef, err
 	}
 
-	// Get the api for the parent network hosting the subnet actor
-	// for the subnet.
+	// Get the api for the parent network hosting the subnet actor for the subnet.
 	parentAPI, err := s.getParentAPI(id)
 	if err != nil {
 		return cid.Undef, err
@@ -753,24 +800,24 @@ func (s *SubnetMgr) getSubnet(id address.SubnetID) (*Subnet, error) {
 }
 
 func (s *SubnetMgr) GetSubnetAPI(id address.SubnetID) (v1api.FullNode, error) {
-	api := s.getAPI(id)
-	if api == nil {
+	sapi := s.getAPI(id)
+	if sapi == nil {
 		return nil, xerrors.Errorf("subnet manager not syncing with network")
 	}
-	return api, nil
+	return sapi, nil
 }
 
 func (s *SubnetMgr) GetSCAState(ctx context.Context, id address.SubnetID) (*sca.SCAState, blockadt.Store, error) {
-	api, err := s.GetSubnetAPI(id)
+	sapi, err := s.GetSubnetAPI(id)
 	if err != nil {
 		return nil, nil, err
 	}
 	var st sca.SCAState
-	subnetAct, err := api.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, types.EmptyTSK)
+	subnetAct, err := sapi.StateGetActor(ctx, hierarchical.SubnetCoordActorAddr, types.EmptyTSK)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("loading actor state: %w", err)
 	}
-	pbs := blockstore.NewAPIBlockstore(api)
+	pbs := blockstore.NewAPIBlockstore(sapi)
 	pcst := cbor.NewCborStore(pbs)
 	if err := pcst.Get(ctx, subnetAct.Head, &st); err != nil {
 		return nil, nil, xerrors.Errorf("getting actor state: %w", err)
@@ -779,33 +826,45 @@ func (s *SubnetMgr) GetSCAState(ctx context.Context, id address.SubnetID) (*sca.
 }
 
 func (s *SubnetMgr) SubnetChainNotify(ctx context.Context, id address.SubnetID) (<-chan []*api.HeadChange, error) {
-	api, err := s.GetSubnetAPI(id)
+	sapi, err := s.GetSubnetAPI(id)
 	if err != nil {
 		return nil, err
 	}
-	return api.ChainNotify(ctx)
+	return sapi.ChainNotify(ctx)
 }
 
 func (s *SubnetMgr) SubnetChainHead(ctx context.Context, id address.SubnetID) (*types.TipSet, error) {
-	api, err := s.GetSubnetAPI(id)
+	sapi, err := s.GetSubnetAPI(id)
 	if err != nil {
 		return nil, err
 	}
-	return api.ChainHead(ctx)
+	return sapi.ChainHead(ctx)
 }
 
 func (s *SubnetMgr) SubnetStateGetActor(ctx context.Context, id address.SubnetID, addr address.Address, tsk types.TipSetKey) (*types.Actor, error) {
-	api, err := s.GetSubnetAPI(id)
+	sapi, err := s.GetSubnetAPI(id)
 	if err != nil {
 		return nil, err
 	}
-	return api.StateGetActor(ctx, addr, tsk)
+	return sapi.StateGetActor(ctx, addr, tsk)
 }
 
 func (s *SubnetMgr) SubnetStateWaitMsg(ctx context.Context, id address.SubnetID, cid cid.Cid, confidence uint64, limit abi.ChainEpoch, allowReplaced bool) (*api.MsgLookup, error) {
-	api, err := s.GetSubnetAPI(id)
+	sapi, err := s.GetSubnetAPI(id)
 	if err != nil {
 		return nil, err
 	}
-	return api.StateWaitMsg(ctx, cid, confidence, limit, allowReplaced)
+	return sapi.StateWaitMsg(ctx, cid, confidence, limit, allowReplaced)
+}
+
+func (s *SubnetMgr) SubnetStateGetValidators(ctx context.Context, id address.SubnetID) ([]hierarchical.Validator, error) {
+	actor, err := id.Actor()
+	if err != nil {
+		return nil, err
+	}
+	st, err := s.GetSubnetState(ctx, id, actor)
+	if err != nil {
+		return nil, err
+	}
+	return st.ValidatorSet, nil
 }

@@ -21,7 +21,7 @@ var _ = cid.Undef
 var _ = math.E
 var _ = sort.Sort
 
-var lengthBufSubnetState = []byte{140}
+var lengthBufSubnetState = []byte{142}
 
 func (t *SubnetState) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -136,6 +136,26 @@ func (t *SubnetState) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("failed to write cid field t.WindowChecks: %w", err)
 	}
 
+	// t.ValidatorSet ([]hierarchical.Validator) (slice)
+	if len(t.ValidatorSet) > cbg.MaxLength {
+		return xerrors.Errorf("Slice value in field t.ValidatorSet was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajArray, uint64(len(t.ValidatorSet))); err != nil {
+		return err
+	}
+	for _, v := range t.ValidatorSet {
+		if err := v.MarshalCBOR(w); err != nil {
+			return err
+		}
+	}
+
+	// t.MinValidators (uint64) (uint64)
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.MinValidators)); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -153,7 +173,7 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 12 {
+	if extra != 14 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -334,6 +354,49 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) error {
 		t.WindowChecks = c
 
 	}
+	// t.ValidatorSet ([]hierarchical.Validator) (slice)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+
+	if extra > cbg.MaxLength {
+		return fmt.Errorf("t.ValidatorSet: array too large (%d)", extra)
+	}
+
+	if maj != cbg.MajArray {
+		return fmt.Errorf("expected cbor array")
+	}
+
+	if extra > 0 {
+		t.ValidatorSet = make([]hierarchical.Validator, extra)
+	}
+
+	for i := 0; i < int(extra); i++ {
+
+		var v hierarchical.Validator
+		if err := v.UnmarshalCBOR(br); err != nil {
+			return err
+		}
+
+		t.ValidatorSet[i] = v
+	}
+
+	// t.MinValidators (uint64) (uint64)
+
+	{
+
+		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+		if maj != cbg.MajUnsignedInt {
+			return fmt.Errorf("wrong type for uint64 field")
+		}
+		t.MinValidators = uint64(extra)
+
+	}
 	return nil
 }
 
@@ -380,13 +443,13 @@ func (t *ConstructParams) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.MinMinerStake (big.Int) (struct)
-	if err := t.MinMinerStake.MarshalCBOR(w); err != nil {
+	// t.ConsensusParams (hierarchical.ConsensusParams) (struct)
+	if err := t.ConsensusParams.MarshalCBOR(w); err != nil {
 		return err
 	}
 
-	// t.DelegMiner (address.Address) (struct)
-	if err := t.DelegMiner.MarshalCBOR(w); err != nil {
+	// t.MinMinerStake (big.Int) (struct)
+	if err := t.MinMinerStake.MarshalCBOR(w); err != nil {
 		return err
 	}
 
@@ -455,21 +518,31 @@ func (t *ConstructParams) UnmarshalCBOR(r io.Reader) error {
 		t.Consensus = hierarchical.ConsensusType(extra)
 
 	}
+	// t.ConsensusParams (hierarchical.ConsensusParams) (struct)
+
+	{
+
+		b, err := br.ReadByte()
+		if err != nil {
+			return err
+		}
+		if b != cbg.CborNull[0] {
+			if err := br.UnreadByte(); err != nil {
+				return err
+			}
+			t.ConsensusParams = new(hierarchical.ConsensusParams)
+			if err := t.ConsensusParams.UnmarshalCBOR(br); err != nil {
+				return xerrors.Errorf("unmarshaling t.ConsensusParams pointer: %w", err)
+			}
+		}
+
+	}
 	// t.MinMinerStake (big.Int) (struct)
 
 	{
 
 		if err := t.MinMinerStake.UnmarshalCBOR(br); err != nil {
 			return xerrors.Errorf("unmarshaling t.MinMinerStake: %w", err)
-		}
-
-	}
-	// t.DelegMiner (address.Address) (struct)
-
-	{
-
-		if err := t.DelegMiner.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.DelegMiner: %w", err)
 		}
 
 	}

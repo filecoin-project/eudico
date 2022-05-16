@@ -366,13 +366,15 @@ func (tm *Tendermint) getEudicoMessagesFromTendermintBlock(b *tmtypes.Block) ([]
 				msgs = append(msgs, m)
 				tm.seenMessages[id] = true
 			}
-		case *types.Message:
+		case *types.UnverifiedCrossMsg:
 			id := m.Cid()
 			if _, found := tm.seenMessages[id]; !found {
-				crossMsgs = append(crossMsgs, m)
+				crossMsgs = append(crossMsgs, m.Message)
 				tm.seenMessages[id] = true
 			}
+		case *RegistrationMessageRequest:
 		default:
+			log.Errorf("received unknown message in Tendermint block: %v", m)
 		}
 	}
 	return msgs, crossMsgs

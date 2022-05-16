@@ -4,17 +4,20 @@ import (
 	"context"
 	"time"
 
-	"github.com/filecoin-project/go-address"
 	"golang.org/x/xerrors"
 
+	"github.com/filecoin-project/go-address"
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
+	"github.com/filecoin-project/lotus/chain/consensus/platform/logging"
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
 func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
+	log = logging.FromContext(ctx, log)
+
 	head, err := api.ChainHead(ctx)
 	if err != nil {
 		return xerrors.Errorf("getting head: %w", err)
@@ -88,6 +91,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			})
 			if err != nil {
 				log.Errorw("submitting block failed", "error", err)
+				continue
 			}
 
 			log.Info("delegated mined a block! ", bh.Cid(), " msgs ", len(msgs))

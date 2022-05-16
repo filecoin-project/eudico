@@ -13,12 +13,24 @@ import (
 // ConsensusType for subnet.
 type ConsensusType uint64
 
+type ConsensusParams struct {
+	DelegMiner    address.Address // Miner in delegated consensus.
+	MinValidators uint64          // Min number of validators required to start a network.
+}
+
+type MiningParams struct {
+	LogLevel    string
+	LogFileName string
+}
+
 // List of supported/implemented consensus for subnets.
 const (
 	Delegated ConsensusType = iota
 	PoW
 	Tendermint
+	Mir
 	FilecoinEC
+	Dummy
 )
 
 // ConsensusName returns the consensus algorithm name.
@@ -32,6 +44,10 @@ func ConsensusName(alg ConsensusType) string {
 		return "Tendermint"
 	case FilecoinEC:
 		return "FilecoinEC"
+	case Mir:
+		return "Mir"
+	case Dummy:
+		return "Dummy"
 	default:
 		return "unknown"
 	}

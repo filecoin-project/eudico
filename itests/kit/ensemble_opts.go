@@ -27,6 +27,9 @@ type ensembleOpts struct {
 
 	rootConsensus   hierarchical.ConsensusType
 	subnetConsensus hierarchical.ConsensusType
+
+	minValidators    uint64
+	validatorAddress string
 }
 
 var DefaultEnsembleOpts = ensembleOpts{
@@ -35,6 +38,23 @@ var DefaultEnsembleOpts = ensembleOpts{
 		Height:  -1,
 		Network: build.NewestNetworkVersion,
 	}},
+	minValidators: 0,
+}
+
+// MinValidators sets the minimum number of validators in a subnet.
+func MinValidators(n uint64) EnsembleOpt {
+	return func(opts *ensembleOpts) error {
+		opts.minValidators = n
+		return nil
+	}
+}
+
+// ValidatorAddress sets validator address.
+func ValidatorAddress(addr string) EnsembleOpt {
+	return func(opts *ensembleOpts) error {
+		opts.validatorAddress = addr
+		return nil
+	}
 }
 
 // RootTSPoW activates PoW consensus protocol for the root subnet in Eudico.
@@ -69,6 +89,22 @@ func RootFilcns() EnsembleOpt {
 	}
 }
 
+// RootMir activates MirBFT consensus protocol for the root subnet in Eudico.
+func RootMir() EnsembleOpt {
+	return func(opts *ensembleOpts) error {
+		opts.rootConsensus = hierarchical.Mir
+		return nil
+	}
+}
+
+// RootDummy activates Ideal consensus protocol for the root subnet in Eudico.
+func RootDummy() EnsembleOpt {
+	return func(opts *ensembleOpts) error {
+		opts.rootConsensus = hierarchical.Dummy
+		return nil
+	}
+}
+
 // SubnetTSPoW activates PoW consensus protocol for a subnet in Eudico.
 func SubnetTSPoW() EnsembleOpt {
 	return func(opts *ensembleOpts) error {
@@ -89,6 +125,22 @@ func SubnetDelegated() EnsembleOpt {
 func SubnetTendermint() EnsembleOpt {
 	return func(opts *ensembleOpts) error {
 		opts.subnetConsensus = hierarchical.Tendermint
+		return nil
+	}
+}
+
+// SubnetMir activates MirBFT consensus protocol for a subnet in Eudico.
+func SubnetMir() EnsembleOpt {
+	return func(opts *ensembleOpts) error {
+		opts.subnetConsensus = hierarchical.Mir
+		return nil
+	}
+}
+
+// SubnetDummy activates Dummy consensus protocol for a subnet in Eudico.
+func SubnetDummy() EnsembleOpt {
+	return func(opts *ensembleOpts) error {
+		opts.subnetConsensus = hierarchical.Dummy
 		return nil
 	}
 }

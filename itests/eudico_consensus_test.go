@@ -1,24 +1,37 @@
-//stm: #integration
+// stm: #integration
 package itests
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
+	"github.com/filecoin-project/lotus/chain/consensus/dummy"
+	"github.com/filecoin-project/lotus/chain/consensus/mir"
 	"github.com/filecoin-project/lotus/chain/consensus/tendermint"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/wallet"
 	"github.com/filecoin-project/lotus/itests/kit"
+	mapi "github.com/filecoin-project/mir"
 )
 
 func TestEudicoConsensus(t *testing.T) {
+	t.Run("dummy", func(t *testing.T) {
+		runDummyConsensusTests(t, kit.ThroughRPC(), kit.RootDummy())
+	})
+
+	t.Run("mir", func(t *testing.T) {
+		runMirConsensusTests(t, kit.ThroughRPC(), kit.RootMir())
+	})
+
 	t.Run("tspow", func(t *testing.T) {
 		runTSPoWConsensusTests(t, kit.ThroughRPC(), kit.RootTSPoW())
 	})
@@ -27,25 +40,107 @@ func TestEudicoConsensus(t *testing.T) {
 		runDelegatedConsensusTests(t, kit.ThroughRPC(), kit.RootDelegated())
 	})
 
+	t.Run("filcns", func(t *testing.T) {
+		runFilcnsConsensusTests(t, kit.ThroughRPC(), kit.RootFilcns())
+	})
+
 	if os.Getenv("TENDERMINT_ITESTS") != "" {
 		t.Run("tendermint", func(t *testing.T) {
 			runTendermintConsensusTests(t, kit.ThroughRPC(), kit.RootTendermint())
 		})
 	}
-
-	t.Run("filcns", func(t *testing.T) {
-		runFilcnsConsensusTests(t, kit.ThroughRPC(), kit.RootFilcns())
-	})
 }
 
 type eudicoConsensusSuite struct {
 	opts []interface{}
 }
 
+func runDummyConsensusTests(t *testing.T, opts ...interface{}) {
+	ts := eudicoConsensusSuite{opts: opts}
+
+	t.Run("testDummyMining", ts.testDummyMining)
+}
+
+func (ts *eudicoConsensusSuite) testDummyMining(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	full, _ := kit.EudicoEnsembleFullNodeOnly(t, ts.opts...)
+
+	l, err := full.WalletList(ctx)
+	require.NoError(t, err)
+	if len(l) != 1 {
+		t.Fatal("wallet key list is empty")
+	}
+
+	go func() {
+		err = dummy.Mine(ctx, l[0], full)
+		if err != nil {
+			t.Error(err)
+			cancel()
+			return
+		}
+	}()
+
+	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 10, address.RootSubnet, full)
+	require.NoError(t, err)
+}
+
+func runMirConsensusTests(t *testing.T, opts ...interface{}) {
+	ts := eudicoConsensusSuite{opts: opts}
+
+	t.Run("testMirMining", ts.testMirMining)
+}
+
+func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	full, ens := kit.EudicoEnsembleFullNodeOnly(t, ts.opts...)
+	defer func() {
+		err := ens.Stop()
+		require.NoError(t, err)
+	}()
+
+	l, err := full.WalletList(ctx)
+	require.NoError(t, err)
+	if len(l) != 1 {
+		t.Fatal("wallet key list is empty")
+	}
+
+	mirNodeID := fmt.Sprintf("%s:%s", address.RootSubnet, l[0].String())
+
+	if err := os.Setenv(mir.MirMinersEnv, fmt.Sprintf("%s@%s", mirNodeID, "127.0.0.1:10000")); err != nil {
+		require.NoError(t, err)
+	}
+	defer os.Unsetenv(mir.MirMinersEnv) // nolint
+
+	go func() {
+		err = mir.Mine(ctx, l[0], full)
+		if xerrors.Is(mapi.ErrStopped, err) {
+			return
+		}
+		if err != nil {
+			t.Error(err)
+			cancel()
+			return
+		}
+	}()
+
+	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 10, address.RootSubnet, full)
+	if xerrors.Is(mapi.ErrStopped, err) {
+		return
+	}
+	require.NoError(t, err)
+
+	err = ens.Stop()
+	require.NoError(t, err)
+}
+
 func runTSPoWConsensusTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoConsensusSuite{opts: opts}
 
-	t.Run("testTSpoWConsensusMining", ts.testTSPoWMining)
+	t.Run("testTSpoWMining", ts.testTSPoWMining)
 }
 
 func (ts *eudicoConsensusSuite) testTSPoWMining(t *testing.T) {
@@ -71,7 +166,7 @@ func (ts *eudicoConsensusSuite) testTSPoWMining(t *testing.T) {
 
 func runDelegatedConsensusTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoConsensusSuite{opts: opts}
-	t.Run("testDelegatedConsensusMining", ts.testDelegatedMining)
+	t.Run("testDelegatedMining", ts.testDelegatedMining)
 }
 
 func (ts *eudicoConsensusSuite) testDelegatedMining(t *testing.T) {
@@ -124,7 +219,7 @@ func (ts *eudicoConsensusSuite) testDelegatedMining(t *testing.T) {
 
 func runTendermintConsensusTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoConsensusSuite{opts: opts}
-	t.Run("testTendermintConsensusMining", ts.testTendermintMining)
+	t.Run("testTendermintMining", ts.testTendermintMining)
 }
 
 func (ts *eudicoConsensusSuite) testTendermintMining(t *testing.T) {
@@ -180,7 +275,7 @@ func (ts *eudicoConsensusSuite) testTendermintMining(t *testing.T) {
 
 func runFilcnsConsensusTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoConsensusSuite{opts: opts}
-	t.Run("testFilcnsConsensusMining", ts.testFilcnsMining)
+	t.Run("testFilcnsMining", ts.testFilcnsMining)
 }
 
 func (ts *eudicoConsensusSuite) testFilcnsMining(t *testing.T) {

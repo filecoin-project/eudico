@@ -19,7 +19,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
-	spec_builtin "github.com/filecoin-project/specs-actors/actors/builtin"
+	specbuiltin "github.com/filecoin-project/specs-actors/actors/builtin"
 	init_ "github.com/filecoin-project/specs-actors/actors/builtin/init"
 )
 
@@ -67,12 +67,17 @@ var listSubnetsCmd = &cli.Command{
 		if err != nil {
 			return xerrors.Errorf("error getting list of subnets: %w", err)
 		}
+		if len(subnets) == 0 {
+			fmt.Println("no subnets")
+			return nil
+		}
+
 		for _, sh := range subnets {
 			status := "Active"
 			if sh.Subnet.Status != 0 {
 				status = "Inactive"
 			}
-			fmt.Printf("%s: status=%v, stake=%v, circulating supply=%v\n, consensus=%s",
+			fmt.Printf("%s: status=%v, stake=%v, circulating supply=%v, consensus=%v\n",
 				sh.Subnet.ID, status, types.FIL(sh.Subnet.Stake),
 				types.FIL(sh.Subnet.CircSupply),
 				hierarchical.ConsensusName(sh.Consensus),
@@ -95,9 +100,9 @@ var addCmd = &cli.Command{
 			Name:  "parent",
 			Usage: "specify the ID of the parent subnet from which to add",
 		},
-		&cli.IntFlag{
+		&cli.Uint64Flag{
 			Name:  "consensus",
-			Usage: "specify consensus for the subnet (0=delegated, 1=PoW, 2=Tendermint)",
+			Usage: "specify consensus for the subnet (0=delegated, 1=PoW, 2=Tendermint, 3=Mir)",
 		},
 		&cli.IntFlag{
 			Name:  "checkperiod",
@@ -110,6 +115,11 @@ var addCmd = &cli.Command{
 		&cli.StringFlag{
 			Name:  "delegminer",
 			Usage: "optionally specify miner for delegated consensus",
+		},
+		&cli.Uint64Flag{
+			Name:  "min-validators",
+			Usage: "optionally specify number of validators in subnet",
+			Value: 0,
 		},
 	},
 	Action: func(cctx *cli.Context) error {
@@ -134,9 +144,9 @@ var addCmd = &cli.Command{
 			}
 		}
 
-		consensus := 0
+		var cns uint64
 		if cctx.IsSet("consensus") {
-			consensus = cctx.Int("consensus")
+			cns = cctx.Uint64("consensus")
 		}
 
 		var name string
@@ -151,22 +161,31 @@ var addCmd = &cli.Command{
 			parent = address.SubnetID(cctx.String("parent"))
 		}
 
+		var minVals uint64
+		if cctx.IsSet("min-validators") {
+			minVals = cctx.Uint64("min-validators")
+		}
+
 		// FIXME: This is a horrible workaround to avoid delegminer from
 		// not being set. But need to demo in 30 mins, so will fix it afterwards
 		// (we all know I'll come across this comment in 2 years and laugh at it).
-		delegminer := hierarchical.SubnetCoordActorAddr
+		delegMiner := hierarchical.SubnetCoordActorAddr
 		if cctx.IsSet("delegminer") {
 			d := cctx.String("delegminer")
-			delegminer, err = address.NewFromString(d)
+			delegMiner, err = address.NewFromString(d)
 			if err != nil {
 				return xerrors.Errorf("couldn't parse deleg miner address: %s", err)
 			}
-		} else if consensus == 0 {
+		} else if cns == 0 {
 			return lcli.ShowHelp(cctx, fmt.Errorf("no delegated miner for delegated consensus specified"))
 		}
 		minerStake := abi.NewStoragePower(1e8) // TODO: Make this value configurable in a flag/argument
 		checkperiod := abi.ChainEpoch(cctx.Int("checkperiod"))
-		actorAddr, err := api.AddSubnet(ctx, addr, parent, name, uint64(consensus), minerStake, checkperiod, delegminer)
+		params := &hierarchical.ConsensusParams{
+			DelegMiner:    delegMiner,
+			MinValidators: minVals,
+		}
+		actorAddr, err := api.AddSubnet(ctx, addr, parent, name, cns, minerStake, checkperiod, params)
 		if err != nil {
 			return err
 		}
@@ -190,6 +209,11 @@ var joinCmd = &cli.Command{
 			Name:  "subnet",
 			Usage: "specify the id of the subnet to join",
 			Value: address.RootSubnet.String(),
+		},
+		&cli.StringFlag{
+			Name:  "val-addr",
+			Usage: "specify subnet validator address",
+			Value: "",
 		},
 	},
 	Action: func(cctx *cli.Context) error {
@@ -225,11 +249,13 @@ var joinCmd = &cli.Command{
 			return lcli.ShowHelp(cctx, fmt.Errorf("failed to parse amount: %w", err))
 		}
 
-		c, err := api.JoinSubnet(ctx, addr, big.Int(val), address.SubnetID(subnet))
+		c, err := api.JoinSubnet(ctx, addr, big.Int(val), address.SubnetID(subnet), cctx.String("val-addr"))
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cctx.App.Writer, "Successfully added stake to subnet %s in message: %s\n", subnet, c)
+		if _, err := fmt.Fprintf(cctx.App.Writer, "Successfully added stake to subnet %s in message: %s\n", subnet, c); err != nil {
+			return err
+		}
 		return nil
 	},
 }
@@ -271,7 +297,9 @@ var syncCmd = &cli.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cctx.App.Writer, "Successfully started/stopped syncing with subnet %s \n", subnet)
+		if _, err := fmt.Fprintf(cctx.App.Writer, "Successfully started/stopped syncing with subnet %s \n", subnet); err != nil {
+			return err
+		}
 		return nil
 	},
 }
@@ -293,6 +321,16 @@ var mineCmd = &cli.Command{
 		&cli.BoolFlag{
 			Name:  "stop",
 			Usage: "use this flag to stop mining a subnet",
+		},
+		&cli.StringFlag{
+			Name:  "log-file",
+			Usage: "use this file for logging",
+			Value: "",
+		},
+		&cli.StringFlag{
+			Name:  "log-level",
+			Usage: "logging level",
+			Value: "",
 		},
 	},
 	Action: func(cctx *cli.Context) error {
@@ -323,14 +361,23 @@ var mineCmd = &cli.Command{
 			subnet = cctx.String("subnet")
 		}
 
-		err = api.MineSubnet(ctx, addr, address.SubnetID(subnet), cctx.Bool("stop"))
+		params := &hierarchical.MiningParams{
+			LogFileName: cctx.String("log-file"),
+			LogLevel:    cctx.String("log-level"),
+		}
+
+		err = api.MineSubnet(ctx, addr, address.SubnetID(subnet), cctx.Bool("stop"), params)
 		if err != nil {
 			return err
 		}
 		if cctx.Bool("stop") {
-			fmt.Fprintf(cctx.App.Writer, "Successfully stopped mining in subnet: %s\n", subnet)
+			if _, err := fmt.Fprintf(cctx.App.Writer, "Successfully stopped mining in subnet: %s\n", subnet); err != nil {
+				return err
+			}
 		} else {
-			fmt.Fprintf(cctx.App.Writer, "Successfully started mining in subnet: %s\n", subnet)
+			if _, err := fmt.Fprintf(cctx.App.Writer, "Successfully started mining in subnet: %s\n", subnet); err != nil {
+				return err
+			}
 		}
 		return nil
 	},
@@ -383,7 +430,9 @@ var leaveCmd = &cli.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cctx.App.Writer, "Successfully left subnet in message: %s\n", c)
+		if _, err := fmt.Fprintf(cctx.App.Writer, "Successfully left subnet in message: %s\n", c); err != nil {
+			return err
+		}
 		return nil
 	},
 }
@@ -435,7 +484,9 @@ var killCmd = &cli.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cctx.App.Writer, "Successfully sent kill to subnet in message: %s\n", c)
+		if _, err := fmt.Fprintf(cctx.App.Writer, "Successfully sent kill to subnet in message: %s\n", c); err != nil {
+			return err
+		}
 		return nil
 	},
 }
@@ -494,9 +545,14 @@ var releaseCmd = &cli.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cctx.App.Writer, "Successfully sent release message: %s\n", c)
-		fmt.Fprintf(cctx.App.Writer, "Cross-message should be propagated in the next checkpoint to: %s\n",
+		if _, err := fmt.Fprintf(cctx.App.Writer, "Successfully sent release message: %s\n", c); err != nil {
+			return err
+		}
+		_, err = fmt.Fprintf(cctx.App.Writer, "Cross-message should be propagated in the next checkpoint to: %s\n",
 			address.SubnetID(subnet).Parent())
+		if err != nil {
+			return err
+		}
 		return nil
 	},
 }
@@ -525,7 +581,9 @@ var hAddrCmd = &cli.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cctx.App.Writer, "%s\n", out)
+		if _, err := fmt.Fprintf(cctx.App.Writer, "%s\n", out); err != nil {
+			return err
+		}
 		return nil
 	},
 }
@@ -583,8 +641,12 @@ var fundCmd = &cli.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cctx.App.Writer, "Successfully funded subnet in message: %s\n", c)
-		fmt.Fprintf(cctx.App.Writer, "Cross-message should be validated shortly in subnet: %s\n", subnet)
+		if _, err := fmt.Fprintf(cctx.App.Writer, "Successfully funded subnet in message: %s\n", c); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(cctx.App.Writer, "Cross-message should be validated shortly in subnet: %s\n", subnet); err != nil {
+			return nil
+		}
 		return nil
 	},
 }
@@ -753,8 +815,12 @@ var sendCmd = &cli.Command{
 			return xerrors.Errorf("Error sending message: %s", aerr)
 		}
 
-		fmt.Fprintf(cctx.App.Writer, "Successfully send cross-message with cid: %s\n", smsg.Cid())
-		fmt.Fprintf(cctx.App.Writer, "Cross-message should be propagated shortly to the right subnet: %s\n", subnet)
+		if _, err := fmt.Fprintf(cctx.App.Writer, "Successfully send cross-message with cid: %s\n", smsg.Cid()); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(cctx.App.Writer, "Cross-message should be propagated shortly to the right subnet: %s\n", subnet); err != nil {
+			return err
+		}
 		return nil
 	},
 }
@@ -816,6 +882,7 @@ var deployActorCmd = &cli.Command{
 		if err != nil {
 			return err
 		}
+		// TODO: use this https://www.joeshaw.org/dont-defer-close-on-writable-files/ to check error on srv close
 		defer srv.Close() //nolint:errcheck
 
 		ctx := lcli.ReqContext(cctx)
@@ -896,10 +963,10 @@ var deployActorCmd = &cli.Command{
 
 		// Init actor is responsible for the deployment of new actors.
 		smsg, aerr := api.MpoolPushMessage(ctx, &types.Message{
-			To:         spec_builtin.InitActorAddr,
+			To:         specbuiltin.InitActorAddr,
 			From:       params.From,
 			Value:      big.Zero(),
-			Method:     spec_builtin.MethodsInit.Exec,
+			Method:     specbuiltin.MethodsInit.Exec,
 			Params:     serparams,
 			GasLimit:   *params.GasLimit,
 			GasFeeCap:  *params.GasFeeCap,
@@ -919,7 +986,10 @@ var deployActorCmd = &cli.Command{
 		if err := r.UnmarshalCBOR(bytes.NewReader(mw.Receipt.Return)); err != nil {
 			return err
 		}
-		fmt.Fprintf(cctx.App.Writer, "Successfully deployed actor with address: %s\n", r.IDAddress)
+		_, err = fmt.Fprintf(cctx.App.Writer, "Successfully deployed actor with address: %s\n", r.IDAddress)
+		if err != nil {
+			return err
+		}
 		return nil
 	},
 }

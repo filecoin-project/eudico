@@ -112,3 +112,5 @@ const InteractivePoRepConfidence = 6
 const BootstrapPeerThreshold = 1
 
 var WhitelistedBlock = cid.Undef
+
+const MirTimer = 1300

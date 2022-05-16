@@ -2,6 +2,7 @@ package tendermint
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	tmclient "github.com/tendermint/tendermint/rpc/client/http"
@@ -13,6 +14,7 @@ import (
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
+	"github.com/filecoin-project/lotus/chain/consensus/platform/logging"
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
@@ -21,8 +23,7 @@ const (
 )
 
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {
-	log.Info("starting Tendermint miner: ", miner.String())
-	defer log.Info("shutdown Tendermint miner: ", miner.String())
+	log = logging.FromContext(ctx, log)
 
 	var cache = newMessageCache()
 
@@ -36,8 +37,13 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		return err
 	}
 	subnetID := address.SubnetID(nn)
+	minerID := fmt.Sprintf("%s:%s", subnetID, miner)
 
-	log.Infof("Tendermint miner params: network name - %s, subnet ID - %s", nn, subnetID)
+	log.Infof("Tendermint miner %s started", minerID)
+	defer log.Infof("Tendermint miner %s completed", minerID)
+
+	log.Infof("Tendermint miner params:\n\tnetwork name - %s\n\tsubnet ID - %s\n\tadddress - %s",
+		nn, subnetID, miner)
 
 	// It is a workaround to address this bug: https://github.com/tendermint/tendermint/issues/7185.
 	// If a message is sent to a Tendermint node at least twice then the Tendermint node hangs.
@@ -84,14 +90,14 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 						log.Error("unable to serialize message:", err)
 						continue
 					}
-					tx := NewSignedMessageBytes(msgBytes, nodeIDBytes[:])
+					tx := common.NewSignedMessageBytes(msgBytes, nodeIDBytes[:])
 					_, err = tendermintClient.BroadcastTxSync(ctx, tx)
 					if err != nil {
 						log.Error("unable to send a message to Tendermint:", err)
 						continue
 					} else {
 						cache.addSentMessage(id, base.Height())
-						log.Debugf("successfully sent a message %s to Tendermint", id)
+						log.Debugf("successfully sent a message %v to Tendermint", id)
 					}
 				}
 			}
@@ -102,18 +108,18 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			}
 			log.Debugf("[subnet: %s, epoch: %d] retrieved %d crossmsgs", subnetID, base.Height()+1, len(crossMsgs))
 
-			for _, w := range crossMsgs {
-				id := w.Cid().String()
+			for _, msg := range crossMsgs {
+				id := msg.Cid().String()
 
-				log.Debugf("[subnet: %s, epoch: %d] >>>>> cross msg to send: %s", id, subnetID, base.Height()+1)
+				log.Debugf("[subnet: %s, epoch: %s] >>>>> cross msg to send: %s", id, subnetID, base.Height()+1)
 
 				if cache.shouldSendMessage(id) {
-					msgBytes, err := w.Msg.Serialize()
+					msgBytes, err := msg.Serialize()
 					if err != nil {
 						log.Error("unable to serialize message:", err)
 						continue
 					}
-					tx := NewCrossMessageBytes(msgBytes, nodeIDBytes[:])
+					tx := common.NewCrossMessageBytes(msgBytes, nodeIDBytes[:])
 					_, err = tendermintClient.BroadcastTxSync(ctx, tx)
 					if err != nil {
 						log.Error("unable to send a cross message to Tendermint:", err)
@@ -156,6 +162,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			})
 			if err != nil {
 				log.Errorw("unable to sync the block", "error", err)
+				continue
 			}
 
 			cache.clearSentMessages(base.Height())
@@ -195,6 +202,7 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 	}
 
 	msgs, crossMsgs := tm.getEudicoMessagesFromTendermintBlock(next.Block)
+
 	bt.Messages = msgs
 	bt.CrossMessages = crossMsgs
 	bt.Timestamp = uint64(next.Block.Time.Unix())

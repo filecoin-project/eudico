@@ -9,6 +9,7 @@ import (
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	snmgr "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/manager"
@@ -28,13 +29,13 @@ func (a *HierarchicalAPI) AddSubnet(
 	parent address.SubnetID, name string,
 	consensus uint64, minerStake abi.TokenAmount,
 	checkPeriod abi.ChainEpoch,
-	delegminer address.Address) (address.Address, error) {
-	return a.Sub.AddSubnet(ctx, wallet, parent, name, consensus, minerStake, checkPeriod, delegminer)
+	params *hierarchical.ConsensusParams) (address.Address, error) {
+	return a.Sub.AddSubnet(ctx, wallet, parent, name, consensus, minerStake, checkPeriod, params)
 }
 
 func (a *HierarchicalAPI) JoinSubnet(ctx context.Context, wallet address.Address,
-	value abi.TokenAmount, id address.SubnetID) (cid.Cid, error) {
-	return a.Sub.JoinSubnet(ctx, wallet, value, id)
+	value abi.TokenAmount, id address.SubnetID, validator string) (cid.Cid, error) {
+	return a.Sub.JoinSubnet(ctx, wallet, value, id, validator)
 }
 
 func (a *HierarchicalAPI) SyncSubnet(ctx context.Context, id address.SubnetID, stop bool) error {
@@ -42,8 +43,8 @@ func (a *HierarchicalAPI) SyncSubnet(ctx context.Context, id address.SubnetID, s
 }
 
 func (a *HierarchicalAPI) MineSubnet(ctx context.Context, wallet address.Address,
-	id address.SubnetID, stop bool) error {
-	return a.Sub.MineSubnet(ctx, wallet, id, stop)
+	id address.SubnetID, stop bool, params *hierarchical.MiningParams) error {
+	return a.Sub.MineSubnet(ctx, wallet, id, stop, params)
 }
 
 func (a *HierarchicalAPI) LeaveSubnet(ctx context.Context, wallet address.Address,
@@ -144,4 +145,8 @@ func (a *HierarchicalAPI) SubnetStateGetActor(ctx context.Context, id address.Su
 func (a *HierarchicalAPI) SubnetStateWaitMsg(ctx context.Context, id address.SubnetID, cid cid.Cid, confidence uint64, limit abi.ChainEpoch,
 	allowReplaced bool) (*api.MsgLookup, error) {
 	return a.Sub.SubnetStateWaitMsg(ctx, id, cid, confidence, limit, allowReplaced)
+}
+
+func (a *HierarchicalAPI) SubnetStateGetValidators(ctx context.Context, id address.SubnetID) ([]hierarchical.Validator, error) {
+	return a.Sub.SubnetStateGetValidators(ctx, id)
 }

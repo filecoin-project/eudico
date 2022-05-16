@@ -6,10 +6,7 @@ import (
 	"encoding/json"
 	"strconv"
 
-	"github.com/filecoin-project/go-state-types/crypto"
-
-	"github.com/filecoin-project/go-state-types/cbor"
-	cid "github.com/ipfs/go-cid"
+	"github.com/ipfs/go-cid"
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
 
@@ -17,10 +14,10 @@ import (
 	"github.com/filecoin-project/go-bitfield"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-state-types/cbor"
+	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/go-state-types/dline"
 	"github.com/filecoin-project/go-state-types/network"
-	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
-
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/market"
@@ -38,6 +35,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/vm"
 	"github.com/filecoin-project/lotus/chain/wallet"
+	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
@@ -79,8 +77,8 @@ var _ StateModuleAPI = (*StateModule)(nil)
 type StateAPI struct {
 	fx.In
 
-	// TODO: the wallet here is only needed because we have the MinerCreateBlock
-	// API attached to the state API. It probably should live somewhere better
+	// TODO: the wallet here is only needed because we have the MinerCreateBlock API attached to the state API.
+	// It probably should live somewhere better.
 	Wallet    api.Wallet
 	DefWallet wallet.Default
 
@@ -288,7 +286,7 @@ func (a *StateAPI) StateMinerFaults(ctx context.Context, addr address.Address, t
 }
 
 func (a *StateAPI) StateAllMinerFaults(ctx context.Context, lookback abi.ChainEpoch, endTsk types.TipSetKey) ([]*api.Fault, error) {
-	return nil, xerrors.Errorf("fixme")
+	return nil, xerrors.New("unimplemented")
 
 	/*endTs, err := a.Chain.GetTipSetFromKey(endTsk)
 	if err != nil {
@@ -521,7 +519,9 @@ func (a *StateAPI) StateEncodeParams(ctx context.Context, toActCode cid.Cid, met
 	return cbb.Bytes(), nil
 }
 
-// This is on StateAPI because miner.Miner requires this, and MinerAPI requires miner.Miner
+// MinerGetBaseInfo returns base information about a miner.
+//
+// This is on StateAPI because miner.Miner requires this, and MinerAPI requires miner.Miner.
 func (a *StateAPI) MinerGetBaseInfo(ctx context.Context, maddr address.Address, epoch abi.ChainEpoch, tsk types.TipSetKey) (*api.MiningBaseInfo, error) {
 	// XXX: Gets the state by computing the tipset state, instead of looking at the parent.
 	return stmgr.MinerGetBaseInfo(ctx, a.StateManager, a.Beacon, tsk, epoch, maddr, a.ProofVerifier)
@@ -641,15 +641,15 @@ func (a *StateAPI) StateMarketParticipants(ctx context.Context, tsk types.TipSet
 		return nil, xerrors.Errorf("loading tipset %s: %w", tsk, err)
 	}
 
-	state, err := a.StateManager.GetMarketState(ctx, ts)
+	mstate, err := a.StateManager.GetMarketState(ctx, ts)
 	if err != nil {
 		return nil, err
 	}
-	escrow, err := state.EscrowTable()
+	escrow, err := mstate.EscrowTable()
 	if err != nil {
 		return nil, err
 	}
-	locked, err := state.LockedTable()
+	locked, err := mstate.LockedTable()
 	if err != nil {
 		return nil, err
 	}
@@ -681,17 +681,17 @@ func (a *StateAPI) StateMarketDeals(ctx context.Context, tsk types.TipSetKey) (m
 		return nil, xerrors.Errorf("loading tipset %s: %w", tsk, err)
 	}
 
-	state, err := a.StateManager.GetMarketState(ctx, ts)
+	mstate, err := a.StateManager.GetMarketState(ctx, ts)
 	if err != nil {
 		return nil, err
 	}
 
-	da, err := state.Proposals()
+	da, err := mstate.Proposals()
 	if err != nil {
 		return nil, err
 	}
 
-	sa, err := state.States()
+	sa, err := mstate.States()
 	if err != nil {
 		return nil, err
 	}
@@ -723,14 +723,14 @@ func (m *StateModule) StateMarketStorageDeal(ctx context.Context, dealId abi.Dea
 }
 
 func (a *StateAPI) StateChangedActors(ctx context.Context, old cid.Cid, new cid.Cid) (map[string]types.Actor, error) {
-	store := a.Chain.ActorStore(ctx)
+	st := a.Chain.ActorStore(ctx)
 
-	oldTree, err := state.LoadStateTree(store, old)
+	oldTree, err := state.LoadStateTree(st, old)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to load old state tree: %w", err)
 	}
 
-	newTree, err := state.LoadStateTree(store, new)
+	newTree, err := state.LoadStateTree(st, new)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to load new state tree: %w", err)
 	}
@@ -1033,7 +1033,7 @@ func (m *StateModule) MsigGetPending(ctx context.Context, addr address.Address, 
 		return nil, xerrors.Errorf("failed to load multisig actor state: %w", err)
 	}
 
-	var out = []*api.MsigTransaction{}
+	var out []*api.MsigTransaction
 	if err := msas.ForEachPendingTxn(func(id int64, txn multisig.Transaction) error {
 		out = append(out, &api.MsigTransaction{
 			ID:     id,
@@ -1061,7 +1061,7 @@ func (a *StateAPI) StateMinerPreCommitDepositForPower(ctx context.Context, maddr
 		return types.EmptyInt, xerrors.Errorf("loading tipset %s: %w", tsk, err)
 	}
 
-	state, err := a.StateManager.ParentState(ts)
+	parentState, err := a.StateManager.ParentState(ts)
 	if err != nil {
 		return types.EmptyInt, xerrors.Errorf("loading state %s: %w", tsk, err)
 	}
@@ -1071,12 +1071,12 @@ func (a *StateAPI) StateMinerPreCommitDepositForPower(ctx context.Context, maddr
 		return types.EmptyInt, xerrors.Errorf("failed to get resolve size: %w", err)
 	}
 
-	store := a.Chain.ActorStore(ctx)
+	st := a.Chain.ActorStore(ctx)
 
 	var sectorWeight abi.StoragePower
-	if act, err := state.GetActor(market.Address); err != nil {
+	if act, err := parentState.GetActor(market.Address); err != nil {
 		return types.EmptyInt, xerrors.Errorf("loading market actor %s: %w", maddr, err)
-	} else if s, err := market.Load(store, act); err != nil {
+	} else if s, err := market.Load(st, act); err != nil {
 		return types.EmptyInt, xerrors.Errorf("loading market actor state %s: %w", maddr, err)
 	} else if w, vw, err := s.VerifyDealsForActivation(maddr, pci.DealIDs, ts.Height(), pci.Expiration); err != nil {
 		return types.EmptyInt, xerrors.Errorf("verifying deals for activation: %w", err)
@@ -1087,9 +1087,9 @@ func (a *StateAPI) StateMinerPreCommitDepositForPower(ctx context.Context, maddr
 	}
 
 	var powerSmoothed builtin.FilterEstimate
-	if act, err := state.GetActor(power.Address); err != nil {
+	if act, err := parentState.GetActor(power.Address); err != nil {
 		return types.EmptyInt, xerrors.Errorf("loading power actor: %w", err)
-	} else if s, err := power.Load(store, act); err != nil {
+	} else if s, err := power.Load(st, act); err != nil {
 		return types.EmptyInt, xerrors.Errorf("loading power actor state: %w", err)
 	} else if p, err := s.TotalPowerSmoothed(); err != nil {
 		return types.EmptyInt, xerrors.Errorf("failed to determine total power: %w", err)
@@ -1097,12 +1097,12 @@ func (a *StateAPI) StateMinerPreCommitDepositForPower(ctx context.Context, maddr
 		powerSmoothed = p
 	}
 
-	rewardActor, err := state.GetActor(reward.Address)
+	rewardActor, err := parentState.GetActor(reward.Address)
 	if err != nil {
 		return types.EmptyInt, xerrors.Errorf("loading miner actor: %w", err)
 	}
 
-	rewardState, err := reward.Load(store, rewardActor)
+	rewardState, err := reward.Load(st, rewardActor)
 	if err != nil {
 		return types.EmptyInt, xerrors.Errorf("loading reward actor state: %w", err)
 	}
@@ -1122,7 +1122,7 @@ func (a *StateAPI) StateMinerInitialPledgeCollateral(ctx context.Context, maddr 
 		return types.EmptyInt, xerrors.Errorf("loading tipset %s: %w", tsk, err)
 	}
 
-	state, err := a.StateManager.ParentState(ts)
+	parentState, err := a.StateManager.ParentState(ts)
 	if err != nil {
 		return types.EmptyInt, xerrors.Errorf("loading state %s: %w", tsk, err)
 	}
@@ -1132,12 +1132,12 @@ func (a *StateAPI) StateMinerInitialPledgeCollateral(ctx context.Context, maddr 
 		return types.EmptyInt, xerrors.Errorf("failed to get resolve size: %w", err)
 	}
 
-	store := a.Chain.ActorStore(ctx)
+	st := a.Chain.ActorStore(ctx)
 
 	var sectorWeight abi.StoragePower
-	if act, err := state.GetActor(market.Address); err != nil {
+	if act, err := parentState.GetActor(market.Address); err != nil {
 		return types.EmptyInt, xerrors.Errorf("loading market actor: %w", err)
-	} else if s, err := market.Load(store, act); err != nil {
+	} else if s, err := market.Load(st, act); err != nil {
 		return types.EmptyInt, xerrors.Errorf("loading market actor state: %w", err)
 	} else if w, vw, err := s.VerifyDealsForActivation(maddr, pci.DealIDs, ts.Height(), pci.Expiration); err != nil {
 		return types.EmptyInt, xerrors.Errorf("verifying deals for activation: %w", err)
@@ -1151,9 +1151,9 @@ func (a *StateAPI) StateMinerInitialPledgeCollateral(ctx context.Context, maddr 
 		powerSmoothed    builtin.FilterEstimate
 		pledgeCollateral abi.TokenAmount
 	)
-	if act, err := state.GetActor(power.Address); err != nil {
+	if act, err := parentState.GetActor(power.Address); err != nil {
 		return types.EmptyInt, xerrors.Errorf("loading power actor: %w", err)
-	} else if s, err := power.Load(store, act); err != nil {
+	} else if s, err := power.Load(st, act); err != nil {
 		return types.EmptyInt, xerrors.Errorf("loading power actor state: %w", err)
 	} else if p, err := s.TotalPowerSmoothed(); err != nil {
 		return types.EmptyInt, xerrors.Errorf("failed to determine total power: %w", err)
@@ -1164,12 +1164,12 @@ func (a *StateAPI) StateMinerInitialPledgeCollateral(ctx context.Context, maddr 
 		pledgeCollateral = c
 	}
 
-	rewardActor, err := state.GetActor(reward.Address)
+	rewardActor, err := parentState.GetActor(reward.Address)
 	if err != nil {
 		return types.EmptyInt, xerrors.Errorf("loading reward actor: %w", err)
 	}
 
-	rewardState, err := reward.Load(store, rewardActor)
+	rewardState, err := reward.Load(st, rewardActor)
 	if err != nil {
 		return types.EmptyInt, xerrors.Errorf("loading reward actor state: %w", err)
 	}
@@ -1240,9 +1240,8 @@ func (a *StateAPI) StateMinerSectorAllocated(ctx context.Context, maddr address.
 	return mas.IsAllocated(s)
 }
 
-// StateVerifiedClientStatus returns the data cap for the given address.
-// Returns zero if there is no entry in the data cap table for the
-// address.
+// StateVerifierStatus returns the data cap for the given address.
+// Returns zero if there is no entry in the data cap table for the address.
 func (a *StateAPI) StateVerifierStatus(ctx context.Context, addr address.Address, tsk types.TipSetKey) (*abi.StoragePower, error) {
 	act, err := a.StateGetActor(ctx, verifreg.Address, tsk)
 	if err != nil {

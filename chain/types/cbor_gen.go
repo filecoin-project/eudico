@@ -885,8 +885,8 @@ func (t *UnverifiedCrossMsg) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.Msg (types.Message) (struct)
-	if err := t.Msg.MarshalCBOR(w); err != nil {
+	// t.Message (types.Message) (struct)
+	if err := t.Message.MarshalCBOR(w); err != nil {
 		return err
 	}
 	return nil
@@ -924,7 +924,7 @@ func (t *UnverifiedCrossMsg) UnmarshalCBOR(r io.Reader) error {
 		t.Type = uint64(extra)
 
 	}
-	// t.Msg (types.Message) (struct)
+	// t.Message (types.Message) (struct)
 
 	{
 
@@ -936,9 +936,9 @@ func (t *UnverifiedCrossMsg) UnmarshalCBOR(r io.Reader) error {
 			if err := br.UnreadByte(); err != nil {
 				return err
 			}
-			t.Msg = new(Message)
-			if err := t.Msg.UnmarshalCBOR(br); err != nil {
-				return xerrors.Errorf("unmarshaling t.Msg pointer: %w", err)
+			t.Message = new(Message)
+			if err := t.Message.UnmarshalCBOR(br); err != nil {
+				return xerrors.Errorf("unmarshaling t.Message pointer: %w", err)
 			}
 		}
 

@@ -5,15 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/big"
-	"github.com/filecoin-project/go-state-types/network"
-	"github.com/filecoin-project/lotus/build"
 	block "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-state-types/network"
+	"github.com/filecoin-project/lotus/build"
 )
 
 const MessageVersion = 0
@@ -22,8 +22,7 @@ type ChainMsg interface {
 	Cid() cid.Cid
 	VMMessage() *Message
 	ToStorageBlock() (block.Block, error)
-	// FIXME: This is the *message* length, this name is misleading.
-	ChainLength() int
+	ChainLength() int // FIXME: This is the *message* length, this name is misleading.
 }
 
 type Message struct {
@@ -47,8 +46,8 @@ type Message struct {
 // UnverifiedCrossMsg is a special type-wrapper to distinguish top-down and bottom-up cross messages,
 // since Message doesn't contain such information.
 type UnverifiedCrossMsg struct {
-	Type uint64
-	Msg  *Message
+	Type    uint64
+	Message *Message
 }
 
 func (m *UnverifiedCrossMsg) Serialize() ([]byte, error) {
@@ -69,6 +68,19 @@ func (m *Message) Receiver() address.Address {
 
 func (m *Message) ValueReceived() abi.TokenAmount {
 	return m.Value
+}
+
+func DecodeUnverifiedCrossMessage(b []byte) (*UnverifiedCrossMsg, error) {
+	var cmsg UnverifiedCrossMsg
+	if err := cmsg.UnmarshalCBOR(bytes.NewReader(b)); err != nil {
+		return nil, err
+	}
+
+	if cmsg.Message.Version != MessageVersion {
+		return nil, fmt.Errorf("decoded message had incorrect version (%d)", cmsg.Message.Version)
+	}
+
+	return &cmsg, nil
 }
 
 func DecodeMessage(b []byte) (*Message, error) {

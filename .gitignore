@@ -50,3 +50,5 @@ bin/tmp/*
 .idea
 scratchpad
 gen.gen
+
+**/*-wal/

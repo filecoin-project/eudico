@@ -22,6 +22,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/paych"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -567,7 +568,7 @@ type HierarchicalCnsStruct struct {
 	Internal struct {
 		AbortAtomicExec func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 cid.Cid) (sca.ExecStatus, error) `perm:"write"`
 
-		AddSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 address.Address) (address.Address, error) `perm:"write"`
+		AddSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 *hierarchical.ConsensusParams) (address.Address, error) `perm:"write"`
 
 		ComputeAndSubmitExec func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 cid.Cid) (sca.ExecStatus, error) `perm:"write"`
 
@@ -581,7 +582,7 @@ type HierarchicalCnsStruct struct {
 
 		InitAtomicExec func(p0 context.Context, p1 address.Address, p2 map[string]sca.LockedState, p3 []types.Message) (cid.Cid, error) `perm:"write"`
 
-		JoinSubnet func(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 address.SubnetID) (cid.Cid, error) `perm:"write"`
+		JoinSubnet func(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 address.SubnetID, p4 string) (cid.Cid, error) `perm:"write"`
 
 		KillSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID) (cid.Cid, error) `perm:"write"`
 
@@ -595,7 +596,7 @@ type HierarchicalCnsStruct struct {
 
 		LockState func(p0 context.Context, p1 address.Address, p2 address.Address, p3 address.SubnetID, p4 abi.MethodNum) (cid.Cid, error) `perm:"write"`
 
-		MineSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 bool) error `perm:"read"`
+		MineSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 bool, p4 *hierarchical.MiningParams) error `perm:"read"`
 
 		ReleaseFunds func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) `perm:"write"`
 
@@ -604,6 +605,8 @@ type HierarchicalCnsStruct struct {
 		SubnetChainNotify func(p0 context.Context, p1 address.SubnetID) (<-chan []*HeadChange, error) `perm:"read"`
 
 		SubnetStateGetActor func(p0 context.Context, p1 address.SubnetID, p2 address.Address, p3 types.TipSetKey) (*types.Actor, error) `perm:"read"`
+
+		SubnetStateGetValidators func(p0 context.Context, p1 address.SubnetID) ([]hierarchical.Validator, error) `perm:"read"`
 
 		SubnetStateWaitMsg func(p0 context.Context, p1 address.SubnetID, p2 cid.Cid, p3 uint64, p4 abi.ChainEpoch, p5 bool) (*MsgLookup, error) `perm:"read"`
 
@@ -3549,14 +3552,14 @@ func (s *HierarchicalCnsStub) AbortAtomicExec(p0 context.Context, p1 address.Add
 	return *new(sca.ExecStatus), ErrNotSupported
 }
 
-func (s *HierarchicalCnsStruct) AddSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 address.Address) (address.Address, error) {
+func (s *HierarchicalCnsStruct) AddSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 *hierarchical.ConsensusParams) (address.Address, error) {
 	if s.Internal.AddSubnet == nil {
 		return *new(address.Address), ErrNotSupported
 	}
 	return s.Internal.AddSubnet(p0, p1, p2, p3, p4, p5, p6, p7)
 }
 
-func (s *HierarchicalCnsStub) AddSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 address.Address) (address.Address, error) {
+func (s *HierarchicalCnsStub) AddSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 *hierarchical.ConsensusParams) (address.Address, error) {
 	return *new(address.Address), ErrNotSupported
 }
 
@@ -3626,14 +3629,14 @@ func (s *HierarchicalCnsStub) InitAtomicExec(p0 context.Context, p1 address.Addr
 	return *new(cid.Cid), ErrNotSupported
 }
 
-func (s *HierarchicalCnsStruct) JoinSubnet(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 address.SubnetID) (cid.Cid, error) {
+func (s *HierarchicalCnsStruct) JoinSubnet(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 address.SubnetID, p4 string) (cid.Cid, error) {
 	if s.Internal.JoinSubnet == nil {
 		return *new(cid.Cid), ErrNotSupported
 	}
-	return s.Internal.JoinSubnet(p0, p1, p2, p3)
+	return s.Internal.JoinSubnet(p0, p1, p2, p3, p4)
 }
 
-func (s *HierarchicalCnsStub) JoinSubnet(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 address.SubnetID) (cid.Cid, error) {
+func (s *HierarchicalCnsStub) JoinSubnet(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 address.SubnetID, p4 string) (cid.Cid, error) {
 	return *new(cid.Cid), ErrNotSupported
 }
 
@@ -3703,14 +3706,14 @@ func (s *HierarchicalCnsStub) LockState(p0 context.Context, p1 address.Address, 
 	return *new(cid.Cid), ErrNotSupported
 }
 
-func (s *HierarchicalCnsStruct) MineSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 bool) error {
+func (s *HierarchicalCnsStruct) MineSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 bool, p4 *hierarchical.MiningParams) error {
 	if s.Internal.MineSubnet == nil {
 		return ErrNotSupported
 	}
-	return s.Internal.MineSubnet(p0, p1, p2, p3)
+	return s.Internal.MineSubnet(p0, p1, p2, p3, p4)
 }
 
-func (s *HierarchicalCnsStub) MineSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 bool) error {
+func (s *HierarchicalCnsStub) MineSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 bool, p4 *hierarchical.MiningParams) error {
 	return ErrNotSupported
 }
 
@@ -3756,6 +3759,17 @@ func (s *HierarchicalCnsStruct) SubnetStateGetActor(p0 context.Context, p1 addre
 
 func (s *HierarchicalCnsStub) SubnetStateGetActor(p0 context.Context, p1 address.SubnetID, p2 address.Address, p3 types.TipSetKey) (*types.Actor, error) {
 	return nil, ErrNotSupported
+}
+
+func (s *HierarchicalCnsStruct) SubnetStateGetValidators(p0 context.Context, p1 address.SubnetID) ([]hierarchical.Validator, error) {
+	if s.Internal.SubnetStateGetValidators == nil {
+		return *new([]hierarchical.Validator), ErrNotSupported
+	}
+	return s.Internal.SubnetStateGetValidators(p0, p1)
+}
+
+func (s *HierarchicalCnsStub) SubnetStateGetValidators(p0 context.Context, p1 address.SubnetID) ([]hierarchical.Validator, error) {
+	return *new([]hierarchical.Validator), ErrNotSupported
 }
 
 func (s *HierarchicalCnsStruct) SubnetStateWaitMsg(p0 context.Context, p1 address.SubnetID, p2 cid.Cid, p3 uint64, p4 abi.ChainEpoch, p5 bool) (*MsgLookup, error) {

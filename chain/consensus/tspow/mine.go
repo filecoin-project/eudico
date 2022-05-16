@@ -5,18 +5,22 @@ import (
 	"crypto/rand"
 	"time"
 
+	"golang.org/x/xerrors"
+
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/big"
-	"golang.org/x/xerrors"
+	"github.com/filecoin-project/lotus/chain/consensus/platform/logging"
 
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
-	common "github.com/filecoin-project/lotus/chain/consensus/common"
+	"github.com/filecoin-project/lotus/chain/consensus/common"
 	param "github.com/filecoin-project/lotus/chain/consensus/common/params"
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
 func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error {
+	log = logging.FromContext(ctx, log)
+
 	head, err := api.ChainHead(ctx)
 	if err != nil {
 		return xerrors.Errorf("getting head: %w", err)
@@ -102,6 +106,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		})
 		if err != nil {
 			log.Errorw("submitting block failed", "error", err)
+			continue
 		}
 
 		log.Info("PoW mined a block! ", bh.Cid())
