@@ -550,7 +550,7 @@ func (a SubnetCoordActor) SendCross(rt runtime.Runtime, params *CrossMsgParams) 
 	)
 
 	rt.StateTransaction(&st, func() {
-		if params.Destination == address.UndefSubnetID {
+		if params.Destination == st.NetworkName {
 			rt.Abortf(exitcode.ErrIllegalArgument, "destination subnet is current one. You are better of sending a good ol' msg")
 		}
 		// Transform to hierarchical-supported addresses
