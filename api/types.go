@@ -5,20 +5,20 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/libp2p/go-libp2p-core/network"
+
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/chain/types"
+	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-graphsync"
 
-	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	ma "github.com/multiformats/go-multiaddr"
 )
-
-// TODO: check if this exists anywhere else
 
 type MultiaddrSlice []ma.Multiaddr
 
@@ -58,7 +58,7 @@ type MessageSendSpec struct {
 // GraphSyncDataTransfer provides diagnostics on a data transfer happening over graphsync
 type GraphSyncDataTransfer struct {
 	// GraphSync request id for this transfer
-	RequestID graphsync.RequestID
+	RequestID *graphsync.RequestID
 	// Graphsync state for this transfer
 	RequestState string
 	// If a channel ID is present, indicates whether this is the current graphsync request for this channel
@@ -124,12 +124,6 @@ func NewDataTransferChannel(hostID peer.ID, channelState datatransfer.ChannelSta
 	return channel
 }
 
-type NetBlockList struct {
-	Peers     []peer.ID
-	IPAddrs   []string
-	IPSubnets []string
-}
-
 type NetStat struct {
 	System    *network.ScopeStat           `json:",omitempty"`
 	Transient *network.ScopeStat           `json:",omitempty"`
@@ -150,6 +144,12 @@ type NetLimit struct {
 	Streams, StreamsInbound, StreamsOutbound int
 	Conns, ConnsInbound, ConnsOutbound       int
 	FD                                       int
+}
+
+type NetBlockList struct {
+	Peers     []peer.ID
+	IPAddrs   []string
+	IPSubnets []string
 }
 
 type ExtendedPeerInfo struct {
@@ -287,3 +287,34 @@ type ExportRef struct {
 }
 
 type FullNodeServer func(path string, api FullNode) error
+type NetworkParams struct {
+	NetworkName             dtypes.NetworkName
+	BlockDelaySecs          uint64
+	ConsensusMinerMinPower  abi.StoragePower
+	SupportedProofTypes     []abi.RegisteredSealProof
+	PreCommitChallengeDelay abi.ChainEpoch
+	ForkUpgradeParams       ForkUpgradeParams
+}
+
+type ForkUpgradeParams struct {
+	UpgradeSmokeHeight         abi.ChainEpoch
+	UpgradeBreezeHeight        abi.ChainEpoch
+	UpgradeIgnitionHeight      abi.ChainEpoch
+	UpgradeLiftoffHeight       abi.ChainEpoch
+	UpgradeAssemblyHeight      abi.ChainEpoch
+	UpgradeRefuelHeight        abi.ChainEpoch
+	UpgradeTapeHeight          abi.ChainEpoch
+	UpgradeKumquatHeight       abi.ChainEpoch
+	UpgradePriceListOopsHeight abi.ChainEpoch
+	BreezeGasTampingDuration   abi.ChainEpoch
+	UpgradeCalicoHeight        abi.ChainEpoch
+	UpgradePersianHeight       abi.ChainEpoch
+	UpgradeOrangeHeight        abi.ChainEpoch
+	UpgradeClausHeight         abi.ChainEpoch
+	UpgradeTrustHeight         abi.ChainEpoch
+	UpgradeNorwegianHeight     abi.ChainEpoch
+	UpgradeTurboHeight         abi.ChainEpoch
+	UpgradeHyperdriveHeight    abi.ChainEpoch
+	UpgradeChocolateHeight     abi.ChainEpoch
+	UpgradeOhSnapHeight        abi.ChainEpoch
+}

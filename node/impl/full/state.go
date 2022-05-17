@@ -18,6 +18,8 @@ import (
 	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/go-state-types/dline"
 	"github.com/filecoin-project/go-state-types/network"
+	"github.com/filecoin-project/lotus/build"
+
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/market"
@@ -445,6 +447,15 @@ func (m *StateModule) StateLookupID(ctx context.Context, addr address.Address, t
 	}
 
 	return m.StateManager.LookupID(ctx, addr, ts)
+}
+
+func (a *StateAPI) StateLookupRobustAddress(ctx context.Context, addr address.Address, tsk types.TipSetKey) (address.Address, error) {
+	ts, err := a.Chain.GetTipSetFromKey(ctx, tsk)
+	if err != nil {
+		return address.Undef, xerrors.Errorf("loading tipset %s: %w", tsk, err)
+	}
+
+	return a.StateManager.LookupRobustAddress(ctx, addr, ts)
 }
 
 func (m *StateModule) StateAccountKey(ctx context.Context, addr address.Address, tsk types.TipSetKey) (address.Address, error) {
@@ -1430,4 +1441,40 @@ func (a *StateAPI) StateGetRandomnessFromTickets(ctx context.Context, personaliz
 func (a *StateAPI) StateGetRandomnessFromBeacon(ctx context.Context, personalization crypto.DomainSeparationTag, randEpoch abi.ChainEpoch, entropy []byte, tsk types.TipSetKey) (abi.Randomness, error) {
 	return a.StateManager.GetRandomnessFromBeacon(ctx, personalization, randEpoch, entropy, tsk)
 
+}
+
+func (a *StateAPI) StateGetNetworkParams(ctx context.Context) (*api.NetworkParams, error) {
+	networkName, err := a.StateNetworkName(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &api.NetworkParams{
+		NetworkName:             networkName,
+		BlockDelaySecs:          build.BlockDelaySecs,
+		ConsensusMinerMinPower:  build.ConsensusMinerMinPower,
+		SupportedProofTypes:     build.SupportedProofTypes,
+		PreCommitChallengeDelay: build.PreCommitChallengeDelay,
+		ForkUpgradeParams: api.ForkUpgradeParams{
+			UpgradeSmokeHeight:       build.UpgradeSmokeHeight,
+			UpgradeBreezeHeight:      build.UpgradeBreezeHeight,
+			UpgradeIgnitionHeight:    build.UpgradeIgnitionHeight,
+			UpgradeLiftoffHeight:     build.UpgradeLiftoffHeight,
+			UpgradeAssemblyHeight:    build.UpgradeAssemblyHeight,
+			UpgradeRefuelHeight:      build.UpgradeRefuelHeight,
+			UpgradeTapeHeight:        build.UpgradeTapeHeight,
+			UpgradeKumquatHeight:     build.UpgradeKumquatHeight,
+			BreezeGasTampingDuration: build.BreezeGasTampingDuration,
+			UpgradeCalicoHeight:      build.UpgradeCalicoHeight,
+			UpgradePersianHeight:     build.UpgradePersianHeight,
+			UpgradeOrangeHeight:      build.UpgradeOrangeHeight,
+			UpgradeClausHeight:       build.UpgradeClausHeight,
+			UpgradeTrustHeight:       build.UpgradeTrustHeight,
+			UpgradeNorwegianHeight:   build.UpgradeNorwegianHeight,
+			UpgradeTurboHeight:       build.UpgradeTurboHeight,
+			UpgradeHyperdriveHeight:  build.UpgradeHyperdriveHeight,
+			UpgradeChocolateHeight:   build.UpgradeChocolateHeight,
+			UpgradeOhSnapHeight:      build.UpgradeOhSnapHeight,
+		},
+	}, nil
 }

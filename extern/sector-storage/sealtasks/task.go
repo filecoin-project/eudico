@@ -3,6 +3,7 @@ package sealtasks
 type TaskType string
 
 const (
+	TTDataCid    TaskType = "seal/v0/datacid"
 	TTAddPiece   TaskType = "seal/v0/addpiece"
 	TTPreCommit1 TaskType = "seal/v0/precommit/1"
 	TTPreCommit2 TaskType = "seal/v0/precommit/2"
@@ -14,14 +15,19 @@ const (
 	TTFetch  TaskType = "seal/v0/fetch"
 	TTUnseal TaskType = "seal/v0/unseal"
 
-	TTReplicaUpdate       TaskType = "seal/v0/replicaupdate"
-	TTProveReplicaUpdate1 TaskType = "seal/v0/provereplicaupdate/1"
-	TTProveReplicaUpdate2 TaskType = "seal/v0/provereplicaupdate/2"
-	TTRegenSectorKey      TaskType = "seal/v0/regensectorkey"
+	TTReplicaUpdate         TaskType = "seal/v0/replicaupdate"
+	TTProveReplicaUpdate1   TaskType = "seal/v0/provereplicaupdate/1"
+	TTProveReplicaUpdate2   TaskType = "seal/v0/provereplicaupdate/2"
+	TTRegenSectorKey        TaskType = "seal/v0/regensectorkey"
+	TTFinalizeReplicaUpdate TaskType = "seal/v0/finalize/replicaupdate"
+
+	TTGenerateWindowPoSt  TaskType = "post/v0/windowproof"
+	TTGenerateWinningPoSt TaskType = "post/v0/winningproof"
 )
 
 var order = map[TaskType]int{
-	TTRegenSectorKey:      10, // least priority
+	TTRegenSectorKey:      11, // least priority
+	TTDataCid:             10,
 	TTAddPiece:            9,
 	TTReplicaUpdate:       8,
 	TTProveReplicaUpdate2: 7,
@@ -31,11 +37,16 @@ var order = map[TaskType]int{
 	TTCommit2:             3,
 	TTCommit1:             2,
 	TTUnseal:              1,
-	TTFetch:               -1,
-	TTFinalize:            -2, // most priority
+
+	TTFetch:    -1,
+	TTFinalize: -2,
+
+	TTGenerateWindowPoSt:  -3,
+	TTGenerateWinningPoSt: -4, // most priority
 }
 
 var shortNames = map[TaskType]string{
+	TTDataCid:  "DC",
 	TTAddPiece: "AP",
 
 	TTPreCommit1: "PC1",
@@ -48,10 +59,31 @@ var shortNames = map[TaskType]string{
 	TTFetch:  "GET",
 	TTUnseal: "UNS",
 
-	TTReplicaUpdate:       "RU",
-	TTProveReplicaUpdate1: "PR1",
-	TTProveReplicaUpdate2: "PR2",
-	TTRegenSectorKey:      "GSK",
+	TTReplicaUpdate:         "RU",
+	TTProveReplicaUpdate1:   "PR1",
+	TTProveReplicaUpdate2:   "PR2",
+	TTRegenSectorKey:        "GSK",
+	TTFinalizeReplicaUpdate: "FRU",
+
+	TTGenerateWindowPoSt:  "WDP",
+	TTGenerateWinningPoSt: "WNP",
+}
+
+const (
+	WorkerSealing     = "Sealing"
+	WorkerWinningPoSt = "WinPost"
+	WorkerWindowPoSt  = "WdPoSt"
+)
+
+func (a TaskType) WorkerType() string {
+	switch a {
+	case TTGenerateWinningPoSt:
+		return WorkerWinningPoSt
+	case TTGenerateWindowPoSt:
+		return WorkerWindowPoSt
+	default:
+		return WorkerSealing
+	}
 }
 
 func (a TaskType) MuchLess(b TaskType) (bool, bool) {

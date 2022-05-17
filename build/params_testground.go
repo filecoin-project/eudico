@@ -35,6 +35,12 @@ var (
 	BlockDelaySecs        = uint64(builtin2.EpochDurationSeconds)
 	PropagationDelaySecs  = uint64(6)
 	MirTimer              = 1000
+	SupportedProofTypes   = []abi.RegisteredSealProof{
+		abi.RegisteredSealProof_StackedDrg32GiBV1,
+		abi.RegisteredSealProof_StackedDrg64GiBV1,
+	}
+	ConsensusMinerMinPower  = abi.NewStoragePower(10 << 40)
+	PreCommitChallengeDelay = abi.ChainEpoch(150)
 
 	AllowableClockDriftSecs = uint64(1)
 

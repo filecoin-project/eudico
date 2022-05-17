@@ -70,7 +70,7 @@ var ChainNode = Options(
 	Override(new(ffiwrapper.Verifier), ffiwrapper.ProofVerifier),
 	Override(new(ffiwrapper.Prover), ffiwrapper.ProofProver),
 
-	// Consensus: VM
+	// Consensus: LegacyVM
 	Override(new(vm.SyscallBuilder), vm.Syscalls),
 
 	// Consensus: Chain storage/access
@@ -126,7 +126,7 @@ var ChainNode = Options(
 	// Markets (retrieval)
 	Override(new(discovery.PeerResolver), modules.RetrievalResolver),
 	Override(new(retrievalmarket.BlockstoreAccessor), modules.RetrievalBlockstoreAccessor),
-	Override(new(retrievalmarket.RetrievalClient), modules.RetrievalClient),
+	Override(new(retrievalmarket.RetrievalClient), modules.RetrievalClient(false)),
 	Override(new(dtypes.ClientDataTransfer), modules.NewClientGraphsyncDataTransfer),
 
 	// Markets (storage)
@@ -148,6 +148,7 @@ var ChainNode = Options(
 
 	Override(StartSubnetMgrKey, snmgr.BuildSubnetMgr),
 	Override(StartCrossMsgResolverMgrKey, resolver.HandleMsgs),
+	Override(RelayIndexerMessagesKey, modules.RelayIndexerMessages),
 
 	// Lite node API
 	ApplyIf(isLiteNode,
@@ -235,6 +236,8 @@ func ConfigFullNode(c interface{}) Option {
 			),
 		),
 		Override(new(dtypes.Graphsync), modules.Graphsync(cfg.Client.SimultaneousTransfersForStorage, cfg.Client.SimultaneousTransfersForRetrieval)),
+
+		Override(new(retrievalmarket.RetrievalClient), modules.RetrievalClient(cfg.Client.OffChainRetrieval)),
 
 		If(cfg.Wallet.RemoteBackend != "",
 			Override(new(*remotewallet.RemoteWallet), remotewallet.SetupRemoteWallet(cfg.Wallet.RemoteBackend)),

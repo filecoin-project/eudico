@@ -58,10 +58,17 @@ func ComputeAtomicOutput(ctx context.Context, sm *stmgr.StateManager, ts *types.
 		return nil, err
 	}
 
-	// vm init
+	// Since we're simulating a future message, pretend we're applying it in the "next" tipset
+	vmHeight := pheight + 1
+
+	filVested, err := sm.GetFilVested(ctx, vmHeight)
+	if err != nil {
+		return nil, err
+	}
+
 	vmopt := &vm.VMOpts{
 		StateBase: bstate,
-		Epoch:     pheight + 1,
+		Epoch:     vmHeight,
 		Rand:      rand.NewStateRand(sm.ChainStore(), ts.Cids(), sm.Beacon(), sm.GetNetworkVersion),
 		// Bstore:    sm.ChainStore().StateBlockstore(),
 		Bstore:         tmpbs,
@@ -71,6 +78,7 @@ func ComputeAtomicOutput(ctx context.Context, sm *stmgr.StateManager, ts *types.
 		NetworkVersion: sm.GetNetworkVersion(ctx, pheight+1),
 		BaseFee:        types.NewInt(0),
 		LookbackState:  stmgr.LookbackStateGetterForTipset(sm, ts),
+		FilVested:      filVested,
 	}
 	vmi, err := sm.VMConstructor()(ctx, vmopt)
 	if err != nil {
@@ -128,18 +136,21 @@ func ComputeAtomicOutput(ctx context.Context, sm *stmgr.StateManager, ts *types.
 	}
 
 	// flush state to process it.
-	_, err = vmi.Flush(ctx)
+	stroot, err := vmi.Flush(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// output state from actor in actorState
-	toActor, err := vmi.StateTree().GetActor(to)
-	if err != nil {
-		return nil, xerrors.Errorf("call raw get actor: %s", err)
-	}
 	cst := cbor.NewCborStore(tmpbs)
+	stTree, err := state.LoadStateTree(cst, stroot)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to load state tree: %w", err)
+	}
+	toActor, err := stTree.GetActor(to)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to get actor: %w", err)
 
+	}
 	st, ok := atomic.StateRegistry[toActor.Code].(atomic.LockableActorState)
 	if !ok {
 		return nil, xerrors.Errorf("state from actor not of lockable state type")
@@ -158,7 +169,7 @@ func ComputeAtomicOutput(ctx context.Context, sm *stmgr.StateManager, ts *types.
 	return st.Output(lparams), nil
 }
 
-func computeMsg(ctx context.Context, vmi *vm.VM, m types.Message) error {
+func computeMsg(ctx context.Context, vmi vm.Interface, m types.Message) error {
 	// apply msg implicitly to execute new state
 	ret, err := vmi.ApplyImplicitMessage(ctx, &m)
 	if err != nil {

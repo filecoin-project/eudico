@@ -7,15 +7,17 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/google/uuid"
+	"github.com/filecoin-project/go-statestore"
 	"github.com/hashicorp/go-multierror"
-	"github.com/ipfs/go-cid"
-	logging "github.com/ipfs/go-log/v2"
 	"github.com/mitchellh/go-homedir"
+
+	"github.com/google/uuid"
+	cid "github.com/ipfs/go-cid"
+	logging "github.com/ipfs/go-log/v2"
+	"go.uber.org/multierr"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-statestore"
 	"github.com/filecoin-project/specs-storage/storage"
 
 	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
@@ -35,7 +37,7 @@ type Worker interface {
 	TaskTypes(context.Context) (map[sealtasks.TaskType]struct{}, error)
 
 	// Returns paths accessible to the worker
-	Paths(context.Context) ([]stores.StoragePath, error)
+	Paths(context.Context) ([]storiface.StoragePath, error)
 
 	Info(context.Context) (storiface.WorkerInfo, error)
 
@@ -55,17 +57,21 @@ var ClosedWorkerID = uuid.UUID{}
 
 type Manager struct {
 	ls         stores.LocalStorage
-	storage    *stores.Remote
+	storage    stores.Store
 	localStore *stores.Local
 	remoteHnd  *stores.FetchHandler
 	index      stores.SectorIndex
 
-	sched *scheduler
+	sched            *scheduler
+	windowPoStSched  *poStScheduler
+	winningPoStSched *poStScheduler
 
-	storage.Prover
+	localProver storage.Prover
 
 	workLk sync.Mutex
 	work   *statestore.StateStore
+
+	parallelCheckLimit int
 
 	callToWork map[storiface.CallID]WorkID
 	// used when we get an early return and there's no callToWork mapping
@@ -74,6 +80,8 @@ type Manager struct {
 	results map[WorkID]result
 	waitRes map[WorkID]chan struct{}
 }
+
+var _ storage.Prover = &Manager{}
 
 type result struct {
 	r   interface{}
@@ -94,7 +102,7 @@ const (
 	ResourceFilteringDisabled = ResourceFilteringStrategy("disabled")
 )
 
-type SealerConfig struct {
+type Config struct {
 	ParallelFetchLimit int
 
 	// Local worker config
@@ -105,11 +113,15 @@ type SealerConfig struct {
 	AllowUnseal              bool
 	AllowReplicaUpdate       bool
 	AllowProveReplicaUpdate2 bool
+	AllowRegenSectorKey      bool
 
 	// ResourceFiltering instructs the system which resource filtering strategy
 	// to use when evaluating tasks against this worker. An empty value defaults
 	// to "hardware".
 	ResourceFiltering ResourceFilteringStrategy
+
+	// PoSt config
+	ParallelCheckLimit int
 }
 
 type StorageAuth http.Header
@@ -117,7 +129,7 @@ type StorageAuth http.Header
 type WorkerStateStore *statestore.StateStore
 type ManagerStateStore *statestore.StateStore
 
-func New(ctx context.Context, lstor *stores.Local, stor *stores.Remote, ls stores.LocalStorage, si stores.SectorIndex, sc SealerConfig, wss WorkerStateStore, mss ManagerStateStore) (*Manager, error) {
+func New(ctx context.Context, lstor *stores.Local, stor stores.Store, ls stores.LocalStorage, si stores.SectorIndex, sc Config, wss WorkerStateStore, mss ManagerStateStore) (*Manager, error) {
 	prover, err := ffiwrapper.New(&readonlyProvider{stor: lstor, index: si})
 	if err != nil {
 		return nil, xerrors.Errorf("creating prover instance: %w", err)
@@ -130,9 +142,13 @@ func New(ctx context.Context, lstor *stores.Local, stor *stores.Remote, ls store
 		remoteHnd:  &stores.FetchHandler{Local: lstor, PfHandler: &stores.DefaultPartialFileHandler{}},
 		index:      si,
 
-		sched: newScheduler(),
+		sched:            newScheduler(),
+		windowPoStSched:  newPoStScheduler(sealtasks.TTGenerateWindowPoSt),
+		winningPoStSched: newPoStScheduler(sealtasks.TTGenerateWinningPoSt),
 
-		Prover: prover,
+		localProver: prover,
+
+		parallelCheckLimit: sc.ParallelCheckLimit,
 
 		work:       mss,
 		callToWork: map[storiface.CallID]WorkID{},
@@ -146,10 +162,10 @@ func New(ctx context.Context, lstor *stores.Local, stor *stores.Remote, ls store
 	go m.sched.runSched()
 
 	localTasks := []sealtasks.TaskType{
-		sealtasks.TTCommit1, sealtasks.TTProveReplicaUpdate1, sealtasks.TTFinalize, sealtasks.TTFetch,
+		sealtasks.TTCommit1, sealtasks.TTProveReplicaUpdate1, sealtasks.TTFinalize, sealtasks.TTFetch, sealtasks.TTFinalizeReplicaUpdate,
 	}
 	if sc.AllowAddPiece {
-		localTasks = append(localTasks, sealtasks.TTAddPiece)
+		localTasks = append(localTasks, sealtasks.TTAddPiece, sealtasks.TTDataCid)
 	}
 	if sc.AllowPreCommit1 {
 		localTasks = append(localTasks, sealtasks.TTPreCommit1)
@@ -168,6 +184,9 @@ func New(ctx context.Context, lstor *stores.Local, stor *stores.Remote, ls store
 	}
 	if sc.AllowProveReplicaUpdate2 {
 		localTasks = append(localTasks, sealtasks.TTProveReplicaUpdate2)
+	}
+	if sc.AllowRegenSectorKey {
+		localTasks = append(localTasks, sealtasks.TTRegenSectorKey)
 	}
 
 	wcfg := WorkerConfig{
@@ -202,7 +221,32 @@ func (m *Manager) AddLocalStorage(ctx context.Context, path string) error {
 }
 
 func (m *Manager) AddWorker(ctx context.Context, w Worker) error {
-	return m.sched.runWorker(ctx, w)
+	sessID, err := w.Session(ctx)
+	if err != nil {
+		return xerrors.Errorf("getting worker session: %w", err)
+	}
+	if sessID == ClosedWorkerID {
+		return xerrors.Errorf("worker already closed")
+	}
+
+	wid := storiface.WorkerID(sessID)
+
+	whnd, err := newWorkerHandle(ctx, w)
+	if err != nil {
+		return err
+	}
+
+	tasks, err := w.TaskTypes(ctx)
+	if err != nil {
+		return xerrors.Errorf("getting worker tasks: %w", err)
+	}
+
+	if m.windowPoStSched.MaybeAddWorker(wid, tasks, whnd) ||
+		m.winningPoStSched.MaybeAddWorker(wid, tasks, whnd) {
+		return nil
+	}
+
+	return m.sched.runWorker(ctx, wid, whnd)
 }
 
 func (m *Manager) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -281,6 +325,27 @@ func (m *Manager) SectorsUnsealPiece(ctx context.Context, sector storage.SectorR
 func (m *Manager) NewSector(ctx context.Context, sector storage.SectorRef) error {
 	log.Warnf("stub NewSector")
 	return nil
+}
+
+func (m *Manager) DataCid(ctx context.Context, pieceSize abi.UnpaddedPieceSize, pieceData storage.Data) (abi.PieceInfo, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	selector := newTaskSelector()
+
+	var out abi.PieceInfo
+	err := m.sched.Schedule(ctx, storage.NoSectorRef, sealtasks.TTDataCid, selector, schedNop, func(ctx context.Context, w Worker) error {
+		p, err := m.waitSimpleCall(ctx)(w.DataCid(ctx, pieceSize, pieceData))
+		if err != nil {
+			return err
+		}
+		if p != nil {
+			out = p.(abi.PieceInfo)
+		}
+		return nil
+	})
+
+	return out, err
 }
 
 func (m *Manager) AddPiece(ctx context.Context, sector storage.SectorRef, existingPieces []abi.UnpaddedPieceSize, sz abi.UnpaddedPieceSize, r io.Reader) (abi.PieceInfo, error) {
@@ -544,10 +609,10 @@ func (m *Manager) FinalizeSector(ctx context.Context, sector storage.SectorRef, 
 		}
 	}
 
-	selector := newExistingSelector(m.index, sector.ID, storiface.FTCache|storiface.FTSealed, false)
+	selector := newExistingSelector(m.index, sector.ID, storiface.FTCache, false)
 
 	err := m.sched.Schedule(ctx, sector, sealtasks.TTFinalize, selector,
-		m.schedFetch(sector, storiface.FTCache|storiface.FTSealed|unsealed, pathType, storiface.AcquireMove),
+		m.schedFetch(sector, storiface.FTCache|unsealed, pathType, storiface.AcquireMove),
 		func(ctx context.Context, w Worker) error {
 			_, err := m.waitSimpleCall(ctx)(w.FinalizeSector(ctx, sector, keepUnsealed))
 			return err
@@ -577,8 +642,104 @@ func (m *Manager) FinalizeSector(ctx context.Context, sector storage.SectorRef, 
 	return nil
 }
 
-func (m *Manager) ReleaseUnsealed(ctx context.Context, sector storage.SectorRef, safeToFree []storage.Range) error {
+func (m *Manager) FinalizeReplicaUpdate(ctx context.Context, sector storage.SectorRef, keepUnsealed []storage.Range) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	if err := m.index.StorageLock(ctx, sector.ID, storiface.FTNone, storiface.FTSealed|storiface.FTUnsealed|storiface.FTCache|storiface.FTUpdate|storiface.FTUpdateCache); err != nil {
+		return xerrors.Errorf("acquiring sector lock: %w", err)
+	}
+
+	moveUnsealed := storiface.FTUnsealed
+	{
+		unsealedStores, err := m.index.StorageFindSector(ctx, sector.ID, storiface.FTUnsealed, 0, false)
+		if err != nil {
+			return xerrors.Errorf("finding unsealed sector: %w", err)
+		}
+
+		if len(unsealedStores) == 0 { // Is some edge-cases unsealed sector may not exist already, that's fine
+			moveUnsealed = storiface.FTNone
+		}
+	}
+
+	pathType := storiface.PathStorage
+	{
+		sealedStores, err := m.index.StorageFindSector(ctx, sector.ID, storiface.FTUpdate, 0, false)
+		if err != nil {
+			return xerrors.Errorf("finding sealed sector: %w", err)
+		}
+
+		for _, store := range sealedStores {
+			if store.CanSeal {
+				pathType = storiface.PathSealing
+				break
+			}
+		}
+	}
+
+	selector := newExistingSelector(m.index, sector.ID, storiface.FTCache|storiface.FTUpdateCache, false)
+
+	err := m.sched.Schedule(ctx, sector, sealtasks.TTFinalizeReplicaUpdate, selector,
+		m.schedFetch(sector, storiface.FTCache|storiface.FTUpdateCache|moveUnsealed, pathType, storiface.AcquireMove),
+		func(ctx context.Context, w Worker) error {
+			_, err := m.waitSimpleCall(ctx)(w.FinalizeReplicaUpdate(ctx, sector, keepUnsealed))
+			return err
+		})
+	if err != nil {
+		return err
+	}
+
+	move := func(types storiface.SectorFileType) error {
+		fetchSel := newAllocSelector(m.index, types, storiface.PathStorage)
+		{
+			if len(keepUnsealed) == 0 {
+				moveUnsealed = storiface.FTNone
+			}
+		}
+
+		err = m.sched.Schedule(ctx, sector, sealtasks.TTFetch, fetchSel,
+			m.schedFetch(sector, types, storiface.PathStorage, storiface.AcquireMove),
+			func(ctx context.Context, w Worker) error {
+				_, err := m.waitSimpleCall(ctx)(w.MoveStorage(ctx, sector, types))
+				return err
+			})
+		if err != nil {
+			return xerrors.Errorf("moving sector to storage: %w", err)
+		}
+		return nil
+	}
+
+	err = multierr.Append(move(storiface.FTUpdate|storiface.FTUpdateCache), move(storiface.FTCache))
+	err = multierr.Append(err, move(storiface.FTSealed)) // Sealed separate from cache just in case ReleaseSectorKey was already called
+	if moveUnsealed != storiface.FTNone {
+		err = multierr.Append(err, move(moveUnsealed))
+	}
+
+	if err != nil {
+		return xerrors.Errorf("moving sector to storage: %w", err)
+	}
+
 	return nil
+}
+
+func (m *Manager) ReleaseUnsealed(ctx context.Context, sector storage.SectorRef, safeToFree []storage.Range) error {
+	ssize, err := sector.ProofType.SectorSize()
+	if err != nil {
+		return err
+	}
+	if len(safeToFree) == 0 || safeToFree[0].Offset != 0 || safeToFree[0].Size.Padded() != abi.PaddedPieceSize(ssize) {
+		// todo support partial free
+		return nil
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	if err := m.index.StorageLock(ctx, sector.ID, storiface.FTNone, storiface.FTUnsealed); err != nil {
+		return xerrors.Errorf("acquiring sector lock: %w", err)
+	}
+
+	return m.storage.Remove(ctx, sector.ID, storiface.FTUnsealed, true, nil)
 }
 
 func (m *Manager) ReleaseSectorKey(ctx context.Context, sector storage.SectorRef) error {
@@ -691,7 +852,7 @@ func (m *Manager) Remove(ctx context.Context, sector storage.SectorRef) error {
 func (m *Manager) ReplicaUpdate(ctx context.Context, sector storage.SectorRef, pieces []abi.PieceInfo) (out storage.ReplicaUpdateOut, err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	log.Errorf("manager is doing replica update")
+	log.Debugf("manager is doing replica update")
 	wk, wait, cancel, err := m.getWork(ctx, sealtasks.TTReplicaUpdate, sector, pieces)
 	if err != nil {
 		return storage.ReplicaUpdateOut{}, xerrors.Errorf("getWork: %w", err)
@@ -770,7 +931,7 @@ func (m *Manager) ProveReplicaUpdate1(ctx context.Context, sector storage.Sector
 	// NOTE: We set allowFetch to false in so that we always execute on a worker
 	// with direct access to the data. We want to do that because this step is
 	// generally very cheap / fast, and transferring data is not worth the effort
-	selector := newExistingSelector(m.index, sector.ID, storiface.FTUpdate|storiface.FTUpdateCache|storiface.FTSealed|storiface.FTCache, false)
+	selector := newExistingSelector(m.index, sector.ID, storiface.FTUpdate|storiface.FTUpdateCache, false)
 
 	err = m.sched.Schedule(ctx, sector, sealtasks.TTProveReplicaUpdate1, selector, m.schedFetch(sector, storiface.FTSealed|storiface.FTCache|storiface.FTUpdate|storiface.FTUpdateCache, storiface.PathSealing, storiface.AcquireCopy), func(ctx context.Context, w Worker) error {
 
@@ -835,6 +996,10 @@ func (m *Manager) ProveReplicaUpdate2(ctx context.Context, sector storage.Sector
 	return out, waitErr
 }
 
+func (m *Manager) ReturnDataCid(ctx context.Context, callID storiface.CallID, pi abi.PieceInfo, err *storiface.CallError) error {
+	return m.returnResult(ctx, callID, pi, err)
+}
+
 func (m *Manager) ReturnAddPiece(ctx context.Context, callID storiface.CallID, pi abi.PieceInfo, err *storiface.CallError) error {
 	return m.returnResult(ctx, callID, pi, err)
 }
@@ -875,6 +1040,10 @@ func (m *Manager) ReturnProveReplicaUpdate2(ctx context.Context, callID storifac
 	return m.returnResult(ctx, callID, proof, err)
 }
 
+func (m *Manager) ReturnFinalizeReplicaUpdate(ctx context.Context, callID storiface.CallID, err *storiface.CallError) error {
+	return m.returnResult(ctx, callID, nil, err)
+}
+
 func (m *Manager) ReturnGenerateSectorKeyFromData(ctx context.Context, callID storiface.CallID, err *storiface.CallError) error {
 	return m.returnResult(ctx, callID, nil, err)
 }
@@ -895,13 +1064,13 @@ func (m *Manager) ReturnFetch(ctx context.Context, callID storiface.CallID, err 
 	return m.returnResult(ctx, callID, nil, err)
 }
 
-func (m *Manager) StorageLocal(ctx context.Context) (map[stores.ID]string, error) {
+func (m *Manager) StorageLocal(ctx context.Context) (map[storiface.ID]string, error) {
 	l, err := m.localStore.Local(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	out := map[stores.ID]string{}
+	out := map[storiface.ID]string{}
 	for _, st := range l {
 		out[st.ID] = st.LocalPath
 	}
@@ -909,7 +1078,7 @@ func (m *Manager) StorageLocal(ctx context.Context) (map[stores.ID]string, error
 	return out, nil
 }
 
-func (m *Manager) FsStat(ctx context.Context, id stores.ID) (fsutil.FsStat, error) {
+func (m *Manager) FsStat(ctx context.Context, id storiface.ID) (fsutil.FsStat, error) {
 	return m.storage.FsStat(ctx, id)
 }
 
@@ -967,6 +1136,8 @@ func (m *Manager) SchedDiag(ctx context.Context, doSched bool) (interface{}, err
 }
 
 func (m *Manager) Close(ctx context.Context) error {
+	m.windowPoStSched.schedClose()
+	m.winningPoStSched.schedClose()
 	return m.sched.Close(ctx)
 }
 

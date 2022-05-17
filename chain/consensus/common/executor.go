@@ -76,7 +76,7 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 		partDone()
 	}()
 
-	makeVmWithBaseStateAndEpoch := func(base cid.Cid, e abi.ChainEpoch) (*vm.VM, error) {
+	makeVmWithBaseStateAndEpoch := func(base cid.Cid, e abi.ChainEpoch) (vm.Interface, error) {
 		vmopt := &vm.VMOpts{
 			StateBase:      base,
 			Epoch:          e,
@@ -216,7 +216,7 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 	return st, rectroot, nil
 }
 
-func applyMiningRewards(ctx context.Context, vmi *vm.VM, em stmgr.ExecMonitor, b store.BlockMessages, epoch abi.ChainEpoch, ts *types.TipSet, value abi.TokenAmount) error {
+func applyMiningRewards(ctx context.Context, vmi vm.Interface, em stmgr.ExecMonitor, b store.BlockMessages, epoch abi.ChainEpoch, ts *types.TipSet, value abi.TokenAmount) error {
 	rwMsg := &types.Message{
 		From:       reward.RewardActorAddr,
 		To:         b.Miner,

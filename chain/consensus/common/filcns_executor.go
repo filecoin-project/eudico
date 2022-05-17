@@ -56,7 +56,7 @@ func (t *FilCnsTipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateM
 		partDone()
 	}()
 
-	makeVmWithBaseStateAndEpoch := func(base cid.Cid, e abi.ChainEpoch) (*vm.VM, error) {
+	makeVmWithBaseStateAndEpoch := func(base cid.Cid, e abi.ChainEpoch) (vm.Interface, error) {
 		vmopt := &vm.VMOpts{
 			StateBase:      base,
 			Epoch:          e,
@@ -73,7 +73,7 @@ func (t *FilCnsTipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateM
 		return sm.VMConstructor()(ctx, vmopt)
 	}
 
-	runCron := func(vmCron *vm.VM, epoch abi.ChainEpoch) error {
+	runCron := func(vmCron vm.Interface, epoch abi.ChainEpoch) error {
 		cronMsg := &types.Message{
 			To:         cron.Address,
 			From:       builtin.SystemActorAddr,
