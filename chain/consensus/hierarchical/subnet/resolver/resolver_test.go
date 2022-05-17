@@ -9,6 +9,7 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	tutil "github.com/filecoin-project/specs-actors/v7/support/testing"
 	"github.com/ipfs/go-datastore"
+	dssync "github.com/ipfs/go-datastore/sync"
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/stretchr/testify/require"
@@ -20,7 +21,7 @@ import (
 
 func TestGetSet(t *testing.T) {
 	ctx := context.Background()
-	ds := datastore.NewMapDatastore()
+	ds := dssync.MutexWrap(datastore.NewMapDatastore())
 	h, err := libp2p.New()
 	require.NoError(t, err)
 	ps, err := pubsub.NewGossipSub(context.TODO(), h)
@@ -60,7 +61,7 @@ func TestSerializeResolveMsg(t *testing.T) {
 
 func TestResolveCross(t *testing.T) {
 	ctx := context.Background()
-	ds := datastore.NewMapDatastore()
+	ds := dssync.MutexWrap(datastore.NewMapDatastore())
 	h, err := libp2p.New()
 	require.NoError(t, err)
 	ps, err := pubsub.NewGossipSub(context.TODO(), h)
@@ -94,7 +95,7 @@ func TestResolveCross(t *testing.T) {
 
 func TestWaitResolveCross(t *testing.T) {
 	ctx := context.Background()
-	ds := datastore.NewMapDatastore()
+	ds := dssync.MutexWrap(datastore.NewMapDatastore())
 	h, err := libp2p.New()
 	require.NoError(t, err)
 	ps, err := pubsub.NewGossipSub(context.TODO(), h)
@@ -119,7 +120,7 @@ func TestWaitResolveCross(t *testing.T) {
 	go func() {
 		// Wait one second, and store cross-msgs locally
 		time.Sleep(1 * time.Second)
-		err = r.setLocal(ctx, c, out)
+		err := r.setLocal(ctx, c, out)
 		require.NoError(t, err)
 	}()
 
@@ -129,7 +130,7 @@ func TestWaitResolveCross(t *testing.T) {
 
 func TestResolveLocked(t *testing.T) {
 	ctx := context.Background()
-	ds := datastore.NewMapDatastore()
+	ds := dssync.MutexWrap(datastore.NewMapDatastore())
 	h, err := libp2p.New()
 	require.NoError(t, err)
 	ps, err := pubsub.NewGossipSub(context.TODO(), h)
@@ -151,7 +152,7 @@ func TestResolveLocked(t *testing.T) {
 
 func TestWaitResolveLocked(t *testing.T) {
 	ctx := context.Background()
-	ds := datastore.NewMapDatastore()
+	ds := dssync.MutexWrap(datastore.NewMapDatastore())
 	h, err := libp2p.New()
 	require.NoError(t, err)
 	ps, err := pubsub.NewGossipSub(context.TODO(), h)
@@ -166,7 +167,7 @@ func TestWaitResolveLocked(t *testing.T) {
 	go func() {
 		// Wait one second, and store cross-msgs locally
 		time.Sleep(1 * time.Second)
-		err = r.setLocal(ctx, c, out)
+		err := r.setLocal(ctx, c, out)
 		require.NoError(t, err)
 	}()
 

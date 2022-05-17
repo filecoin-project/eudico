@@ -74,7 +74,7 @@ func (ts *eudicoConsensusSuite) testDummyMining(t *testing.T) {
 	}
 
 	go func() {
-		err = dummy.Mine(ctx, l[0], full)
+		err := dummy.Mine(ctx, l[0], full)
 		if err != nil {
 			t.Error(err)
 			cancel()
@@ -116,7 +116,7 @@ func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
 	defer os.Unsetenv(mir.MirMinersEnv) // nolint
 
 	go func() {
-		err = mir.Mine(ctx, l[0], full)
+		err := mir.Mine(ctx, l[0], full)
 		if xerrors.Is(mapi.ErrStopped, err) {
 			return
 		}
@@ -156,8 +156,12 @@ func (ts *eudicoConsensusSuite) testTSPoWMining(t *testing.T) {
 	}
 
 	go func() {
-		err = tspow.Mine(ctx, l[0], full)
-		require.NoError(t, err)
+		err := tspow.Mine(ctx, l[0], full)
+		if err != nil {
+			t.Error(err)
+			cancel()
+			return
+		}
 	}()
 
 	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 3, address.RootSubnet, full)
@@ -189,8 +193,12 @@ func (ts *eudicoConsensusSuite) testDelegatedMining(t *testing.T) {
 	require.NoError(t, err)
 
 	go func() {
-		err = delegcns.Mine(ctx, address.Undef, full)
-		require.NoError(t, err)
+		err := delegcns.Mine(ctx, address.Undef, full)
+		if err != nil {
+			t.Error(err)
+			cancel()
+			return
+		}
 	}()
 
 	newHeads, err := full.ChainNotify(ctx)
@@ -245,8 +253,12 @@ func (ts *eudicoConsensusSuite) testTendermintMining(t *testing.T) {
 	}
 
 	go func() {
-		err = tendermint.Mine(ctx, l[0], full)
-		require.NoError(t, err)
+		err := tendermint.Mine(ctx, l[0], full)
+		if err != nil {
+			t.Error(err)
+			cancel()
+			return
+		}
 	}()
 
 	newHeads, err := full.ChainNotify(ctx)

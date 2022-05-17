@@ -22,6 +22,12 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
+func TestEudicoSubnetSanity(t *testing.T) {
+	t.Run("/root/dummy-/subnet/dummy", func(t *testing.T) {
+		runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetDummy())
+	})
+}
+
 func TestEudicoSubnetMir(t *testing.T) {
 	t.Run("/root/mir-/subnet/dummy", func(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDummy())

@@ -37,22 +37,24 @@ func newSigningState() *signingState {
 // getPrevCheck checks if a high-confidence prevCheck cid can be retrieved
 // subnet state or we need to use the one from our checkBuffer.
 func (sh *Subnet) getPrevCheck(store adt.Store, st *subnet.SubnetState, epoch abi.ChainEpoch) (cid.Cid, error) {
+	sh.checklk.RLock()
+	defer sh.checklk.RUnlock()
 	ep := epoch - st.CheckPeriod
-	prevch, found, err := st.GetCheckpoint(store, ep)
+	prevCp, found, err := st.GetCheckpoint(store, ep)
 	if err != nil {
 		return cid.Undef, err
 	}
 	if !found {
 		// if not use the previous from buffer
-		prevch, ok := sh.signingState.checkBuffer[ep]
-		if ok {
-			return prevch.Cid()
+		prevCp, ok := sh.signingState.checkBuffer[ep]
+		if !ok {
+			// If nothing found in state or buffer
+			return schema.NoPreviousCheck, nil
 		}
-		// If nothing found in state or buffer
-		return schema.NoPreviousCheck, nil
+		return prevCp.Cid()
 
 	}
-	return prevch.Cid()
+	return prevCp.Cid()
 }
 
 // gc the check buffer to prevent it from growing indefinitely
