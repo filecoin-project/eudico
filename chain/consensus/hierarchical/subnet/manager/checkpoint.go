@@ -59,8 +59,6 @@ func (sh *Subnet) getPrevCheck(store adt.Store, st *subnet.SubnetState, epoch ab
 
 // gc the check buffer to prevent it from growing indefinitely
 func (sh *Subnet) gcCheckBuf(store adt.Store, st *subnet.SubnetState, epoch abi.ChainEpoch) {
-	sh.checklk.Lock()
-	defer sh.checklk.Unlock()
 	ep := epoch - st.CheckPeriod
 	for ep >= 0 {
 		_, found, err := st.GetCheckpoint(store, ep)
