@@ -146,8 +146,11 @@ func ComputeAtomicOutput(ctx context.Context, sm *stmgr.StateManager, ts *types.
 	if err != nil {
 		return nil, xerrors.Errorf("failed to load state tree: %w", err)
 	}
-
 	toActor, err := stTree.GetActor(to)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to get actor: %w", err)
+
+	}
 	st, ok := atomic.StateRegistry[toActor.Code].(atomic.LockableActorState)
 	if !ok {
 		return nil, xerrors.Errorf("state from actor not of lockable state type")
