@@ -136,20 +136,18 @@ func ComputeAtomicOutput(ctx context.Context, sm *stmgr.StateManager, ts *types.
 	}
 
 	// flush state to process it.
-	_, err = vmi.Flush(ctx)
+	stroot, err := vmi.Flush(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// output state from actor in actorState
-	stTree, err := sm.StateTree(bstate)
+	cst := cbor.NewCborStore(tmpbs)
+	stTree, err := state.LoadStateTree(cst, stroot)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to load state tree: %w", err)
 	}
 
 	toActor, err := stTree.GetActor(to)
-	cst := cbor.NewCborStore(tmpbs)
-
 	st, ok := atomic.StateRegistry[toActor.Code].(atomic.LockableActorState)
 	if !ok {
 		return nil, xerrors.Errorf("state from actor not of lockable state type")
