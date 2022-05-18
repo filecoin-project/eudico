@@ -228,7 +228,7 @@ jobs:
                 command: |
                   bash <(curl -s https://codecov.io/bash)
 
-  test-subnet_unit:
+  test-subnet-unit:
     <<: *basic_test
 
   test-subnet:
