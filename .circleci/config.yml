@@ -237,7 +237,7 @@ jobs:
   test-consensus:
     <<: *basic_test
 
-  test_subnet_races:
+  test-subnet-races:
     <<: *basic_test
 
   test-conformance:
