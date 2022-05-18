@@ -805,6 +805,7 @@ workflows:
           target: "./itests/eudico_consensus_test.go"
       - test_subnet_races:
           requires:
+            - lint-all
             - test_consensus
             - test_subnet
           name: hierarchical-test-subnet-with-race-detector
