@@ -155,7 +155,7 @@ jobs:
       - run:
           command: make eudico
 
-  test:
+  test: &basic_test
     description: |
       Run tests with gotestsum.
     parameters: &test-params
@@ -227,6 +227,18 @@ jobs:
                 shell: /bin/bash -eo pipefail
                 command: |
                   bash <(curl -s https://codecov.io/bash)
+
+  test_subnet_unit:
+    <<: *basic_test
+
+  test_subnet:
+    <<: *basic_test
+
+  test_consensus:
+    <<: *basic_test
+
+  test_subnet_races:
+    <<: *basic_test
 
   test-conformance:
     description: |
@@ -462,7 +474,6 @@ jobs:
           root: "."
           paths:
             - appimage
-
 
   gofmt:
     executor: golang
@@ -780,18 +791,26 @@ workflows:
       - mod-tidy-check
       - gofmt
       - gen-check
-      - test:
+      - test_unit:
           name: hierarchical-unit-tests
           suite: hierarchical-consensus
           target: "./chain/consensus/..."
-      - test:
+      - test_consensus:
           name: hierarchical-test-subnets
           suite: hierarchical-consensus
-          target: "./itests/eudico_subnet_test.go"
-      - test:
+          target: "./itests/eudico_consensus_test.go"
+      - test_subnet:
           name: hierarchical-test-consensus
           suite: hierarchical-consensus
           target: "./itests/eudico_consensus_test.go"
+      - test_subnet_races:
+          requires:
+            - test_consensus
+            - test_subnet
+          name: hierarchical-test-consensus
+          suite: hierarchical-consensus
+          go-test-flags: "-race -tags=2k -timeout 30m"
+          target: "./itests/eudico_subnet_test.go"
       # FIXME: Uncomment when Eudico is stable and ready for production.
       # - docs-check
       
