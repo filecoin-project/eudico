@@ -815,8 +815,8 @@ workflows:
           go-test-flags: "-race -tags=2k -timeout 30m"
           target: "./itests/eudico_subnet_test.go"
           requires:
-            - test-consensus
-            - test-subnet
+            - hierarchical-test-subnet
+            - hierarchical-test-consensus
       # FIXME: Uncomment when Eudico is stable and ready for production.
       # - docs-check
       
