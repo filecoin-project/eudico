@@ -38,7 +38,7 @@ import (
 //    are received via state, after each validator joins the subnet.
 //    This is used to run Mir in a subnet.
 func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
-	log = logging.FromContext(ctx, log)
+	log := logging.FromContext(ctx, log)
 
 	m, err := newMiner(ctx, addr, api)
 	if err != nil {

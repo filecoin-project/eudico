@@ -16,7 +16,7 @@ import (
 )
 
 func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
-	log = logging.FromContext(ctx, log)
+	log := logging.FromContext(ctx, log)
 
 	head, err := api.ChainHead(ctx)
 	if err != nil {
