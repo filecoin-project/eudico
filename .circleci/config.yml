@@ -806,7 +806,6 @@ workflows:
       - test_subnet_races:
           requires:
             - lint-all
-            - test_subnet
           name: hierarchical-test-subnet-with-race-detector
           suite: hierarchical-consensus
           go-test-flags: "-race -tags=2k -timeout 30m"
