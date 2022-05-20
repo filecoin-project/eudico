@@ -8,11 +8,11 @@ cid = { version = "0.8.4", default-features = false }
 multihash = { version = "0.16.2", default-features = false }
 # FIXME: Pointing to a fork of ref-fvm. This needs to change
 # once features are fully implemented.
-fvm_sdk = { version = "0.6.1", git = "https://github.com/adlrocha/ref-fvm" }
-fvm_shared = { version = "0.6.1", git = "https://github.com/adlrocha/ref-fvm" }
-fvm_ipld_blockstore = "0.1.0"
-fvm_ipld_hamt = "0.5.1"
-fvm_ipld_encoding = "0.2.0"
+fvm_sdk = { git = "https://github.com/adlrocha/ref-fvm" }
+fvm_shared = { git = "https://github.com/adlrocha/ref-fvm" }
+fvm_ipld_blockstore = { git = "https://github.com/adlrocha/ref-fvm" }
+fvm_ipld_hamt = { git = "https://github.com/adlrocha/ref-fvm" }
+fvm_ipld_encoding = { git = "https://github.com/adlrocha/ref-fvm" }
 serde = { version = "1.0.136", features = ["derive"] }
 serde_tuple = "0.5"
 anyhow = "1.0.56"
@@ -21,12 +21,25 @@ anyhow = "1.0.56"
 # FIXME: Pointing to a fork of ref-fvm. This needs to change
 # once features are fully implemented.
 fvm = { git = "https://github.com/adlrocha/ref-fvm" }
+fvm_integration_tests = { git = "https://github.com/adlrocha/ref-fvm" }
 libsecp256k1 = { version = "0.7" }
 rand = "0.8"
 rand_chacha = "0.3"
 anyhow = "1.0.52"
 wasmtime = "0.35.2"
+num-traits = "0.2"
+wabt = "0.10.0"
 
 [build-dependencies]
 wasm-builder = "3.0.1"
 wasmtime = "0.35.2"
+
+[patch.crates-io]
+fvm_shared = { path = "/home/adlrocha/Desktop/main/work/ProtocolLabs/repos/consensuslab/ref-fvm/shared" }
+fvm_sdk = { path = "/home/adlrocha/Desktop/main/work/ProtocolLabs/repos/consensuslab/ref-fvm/sdk" }
+fvm_ipld_hamt = { path = "/home/adlrocha/Desktop/main/work/ProtocolLabs/repos/consensuslab/ref-fvm/ipld/hamt" }
+fvm_ipld_amt = { path = "/home/adlrocha/Desktop/main/work/ProtocolLabs/repos/consensuslab/ref-fvm/ipld/amt" }
+fvm_ipld_bitfield = { path = "/home/adlrocha/Desktop/main/work/ProtocolLabs/repos/consensuslab/ref-fvm/ipld/bitfield"}
+fvm_ipld_encoding = { path = "/home/adlrocha/Desktop/main/work/ProtocolLabs/repos/consensuslab/ref-fvm/ipld/encoding"}
+fvm_ipld_blockstore = { path = "/home/adlrocha/Desktop/main/work/ProtocolLabs/repos/consensuslab/ref-fvm/ipld/blockstore"}
+

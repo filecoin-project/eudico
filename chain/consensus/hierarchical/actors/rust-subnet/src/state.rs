@@ -1,10 +1,13 @@
+use anyhow::anyhow;
 use cid::multihash::Code;
 use cid::Cid;
 use fvm_ipld_encoding::tuple::{Deserialize_tuple, Serialize_tuple};
 use fvm_ipld_encoding::{to_vec, CborStore, DAG_CBOR};
+use fvm_ipld_hamt::{Error as HamtError, Hamt};
 use fvm_sdk as sdk;
-use fvm_shared::address::SubnetID;
+use fvm_shared::address::{Address, SubnetID};
 use fvm_shared::bigint::bigint_ser;
+use fvm_shared::bigint::bigint_ser::BigIntDe;
 use fvm_shared::bigint::Zero;
 use fvm_shared::clock::ChainEpoch;
 use fvm_shared::econ::TokenAmount;
@@ -21,7 +24,7 @@ pub struct State {
     pub parent_id: SubnetID,
     pub consensus: ConsensusType,
     #[serde(with = "bigint_ser")]
-    pub min_miner_stake: TokenAmount,
+    pub min_validator_stake: TokenAmount,
     #[serde(with = "bigint_ser")]
     pub total_stake: TokenAmount,
     pub stake: Cid, // BalanceTable of stake (HAMT[address]TokenAmount)
@@ -58,10 +61,10 @@ impl State {
             parent_id: params.parent,
             consensus: params.consensus,
             total_stake: TokenAmount::zero(),
-            min_miner_stake: if params.min_miner_stake < min_stake {
+            min_validator_stake: if params.min_validator_stake < min_stake {
                 min_stake
             } else {
-                params.min_miner_stake
+                params.min_validator_stake
             },
             check_period: if params.check_period < ext::sca::MIN_CHECK_PERIOD {
                 ext::sca::MIN_CHECK_PERIOD
@@ -76,6 +79,62 @@ impl State {
             validator_set: vec![],
         }
     }
+
+    pub fn add_stake(&mut self, addr: &Address, amount: &TokenAmount) -> anyhow::Result<()> {
+        // update miner stake
+        let mut bt = make_map_with_root::<_, BigIntDe>(&self.stake, &Blockstore)?;
+        let mut stake = get_stake(&bt, addr)
+            .map_err(|e| anyhow!(format!("error getting stake from Hamt: {:?}", e)))?;
+        stake += amount;
+        set_stake(&mut bt, addr, stake.clone())?;
+        self.stake = bt.flush()?;
+
+        // update total collateral
+        self.total_stake += amount;
+
+        // check if the miner has coollateral to become a validator
+        if stake >= self.min_validator_stake
+            && (self.consensus != ConsensusType::Delegated || self.validator_set.len() < 1)
+        {
+            self.validator_set.push(Validator {
+                subnet: SubnetID::new(&self.parent_id, Address::new_id(sdk::message::receiver())),
+                addr: addr.clone(),
+                // FIXME: Receive address in params
+                net_addr: String::new(),
+            });
+        }
+
+        Ok(())
+    }
+
+    pub fn mutate_state(&mut self) {
+        match self.status {
+            Status::Instantiated => {
+                if self.total_stake >= TokenAmount::from(ext::sca::MIN_STAKE) {
+                    self.status = Status::Active
+                }
+            }
+            Status::Active => {
+                if self.total_stake < TokenAmount::from(ext::sca::MIN_STAKE) {
+                    self.status = Status::Inactive
+                }
+            }
+            Status::Inactive => {
+                if self.total_stake >= TokenAmount::from(ext::sca::MIN_STAKE) {
+                    self.status = Status::Active
+                }
+            }
+            Status::Terminating => {
+                if self.total_stake == TokenAmount::zero()
+                    && sdk::sself::current_balance() == TokenAmount::zero()
+                {
+                    self.status = Status::Killed
+                }
+            }
+            _ => {}
+        }
+    }
+
     pub fn load() -> Self {
         // First, load the current state root.
         let root = match sdk::sself::root() {
@@ -105,5 +164,47 @@ impl State {
             abort!(USR_ILLEGAL_STATE, "failed to set root ciid: {:}", err);
         }
         cid
+    }
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            parent_id: SubnetID::default(),
+            consensus: ConsensusType::Delegated,
+            min_validator_stake: TokenAmount::from(ext::sca::MIN_STAKE),
+            total_stake: TokenAmount::zero(),
+            check_period: 10,
+            genesis: Vec::new(),
+            status: Status::Instantiated,
+            checkpoints: Cid::default(),
+            stake: Cid::default(),
+            window_checks: Cid::default(),
+            validator_set: Vec::new(),
+        }
+    }
+}
+
+pub fn set_stake<BS: fvm_ipld_blockstore::Blockstore>(
+    stakes: &mut Hamt<BS, BigIntDe>,
+    addr: &Address,
+    amount: TokenAmount,
+) -> anyhow::Result<()> {
+    stakes
+        .set(addr.to_bytes().into(), BigIntDe(amount))
+        .map_err(|e| anyhow!(format!("failed to set stake for addr {}: {:?}", addr, e)))?;
+    Ok(())
+}
+
+/// Gets token amount for given address in balance table
+pub fn get_stake<'m, BS: fvm_ipld_blockstore::Blockstore>(
+    stakes: &'m Hamt<BS, BigIntDe>,
+    key: &Address,
+) -> Result<TokenAmount, HamtError> {
+    if let Some(v) = stakes.get(&key.to_bytes())? {
+        Ok(v.0.clone())
+    } else {
+        Ok(0.into())
     }
 }

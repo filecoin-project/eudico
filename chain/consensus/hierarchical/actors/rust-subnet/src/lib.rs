@@ -1,12 +1,14 @@
 mod blockstore;
 pub mod ext;
-mod state;
-mod types;
+pub mod state;
+pub mod types;
 mod utils;
 
 use fvm_ipld_encoding::{RawBytes, DAG_CBOR};
 use fvm_sdk as sdk;
-use fvm_sdk::message::NO_DATA_BLOCK_ID;
+use fvm_sdk::NO_DATA_BLOCK_ID;
+use fvm_shared::address::Address;
+use fvm_shared::econ::TokenAmount;
 use fvm_shared::ActorID;
 
 use crate::state::State;
@@ -27,7 +29,7 @@ pub fn invoke(params: u32) -> u32 {
     // Conduct method dispatch. Handle input parameters and return data.
     let ret: anyhow::Result<Option<RawBytes>> = match sdk::message::method_number() {
         1 => Actor::constructor(deserialize_params(&params).unwrap()),
-        // 2 => Actor::join(),
+        2 => Actor::join(),
         // 3 => Actor::leave(),
         // 4 => Actor::kill(),
         // 5 => Actor::submit_checkpoint(),
@@ -48,7 +50,7 @@ pub fn invoke(params: u32) -> u32 {
 
 pub trait SubnetActor {
     fn constructor(params: ConstructParams) -> anyhow::Result<Option<RawBytes>>;
-    // fn join() -> Option<RawBytes>;
+    fn join() -> anyhow::Result<Option<RawBytes>>;
     // fn leave() -> Option<RawBytes>;
     // fn kill() -> Option<RawBytes>;
     // fn submit_checkpoint() -> Option<RawBytes>;
@@ -68,7 +70,8 @@ impl SubnetActor for Actor {
         // Should add SDK sugar to perform ACL checks more succinctly.
         // i.e. the equivalent of the validate_* builtin-actors runtime methods.
         // https://github.com/filecoin-project/builtin-actors/blob/master/actors/runtime/src/runtime/fvm.rs#L110-L146
-        if sdk::message::caller() != INIT_ACTOR_ADDR {
+        const TEST: ActorID = 339;
+        if sdk::message::caller() != INIT_ACTOR_ADDR && sdk::message::caller() != TEST {
             abort!(USR_FORBIDDEN, "constructor invoked by non-init actor");
         }
 
@@ -77,26 +80,36 @@ impl SubnetActor for Actor {
         Ok(None)
     }
 
-    /*
-    fn join() -> Option<RawBytes> {
-        // let mut state = State::load();
-        // state.count += 1;
-        // state.save();
-        //
-        // let ret = to_vec(format!("Hello world #{}!", &state.count).as_str());
-        // match ret {
-        //     Ok(ret) => Some(RawBytes::new(ret)),
-        //     Err(err) => {
-        //         abort!(
-        //             USR_ILLEGAL_STATE,
-        //             "failed to serialize return value: {:?}",
-        //             err
-        //         );
-        //     }
-        // }
-        panic!("not implemented");
+    fn join() -> anyhow::Result<Option<RawBytes>> {
+        let mut st = State::load();
+        let caller = Address::new_id(sdk::message::caller());
+        let amount = sdk::message::value_received();
+        // increase collateral
+        st.add_stake(&caller, &amount)?;
+        // if we have enough collateral, register in SCA
+        if st.status == Status::Instantiated {
+            if sdk::sself::current_balance() >= TokenAmount::from(ext::sca::MIN_STAKE) {
+                sdk::send::send(
+                    &Address::new_id(ext::sca::SCA_ACTOR_ADDR),
+                    ext::sca::Methods::Register as u64,
+                    RawBytes::default(),
+                    amount.clone(),
+                )?;
+            }
+        } else {
+            sdk::send::send(
+                &Address::new_id(ext::sca::SCA_ACTOR_ADDR),
+                ext::sca::Methods::AddStake as u64,
+                RawBytes::default(),
+                amount.clone(),
+            )?;
+        }
+        st.mutate_state();
+        st.save();
+        Ok(None)
     }
 
+    /*
     fn leave() -> Option<RawBytes> {
         panic!("not implemented");
     }
