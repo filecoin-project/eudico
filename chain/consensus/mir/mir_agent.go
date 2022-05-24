@@ -51,6 +51,18 @@ func (m *mirLogger) Log(level mirLogging.LogLevel, text string, args ...interfac
 	}
 }
 
+func NewWAL(ownID, walDir string) (*simplewal.WAL, error) {
+	walPath := path.Join(walDir, fmt.Sprintf("%v", ownID))
+	wal, err := simplewal.Open(walPath)
+	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(walPath, 0700); err != nil {
+		return nil, err
+	}
+	return wal, nil
+}
+
 // MirAgent manages and provides direct access to a Mir node abstraction participating in consensus.
 type MirAgent struct {
 	OwnID string
@@ -73,12 +85,8 @@ func NewMirAgent(ctx context.Context, ownID string, nodes []hierarchical.Validat
 	}
 	log.Debugf("Mir node config:\n%v\n%v", nodeIds, nodeAddrs)
 
-	walPath := path.Join("eudico-wal", fmt.Sprintf("%v", ownID))
-	wal, err := simplewal.Open(walPath)
+	wal, err := NewWAL(ownID, "eudico-wal")
 	if err != nil {
-		return nil, err
-	}
-	if err := os.MkdirAll(walPath, 0700); err != nil {
 		return nil, err
 	}
 
@@ -162,4 +170,15 @@ func (m *MirAgent) Stop() {
 	}
 	m.Net.Stop()
 	close(m.App.ChainNotify)
+}
+
+func (m *MirAgent) SubmitRequests(ctx context.Context, refs []*RequestRef) {
+	for _, r := range refs {
+		err := m.Node.SubmitRequest(ctx, r.ClientID, r.ReqNo, r.Hash, []byte{})
+		if err != nil {
+			log.Errorf("unable to submit a request from %s to Mir: %v", r.ClientID, err)
+			continue
+		}
+		log.Debugf("successfully sent message %d from %s to Mir", r.Type, r.ClientID)
+	}
 }
