@@ -1,5 +1,4 @@
-// Package mirbft implements integration with Mir library,
-// available at https://github.com/hyperledger-labs/mirbft.
+// Package mir implements Eudico consensus in Mir framework.
 package mir
 
 import (
@@ -13,7 +12,6 @@ import (
 	logging "github.com/ipfs/go-log/v2"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"go.opencensus.io/stats"
-	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -39,7 +37,7 @@ import (
 const (
 	MaxHeightDrift = 5
 	SubmitInterval = 5000 * time.Millisecond
-	MirMinersEnv   = "EUDICO_MIR_MINERS"
+	ValidatorsEnv  = "EUDICO_MIR_VALIDATORS"
 )
 
 var (
@@ -83,14 +81,18 @@ func NewConsensus(
 	}, nil
 }
 
-// CreateBlock creates a final Filecoin block from the input block template.
+// CreateBlock creates a Filecoin block from the input block template.
 func (bft *Mir) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.BlockTemplate) (*types.FullBlock, error) {
 	b, err := common.PrepareBlockForSignature(ctx, bft.sm, bt)
 	if err != nil {
 		return nil, err
 	}
 
-	// We don't sign blocks mined by Mir validators
+	err = common.SignBlock(ctx, w, b)
+	if err != nil {
+		return nil, err
+	}
+
 	return b, nil
 }
 
@@ -98,45 +100,45 @@ func (bft *Mir) ValidateBlock(ctx context.Context, b *types.FullBlock) (err erro
 	log.Infof("starting block validation process at @%d", b.Header.Height)
 
 	if err := common.BlockSanityChecks(hierarchical.Mir, b.Header); err != nil {
-		return xerrors.Errorf("incoming header failed basic sanity checks: %w", err)
+		return fmt.Errorf("incoming header failed basic sanity checks: %w", err)
 	}
 
 	h := b.Header
 
 	baseTs, err := bft.store.LoadTipSet(ctx, types.NewTipSetKey(h.Parents...))
 	if err != nil {
-		return xerrors.Errorf("load parent tipset failed (%s): %w", h.Parents, err)
+		return fmt.Errorf("load parent tipset failed (%s): %w", h.Parents, err)
 	}
 
 	// fast checks first
 	if h.Height != baseTs.Height()+1 {
-		return xerrors.Errorf("block height not parent height+1: %d != %d", h.Height, baseTs.Height()+1)
+		return fmt.Errorf("block height not parent height+1: %d != %d", h.Height, baseTs.Height()+1)
 	}
 
 	now := uint64(build.Clock.Now().Unix())
 	if h.Timestamp > now+build.AllowableClockDriftSecs {
-		return xerrors.Errorf("block was from the future (now=%d, blk=%d): %w", now, h.Timestamp, consensus.ErrTemporal)
+		return fmt.Errorf("block was from the future (now=%d, blk=%d): %w", now, h.Timestamp, consensus.ErrTemporal)
 	}
 	if h.Timestamp > now {
 		log.Warn("Got block from the future, but within threshold", h.Timestamp, build.Clock.Now().Unix())
 	}
 
-	msgsChecks := common.CheckMsgsWithoutBlockSig(ctx, bft.store, bft.sm, bft.subMgr, bft.resolver, bft.netName, b, baseTs)
+	msgsChecks := common.CheckMsgs(ctx, bft.store, bft.sm, bft.subMgr, bft.resolver, bft.netName, b, baseTs)
 
 	minerCheck := async.Err(func() error {
 		if err := bft.minerIsValid(b.Header.Miner); err != nil {
-			return xerrors.Errorf("minerIsValid failed: %w", err)
+			return fmt.Errorf("minerIsValid failed: %w", err)
 		}
 		return nil
 	})
 
 	pweight, err := Weight(ctx, nil, baseTs)
 	if err != nil {
-		return xerrors.Errorf("getting parent weight: %w", err)
+		return fmt.Errorf("getting parent weight: %w", err)
 	}
 
 	if types.BigCmp(pweight, b.Header.ParentWeight) != 0 {
-		return xerrors.Errorf("parent weight different: %s (header) != %s (computed)",
+		return fmt.Errorf("parent weight different: %s (header) != %s (computed)",
 			b.Header.ParentWeight, pweight)
 	}
 
@@ -167,9 +169,7 @@ func (bft *Mir) ValidateBlock(ctx context.Context, b *types.FullBlock) (err erro
 				points[i] = fmt.Sprintf("* %+v", err)
 			}
 
-			return fmt.Sprintf(
-				"%d errors occurred:\n\t%s\n\n",
-				len(es), strings.Join(points, "\n\t"))
+			return fmt.Sprintf("%d errors occurred:\n\t%s\n\n", len(es), strings.Join(points, "\n\t"))
 		}
 		return mulErr
 	}
@@ -181,7 +181,7 @@ func (bft *Mir) ValidateBlock(ctx context.Context, b *types.FullBlock) (err erro
 
 func (bft *Mir) ValidateBlockPubsub(ctx context.Context, self bool, msg *pubsub.Message) (pubsub.ValidationResult, string) {
 	if self {
-		return validateLocalBlock(ctx, msg)
+		return common.ValidateLocalBlock(ctx, msg)
 	}
 
 	// track validation time
@@ -197,7 +197,7 @@ func (bft *Mir) ValidateBlockPubsub(ctx context.Context, self bool, msg *pubsub.
 		panic(what)
 	}
 
-	blk, what, err := decodeAndCheckBlock(msg)
+	blk, what, err := common.DecodeAndCheckBlock(msg)
 	if err != nil {
 		log.Error("got invalid block over pubsub: ", err)
 		recordFailureFlagPeer(what)
@@ -225,7 +225,7 @@ func (bft *Mir) minerIsValid(maddr address.Address) error {
 	case address.SECP256K1:
 		return nil
 	}
-	return xerrors.Errorf("miner address must be a key")
+	return fmt.Errorf("miner address must be a key")
 }
 
 // IsEpochBeyondCurrMax is used in Filcns to detect delayed blocks.
@@ -252,41 +252,4 @@ func Weight(ctx context.Context, stateBs bstore.Blockstore, ts *types.TipSet) (t
 	}
 
 	return big.NewInt(int64(ts.Height() + 1)), nil
-}
-
-func validateLocalBlock(ctx context.Context, msg *pubsub.Message) (pubsub.ValidationResult, string) {
-	stats.Record(ctx, metrics.BlockPublished.M(1))
-
-	if size := msg.Size(); size > 1<<20-1<<15 {
-		log.Errorf("ignoring oversize block (%dB)", size)
-		return pubsub.ValidationIgnore, "oversize_block"
-	}
-
-	blk, what, err := decodeAndCheckBlock(msg)
-	if err != nil {
-		log.Errorf("got invalid local block: %s", err)
-		return pubsub.ValidationIgnore, what
-	}
-
-	msg.ValidatorData = blk
-	stats.Record(ctx, metrics.BlockValidationSuccess.M(1))
-	return pubsub.ValidationAccept, ""
-}
-
-func decodeAndCheckBlock(msg *pubsub.Message) (*types.BlockMsg, string, error) {
-	blk, err := types.DecodeBlockMsg(msg.GetData())
-	if err != nil {
-		return nil, "invalid", xerrors.Errorf("error decoding block: %w", err)
-	}
-
-	if count := len(blk.BlsMessages) + len(blk.SecpkMessages); count > build.BlockMessageLimit {
-		return nil, "too_many_messages", fmt.Errorf("block contains too many messages (%d)", count)
-	}
-
-	// make sure we have a signature
-	if blk.Header.BlockSig != nil {
-		return nil, "missing_signature", fmt.Errorf("block with a signature")
-	}
-
-	return blk, "", nil
 }

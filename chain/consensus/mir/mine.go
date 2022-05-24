@@ -2,6 +2,7 @@ package mir
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/filecoin-project/go-address"
@@ -13,18 +14,22 @@ import (
 	ltypes "github.com/filecoin-project/lotus/chain/types"
 )
 
-// Mine handles mining using Mir.
+// Mine handles block "mining" using Mir framework.
 //
 // Mine implements the following algorithm:
-// 1. Retrieve messages and cross-messages from mempool.
+// 1. Retrieve messages and cross-messages from mempool and create Mir requests from them.
 //    Note, that messages can be added into mempool via the libp2p mechanism and the CLI.
-// 2. Send these messages to the Mir node.
-// 3. Receive ordered messages from the Mir node and push them into the next Filecoin block.
-// 4. Submit this block over libp2p network.
+// 2. Store the requests in cache, that is, at present, a key-value storage in memory.
+//    Each key is the request hash.
+// 3. Send those hashes to the Mir node.
+// 4. Receive ordered hashes from the Mir node and retrieve the corresponding requests from the storage.
+// 5. Create the next Filecoin block.
+//    Note, only a leader Eudico node, chosen by round-robin election, creates a block.
+// 6. Submit this block over libp2p network.
 //
 // There are two ways how mining with Mir can be started:
 // 1) Environment variables: validators ID and their network addresses are passed
-//    via EUDICO_MIR_MINERS and EUDICO_MIR_ID variables.
+//    via EUDICO_MIR_VALIDATORS variable.
 //    This approach can be used to run Mir in the root network and for simple demos.
 // 2) Hierarchical consensus framework: validators IDs and their network addresses
 //    are received via state, after each validator joins the subnet.
@@ -32,23 +37,19 @@ import (
 func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 	log := logging.FromContext(ctx, log)
 
-	m, err := newMiner(ctx, addr, api)
+	m, err := NewManager(ctx, addr, api)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to create a manager: %v", err)
 	}
-	log.Infof("Mir miner %s started", m.mirID())
-	defer log.Infof("Mir miner %s completed", m.mirID())
+	log.Infof("Mir miner %s started", m.MirID)
+	defer log.Infof("Mir miner %s completed", m.MirID)
 
 	log.Infof("Miner info:\n\twallet - %s\n\tnetwork - %s\n\tsubnet - %s\n\tMir ID - %s\n\tvalidators - %v",
-		m.addr, m.netName, m.subnetID, m.mirID(), m.validators)
+		m.Addr, m.NetName, m.SubnetID, m.MirID, m.Validators)
 	log.Info("Mir timer:", build.MirTimer)
 
-	mirAgent, err := NewMirAgent(ctx, m.mirID(), m.validators)
-	if err != nil {
-		return err
-	}
-	mirErrors := mirAgent.Start(ctx)
-	mirHead := mirAgent.App.ChainNotify
+	mirErrors := m.Start(ctx)
+	mirHead := m.App.ChainNotify
 
 	submit := time.NewTicker(SubmitInterval)
 	defer submit.Stop()
@@ -60,10 +61,10 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			continue
 		}
 
-		// Miner for an epoch is chosen deterministically using round-robin.
-		epochMiner := m.validators[int(base.Height())%len(m.validators)].Addr
-		// Only one miner pulls the ordered messages and proposes a Filecoin block.
-		// We are suggesting no faults.
+		// Miner (leader) for an epoch is chosen deterministically using round-robin.
+		epochMiner := m.Validators[int(base.Height())%len(m.Validators)].Addr
+		// Only one miner pulls the ordered messages and proposes a Filecoin block consisting on ordered messages.
+		// At present, we are suggesting no faults.
 		if epochMiner != addr {
 			continue
 		}
@@ -76,8 +77,8 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 		case err := <-mirErrors:
 			return err
 		case hashes := <-mirHead:
-			msgs, crossMsgs := m.getMessagesByHashes(hashes)
-			log.Infof("[subnet: %s, epoch: %d] try to create a block", m.subnetID, base.Height()+1)
+			msgs, crossMsgs := m.GetMessagesByHashes(hashes)
+			log.Infof("[subnet: %s, epoch: %d] try to create a block", m.SubnetID, base.Height()+1)
 
 			bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
 				Miner:            epochMiner,
@@ -99,7 +100,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 				continue
 			}
 
-			log.Infof("[subnet: %s, epoch: %d] try to sync a block", m.subnetID, base.Height()+1)
+			log.Infof("[subnet: %s, epoch: %d] try to sync a block", m.SubnetID, base.Height()+1)
 			err = api.SyncSubmitBlock(ctx, &types.BlockMsg{
 				Header:        bh.Header,
 				BlsMessages:   bh.BlsMessages,
@@ -112,32 +113,32 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			}
 
 			log.Infof("[subnet: %s, epoch: %d] %s mined a block %v",
-				m.subnetID, bh.Header.Height, epochMiner, bh.Cid())
+				m.SubnetID, bh.Header.Height, epochMiner, bh.Cid())
 		case <-submit.C:
-			var refs []*RequestRef // These are request references.
 			msgs, err := api.MpoolSelect(ctx, base.Key(), 1)
 			if err != nil {
 				log.Errorw("unable to select messages from mempool", "error", err)
 			}
-			log.Debugf("[subnet: %s, epoch: %d] retrieved %d msgs from mempool", m.subnetID, base.Height()+1, len(msgs))
+			log.Debugf("[subnet: %s, epoch: %d] retrieved %d msgs from mempool", m.SubnetID, base.Height()+1, len(msgs))
 
-			crossMsgs, err := api.GetUnverifiedCrossMsgsPool(ctx, m.subnetID, base.Height()+1)
+			crossMsgs, err := api.GetUnverifiedCrossMsgsPool(ctx, m.SubnetID, base.Height()+1)
 			if err != nil {
 				log.Errorw("unable to select cross-messages from mempool", "error", err)
 			}
-			log.Debugf("[subnet: %s, epoch: %d] retrieved %d crossmsgs from mempool", m.subnetID, base.Height()+1, len(crossMsgs))
+			log.Debugf("[subnet: %s, epoch: %d] retrieved %d crossmsgs from mempool", m.SubnetID, base.Height()+1, len(crossMsgs))
 
-			refs, err = m.addSignedMessages(refs, msgs)
+			var refs []*RequestRef
+			refs, err = m.AddSignedMessages(refs, msgs)
 			if err != nil {
-				log.Errorw("unable to add messages", "error", err)
+				log.Errorw("unable to push messages", "error", err)
 			}
 
-			refs, err = m.addCrossMessages(refs, crossMsgs)
+			refs, err = m.AddCrossMessages(refs, crossMsgs)
 			if err != nil {
-				log.Errorw("unable to add cross-messages", "error", err)
+				log.Errorw("unable to push cross-messages", "error", err)
 			}
 
-			mirAgent.SubmitRequests(ctx, refs)
+			m.SubmitRequests(ctx, refs)
 		}
 	}
 }
