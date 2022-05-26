@@ -34,7 +34,6 @@ var (
 	MinimumBaseFee        = int64(100)
 	BlockDelaySecs        = uint64(builtin2.EpochDurationSeconds)
 	PropagationDelaySecs  = uint64(6)
-	MirTimer              = 1000
 	SupportedProofTypes   = []abi.RegisteredSealProof{
 		abi.RegisteredSealProof_StackedDrg32GiBV1,
 		abi.RegisteredSealProof_StackedDrg64GiBV1,

@@ -8,7 +8,6 @@ import (
 	"github.com/filecoin-project/go-address"
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
-	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/consensus/platform/logging"
 	"github.com/filecoin-project/lotus/chain/types"
 	ltypes "github.com/filecoin-project/lotus/chain/types"
@@ -21,11 +20,11 @@ import (
 //    Note, that messages can be added into mempool via the libp2p mechanism and the CLI.
 // 2. Store the requests in cache, that is, at present, a key-value storage in memory.
 //    Each key is the request hash.
-// 3. Send those hashes to the Mir node.
+// 3. Send those hashes to the Mir node in FIFO mode for each client.
 // 4. Receive ordered hashes from the Mir node and retrieve the corresponding requests from the storage.
 // 5. Create the next Filecoin block.
 //    Note, only a leader Eudico node, chosen by round-robin election, creates a block.
-// 6. Submit this block over libp2p network.
+// 6. Sunk this block without sending it over the libp2p network.
 //
 // There are two ways how mining with Mir can be started:
 // 1) Environment variables: validators ID and their network addresses are passed
@@ -46,7 +45,6 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 
 	log.Infof("Miner info:\n\twallet - %s\n\tnetwork - %s\n\tsubnet - %s\n\tMir ID - %s\n\tvalidators - %v",
 		m.Addr, m.NetName, m.SubnetID, m.MirID, m.Validators)
-	log.Info("Mir timer:", build.MirTimer)
 
 	mirErrors := m.Start(ctx)
 	mirHead := m.App.ChainNotify
@@ -61,14 +59,9 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			continue
 		}
 
-		// Miner (leader) for an epoch is chosen deterministically using round-robin.
+		// Miner (leader) for an epoch is assigned deterministically using round-robin.
+		// All other validators use the same Miner in the block.
 		epochMiner := m.Validators[int(base.Height())%len(m.Validators)].Addr
-		// Only one miner pulls the ordered messages and proposes a Filecoin block consisting on ordered messages.
-		// At present, we are suggesting no faults.
-		if epochMiner != addr {
-			continue
-		}
-		log.Debugf("Miner in %d epoch: %v", base.Height(), epochMiner)
 
 		select {
 		case <-ctx.Done():
@@ -101,7 +94,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			}
 
 			log.Infof("[subnet: %s, epoch: %d] try to sync a block", m.SubnetID, base.Height()+1)
-			err = api.SyncSubmitBlock(ctx, &types.BlockMsg{
+			err = api.SyncBlock(ctx, &types.BlockMsg{
 				Header:        bh.Header,
 				BlsMessages:   bh.BlsMessages,
 				SecpkMessages: bh.SecpkMessages,
@@ -128,6 +121,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			log.Debugf("[subnet: %s, epoch: %d] retrieved %d crossmsgs from mempool", m.SubnetID, base.Height()+1, len(crossMsgs))
 
 			var refs []*RequestRef
+
 			refs, err = m.AddSignedMessages(refs, msgs)
 			if err != nil {
 				log.Errorw("unable to push messages", "error", err)
@@ -138,6 +132,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 				log.Errorw("unable to push cross-messages", "error", err)
 			}
 
+			log.Debugf("[subnet: %s, epoch: %d] try to send %d msgs to Mir", m.SubnetID, base.Height()+1, len(refs))
 			m.SubmitRequests(ctx, refs)
 		}
 	}

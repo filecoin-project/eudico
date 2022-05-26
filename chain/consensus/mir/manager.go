@@ -5,14 +5,12 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"time"
 
 	logging "github.com/ipfs/go-log/v2"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/api/v1api"
-	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -196,7 +194,7 @@ func (m *Manager) Start(ctx context.Context) chan error {
 	}()
 
 	go func() {
-		errChan <- m.MirNode.Run(ctx, time.NewTicker(time.Duration(build.MirTimer)*time.Millisecond).C)
+		errChan <- m.MirNode.Run(ctx)
 		agentCancel()
 	}()
 
@@ -217,7 +215,7 @@ func (m *Manager) Stop() {
 
 func (m *Manager) SubmitRequests(ctx context.Context, refs []*RequestRef) {
 	for _, r := range refs {
-		err := m.MirNode.SubmitRequest(ctx, r.ClientID, r.ReqNo, r.Hash, []byte{})
+		err := m.MirNode.SubmitRequest(ctx, r.ClientID, r.ReqNo, r.Hash, []byte{0})
 		if err != nil {
 			log.Errorf("unable to submit a request from %s to Mir: %v", r.ClientID, err)
 			continue
@@ -226,52 +224,55 @@ func (m *Manager) SubmitRequests(ctx context.Context, refs []*RequestRef) {
 	}
 }
 
-// GetRequest gets the request from the cache.
-func (m *Manager) GetRequest(ref *RequestRef) (Request, bool) {
-	return m.Cache.getRequest(string(ref.Hash))
-}
-
 // GetMessagesByHashes gets requests from the cache and extracts Filecoin messages.
-func (m *Manager) GetMessagesByHashes(hashes []Tx) (msgs []*types.SignedMessage, crossMsgs []*types.Message) {
-	for _, h := range hashes {
-		req, found := m.Cache.getDelRequest(string(h))
+func (m *Manager) GetMessagesByHashes(blockRequestHashes []Tx) (msgs []*types.SignedMessage, crossMsgs []*types.Message) {
+	log.Infof("received a block with %d hashes", len(blockRequestHashes))
+	for _, h := range blockRequestHashes {
+		req, found := m.Cache.getDel(string(h))
 		if !found {
 			log.Errorf("unable to find a request with %v hash", h)
 			continue
 		}
-		switch m := req.(type) {
+
+		switch msg := req.(type) {
 		case *types.SignedMessage:
-			msgs = append(msgs, m)
+			msgs = append(msgs, msg)
+			log.Infof(">>>> got message (%s, %d) from cache", msg.Message.To, msg.Message.Nonce)
 		case *types.UnverifiedCrossMsg:
-			crossMsgs = append(crossMsgs, m.Message)
+			crossMsgs = append(crossMsgs, msg.Message)
+			log.Infof(">>>> got cross-message (%s, %d) from cache", msg.Message.To, msg.Message.Nonce)
 		default:
-			log.Error("got a request of unknown type")
+			log.Error(">>>> got unknown type request")
 		}
 	}
 	return
 }
 
-// PushSignedMessages pushes signed messages to the request cache.
+// AddSignedMessages adds signed messages into the request cache.
 func (m *Manager) AddSignedMessages(dst []*RequestRef, msgs []*types.SignedMessage) ([]*RequestRef, error) {
 	for _, msg := range msgs {
 		hash := msg.Cid()
 		clientID := fmt.Sprintf("%s:%s", m.SubnetID, msg.Message.From.String())
+		nonce := msg.Message.Nonce
 		r := RequestRef{
 			ClientID: t.ClientID(clientID),
-			ReqNo:    t.ReqNo(msg.Message.Nonce),
+			ReqNo:    t.ReqNo(nonce),
 			Type:     common.SignedMessageType,
 			Hash:     hash.Bytes(),
 		}
-		m.Cache.addRequest(string(hash.Bytes()), msg)
-		dst = append(dst, &r)
+		alreadyExist := m.Cache.addIfNotExist(clientID, string(r.Hash), msg)
+		if !alreadyExist {
+			log.Infof(">>>> added message (%s, %d) to cache: client ID %s", msg.Message.To, nonce, clientID)
+			dst = append(dst, &r)
+		}
 	}
 
 	return dst, nil
 }
 
-// PushCrossMessages pushes cross messages to the request cache.
-func (m *Manager) AddCrossMessages(dst []*RequestRef, crossMsgs []*types.UnverifiedCrossMsg) ([]*RequestRef, error) {
-	for _, msg := range crossMsgs {
+// AddCrossMessages adds cross messages into the request cache.
+func (m *Manager) AddCrossMessages(dst []*RequestRef, msgs []*types.UnverifiedCrossMsg) ([]*RequestRef, error) {
+	for _, msg := range msgs {
 		hash := msg.Cid()
 
 		msn, err := msg.Message.From.Subnet()
@@ -279,17 +280,19 @@ func (m *Manager) AddCrossMessages(dst []*RequestRef, crossMsgs []*types.Unverif
 			log.Error("unable to get subnet from message:", err)
 			continue
 		}
-		// client ID for this message MUST BE the same on all Eudico nodes.
 		clientID := fmt.Sprintf("%s:%s", msn, msg.Message.From.String())
-
+		nonce := msg.Message.Nonce
 		r := RequestRef{
 			ClientID: t.ClientID(clientID),
-			ReqNo:    t.ReqNo(msg.Message.Nonce),
+			ReqNo:    t.ReqNo(nonce),
 			Type:     common.CrossMessageType,
 			Hash:     hash.Bytes(),
 		}
-		dst = append(dst, &r)
-		m.Cache.addRequest(string(hash.Bytes()), msg)
+		alreadyExist := m.Cache.addIfNotExist(clientID, string(r.Hash), msg)
+		if !alreadyExist {
+			log.Infof(">>>> added cross-message (%s, %d) to cache: clientID %s", msg.Message.To, nonce, clientID)
+			dst = append(dst, &r)
+		}
 	}
 
 	return dst, nil

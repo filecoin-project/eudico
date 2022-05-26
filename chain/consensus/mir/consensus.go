@@ -12,6 +12,7 @@ import (
 	logging "github.com/ipfs/go-log/v2"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"go.opencensus.io/stats"
+	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -88,11 +89,7 @@ func (bft *Mir) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.BlockTe
 		return nil, err
 	}
 
-	err = common.SignBlock(ctx, w, b)
-	if err != nil {
-		return nil, err
-	}
-
+	// We don't sign blocks mined by Mir validators
 	return b, nil
 }
 
@@ -123,7 +120,7 @@ func (bft *Mir) ValidateBlock(ctx context.Context, b *types.FullBlock) (err erro
 		log.Warn("Got block from the future, but within threshold", h.Timestamp, build.Clock.Now().Unix())
 	}
 
-	msgsChecks := common.CheckMsgs(ctx, bft.store, bft.sm, bft.subMgr, bft.resolver, bft.netName, b, baseTs)
+	msgsChecks := common.CheckMsgsWithoutBlockSig(ctx, bft.store, bft.sm, bft.subMgr, bft.resolver, bft.netName, b, baseTs)
 
 	minerCheck := async.Err(func() error {
 		if err := bft.minerIsValid(b.Header.Miner); err != nil {
@@ -181,7 +178,7 @@ func (bft *Mir) ValidateBlock(ctx context.Context, b *types.FullBlock) (err erro
 
 func (bft *Mir) ValidateBlockPubsub(ctx context.Context, self bool, msg *pubsub.Message) (pubsub.ValidationResult, string) {
 	if self {
-		return common.ValidateLocalBlock(ctx, msg)
+		return validateLocalBlock(ctx, msg)
 	}
 
 	// track validation time
@@ -197,7 +194,7 @@ func (bft *Mir) ValidateBlockPubsub(ctx context.Context, self bool, msg *pubsub.
 		panic(what)
 	}
 
-	blk, what, err := common.DecodeAndCheckBlock(msg)
+	blk, what, err := decodeAndCheckBlock(msg)
 	if err != nil {
 		log.Error("got invalid block over pubsub: ", err)
 		recordFailureFlagPeer(what)
@@ -252,4 +249,41 @@ func Weight(ctx context.Context, stateBs bstore.Blockstore, ts *types.TipSet) (t
 	}
 
 	return big.NewInt(int64(ts.Height() + 1)), nil
+}
+
+func validateLocalBlock(ctx context.Context, msg *pubsub.Message) (pubsub.ValidationResult, string) {
+	stats.Record(ctx, metrics.BlockPublished.M(1))
+
+	if size := msg.Size(); size > 1<<20-1<<15 {
+		log.Errorf("ignoring oversize block (%dB)", size)
+		return pubsub.ValidationIgnore, "oversize_block"
+	}
+
+	blk, what, err := decodeAndCheckBlock(msg)
+	if err != nil {
+		log.Errorf("got invalid local block: %s", err)
+		return pubsub.ValidationIgnore, what
+	}
+
+	msg.ValidatorData = blk
+	stats.Record(ctx, metrics.BlockValidationSuccess.M(1))
+	return pubsub.ValidationAccept, ""
+}
+
+func decodeAndCheckBlock(msg *pubsub.Message) (*types.BlockMsg, string, error) {
+	blk, err := types.DecodeBlockMsg(msg.GetData())
+	if err != nil {
+		return nil, "invalid", xerrors.Errorf("error decoding block: %w", err)
+	}
+
+	if count := len(blk.BlsMessages) + len(blk.SecpkMessages); count > build.BlockMessageLimit {
+		return nil, "too_many_messages", fmt.Errorf("block contains too many messages (%d)", count)
+	}
+
+	// make sure we have a signature
+	if blk.Header.BlockSig != nil {
+		return nil, "missing_signature", fmt.Errorf("block with a signature")
+	}
+
+	return blk, "", nil
 }

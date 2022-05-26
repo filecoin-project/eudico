@@ -9,16 +9,16 @@ import (
 func TestMirRequestCache(t *testing.T) {
 	c := newRequestCache()
 
-	c.addRequest("key1", 0)
+	c.addIfNotExist("client1", "key1", 0)
 
-	r, ok := c.getRequest("key1")
+	r, ok := c.getRequestItem("key1")
 	require.Equal(t, true, ok)
 	require.Equal(t, 0, r)
 
-	c.getDelRequest("key1")
+	c.getDel("key1")
 	require.Equal(t, true, ok)
 	require.Equal(t, 0, r)
 
-	_, ok = c.getRequest("key1")
+	_, ok = c.getRequestItem("key1")
 	require.Equal(t, false, ok)
 }

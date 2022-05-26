@@ -23,6 +23,11 @@ func NewApplication(reqStore modules.RequestStore) *Application {
 func (app *Application) Apply(batch *requestpb.Batch) error {
 	var block []Tx
 
+	if len(batch.Requests) == 0 {
+		app.ChainNotify <- block
+		return nil
+	}
+
 	for _, reqRef := range batch.Requests {
 		msg, err := app.reqStore.GetRequest(reqRef)
 		if err != nil {
