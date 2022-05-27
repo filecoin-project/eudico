@@ -278,7 +278,7 @@ func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
 func runTSPoWConsensusTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoConsensusSuite{opts: opts}
 
-	t.Run("testTSpoWMining", ts.testTSPoWMining)
+	t.Run("testTSPoWMining", ts.testTSPoWMining)
 }
 
 func (ts *eudicoConsensusSuite) testTSPoWMining(t *testing.T) {

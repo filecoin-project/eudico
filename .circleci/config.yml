@@ -808,7 +808,7 @@ workflows:
           suite: hierarchical-consensus
           target: "./itests/eudico_subnet_test.go"
           requires:
-            - lint-all
+            - hierarchical-test-consensus
       - test-subnet-races:
           name: hierarchical-test-subnet-with-race-detector
           suite: hierarchical-consensus
