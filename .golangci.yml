@@ -22,6 +22,7 @@ skip-dirs:
   - vendor$
   - testdata$
   - examples$
+  - extern$
 
 issues:
   exclude:
@@ -75,10 +76,6 @@ issues:
       text: "context.Context should be the first parameter"
       linters:
         - golint
-
-    - path: extern/sector_storage/.*
-      linters: all
-
 
 linters-settings:
   goconst:
