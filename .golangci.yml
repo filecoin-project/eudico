@@ -22,7 +22,6 @@ skip-dirs:
   - vendor$
   - testdata$
   - examples$
-  - extern$
 
 issues:
   exclude:
