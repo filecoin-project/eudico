@@ -76,6 +76,10 @@ issues:
       linters:
         - golint
 
+    - path: extern/sector_storage/.*
+      linters: all
+
+
 linters-settings:
   goconst:
     min-occurrences: 6
