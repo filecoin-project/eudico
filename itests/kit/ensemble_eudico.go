@@ -102,7 +102,7 @@ const (
 	TendermintConsensusKeyFile         = TendermintConsensusTestDir + "/config/priv_validator_key.json"
 	TendermintApplicationAddress       = "tcp://127.0.0.1:26658"
 
-	MirBFTConsensusGenesisTestFile = "../testdata/mir.gen"
+	MirConsensusGenesisTestFile = "../testdata/mir.gen"
 
 	FilcnsConsensusGenesisTestFile = "../testdata/filcns.gen"
 )
@@ -437,15 +437,52 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 
 	if n.options.subnetConsensus == hierarchical.Tendermint ||
 		n.options.rootConsensus == hierarchical.Tendermint {
-		terr := n.startTendermint()
-		require.NoError(n.t, terr)
+		err := n.startTendermint()
+		require.NoError(n.t, err)
 	}
 
 	if n.options.subnetConsensus == hierarchical.Mir ||
 		n.options.rootConsensus == hierarchical.Mir {
-		terr := n.startMir()
-		require.NoError(n.t, terr)
+		err := n.startMir()
+		require.NoError(n.t, err)
 	}
+
+	// ---------------------
+	//  GENESIS BLOCKS
+	// ---------------------
+	var rootGenesisBytes []byte
+	var gferr error
+	switch n.options.rootConsensus {
+	case hierarchical.PoW:
+		err := subnet.CreateGenesisFile(ctx, TSPoWConsensusGenesisTestFile, hierarchical.PoW, address.Undef, sca.DefaultCheckpointPeriod)
+		require.NoError(n.t, err)
+		rootGenesisBytes, gferr = ioutil.ReadFile(TSPoWConsensusGenesisTestFile)
+	case hierarchical.Delegated:
+		miner, err := address.NewFromString(DelegatedConsnensusMinerAddr)
+		require.NoError(n.t, err)
+		require.Equal(n.t, address.SECP256K1, miner.Protocol())
+		cerr := subnet.CreateGenesisFile(ctx, DelegatedConsensusGenesisTestFile, hierarchical.Delegated, miner, sca.DefaultCheckpointPeriod)
+		require.NoError(n.t, cerr)
+		rootGenesisBytes, gferr = ioutil.ReadFile(DelegatedConsensusGenesisTestFile)
+	case hierarchical.Tendermint:
+		err := subnet.CreateGenesisFile(ctx, TendermintConsensusGenesisTestFile, hierarchical.Tendermint, address.Undef, sca.DefaultCheckpointPeriod)
+		require.NoError(n.t, err)
+		rootGenesisBytes, gferr = ioutil.ReadFile(TendermintConsensusGenesisTestFile)
+	case hierarchical.Mir:
+		err := subnet.CreateGenesisFile(ctx, MirConsensusGenesisTestFile, hierarchical.Mir, address.Undef, sca.DefaultCheckpointPeriod)
+		require.NoError(n.t, err)
+		rootGenesisBytes, gferr = ioutil.ReadFile(MirConsensusGenesisTestFile)
+	case hierarchical.Dummy:
+		err := subnet.CreateGenesisFile(ctx, DummyConsensusGenesisTestFile, hierarchical.Dummy, address.Undef, sca.DefaultCheckpointPeriod)
+		require.NoError(n.t, err)
+		rootGenesisBytes, gferr = ioutil.ReadFile(DummyConsensusGenesisTestFile)
+	case hierarchical.FilecoinEC:
+	default:
+		n.t.Fatalf("unknown genesis file %d", n.options.rootConsensus)
+	}
+	require.NoError(n.t, gferr)
+
+	gtempl.NetworkName = "/root"
 
 	// ---------------------
 	//  FULL NODES
@@ -486,40 +523,6 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 
 		// append any node builder options.
 		opts = append(opts, full.options.extraNodeOpts...)
-
-		var rootGenesisBytes []byte
-		var gferr error
-		switch n.options.rootConsensus {
-		case hierarchical.PoW:
-			cerr := subnet.CreateGenesisFile(ctx, TSPoWConsensusGenesisTestFile, hierarchical.PoW, address.Undef, sca.DefaultCheckpointPeriod)
-			require.NoError(n.t, cerr)
-			rootGenesisBytes, gferr = ioutil.ReadFile(TSPoWConsensusGenesisTestFile)
-		case hierarchical.Delegated:
-			miner, merr := address.NewFromString(DelegatedConsnensusMinerAddr)
-			require.NoError(n.t, merr)
-			require.Equal(n.t, address.SECP256K1, miner.Protocol())
-			cerr := subnet.CreateGenesisFile(ctx, DelegatedConsensusGenesisTestFile, hierarchical.Delegated, miner, sca.DefaultCheckpointPeriod)
-			require.NoError(n.t, cerr)
-			rootGenesisBytes, gferr = ioutil.ReadFile(DelegatedConsensusGenesisTestFile)
-		case hierarchical.Tendermint:
-			cerr := subnet.CreateGenesisFile(ctx, TendermintConsensusGenesisTestFile, hierarchical.Tendermint, address.Undef, sca.DefaultCheckpointPeriod)
-			require.NoError(n.t, cerr)
-			rootGenesisBytes, gferr = ioutil.ReadFile(TendermintConsensusGenesisTestFile)
-		case hierarchical.Mir:
-			cerr := subnet.CreateGenesisFile(ctx, MirBFTConsensusGenesisTestFile, hierarchical.Mir, address.Undef, sca.DefaultCheckpointPeriod)
-			require.NoError(n.t, cerr)
-			rootGenesisBytes, gferr = ioutil.ReadFile(MirBFTConsensusGenesisTestFile)
-		case hierarchical.Dummy:
-			cerr := subnet.CreateGenesisFile(ctx, DummyConsensusGenesisTestFile, hierarchical.Dummy, address.Undef, sca.DefaultCheckpointPeriod)
-			require.NoError(n.t, cerr)
-			rootGenesisBytes, gferr = ioutil.ReadFile(DummyConsensusGenesisTestFile)
-		case hierarchical.FilecoinEC:
-		default:
-			n.t.Fatalf("unknown consensus genesis file %d", n.options.rootConsensus)
-		}
-		require.NoError(n.t, gferr)
-
-		gtempl.NetworkName = "/root"
 
 		// TODO: compare with original itests and fix
 		// Either generate the genesis or inject it.
@@ -596,6 +599,10 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 	// If we are here, we have processed all inactive fullnodes and moved them
 	// to active, so clear the slice.
 	n.inactive.fullnodes = n.inactive.fullnodes[:0]
+
+	// Link all the nodes.
+	err = n.mn.LinkAll()
+	require.NoError(n.t, err)
 
 	// ---------------------
 	//  MINERS
@@ -1185,53 +1192,6 @@ func EudicoEnsembleFullNodeOnly(t *testing.T, opts ...interface{}) (*TestFullNod
 	)
 	ens := NewEudicoEnsemble(t, eopts...).FullNode(&full, nopts...).Start()
 	return &full, ens
-}
-
-func EudicoMiners(t *testing.T, opts ...interface{}) (
-	rootMiner func(ctx context.Context, addr address.Address, api v1api.FullNode) error,
-	subnetMinerType hierarchical.ConsensusType) {
-
-	eopts, _ := siftOptions(t, opts)
-
-	options := DefaultEnsembleOpts
-	for _, o := range eopts {
-		err := o(&options)
-		require.NoError(t, err)
-	}
-
-	switch options.rootConsensus {
-	case hierarchical.Tendermint:
-		rootMiner = tendermint.Mine
-	case hierarchical.PoW:
-		rootMiner = tspow.Mine
-	case hierarchical.Delegated:
-		rootMiner = delegcns.Mine
-	case hierarchical.Mir:
-		rootMiner = mir.Mine
-	case hierarchical.Dummy:
-		rootMiner = dummy.Mine
-	case hierarchical.FilecoinEC:
-		break
-	default:
-		t.Fatalf("root consensus %d not supported", options.rootConsensus)
-	}
-
-	switch options.subnetConsensus {
-	case hierarchical.Tendermint:
-		subnetMinerType = hierarchical.Tendermint
-	case hierarchical.PoW:
-		subnetMinerType = hierarchical.PoW
-	case hierarchical.Delegated:
-		subnetMinerType = hierarchical.Delegated
-	case hierarchical.Mir:
-		subnetMinerType = hierarchical.Mir
-	case hierarchical.Dummy:
-		subnetMinerType = hierarchical.Dummy
-	default:
-		t.Fatalf("subnet consensus %d not supported", options.subnetConsensus)
-	}
-
-	return
 }
 
 // EudicoEnsembleTwoOne creates and starts an Ensemble with two full nodes and one miner.

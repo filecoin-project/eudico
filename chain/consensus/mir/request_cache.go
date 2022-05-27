@@ -36,7 +36,7 @@ func (c *requestCache) addIfNotExist(clientID, h string, r Request) (exist bool)
 	return
 }
 
-// getDel gets the target request by the key k and deletes the keys.
+// getDel gets the target request by the key h and deletes the keys.
 func (c *requestCache) getDel(h string) (Request, bool) {
 	c.lk.Lock()
 	defer c.lk.Unlock()
@@ -50,11 +50,11 @@ func (c *requestCache) getDel(h string) (Request, bool) {
 }
 
 // getRequest gets the request by the key.
-func (c *requestCache) getRequestItem(k string) (Request, bool) {
+func (c *requestCache) getRequest(h string) (Request, bool) {
 	c.lk.Lock()
 	defer c.lk.Unlock()
 
-	r, ok := c.cache[k]
+	r, ok := c.cache[h]
 	if ok {
 		return r.Request, ok
 	}

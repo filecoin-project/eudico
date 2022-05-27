@@ -26,11 +26,6 @@ import (
 	mapi "github.com/filecoin-project/mir"
 )
 
-func TestEudicoMir(t *testing.T) {
-	t.Run("mir", func(t *testing.T) {
-		runMirConsensusTests(t, kit.ThroughRPC(), kit.RootMir())
-	})
-}
 func TestEudicoConsensus(t *testing.T) {
 	t.Run("dummy", func(t *testing.T) {
 		runDummyConsensusTests(t, kit.ThroughRPC(), kit.RootDummy())
@@ -97,8 +92,8 @@ func (ts *eudicoConsensusSuite) testDummyMining(t *testing.T) {
 func runMirConsensusTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoConsensusSuite{opts: opts}
 
-	// t.Run("testMirMining", ts.testMirMining)
-	t.Run("testMirTwoNodesMining", ts.testMirTwoNodes)
+	t.Run("testMirMining", ts.testMirMining)
+	t.Run("testMirTwoNodes", ts.testMirTwoNodes)
 }
 
 func (ts *eudicoConsensusSuite) testMirTwoNodes(t *testing.T) {
@@ -106,11 +101,20 @@ func (ts *eudicoConsensusSuite) testMirTwoNodes(t *testing.T) {
 	defer cancel()
 
 	one, two, ens := kit.EudicoEnsembleTwoNodes(t, ts.opts...)
+
 	defer func() {
 		err := ens.Stop()
 		require.NoError(t, err)
 	}()
 
+	// Fail if genesis blocks are different
+	gen1, err := one.ChainGetGenesis(ctx)
+	require.NoError(t, err)
+	gen2, err := two.ChainGetGenesis(ctx)
+	require.NoError(t, err)
+	require.Equal(t, gen1.String(), gen2.String())
+
+	// Fail if no peers
 	p, err := one.NetPeers(ctx)
 	require.NoError(t, err)
 	require.Empty(t, p, "node one has peers")
@@ -120,45 +124,53 @@ func (ts *eudicoConsensusSuite) testMirTwoNodes(t *testing.T) {
 	require.Empty(t, p, "node two has peers")
 
 	ens.Connect(one, two)
-	ens.Connect(two, one)
 
-	_, err = one.NetPeers(ctx)
+	peers, err := one.NetPeers(ctx)
 	require.NoError(t, err)
-	// require.Lenf(t, peers, 1, "node one doesn't have 1 peer")
+	require.Lenf(t, peers, 1, "node one doesn't have a peer")
 
-	_, err = two.NetPeers(ctx)
+	peers, err = two.NetPeers(ctx)
 	require.NoError(t, err)
-	// require.Lenf(t, peers, 1, "node two doesn't have 1 peer")
+	require.Lenf(t, peers, 1, "node two doesn't have a peer")
 
 	l1, err := one.WalletList(ctx)
 	require.NoError(t, err)
 	if len(l1) != 1 {
 		t.Fatal("wallet key list is empty")
 	}
+	oneAddr := l1[0]
 
 	l2, err := two.WalletList(ctx)
 	require.NoError(t, err)
 	if len(l2) != 1 {
 		t.Fatal("wallet key list is empty")
 	}
+	twoAddr := l2[0]
 
 	msg1 := &types.Message{
-		From:  l1[0],
-		To:    l2[0],
+		From:  oneAddr,
+		To:    twoAddr,
 		Value: big.Zero(),
 	}
 
-	mirNodeID1 := fmt.Sprintf("%s:%s", address.RootSubnet, l1[0].String())
-	mirNodeID2 := fmt.Sprintf("%s:%s", address.RootSubnet, l2[0].String())
+	msg2 := &types.Message{
+		From:  twoAddr,
+		To:    oneAddr,
+		Value: big.Zero(),
+	}
+
+	mirNodeOne := fmt.Sprintf("%s:%s", address.RootSubnet, l1[0].String())
+	mirNodeTwo := fmt.Sprintf("%s:%s", address.RootSubnet, l2[0].String())
 	env := fmt.Sprintf("%s@%s,%s@%s",
-		mirNodeID1, "127.0.0.1:10001",
-		mirNodeID2, "127.0.0.1:10002",
+		mirNodeOne, "127.0.0.1:10001",
+		mirNodeTwo, "127.0.0.1:10002",
 	)
 	err = os.Setenv(mir.ValidatorsEnv, env)
 	require.NoError(t, err)
 
 	go func() {
-		err := mir.Mine(ctx, l1[0], one)
+		defer t.Log("node one was stopped")
+		err := mir.Mine(ctx, oneAddr, one)
 		if xerrors.Is(mapi.ErrStopped, err) {
 			return
 		}
@@ -170,7 +182,8 @@ func (ts *eudicoConsensusSuite) testMirTwoNodes(t *testing.T) {
 	}()
 
 	go func() {
-		err := mir.Mine(ctx, l2[0], two)
+		defer t.Log("node two was stopped")
+		err := mir.Mine(ctx, twoAddr, two)
 		if xerrors.Is(mapi.ErrStopped, err) {
 			return
 		}
@@ -181,28 +194,41 @@ func (ts *eudicoConsensusSuite) testMirTwoNodes(t *testing.T) {
 		}
 	}()
 
-	err = kit.WaitForBalance(ctx, l1[0], 4, one)
+	err = kit.WaitForBalance(ctx, oneAddr, 4, one)
 	require.NoError(t, err)
 
-	err = kit.WaitForBalance(ctx, l2[0], 4, two)
+	err = kit.WaitForBalance(ctx, twoAddr, 4, two)
 	require.NoError(t, err)
 
-	sm, err := one.MpoolPushMessage(ctx, msg1, nil)
+	// Send first message
+
+	smsg1, err := one.MpoolPushMessage(ctx, msg1, nil)
 	require.NoError(t, err)
 
-	res, err := one.StateWaitMsg(ctx, sm.Cid(), 1, lapi.LookbackNoLimit, true)
+	res, err := one.StateWaitMsg(ctx, smsg1.Cid(), 1, lapi.LookbackNoLimit, true)
 	require.NoError(t, err)
 
-	require.Equal(t, exitcode.Ok, res.Receipt.ExitCode, "message not successful")
+	require.Equal(t, exitcode.Ok, res.Receipt.ExitCode, "msg1 not successful")
 
-	res, err = two.StateWaitMsg(ctx, sm.Cid(), 1, lapi.LookbackNoLimit, true)
+	res, err = two.StateWaitMsg(ctx, smsg1.Cid(), 1, lapi.LookbackNoLimit, true)
 	require.NoError(t, err)
 
-	require.Equal(t, exitcode.Ok, res.Receipt.ExitCode, "message not successful")
+	require.Equal(t, exitcode.Ok, res.Receipt.ExitCode, "msg1 not successful")
 
-	err = ens.Stop()
+	// Send second message
+
+	smsg2, err := two.MpoolPushMessage(ctx, msg2, nil)
 	require.NoError(t, err)
 
+	res, err = two.StateWaitMsg(ctx, smsg2.Cid(), 1, lapi.LookbackNoLimit, true)
+	require.NoError(t, err)
+
+	require.Equal(t, exitcode.Ok, res.Receipt.ExitCode, "msg2 not successful")
+
+	res, err = one.StateWaitMsg(ctx, smsg2.Cid(), 1, lapi.LookbackNoLimit, true)
+	require.NoError(t, err)
+
+	require.Equal(t, exitcode.Ok, res.Receipt.ExitCode, "msg2 not successful")
 }
 
 func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {

@@ -97,24 +97,24 @@ func (bft *Mir) ValidateBlock(ctx context.Context, b *types.FullBlock) (err erro
 	log.Infof("starting block validation process at @%d", b.Header.Height)
 
 	if err := common.BlockSanityChecks(hierarchical.Mir, b.Header); err != nil {
-		return fmt.Errorf("incoming header failed basic sanity checks: %w", err)
+		return xerrors.Errorf("incoming header failed basic sanity checks: %w", err)
 	}
 
 	h := b.Header
 
 	baseTs, err := bft.store.LoadTipSet(ctx, types.NewTipSetKey(h.Parents...))
 	if err != nil {
-		return fmt.Errorf("load parent tipset failed (%s): %w", h.Parents, err)
+		return xerrors.Errorf("load parent tipset failed (%s): %w", h.Parents, err)
 	}
 
 	// fast checks first
 	if h.Height != baseTs.Height()+1 {
-		return fmt.Errorf("block height not parent height+1: %d != %d", h.Height, baseTs.Height()+1)
+		return xerrors.Errorf("block height not parent height+1: %d != %d", h.Height, baseTs.Height()+1)
 	}
 
 	now := uint64(build.Clock.Now().Unix())
 	if h.Timestamp > now+build.AllowableClockDriftSecs {
-		return fmt.Errorf("block was from the future (now=%d, blk=%d): %w", now, h.Timestamp, consensus.ErrTemporal)
+		return xerrors.Errorf("block was from the future (now=%d, blk=%d): %w", now, h.Timestamp, consensus.ErrTemporal)
 	}
 	if h.Timestamp > now {
 		log.Warn("Got block from the future, but within threshold", h.Timestamp, build.Clock.Now().Unix())
@@ -124,18 +124,18 @@ func (bft *Mir) ValidateBlock(ctx context.Context, b *types.FullBlock) (err erro
 
 	minerCheck := async.Err(func() error {
 		if err := bft.minerIsValid(b.Header.Miner); err != nil {
-			return fmt.Errorf("minerIsValid failed: %w", err)
+			return xerrors.Errorf("minerIsValid failed: %w", err)
 		}
 		return nil
 	})
 
 	pweight, err := Weight(ctx, nil, baseTs)
 	if err != nil {
-		return fmt.Errorf("getting parent weight: %w", err)
+		return xerrors.Errorf("getting parent weight: %w", err)
 	}
 
 	if types.BigCmp(pweight, b.Header.ParentWeight) != 0 {
-		return fmt.Errorf("parent weight different: %s (header) != %s (computed)",
+		return xerrors.Errorf("parent weight different: %s (header) != %s (computed)",
 			b.Header.ParentWeight, pweight)
 	}
 
@@ -222,7 +222,7 @@ func (bft *Mir) minerIsValid(maddr address.Address) error {
 	case address.SECP256K1:
 		return nil
 	}
-	return fmt.Errorf("miner address must be a key")
+	return xerrors.Errorf("miner address must be a key")
 }
 
 // IsEpochBeyondCurrMax is used in Filcns to detect delayed blocks.
@@ -277,12 +277,12 @@ func decodeAndCheckBlock(msg *pubsub.Message) (*types.BlockMsg, string, error) {
 	}
 
 	if count := len(blk.BlsMessages) + len(blk.SecpkMessages); count > build.BlockMessageLimit {
-		return nil, "too_many_messages", fmt.Errorf("block contains too many messages (%d)", count)
+		return nil, "too_many_messages", xerrors.Errorf("block contains too many messages (%d)", count)
 	}
 
 	// make sure we have a signature
 	if blk.Header.BlockSig != nil {
-		return nil, "missing_signature", fmt.Errorf("block with a signature")
+		return nil, "missing_signature", xerrors.Errorf("block with a signature")
 	}
 
 	return blk, "", nil

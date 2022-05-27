@@ -2,8 +2,9 @@ package mir
 
 import (
 	"context"
-	"fmt"
 	"time"
+
+	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	lapi "github.com/filecoin-project/lotus/api"
@@ -38,7 +39,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 
 	m, err := NewManager(ctx, addr, api)
 	if err != nil {
-		return fmt.Errorf("unable to create a manager: %v", err)
+		return xerrors.Errorf("unable to create a manager: %v", err)
 	}
 	log.Infof("Mir miner %s started", m.MirID)
 	defer log.Infof("Mir miner %s completed", m.MirID)

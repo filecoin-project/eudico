@@ -90,11 +90,11 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 
 	var validators []hierarchical.Validator
 
-	minersEnv := os.Getenv(ValidatorsEnv)
-	if minersEnv != "" {
-		validators, err = hierarchical.ValidatorsFromString(minersEnv)
+	validatorsEnv := os.Getenv(ValidatorsEnv)
+	if validatorsEnv != "" {
+		validators, err = hierarchical.ValidatorsFromString(validatorsEnv)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get validators from string: %s", err)
+			return nil, xerrors.Errorf("failed to get validators from string: %s", err)
 		}
 	} else {
 		if subnetID == address.RootSubnet {
@@ -129,6 +129,9 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	if err := net.Start(); err != nil {
 		return nil, err
 	}
+
+	// GrpcTransport is a rather dummy one and this call blocks until all connections are established,
+	// which makes it, at this point, not fault-tolerant.
 	net.Connect(ctx)
 	log.Debug("Mir network transport connected")
 
@@ -138,7 +141,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	issConfig := iss.DefaultConfig(nodeIds)
 	issProtocol, err := iss.New(t.NodeID(mirID), issConfig, newMirLogger(managerLog))
 	if err != nil {
-		return nil, fmt.Errorf("could not instantiate ISS protocol module: %w", err)
+		return nil, xerrors.Errorf("could not instantiate ISS protocol module: %w", err)
 	}
 
 	app := NewApplication(reqStore)
@@ -177,34 +180,34 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	return &a, nil
 }
 
-// Start starts an agent.
+// Start starts the manager.
 func (m *Manager) Start(ctx context.Context) chan error {
-	log.Info("Mir agent starting")
+	log.Info("Mir manager starting")
 
 	errChan := make(chan error, 1)
-	agentCtx, agentCancel := context.WithCancel(ctx)
+	managerCtx, managerCancel := context.WithCancel(ctx)
 
 	go func() {
 		select {
 		case <-ctx.Done():
-			log.Debugf("Mir agent: context closed")
+			log.Debugf("Mir manager: context closed")
 			m.Stop()
-		case <-agentCtx.Done():
+		case <-managerCtx.Done():
 		}
 	}()
 
 	go func() {
 		errChan <- m.MirNode.Run(ctx)
-		agentCancel()
+		managerCancel()
 	}()
 
 	return errChan
 }
 
-// Stop stops an agent.
+// Stop stops the manager.
 func (m *Manager) Stop() {
-	log.Info("Mir agent shutting down")
-	defer log.Info("Mir agent stopped")
+	log.Info("Mir manager shutting down")
+	defer log.Info("Mir manager stopped")
 
 	if err := m.Wal.Close(); err != nil {
 		log.Errorf("Could not close write-ahead log: %s", err)
@@ -296,4 +299,9 @@ func (m *Manager) AddCrossMessages(dst []*RequestRef, msgs []*types.UnverifiedCr
 	}
 
 	return dst, nil
+}
+
+// GetRequest gets the request from the cache by the key.
+func (m *Manager) GetRequest(h string) (Request, bool) {
+	return m.Cache.getRequest(h)
 }
