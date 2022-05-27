@@ -536,6 +536,11 @@ jobs:
       executor:
         type: executor
         default: golang
+      go:
+        type: string
+        default: '1.18'
+        description: |
+          Go version
       concurrency:
         type: string
         default: '2'
