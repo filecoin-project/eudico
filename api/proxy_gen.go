@@ -107,6 +107,10 @@ type FullNodeStruct struct {
 	HierarchicalCnsStruct
 
 	Internal struct {
+		AbortAtomicExec func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 cid.Cid) (sca.ExecStatus, error) `perm:"write"`
+
+		AddSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 *hierarchical.ConsensusParams) (address.Address, error) `perm:"write"`
+
 		BeaconGetEntry func(p0 context.Context, p1 abi.ChainEpoch) (*types.BeaconEntry, error) `perm:"read"`
 
 		ChainBlockstoreInfo func(p0 context.Context) (map[string]interface{}, error) `perm:"read"`
@@ -211,7 +215,13 @@ type FullNodeStruct struct {
 
 		ClientStatelessDeal func(p0 context.Context, p1 *StartDealParams) (*cid.Cid, error) `perm:"write"`
 
+		ComputeAndSubmitExec func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 cid.Cid) (sca.ExecStatus, error) `perm:"write"`
+
 		CreateBackup func(p0 context.Context, p1 string) error `perm:"admin"`
+
+		CrossMsgResolve func(p0 context.Context, p1 address.SubnetID, p2 cid.Cid, p3 address.SubnetID) ([]types.Message, error) `perm:"read"`
+
+		FundSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) `perm:"write"`
 
 		GasEstimateFeeCap func(p0 context.Context, p1 *types.Message, p2 int64, p3 types.TipSetKey) (types.BigInt, error) `perm:"read"`
 
@@ -220,6 +230,26 @@ type FullNodeStruct struct {
 		GasEstimateGasPremium func(p0 context.Context, p1 uint64, p2 address.Address, p3 int64, p4 types.TipSetKey) (types.BigInt, error) `perm:"read"`
 
 		GasEstimateMessageGas func(p0 context.Context, p1 *types.Message, p2 *MessageSendSpec, p3 types.TipSetKey) (*types.Message, error) `perm:"read"`
+
+		GetCrossMsgsPool func(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) ([]*types.Message, error) `perm:"read"`
+
+		GetUnverifiedCrossMsgsPool func(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) ([]*types.UnverifiedCrossMsg, error) `perm:"read"`
+
+		InitAtomicExec func(p0 context.Context, p1 address.Address, p2 map[string]sca.LockedState, p3 []types.Message) (cid.Cid, error) `perm:"write"`
+
+		JoinSubnet func(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 address.SubnetID, p4 string) (cid.Cid, error) `perm:"write"`
+
+		KillSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID) (cid.Cid, error) `perm:"write"`
+
+		LeaveSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID) (cid.Cid, error) `perm:"write"`
+
+		ListAtomicExecs func(p0 context.Context, p1 address.SubnetID, p2 address.Address) ([]sca.AtomicExec, error) `perm:"read"`
+
+		ListCheckpoints func(p0 context.Context, p1 address.SubnetID, p2 int) ([]*schema.Checkpoint, error) `perm:"read"`
+
+		ListSubnets func(p0 context.Context, p1 address.SubnetID) ([]sca.SubnetOutput, error) `perm:"read"`
+
+		LockState func(p0 context.Context, p1 address.Address, p2 address.Address, p3 address.SubnetID, p4 abi.MethodNum) (cid.Cid, error) `perm:"write"`
 
 		MarketAddBalance func(p0 context.Context, p1 address.Address, p2 address.Address, p3 types.BigInt) (cid.Cid, error) `perm:"sign"`
 
@@ -230,6 +260,8 @@ type FullNodeStruct struct {
 		MarketReserveFunds func(p0 context.Context, p1 address.Address, p2 address.Address, p3 types.BigInt) (cid.Cid, error) `perm:"sign"`
 
 		MarketWithdraw func(p0 context.Context, p1 address.Address, p2 address.Address, p3 types.BigInt) (cid.Cid, error) `perm:"sign"`
+
+		MineSubnet func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 bool, p4 *hierarchical.MiningParams) error `perm:"read"`
 
 		MinerCreateBlock func(p0 context.Context, p1 *BlockTemplate) (*types.BlockMsg, error) `perm:"write"`
 
@@ -337,6 +369,8 @@ type FullNodeStruct struct {
 
 		PaychVoucherSubmit func(p0 context.Context, p1 address.Address, p2 *paych.SignedVoucher, p3 []byte, p4 []byte) (cid.Cid, error) `perm:"sign"`
 
+		ReleaseFunds func(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) `perm:"write"`
+
 		StateAccountKey func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (address.Address, error) `perm:"read"`
 
 		StateAllMinerFaults func(p0 context.Context, p1 abi.ChainEpoch, p2 types.TipSetKey) ([]*Fault, error) `perm:"read"`
@@ -437,6 +471,16 @@ type FullNodeStruct struct {
 
 		StateWaitMsg func(p0 context.Context, p1 cid.Cid, p2 uint64, p3 abi.ChainEpoch, p4 bool) (*MsgLookup, error) `perm:"read"`
 
+		SubnetChainHead func(p0 context.Context, p1 address.SubnetID) (*types.TipSet, error) `perm:"read"`
+
+		SubnetChainNotify func(p0 context.Context, p1 address.SubnetID) (<-chan []*HeadChange, error) `perm:"read"`
+
+		SubnetStateGetActor func(p0 context.Context, p1 address.SubnetID, p2 address.Address, p3 types.TipSetKey) (*types.Actor, error) `perm:"read"`
+
+		SubnetStateGetValidators func(p0 context.Context, p1 address.SubnetID) ([]hierarchical.Validator, error) ``
+
+		SubnetStateWaitMsg func(p0 context.Context, p1 address.SubnetID, p2 cid.Cid, p3 uint64, p4 abi.ChainEpoch, p5 bool) (*MsgLookup, error) `perm:"read"`
+
 		SyncBlock func(p0 context.Context, p1 *types.BlockMsg) error `perm:"write"`
 
 		SyncCheckBad func(p0 context.Context, p1 cid.Cid) (string, error) `perm:"read"`
@@ -451,11 +495,17 @@ type FullNodeStruct struct {
 
 		SyncSubmitBlock func(p0 context.Context, p1 *types.BlockMsg) error `perm:"write"`
 
+		SyncSubnet func(p0 context.Context, p1 address.SubnetID, p2 bool) error `perm:"write"`
+
 		SyncUnmarkAllBad func(p0 context.Context) error `perm:"admin"`
 
 		SyncUnmarkBad func(p0 context.Context, p1 cid.Cid) error `perm:"admin"`
 
 		SyncValidateTipset func(p0 context.Context, p1 types.TipSetKey) (bool, error) `perm:"read"`
+
+		UnlockState func(p0 context.Context, p1 address.Address, p2 address.Address, p3 address.SubnetID, p4 abi.MethodNum) error `perm:"write"`
+
+		ValidateCheckpoint func(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) (*schema.Checkpoint, error) `perm:"read"`
 
 		WalletBalance func(p0 context.Context, p1 address.Address) (types.BigInt, error) `perm:"read"`
 
@@ -1163,6 +1213,28 @@ func (s *CommonStub) Version(p0 context.Context) (APIVersion, error) {
 	return *new(APIVersion), ErrNotSupported
 }
 
+func (s *FullNodeStruct) AbortAtomicExec(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 cid.Cid) (sca.ExecStatus, error) {
+	if s.Internal.AbortAtomicExec == nil {
+		return *new(sca.ExecStatus), ErrNotSupported
+	}
+	return s.Internal.AbortAtomicExec(p0, p1, p2, p3)
+}
+
+func (s *FullNodeStub) AbortAtomicExec(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 cid.Cid) (sca.ExecStatus, error) {
+	return *new(sca.ExecStatus), ErrNotSupported
+}
+
+func (s *FullNodeStruct) AddSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 *hierarchical.ConsensusParams) (address.Address, error) {
+	if s.Internal.AddSubnet == nil {
+		return *new(address.Address), ErrNotSupported
+	}
+	return s.Internal.AddSubnet(p0, p1, p2, p3, p4, p5, p6, p7)
+}
+
+func (s *FullNodeStub) AddSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 string, p4 uint64, p5 abi.TokenAmount, p6 abi.ChainEpoch, p7 *hierarchical.ConsensusParams) (address.Address, error) {
+	return *new(address.Address), ErrNotSupported
+}
+
 func (s *FullNodeStruct) BeaconGetEntry(p0 context.Context, p1 abi.ChainEpoch) (*types.BeaconEntry, error) {
 	if s.Internal.BeaconGetEntry == nil {
 		return nil, ErrNotSupported
@@ -1735,6 +1807,17 @@ func (s *FullNodeStub) ClientStatelessDeal(p0 context.Context, p1 *StartDealPara
 	return nil, ErrNotSupported
 }
 
+func (s *FullNodeStruct) ComputeAndSubmitExec(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 cid.Cid) (sca.ExecStatus, error) {
+	if s.Internal.ComputeAndSubmitExec == nil {
+		return *new(sca.ExecStatus), ErrNotSupported
+	}
+	return s.Internal.ComputeAndSubmitExec(p0, p1, p2, p3)
+}
+
+func (s *FullNodeStub) ComputeAndSubmitExec(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 cid.Cid) (sca.ExecStatus, error) {
+	return *new(sca.ExecStatus), ErrNotSupported
+}
+
 func (s *FullNodeStruct) CreateBackup(p0 context.Context, p1 string) error {
 	if s.Internal.CreateBackup == nil {
 		return ErrNotSupported
@@ -1744,6 +1827,28 @@ func (s *FullNodeStruct) CreateBackup(p0 context.Context, p1 string) error {
 
 func (s *FullNodeStub) CreateBackup(p0 context.Context, p1 string) error {
 	return ErrNotSupported
+}
+
+func (s *FullNodeStruct) CrossMsgResolve(p0 context.Context, p1 address.SubnetID, p2 cid.Cid, p3 address.SubnetID) ([]types.Message, error) {
+	if s.Internal.CrossMsgResolve == nil {
+		return *new([]types.Message), ErrNotSupported
+	}
+	return s.Internal.CrossMsgResolve(p0, p1, p2, p3)
+}
+
+func (s *FullNodeStub) CrossMsgResolve(p0 context.Context, p1 address.SubnetID, p2 cid.Cid, p3 address.SubnetID) ([]types.Message, error) {
+	return *new([]types.Message), ErrNotSupported
+}
+
+func (s *FullNodeStruct) FundSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) {
+	if s.Internal.FundSubnet == nil {
+		return *new(cid.Cid), ErrNotSupported
+	}
+	return s.Internal.FundSubnet(p0, p1, p2, p3)
+}
+
+func (s *FullNodeStub) FundSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) {
+	return *new(cid.Cid), ErrNotSupported
 }
 
 func (s *FullNodeStruct) GasEstimateFeeCap(p0 context.Context, p1 *types.Message, p2 int64, p3 types.TipSetKey) (types.BigInt, error) {
@@ -1788,6 +1893,116 @@ func (s *FullNodeStruct) GasEstimateMessageGas(p0 context.Context, p1 *types.Mes
 
 func (s *FullNodeStub) GasEstimateMessageGas(p0 context.Context, p1 *types.Message, p2 *MessageSendSpec, p3 types.TipSetKey) (*types.Message, error) {
 	return nil, ErrNotSupported
+}
+
+func (s *FullNodeStruct) GetCrossMsgsPool(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) ([]*types.Message, error) {
+	if s.Internal.GetCrossMsgsPool == nil {
+		return *new([]*types.Message), ErrNotSupported
+	}
+	return s.Internal.GetCrossMsgsPool(p0, p1, p2)
+}
+
+func (s *FullNodeStub) GetCrossMsgsPool(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) ([]*types.Message, error) {
+	return *new([]*types.Message), ErrNotSupported
+}
+
+func (s *FullNodeStruct) GetUnverifiedCrossMsgsPool(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) ([]*types.UnverifiedCrossMsg, error) {
+	if s.Internal.GetUnverifiedCrossMsgsPool == nil {
+		return *new([]*types.UnverifiedCrossMsg), ErrNotSupported
+	}
+	return s.Internal.GetUnverifiedCrossMsgsPool(p0, p1, p2)
+}
+
+func (s *FullNodeStub) GetUnverifiedCrossMsgsPool(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) ([]*types.UnverifiedCrossMsg, error) {
+	return *new([]*types.UnverifiedCrossMsg), ErrNotSupported
+}
+
+func (s *FullNodeStruct) InitAtomicExec(p0 context.Context, p1 address.Address, p2 map[string]sca.LockedState, p3 []types.Message) (cid.Cid, error) {
+	if s.Internal.InitAtomicExec == nil {
+		return *new(cid.Cid), ErrNotSupported
+	}
+	return s.Internal.InitAtomicExec(p0, p1, p2, p3)
+}
+
+func (s *FullNodeStub) InitAtomicExec(p0 context.Context, p1 address.Address, p2 map[string]sca.LockedState, p3 []types.Message) (cid.Cid, error) {
+	return *new(cid.Cid), ErrNotSupported
+}
+
+func (s *FullNodeStruct) JoinSubnet(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 address.SubnetID, p4 string) (cid.Cid, error) {
+	if s.Internal.JoinSubnet == nil {
+		return *new(cid.Cid), ErrNotSupported
+	}
+	return s.Internal.JoinSubnet(p0, p1, p2, p3, p4)
+}
+
+func (s *FullNodeStub) JoinSubnet(p0 context.Context, p1 address.Address, p2 abi.TokenAmount, p3 address.SubnetID, p4 string) (cid.Cid, error) {
+	return *new(cid.Cid), ErrNotSupported
+}
+
+func (s *FullNodeStruct) KillSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID) (cid.Cid, error) {
+	if s.Internal.KillSubnet == nil {
+		return *new(cid.Cid), ErrNotSupported
+	}
+	return s.Internal.KillSubnet(p0, p1, p2)
+}
+
+func (s *FullNodeStub) KillSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID) (cid.Cid, error) {
+	return *new(cid.Cid), ErrNotSupported
+}
+
+func (s *FullNodeStruct) LeaveSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID) (cid.Cid, error) {
+	if s.Internal.LeaveSubnet == nil {
+		return *new(cid.Cid), ErrNotSupported
+	}
+	return s.Internal.LeaveSubnet(p0, p1, p2)
+}
+
+func (s *FullNodeStub) LeaveSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID) (cid.Cid, error) {
+	return *new(cid.Cid), ErrNotSupported
+}
+
+func (s *FullNodeStruct) ListAtomicExecs(p0 context.Context, p1 address.SubnetID, p2 address.Address) ([]sca.AtomicExec, error) {
+	if s.Internal.ListAtomicExecs == nil {
+		return *new([]sca.AtomicExec), ErrNotSupported
+	}
+	return s.Internal.ListAtomicExecs(p0, p1, p2)
+}
+
+func (s *FullNodeStub) ListAtomicExecs(p0 context.Context, p1 address.SubnetID, p2 address.Address) ([]sca.AtomicExec, error) {
+	return *new([]sca.AtomicExec), ErrNotSupported
+}
+
+func (s *FullNodeStruct) ListCheckpoints(p0 context.Context, p1 address.SubnetID, p2 int) ([]*schema.Checkpoint, error) {
+	if s.Internal.ListCheckpoints == nil {
+		return *new([]*schema.Checkpoint), ErrNotSupported
+	}
+	return s.Internal.ListCheckpoints(p0, p1, p2)
+}
+
+func (s *FullNodeStub) ListCheckpoints(p0 context.Context, p1 address.SubnetID, p2 int) ([]*schema.Checkpoint, error) {
+	return *new([]*schema.Checkpoint), ErrNotSupported
+}
+
+func (s *FullNodeStruct) ListSubnets(p0 context.Context, p1 address.SubnetID) ([]sca.SubnetOutput, error) {
+	if s.Internal.ListSubnets == nil {
+		return *new([]sca.SubnetOutput), ErrNotSupported
+	}
+	return s.Internal.ListSubnets(p0, p1)
+}
+
+func (s *FullNodeStub) ListSubnets(p0 context.Context, p1 address.SubnetID) ([]sca.SubnetOutput, error) {
+	return *new([]sca.SubnetOutput), ErrNotSupported
+}
+
+func (s *FullNodeStruct) LockState(p0 context.Context, p1 address.Address, p2 address.Address, p3 address.SubnetID, p4 abi.MethodNum) (cid.Cid, error) {
+	if s.Internal.LockState == nil {
+		return *new(cid.Cid), ErrNotSupported
+	}
+	return s.Internal.LockState(p0, p1, p2, p3, p4)
+}
+
+func (s *FullNodeStub) LockState(p0 context.Context, p1 address.Address, p2 address.Address, p3 address.SubnetID, p4 abi.MethodNum) (cid.Cid, error) {
+	return *new(cid.Cid), ErrNotSupported
 }
 
 func (s *FullNodeStruct) MarketAddBalance(p0 context.Context, p1 address.Address, p2 address.Address, p3 types.BigInt) (cid.Cid, error) {
@@ -1843,6 +2058,17 @@ func (s *FullNodeStruct) MarketWithdraw(p0 context.Context, p1 address.Address, 
 
 func (s *FullNodeStub) MarketWithdraw(p0 context.Context, p1 address.Address, p2 address.Address, p3 types.BigInt) (cid.Cid, error) {
 	return *new(cid.Cid), ErrNotSupported
+}
+
+func (s *FullNodeStruct) MineSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 bool, p4 *hierarchical.MiningParams) error {
+	if s.Internal.MineSubnet == nil {
+		return ErrNotSupported
+	}
+	return s.Internal.MineSubnet(p0, p1, p2, p3, p4)
+}
+
+func (s *FullNodeStub) MineSubnet(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 bool, p4 *hierarchical.MiningParams) error {
+	return ErrNotSupported
 }
 
 func (s *FullNodeStruct) MinerCreateBlock(p0 context.Context, p1 *BlockTemplate) (*types.BlockMsg, error) {
@@ -2428,6 +2654,17 @@ func (s *FullNodeStub) PaychVoucherSubmit(p0 context.Context, p1 address.Address
 	return *new(cid.Cid), ErrNotSupported
 }
 
+func (s *FullNodeStruct) ReleaseFunds(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) {
+	if s.Internal.ReleaseFunds == nil {
+		return *new(cid.Cid), ErrNotSupported
+	}
+	return s.Internal.ReleaseFunds(p0, p1, p2, p3)
+}
+
+func (s *FullNodeStub) ReleaseFunds(p0 context.Context, p1 address.Address, p2 address.SubnetID, p3 abi.TokenAmount) (cid.Cid, error) {
+	return *new(cid.Cid), ErrNotSupported
+}
+
 func (s *FullNodeStruct) StateAccountKey(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (address.Address, error) {
 	if s.Internal.StateAccountKey == nil {
 		return *new(address.Address), ErrNotSupported
@@ -2978,6 +3215,61 @@ func (s *FullNodeStub) StateWaitMsg(p0 context.Context, p1 cid.Cid, p2 uint64, p
 	return nil, ErrNotSupported
 }
 
+func (s *FullNodeStruct) SubnetChainHead(p0 context.Context, p1 address.SubnetID) (*types.TipSet, error) {
+	if s.Internal.SubnetChainHead == nil {
+		return nil, ErrNotSupported
+	}
+	return s.Internal.SubnetChainHead(p0, p1)
+}
+
+func (s *FullNodeStub) SubnetChainHead(p0 context.Context, p1 address.SubnetID) (*types.TipSet, error) {
+	return nil, ErrNotSupported
+}
+
+func (s *FullNodeStruct) SubnetChainNotify(p0 context.Context, p1 address.SubnetID) (<-chan []*HeadChange, error) {
+	if s.Internal.SubnetChainNotify == nil {
+		return nil, ErrNotSupported
+	}
+	return s.Internal.SubnetChainNotify(p0, p1)
+}
+
+func (s *FullNodeStub) SubnetChainNotify(p0 context.Context, p1 address.SubnetID) (<-chan []*HeadChange, error) {
+	return nil, ErrNotSupported
+}
+
+func (s *FullNodeStruct) SubnetStateGetActor(p0 context.Context, p1 address.SubnetID, p2 address.Address, p3 types.TipSetKey) (*types.Actor, error) {
+	if s.Internal.SubnetStateGetActor == nil {
+		return nil, ErrNotSupported
+	}
+	return s.Internal.SubnetStateGetActor(p0, p1, p2, p3)
+}
+
+func (s *FullNodeStub) SubnetStateGetActor(p0 context.Context, p1 address.SubnetID, p2 address.Address, p3 types.TipSetKey) (*types.Actor, error) {
+	return nil, ErrNotSupported
+}
+
+func (s *FullNodeStruct) SubnetStateGetValidators(p0 context.Context, p1 address.SubnetID) ([]hierarchical.Validator, error) {
+	if s.Internal.SubnetStateGetValidators == nil {
+		return *new([]hierarchical.Validator), ErrNotSupported
+	}
+	return s.Internal.SubnetStateGetValidators(p0, p1)
+}
+
+func (s *FullNodeStub) SubnetStateGetValidators(p0 context.Context, p1 address.SubnetID) ([]hierarchical.Validator, error) {
+	return *new([]hierarchical.Validator), ErrNotSupported
+}
+
+func (s *FullNodeStruct) SubnetStateWaitMsg(p0 context.Context, p1 address.SubnetID, p2 cid.Cid, p3 uint64, p4 abi.ChainEpoch, p5 bool) (*MsgLookup, error) {
+	if s.Internal.SubnetStateWaitMsg == nil {
+		return nil, ErrNotSupported
+	}
+	return s.Internal.SubnetStateWaitMsg(p0, p1, p2, p3, p4, p5)
+}
+
+func (s *FullNodeStub) SubnetStateWaitMsg(p0 context.Context, p1 address.SubnetID, p2 cid.Cid, p3 uint64, p4 abi.ChainEpoch, p5 bool) (*MsgLookup, error) {
+	return nil, ErrNotSupported
+}
+
 func (s *FullNodeStruct) SyncBlock(p0 context.Context, p1 *types.BlockMsg) error {
 	if s.Internal.SyncBlock == nil {
 		return ErrNotSupported
@@ -3055,6 +3347,17 @@ func (s *FullNodeStub) SyncSubmitBlock(p0 context.Context, p1 *types.BlockMsg) e
 	return ErrNotSupported
 }
 
+func (s *FullNodeStruct) SyncSubnet(p0 context.Context, p1 address.SubnetID, p2 bool) error {
+	if s.Internal.SyncSubnet == nil {
+		return ErrNotSupported
+	}
+	return s.Internal.SyncSubnet(p0, p1, p2)
+}
+
+func (s *FullNodeStub) SyncSubnet(p0 context.Context, p1 address.SubnetID, p2 bool) error {
+	return ErrNotSupported
+}
+
 func (s *FullNodeStruct) SyncUnmarkAllBad(p0 context.Context) error {
 	if s.Internal.SyncUnmarkAllBad == nil {
 		return ErrNotSupported
@@ -3086,6 +3389,28 @@ func (s *FullNodeStruct) SyncValidateTipset(p0 context.Context, p1 types.TipSetK
 
 func (s *FullNodeStub) SyncValidateTipset(p0 context.Context, p1 types.TipSetKey) (bool, error) {
 	return false, ErrNotSupported
+}
+
+func (s *FullNodeStruct) UnlockState(p0 context.Context, p1 address.Address, p2 address.Address, p3 address.SubnetID, p4 abi.MethodNum) error {
+	if s.Internal.UnlockState == nil {
+		return ErrNotSupported
+	}
+	return s.Internal.UnlockState(p0, p1, p2, p3, p4)
+}
+
+func (s *FullNodeStub) UnlockState(p0 context.Context, p1 address.Address, p2 address.Address, p3 address.SubnetID, p4 abi.MethodNum) error {
+	return ErrNotSupported
+}
+
+func (s *FullNodeStruct) ValidateCheckpoint(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) (*schema.Checkpoint, error) {
+	if s.Internal.ValidateCheckpoint == nil {
+		return nil, ErrNotSupported
+	}
+	return s.Internal.ValidateCheckpoint(p0, p1, p2)
+}
+
+func (s *FullNodeStub) ValidateCheckpoint(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) (*schema.Checkpoint, error) {
+	return nil, ErrNotSupported
 }
 
 func (s *FullNodeStruct) WalletBalance(p0 context.Context, p1 address.Address) (types.BigInt, error) {

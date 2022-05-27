@@ -12,6 +12,9 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-state-types/exitcode"
+	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
 	"github.com/filecoin-project/lotus/chain/consensus/dummy"
 	"github.com/filecoin-project/lotus/chain/consensus/mir"
@@ -23,6 +26,11 @@ import (
 	mapi "github.com/filecoin-project/mir"
 )
 
+func TestEudicoMir(t *testing.T) {
+	t.Run("mir", func(t *testing.T) {
+		runMirConsensusTests(t, kit.ThroughRPC(), kit.RootMir())
+	})
+}
 func TestEudicoConsensus(t *testing.T) {
 	t.Run("dummy", func(t *testing.T) {
 		runDummyConsensusTests(t, kit.ThroughRPC(), kit.RootDummy())
@@ -89,7 +97,112 @@ func (ts *eudicoConsensusSuite) testDummyMining(t *testing.T) {
 func runMirConsensusTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoConsensusSuite{opts: opts}
 
-	t.Run("testMirMining", ts.testMirMining)
+	// t.Run("testMirMining", ts.testMirMining)
+	t.Run("testMirTwoNodesMining", ts.testMirTwoNodes)
+}
+
+func (ts *eudicoConsensusSuite) testMirTwoNodes(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	one, two, ens := kit.EudicoEnsembleTwoNodes(t, ts.opts...)
+	defer func() {
+		err := ens.Stop()
+		require.NoError(t, err)
+	}()
+
+	p, err := one.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Empty(t, p, "node one has peers")
+
+	p, err = two.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Empty(t, p, "node two has peers")
+
+	ens.Connect(one, two)
+	ens.Connect(two, one)
+
+	_, err = one.NetPeers(ctx)
+	require.NoError(t, err)
+	// require.Lenf(t, peers, 1, "node one doesn't have 1 peer")
+
+	_, err = two.NetPeers(ctx)
+	require.NoError(t, err)
+	// require.Lenf(t, peers, 1, "node two doesn't have 1 peer")
+
+	l1, err := one.WalletList(ctx)
+	require.NoError(t, err)
+	if len(l1) != 1 {
+		t.Fatal("wallet key list is empty")
+	}
+
+	l2, err := two.WalletList(ctx)
+	require.NoError(t, err)
+	if len(l2) != 1 {
+		t.Fatal("wallet key list is empty")
+	}
+
+	msg1 := &types.Message{
+		From:  l1[0],
+		To:    l2[0],
+		Value: big.Zero(),
+	}
+
+	mirNodeID1 := fmt.Sprintf("%s:%s", address.RootSubnet, l1[0].String())
+	mirNodeID2 := fmt.Sprintf("%s:%s", address.RootSubnet, l2[0].String())
+	env := fmt.Sprintf("%s@%s,%s@%s",
+		mirNodeID1, "127.0.0.1:10001",
+		mirNodeID2, "127.0.0.1:10002",
+	)
+	err = os.Setenv(mir.ValidatorsEnv, env)
+	require.NoError(t, err)
+
+	go func() {
+		err := mir.Mine(ctx, l1[0], one)
+		if xerrors.Is(mapi.ErrStopped, err) {
+			return
+		}
+		if err != nil {
+			t.Error(err)
+			cancel()
+			return
+		}
+	}()
+
+	go func() {
+		err := mir.Mine(ctx, l2[0], two)
+		if xerrors.Is(mapi.ErrStopped, err) {
+			return
+		}
+		if err != nil {
+			t.Error(err)
+			cancel()
+			return
+		}
+	}()
+
+	err = kit.WaitForBalance(ctx, l1[0], 4, one)
+	require.NoError(t, err)
+
+	err = kit.WaitForBalance(ctx, l2[0], 4, two)
+	require.NoError(t, err)
+
+	sm, err := one.MpoolPushMessage(ctx, msg1, nil)
+	require.NoError(t, err)
+
+	res, err := one.StateWaitMsg(ctx, sm.Cid(), 1, lapi.LookbackNoLimit, true)
+	require.NoError(t, err)
+
+	require.Equal(t, exitcode.Ok, res.Receipt.ExitCode, "message not successful")
+
+	res, err = two.StateWaitMsg(ctx, sm.Cid(), 1, lapi.LookbackNoLimit, true)
+	require.NoError(t, err)
+
+	require.Equal(t, exitcode.Ok, res.Receipt.ExitCode, "message not successful")
+
+	err = ens.Stop()
+	require.NoError(t, err)
+
 }
 
 func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
@@ -110,9 +223,8 @@ func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
 
 	mirNodeID := fmt.Sprintf("%s:%s", address.RootSubnet, l[0].String())
 
-	if err := os.Setenv(mir.ValidatorsEnv, fmt.Sprintf("%s@%s", mirNodeID, "127.0.0.1:10000")); err != nil {
-		require.NoError(t, err)
-	}
+	err = os.Setenv(mir.ValidatorsEnv, fmt.Sprintf("%s@%s", mirNodeID, "127.0.0.1:10000"))
+	require.NoError(t, err)
 	defer os.Unsetenv(mir.ValidatorsEnv) // nolint
 
 	go func() {
