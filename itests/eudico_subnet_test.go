@@ -3,6 +3,7 @@ package itests
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
+	"github.com/filecoin-project/lotus/chain/consensus/mir"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
@@ -30,8 +32,14 @@ func TestEudicoSubnetSanity(t *testing.T) {
 }
 
 func TestEudicoSubnetTwoNodes(t *testing.T) {
-	t.Run("/root/pow-/subnet/Mir", func(t *testing.T) {
+	t.Run("/root/pow-/subnet/mir", func(t *testing.T) {
 		runSubnetTestsTwoNodes(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetMir())
+	})
+}
+
+func TestEudicoSubnetTwoNodesCrossMessage(t *testing.T) {
+	t.Run("/root/mir-/subnet/pow", func(t *testing.T) {
+		runSubnetTwoNodesCrossMessage(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetTSPoW())
 	})
 }
 
@@ -605,4 +613,279 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 
 	err = ens.Stop()
 	require.NoError(t, err)
+}
+
+func runSubnetTwoNodesCrossMessage(t *testing.T, opts ...interface{}) {
+	ts := eudicoSubnetSuite{opts: opts}
+
+	t.Run("testBasicSubnetFlowTwoNodes", ts.testSubnetTwoNodesCrossMessage)
+}
+
+func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	one, two, ens := kit.EudicoEnsembleTwoNodes(t, ts.opts...)
+	defer func() {
+		err := ens.Stop()
+		require.NoError(t, err)
+	}()
+
+	t.Log("[*] Connecting nodes")
+
+	// Fail if genesis blocks are different
+	gen1, err := one.ChainGetGenesis(ctx)
+	require.NoError(t, err)
+	gen2, err := two.ChainGetGenesis(ctx)
+	require.NoError(t, err)
+	require.Equal(t, gen1.String(), gen2.String())
+
+	// Fail if no peers
+
+	p, err := one.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Empty(t, p, "node one has peers")
+
+	p, err = two.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Empty(t, p, "node two has peers")
+
+	ens.Connect(one, two)
+
+	peers, err := one.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Lenf(t, peers, 1, "node one doesn't have a peer")
+
+	peers, err = two.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Lenf(t, peers, 1, "node two doesn't have a peer")
+
+	l1, err := one.WalletList(ctx)
+	require.NoError(t, err)
+	if len(l1) != 1 {
+		t.Fatal("wallet key list is empty")
+	}
+	oneAddr := l1[0]
+
+	l2, err := two.WalletList(ctx)
+	require.NoError(t, err)
+	if len(l2) != 1 {
+		t.Fatal("wallet key list is empty")
+	}
+	twoAddr := l2[0]
+
+	err = os.Setenv(mir.ValidatorsEnv, fmt.Sprintf("%s@%s,%s@%s",
+		"/root:"+oneAddr.String(), "127.0.0.1:10005",
+		"/root:"+twoAddr.String(), "127.0.0.1:10006"))
+	defer os.Unsetenv(mir.ValidatorsEnv)
+	require.NoError(t, err)
+
+	t.Log("[*] Running consensus in root net")
+
+	go func() {
+		defer t.Log("node one was stopped")
+		err := mir.Mine(ctx, oneAddr, one)
+		if err != nil {
+			t.Error(err)
+			cancel()
+			return
+		}
+	}()
+
+	go func() {
+		defer t.Log("node two was stopped")
+		err := mir.Mine(ctx, twoAddr, two)
+		if err != nil {
+			t.Error(err)
+			cancel()
+			return
+		}
+	}()
+
+	t.Log("[*] Adding and joining the subnet")
+
+	parent := address.RootSubnet
+	minerStake := abi.NewStoragePower(1e8)
+	checkPeriod := abi.ChainEpoch(10)
+
+	err = kit.WaitForBalance(ctx, oneAddr, 20, one)
+	require.NoError(t, err)
+
+	err = kit.WaitForBalance(ctx, twoAddr, 20, two)
+	require.NoError(t, err)
+
+	balance1, err := one.WalletBalance(ctx, oneAddr)
+	require.NoError(t, err)
+	t.Logf("[*] node one %s balance: %d", oneAddr, balance1)
+
+	balance2, err := two.WalletBalance(ctx, twoAddr)
+	require.NoError(t, err)
+	t.Logf("[*] node two %s balance: %d", twoAddr, balance2)
+
+	hp := &hierarchical.ConsensusParams{
+		MinValidators: 0,
+		DelegMiner:    oneAddr,
+	}
+
+	// First subnet
+	subnetName1 := "testSubnet1"
+	actorAddr1, err := one.AddSubnet(ctx, oneAddr, parent, subnetName1, uint64(hierarchical.PoW), minerStake, checkPeriod, hp)
+	require.NoError(t, err)
+
+	subnetAddr1 := address.NewSubnetID(parent, actorAddr1)
+	t.Log("[*] Subnet one addr:", subnetAddr1)
+
+	networkName1, err := one.StateNetworkName(ctx)
+	require.NoError(t, err)
+	require.Equal(t, dtypes.NetworkName("/root"), networkName1)
+
+	val, err := types.ParseFIL("10")
+	require.NoError(t, err)
+
+	_, err = one.StateLookupID(ctx, oneAddr, types.EmptyTSK)
+	require.NoError(t, err)
+
+	sc1, err := one.JoinSubnet(ctx, oneAddr, big.Int(val), subnetAddr1, "")
+	require.NoError(t, err)
+	t1 := time.Now()
+	c1, err := one.StateWaitMsg(ctx, sc1, 1, 100, false)
+	require.NoError(t, err)
+	t.Logf("[*] node one: the message was found in %d epoch of root in %v sec", c1.Height, time.Since(t1).Seconds())
+
+	// Second subnet
+	subnetName2 := "testSubnet2"
+	actorAddr2, err := two.AddSubnet(ctx, twoAddr, parent, subnetName2, uint64(hierarchical.PoW), minerStake, checkPeriod, hp)
+	require.NoError(t, err)
+
+	subnetAddr2 := address.NewSubnetID(parent, actorAddr2)
+	t.Log("[*] Subnet two addr:", subnetAddr2)
+
+	networkName2, err := two.StateNetworkName(ctx)
+	require.NoError(t, err)
+	require.Equal(t, dtypes.NetworkName("/root"), networkName2)
+
+	_, err = two.StateLookupID(ctx, twoAddr, types.EmptyTSK)
+	require.NoError(t, err)
+
+	sc2, err := two.JoinSubnet(ctx, twoAddr, big.Int(val), subnetAddr2, "")
+	require.NoError(t, err)
+	t1 = time.Now()
+	c, err := one.StateWaitMsg(ctx, sc2, 1, 100, false)
+	require.NoError(t, err)
+	t.Logf("[*] node two: the message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
+
+	// AddSubnet only deploys the subnet actor. The subnet will only be listed after joining the subnet
+
+	t.Log("[*] Listing subnets")
+	sn1, err := one.ListSubnets(ctx, address.RootSubnet)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(sn1))
+
+	sn2, err := two.ListSubnets(ctx, address.RootSubnet)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(sn2))
+
+	t.Log("[*] Run PoW in each subnet")
+	go func() {
+		mp := hierarchical.MiningParams{}
+		err := one.MineSubnet(ctx, oneAddr, subnetAddr1, false, &mp)
+		if err != nil {
+			t.Error(err)
+			cancel()
+			return
+		}
+	}()
+
+	go func() {
+		mp := hierarchical.MiningParams{}
+		err := two.MineSubnet(ctx, twoAddr, subnetAddr2, false, &mp)
+		if err != nil {
+			t.Error(err)
+			cancel()
+			return
+		}
+	}()
+
+	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 4, subnetAddr1, one)
+	require.NoError(t, err)
+
+	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 4, subnetAddr2, two)
+	require.NoError(t, err)
+
+	// Sending a message from subnet1 to subnet2
+	subnet2NewAddr, err := two.WalletNew(ctx, types.KTSecp256k1)
+	require.NoError(t, err)
+	t.Logf("[*] Subnet2 new addr: %s", subnet2NewAddr)
+
+	t.Log("[*] Funding subnet1")
+	injectedFils := big.Int(types.MustParseFIL("3"))
+	_, err = one.FundSubnet(ctx, oneAddr, subnetAddr1, injectedFils)
+	require.NoError(t, err)
+
+	// Send a message to the new address
+	t.Log("[*] Sending a message")
+
+	sentFils := big.Int(types.MustParseFIL("3"))
+	require.NoError(t, err)
+
+	var params lcli.SendParams
+	params.Method = builtin.MethodSend
+	params.To = subnet2NewAddr
+	params.From = oneAddr
+	params.Val = sentFils
+	proto, err := kit.MessageForSend(ctx, one, params)
+	require.NoError(t, err)
+
+	crossParams := &sca.CrossMsgParams{
+		Destination: subnetAddr2,
+		Msg:         proto.Message,
+	}
+	serparams, err := actors.SerializeParams(crossParams)
+	require.NoError(t, err)
+
+	msg, err := one.MpoolPushMessage(ctx, &types.Message{
+		To:     hierarchical.SubnetCoordActorAddr,
+		From:   params.From,
+		Value:  params.Val,
+		Method: sca.Methods.SendCross,
+		Params: serparams,
+	}, nil)
+	require.NoError(t, err)
+
+	t1 = time.Now()
+	c, err = one.StateWaitMsg(ctx, msg.Cid(), 1, 100, false)
+	require.NoError(t, err)
+	t.Logf(" [*] the cross message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
+
+	msg, err = one.MpoolPushMessage(ctx, &types.Message{
+		To:    subnet2NewAddr,
+		From:  params.From,
+		Value: sentFils,
+	}, nil)
+	require.NoError(t, err)
+
+	t1 = time.Now()
+	c, err = one.StateWaitMsg(ctx, msg.Cid(), 1, 100, false)
+	require.NoError(t, err)
+	t.Logf("[*] the message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
+
+	t1 = time.Now()
+	bl, err := kit.WaitSubnetActorBalance(ctx, subnetAddr1, oneAddr, injectedFils, one)
+	require.NoError(t, err)
+	t.Logf(" [*] Sent funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
+
+	a, err := one.SubnetStateGetActor(ctx, subnetAddr1, oneAddr, types.EmptyTSK)
+	require.NoError(t, err)
+	t.Logf("[*] %s new addr balance: %d", subnet2NewAddr, a.Balance)
+	require.Equal(t, 0, big.Cmp(injectedFils, a.Balance))
+
+	bl, err = kit.WaitSubnetActorBalance(ctx, subnetAddr2, subnet2NewAddr, sentFils, two)
+	require.NoError(t, err)
+	t.Logf(" [*] Sent funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
+
+	a, err = two.SubnetStateGetActor(ctx, subnetAddr2, subnet2NewAddr, types.EmptyTSK)
+	require.NoError(t, err)
+	t.Logf("[*] %s new addr balance: %d", subnet2NewAddr, a.Balance)
+	require.Equal(t, 0, big.Cmp(sentFils, a.Balance))
+
 }
