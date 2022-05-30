@@ -375,6 +375,7 @@ func runSubnetTestsTwoNodes(t *testing.T, opts ...interface{}) {
 
 func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	one, two, ens := kit.EudicoEnsembleTwoNodes(t, ts.opts...)
 	defer func() {
@@ -393,6 +394,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 	require.Equal(t, gen1.String(), gen2.String())
 
 	// Fail if no peers
+
 	p, err := one.NetPeers(ctx)
 	require.NoError(t, err)
 	require.Empty(t, p, "node one has peers")
@@ -425,7 +427,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 	}
 	twoAddr := l2[0]
 
-	t.Log("[*] Running consensus in rootnet")
+	t.Log("[*] Running consensus in root net")
 
 	go func() {
 		defer t.Log("node one was stopped")
@@ -476,12 +478,11 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 	require.NoError(t, err)
 
 	subnetAddr := address.NewSubnetID(parent, actorAddr)
+	t.Log("[*] Subnet addr:", subnetAddr)
 
 	networkName, err := one.StateNetworkName(ctx)
 	require.NoError(t, err)
 	require.Equal(t, dtypes.NetworkName("/root"), networkName)
-
-	t.Log("[*] Subnet addr:", subnetAddr)
 
 	val, err := types.ParseFIL("10")
 	require.NoError(t, err)
@@ -504,6 +505,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 	t.Logf("[*] node two: the message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
 
 	// AddSubnet only deploys the subnet actor. The subnet will only be listed after joining the subnet
+
 	t.Log("[*] Listing subnets")
 	sn1, err := one.ListSubnets(ctx, address.RootSubnet)
 	require.NoError(t, err)
@@ -603,6 +605,4 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 
 	err = ens.Stop()
 	require.NoError(t, err)
-
-	cancel()
 }
