@@ -16,6 +16,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
+	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/itests/kit"
@@ -25,6 +26,12 @@ import (
 func TestEudicoSubnetSanity(t *testing.T) {
 	t.Run("/root/dummy-/subnet/dummy", func(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetDummy())
+	})
+}
+
+func TestEudicoSubnetTwoNodes(t *testing.T) {
+	t.Run("/root/pow-/subnet/Mir", func(t *testing.T) {
+		runSubnetTestsTwoNodes(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetMir())
 	})
 }
 
@@ -356,4 +363,243 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Logf("[*] Test time: %v\n", time.Since(startTime).Seconds())
+}
+
+func runSubnetTestsTwoNodes(t *testing.T, opts ...interface{}) {
+	ts := eudicoSubnetSuite{opts: opts}
+
+	t.Run("testBasicSubnetFlowTwoNodes", ts.testBasicSubnetFlowTwoNodes)
+}
+
+func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
+	startTime := time.Now()
+	ctx, cancel := context.WithCancel(context.Background())
+
+	one, two, ens := kit.EudicoEnsembleTwoNodes(t, ts.opts...)
+	defer func() {
+		err := ens.Stop()
+		require.NoError(t, err)
+	}()
+
+	t.Log("[*] Connecting nodes")
+
+	// Fail if genesis blocks are different
+	gen1, err := one.ChainGetGenesis(ctx)
+	require.NoError(t, err)
+	gen2, err := two.ChainGetGenesis(ctx)
+	require.NoError(t, err)
+	require.Equal(t, gen1.String(), gen2.String())
+
+	// Fail if no peers
+	p, err := one.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Empty(t, p, "node one has peers")
+
+	p, err = two.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Empty(t, p, "node two has peers")
+
+	ens.Connect(one, two)
+
+	peers, err := one.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Lenf(t, peers, 1, "node one doesn't have a peer")
+
+	peers, err = two.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Lenf(t, peers, 1, "node two doesn't have a peer")
+
+	l1, err := one.WalletList(ctx)
+	require.NoError(t, err)
+	if len(l1) != 1 {
+		t.Fatal("wallet key list is empty")
+	}
+	oneAddr := l1[0]
+
+	l2, err := two.WalletList(ctx)
+	require.NoError(t, err)
+	if len(l2) != 1 {
+		t.Fatal("wallet key list is empty")
+	}
+	twoAddr := l2[0]
+
+	t.Log("[*] Running consensus in rootnet")
+
+	go func() {
+		defer t.Log("node one was stopped")
+		err := tspow.Mine(ctx, oneAddr, one)
+		if err != nil {
+			t.Error(err)
+			cancel()
+			return
+		}
+	}()
+
+	go func() {
+		defer t.Log("node two was stopped")
+		err := tspow.Mine(ctx, twoAddr, two)
+		if err != nil {
+			t.Error(err)
+			cancel()
+			return
+		}
+	}()
+
+	t.Log("[*] Adding and joining the subnet")
+
+	parent := address.RootSubnet
+	subnetName := "testSubnet"
+	minerStake := abi.NewStoragePower(1e8)
+	checkPeriod := abi.ChainEpoch(10)
+
+	err = kit.WaitForBalance(ctx, oneAddr, 20, one)
+	require.NoError(t, err)
+
+	err = kit.WaitForBalance(ctx, twoAddr, 20, two)
+	require.NoError(t, err)
+
+	balance1, err := one.WalletBalance(ctx, oneAddr)
+	require.NoError(t, err)
+	t.Logf("[*] node one %s balance: %d", oneAddr, balance1)
+
+	balance2, err := two.WalletBalance(ctx, twoAddr)
+	require.NoError(t, err)
+	t.Logf("[*] node two %s balance: %d", twoAddr, balance2)
+
+	hp := &hierarchical.ConsensusParams{
+		MinValidators: 2,
+		DelegMiner:    oneAddr,
+	}
+	actorAddr, err := one.AddSubnet(ctx, oneAddr, parent, subnetName, uint64(hierarchical.Mir), minerStake, checkPeriod, hp)
+	require.NoError(t, err)
+
+	subnetAddr := address.NewSubnetID(parent, actorAddr)
+
+	networkName, err := one.StateNetworkName(ctx)
+	require.NoError(t, err)
+	require.Equal(t, dtypes.NetworkName("/root"), networkName)
+
+	t.Log("[*] Subnet addr:", subnetAddr)
+
+	val, err := types.ParseFIL("10")
+	require.NoError(t, err)
+
+	_, err = one.StateLookupID(ctx, oneAddr, types.EmptyTSK)
+	require.NoError(t, err)
+
+	sc, err := one.JoinSubnet(ctx, oneAddr, big.Int(val), subnetAddr, "127.0.0.1:10003")
+	require.NoError(t, err)
+	t1 := time.Now()
+	c, err := one.StateWaitMsg(ctx, sc, 1, 100, false)
+	require.NoError(t, err)
+	t.Logf("[*] node one: the message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
+
+	sc, err = two.JoinSubnet(ctx, twoAddr, big.Int(val), subnetAddr, "127.0.0.1:10004")
+	require.NoError(t, err)
+	t1 = time.Now()
+	c, err = one.StateWaitMsg(ctx, sc, 1, 100, false)
+	require.NoError(t, err)
+	t.Logf("[*] node two: the message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
+
+	// AddSubnet only deploys the subnet actor. The subnet will only be listed after joining the subnet
+	t.Log("[*] Listing subnets")
+	sn1, err := one.ListSubnets(ctx, address.RootSubnet)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(sn1))
+	require.NotEqual(t, 0, sn1[0].Subnet.Status)
+	require.Equal(t, hierarchical.Mir, sn1[0].Consensus)
+
+	sn2, err := two.ListSubnets(ctx, address.RootSubnet)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(sn2))
+	require.NotEqual(t, 0, sn2[0].Subnet.Status)
+	require.Equal(t, hierarchical.Mir, sn2[0].Consensus)
+
+	t.Log("[*] Run Mir in subnets")
+	go func() {
+		mp := hierarchical.MiningParams{}
+		err := one.MineSubnet(ctx, oneAddr, subnetAddr, false, &mp)
+		if err != nil {
+			t.Error(err)
+			cancel()
+			return
+		}
+	}()
+
+	go func() {
+		mp := hierarchical.MiningParams{}
+		err := two.MineSubnet(ctx, twoAddr, subnetAddr, false, &mp)
+		if err != nil {
+			t.Error(err)
+			cancel()
+			return
+		}
+	}()
+
+	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 4, subnetAddr, one)
+	require.NoError(t, err)
+
+	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 4, subnetAddr, two)
+	require.NoError(t, err)
+
+	t.Log("[*] Stop mining")
+	mp := hierarchical.MiningParams{}
+	err = one.MineSubnet(ctx, oneAddr, subnetAddr, true, &mp)
+	require.NoError(t, err)
+
+	err = two.MineSubnet(ctx, twoAddr, subnetAddr, true, &mp)
+	require.NoError(t, err)
+
+	newHeads, err := one.SubnetChainNotify(ctx, subnetAddr)
+	require.NoError(t, err)
+
+	notStopped := true
+	for notStopped {
+		select {
+		case b := <-newHeads:
+			t.Logf("[*] node one: stopping mining: mined a block: %d", b[0].Val.Height())
+		default:
+			t.Log("[*] node one: stopped the miner eventually")
+			notStopped = false
+		}
+	}
+
+	newHeads, err = two.SubnetChainNotify(ctx, subnetAddr)
+	require.NoError(t, err)
+
+	notStopped = true
+	for notStopped {
+		select {
+		case b := <-newHeads:
+			t.Logf("[*] node two: stopping mining: mined a block: %d", b[0].Val.Height())
+		default:
+			t.Log("[*] node two: stopped the miner eventually")
+			notStopped = false
+		}
+	}
+
+	// Leaving the subnet
+
+	t.Log("[*] Leaving the subnet")
+	_, err = one.LeaveSubnet(ctx, oneAddr, subnetAddr)
+	require.NoError(t, err)
+
+	sn1, err = one.ListSubnets(ctx, address.RootSubnet)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(sn1))
+	require.NotEqual(t, 0, sn1[0].Subnet.Status)
+
+	_, err = two.LeaveSubnet(ctx, twoAddr, subnetAddr)
+	require.NoError(t, err)
+
+	sn2, err = two.ListSubnets(ctx, address.RootSubnet)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(sn2))
+	require.NotEqual(t, 0, sn2[0].Subnet.Status)
+
+	err = ens.Stop()
+	require.NoError(t, err)
+
+	t.Logf("[*] Test time: %v\n", time.Since(startTime).Seconds())
+
 }

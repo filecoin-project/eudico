@@ -136,14 +136,14 @@ func (ts *eudicoConsensusSuite) testMirTwoNodes(t *testing.T) {
 	l1, err := one.WalletList(ctx)
 	require.NoError(t, err)
 	if len(l1) != 1 {
-		t.Fatal("wallet key list is empty")
+		t.Fatal("one's wallet key list is empty")
 	}
 	oneAddr := l1[0]
 
 	l2, err := two.WalletList(ctx)
 	require.NoError(t, err)
 	if len(l2) != 1 {
-		t.Fatal("wallet key list is empty")
+		t.Fatal("two's wallet key list is empty")
 	}
 	twoAddr := l2[0]
 
