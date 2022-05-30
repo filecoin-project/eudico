@@ -677,7 +677,7 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 	err = os.Setenv(mir.ValidatorsEnv, fmt.Sprintf("%s@%s,%s@%s",
 		"/root:"+oneAddr.String(), "127.0.0.1:10005",
 		"/root:"+twoAddr.String(), "127.0.0.1:10006"))
-	defer os.Unsetenv(mir.ValidatorsEnv)
+	defer os.Unsetenv(mir.ValidatorsEnv) // nolint
 	require.NoError(t, err)
 
 	t.Log("[*] Running consensus in root net")
