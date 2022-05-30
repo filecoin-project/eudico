@@ -135,13 +135,13 @@ type eudicoSubnetSuite struct {
 }
 
 func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
-	startTime := time.Now()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	full, rootMiner, subnetMinerType, ens := kit.EudicoEnsembleTwoMiners(t, ts.opts...)
 	n, valAddr := ens.ValidatorInfo()
 
+	startTime := time.Now()
 	addr, err := full.WalletDefaultAddress(ctx)
 	require.NoError(t, err)
 	t.Logf("[*] Wallet addr: %s", addr)
@@ -359,10 +359,12 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	require.Equal(t, 1, len(sn))
 	require.NotEqual(t, 0, sn[0].Subnet.Status)
 
+	t.Logf("[*] Test time: %v\n", time.Since(startTime).Seconds())
+
 	err = ens.Stop()
 	require.NoError(t, err)
 
-	t.Logf("[*] Test time: %v\n", time.Since(startTime).Seconds())
+	cancel()
 }
 
 func runSubnetTestsTwoNodes(t *testing.T, opts ...interface{}) {
@@ -372,7 +374,6 @@ func runSubnetTestsTwoNodes(t *testing.T, opts ...interface{}) {
 }
 
 func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
-	startTime := time.Now()
 	ctx, cancel := context.WithCancel(context.Background())
 
 	one, two, ens := kit.EudicoEnsembleTwoNodes(t, ts.opts...)
@@ -381,6 +382,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 		require.NoError(t, err)
 	}()
 
+	startTime := time.Now()
 	t.Log("[*] Connecting nodes")
 
 	// Fail if genesis blocks are different
@@ -597,9 +599,10 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 	require.Equal(t, 1, len(sn2))
 	require.NotEqual(t, 0, sn2[0].Subnet.Status)
 
-	err = ens.Stop()
-	require.NoError(t, err)
-
 	t.Logf("[*] Test time: %v\n", time.Since(startTime).Seconds())
 
+	err = ens.Stop()
+	require.NoError(t, err)
+	
+	cancel()
 }
