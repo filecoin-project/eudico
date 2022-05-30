@@ -364,11 +364,11 @@ func (t *CompactedMessages) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("Slice value in field t.Cross was too long")
 	}
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajArray, uint64(len(t.Cross))); err != nil {
+	if err := cw.WriteMajorTypeHeader(cbg.MajArray, uint64(len(t.Cross))); err != nil {
 		return err
 	}
 	for _, v := range t.Cross {
-		if err := v.MarshalCBOR(w); err != nil {
+		if err := v.MarshalCBOR(cw); err != nil {
 			return err
 		}
 	}
@@ -378,7 +378,7 @@ func (t *CompactedMessages) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("Slice value in field t.CrossIncludes was too long")
 	}
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajArray, uint64(len(t.CrossIncludes))); err != nil {
+	if err := cw.WriteMajorTypeHeader(cbg.MajArray, uint64(len(t.CrossIncludes))); err != nil {
 		return err
 	}
 	for _, v := range t.CrossIncludes {
@@ -386,11 +386,11 @@ func (t *CompactedMessages) MarshalCBOR(w io.Writer) error {
 			return xerrors.Errorf("Slice value in field v was too long")
 		}
 
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajArray, uint64(len(v))); err != nil {
+		if err := cw.WriteMajorTypeHeader(cbg.MajArray, uint64(len(v))); err != nil {
 			return err
 		}
 		for _, v := range v {
-			if err := cbg.CborWriteHeader(w, cbg.MajUnsignedInt, uint64(v)); err != nil {
+			if err := cw.CborWriteHeader(cbg.MajUnsignedInt, uint64(v)); err != nil {
 				return err
 			}
 		}
@@ -599,7 +599,7 @@ func (t *CompactedMessages) UnmarshalCBOR(r io.Reader) (err error) {
 
 	// t.Cross ([]*types.Message) (slice)
 
-	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	maj, extra, err = cr.ReadHeader()
 	if err != nil {
 		return err
 	}
@@ -619,7 +619,7 @@ func (t *CompactedMessages) UnmarshalCBOR(r io.Reader) (err error) {
 	for i := 0; i < int(extra); i++ {
 
 		var v types.Message
-		if err := v.UnmarshalCBOR(br); err != nil {
+		if err := v.UnmarshalCBOR(cr); err != nil {
 			return err
 		}
 
@@ -628,7 +628,7 @@ func (t *CompactedMessages) UnmarshalCBOR(r io.Reader) (err error) {
 
 	// t.CrossIncludes ([][]uint64) (slice)
 
-	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	maj, extra, err = cr.ReadHeader()
 	if err != nil {
 		return err
 	}
@@ -651,7 +651,7 @@ func (t *CompactedMessages) UnmarshalCBOR(r io.Reader) (err error) {
 			var extra uint64
 			var err error
 
-			maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+			maj, extra, err = cr.ReadHeader()
 			if err != nil {
 				return err
 			}
@@ -670,7 +670,7 @@ func (t *CompactedMessages) UnmarshalCBOR(r io.Reader) (err error) {
 
 			for j := 0; j < int(extra); j++ {
 
-				maj, val, err := cbg.CborReadHeaderBuf(br, scratch)
+				maj, val, err := cr.ReadHeader()
 				if err != nil {
 					return xerrors.Errorf("failed to read uint64 for t.CrossIncludes[i] slice: %w", err)
 				}
