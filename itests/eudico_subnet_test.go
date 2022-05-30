@@ -603,6 +603,6 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 
 	err = ens.Stop()
 	require.NoError(t, err)
-	
+
 	cancel()
 }
