@@ -228,10 +228,9 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 
 	sc, err := full.JoinSubnet(ctx, addr, big.Int(val), subnetAddr, valAddr)
 	require.NoError(t, err)
-	t1 := time.Now()
-	c, err := full.StateWaitMsg(ctx, sc, 1, 100, false)
+
+	_, err = full.StateWaitMsg(ctx, sc, 1, 100, false)
 	require.NoError(t, err)
-	t.Logf("[*] message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
 
 	t.Log("[*] listing subnets")
 	sn, err := full.ListSubnets(ctx, address.RootSubnet)
@@ -286,10 +285,8 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	}, nil)
 	require.NoError(t, err)
 
-	t1 = time.Now()
-	c, err = full.StateWaitMsg(ctx, msg.Cid(), 1, 100, false)
+	_, err = full.StateWaitMsg(ctx, msg.Cid(), 1, 100, false)
 	require.NoError(t, err)
-	t.Logf(" [*] cross message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
 
 	msg, err = full.MpoolPushMessage(ctx, &types.Message{
 		To:    newAddr,
@@ -298,24 +295,19 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	}, nil)
 	require.NoError(t, err)
 
-	t1 = time.Now()
-	c, err = full.StateWaitMsg(ctx, msg.Cid(), 1, 100, false)
+	_, err = full.StateWaitMsg(ctx, msg.Cid(), 1, 100, false)
 	require.NoError(t, err)
-	t.Logf("[*] message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
 
-	t1 = time.Now()
-	bl, err := kit.WaitSubnetActorBalance(ctx, subnetAddr, addr, injectedFils, full)
+	_, err = kit.WaitSubnetActorBalance(ctx, subnetAddr, addr, injectedFils, full)
 	require.NoError(t, err)
-	t.Logf(" [*] sent funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
 
 	a, err := full.SubnetStateGetActor(ctx, subnetAddr, addr, types.EmptyTSK)
 	require.NoError(t, err)
 	t.Logf("[*] %s addr balance: %d", addr, a.Balance)
 	require.Equal(t, 0, big.Cmp(injectedFils, a.Balance))
 
-	bl, err = kit.WaitSubnetActorBalance(ctx, subnetAddr, newAddr, sentFils, full)
+	_, err = kit.WaitSubnetActorBalance(ctx, subnetAddr, newAddr, sentFils, full)
 	require.NoError(t, err)
-	t.Logf(" [*] sent funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
 
 	a, err = full.SubnetStateGetActor(ctx, subnetAddr, newAddr, types.EmptyTSK)
 	require.NoError(t, err)
@@ -329,14 +321,11 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	releaseCid, err := full.ReleaseFunds(ctx, newAddr, subnetAddr, releasedFils)
 	require.NoError(t, err)
 
-	c, err = full.SubnetStateWaitMsg(ctx, subnetAddr, releaseCid, 1, 100, false)
+	_, err = full.SubnetStateWaitMsg(ctx, subnetAddr, releaseCid, 1, 100, false)
 	require.NoError(t, err)
-	t.Logf("[*] release message was found in %d epoch of subnet", c.Height)
 
-	t1 = time.Now()
-	bl, err = kit.WaitSubnetActorBalance(ctx, parent, newAddr, big.Add(sentFils, releasedFils), full)
+	_, err = kit.WaitSubnetActorBalance(ctx, parent, newAddr, big.Add(sentFils, releasedFils), full)
 	require.NoError(t, err)
-	t.Logf("[*] released funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
 
 	a, err = full.StateGetActor(ctx, newAddr, types.EmptyTSK)
 	require.NoError(t, err)
@@ -523,17 +512,14 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 
 	sc, err := nodeA.JoinSubnet(ctx, minerA, big.Int(val), subnetAddr, "127.0.0.1:10015")
 	require.NoError(t, err)
-	t1 := time.Now()
-	c, err := nodeA.StateWaitMsg(ctx, sc, 1, 100, false)
+	_, err = nodeA.StateWaitMsg(ctx, sc, 1, 100, false)
 	require.NoError(t, err)
-	t.Logf("[*] node A: message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
 
 	sc, err = nodeB.JoinSubnet(ctx, minerB, big.Int(val), subnetAddr, "127.0.0.1:10016")
 	require.NoError(t, err)
-	t1 = time.Now()
-	c, err = nodeA.StateWaitMsg(ctx, sc, 1, 100, false)
+
+	_, err = nodeA.StateWaitMsg(ctx, sc, 1, 100, false)
 	require.NoError(t, err)
-	t.Logf("[*] node B: message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
 
 	t.Log("[*] listing subnets")
 	sn1, err := nodeA.ListSubnets(ctx, address.RootSubnet)
@@ -614,10 +600,8 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 	}, nil)
 	require.NoError(t, err)
 
-	t1 = time.Now()
-	c, err = nodeA.StateWaitMsg(ctx, msg.Cid(), 1, 100, false)
+	_, err = nodeA.StateWaitMsg(ctx, msg.Cid(), 1, 100, false)
 	require.NoError(t, err)
-	t.Logf(" [*] cross message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
 
 	msg, err = nodeA.MpoolPushMessage(ctx, &types.Message{
 		To:    subnetNewAddr,
@@ -626,37 +610,30 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 	}, nil)
 	require.NoError(t, err)
 
-	t1 = time.Now()
-	c, err = nodeA.StateWaitMsg(ctx, msg.Cid(), 1, 100, false)
+	_, err = nodeA.StateWaitMsg(ctx, msg.Cid(), 1, 100, false)
 	require.NoError(t, err)
-	t.Logf("[*] message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
 
-	c, err = nodeB.StateWaitMsg(ctx, msg.Cid(), 1, 100, false)
+	_, err = nodeB.StateWaitMsg(ctx, msg.Cid(), 1, 100, false)
 	require.NoError(t, err)
-	t.Logf("[*] message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
 
-	t1 = time.Now()
-	bl, err := kit.WaitSubnetActorBalance(ctx, subnetAddr, minerA, injectedFils, nodeA)
+	_, err = kit.WaitSubnetActorBalance(ctx, subnetAddr, minerA, injectedFils, nodeA)
 	require.NoError(t, err)
-	t.Logf(" [*] sent funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
 
 	a, err := nodeA.SubnetStateGetActor(ctx, subnetAddr, minerA, types.EmptyTSK)
 	require.NoError(t, err)
 	t.Logf("[*] %s addr balance: %d", minerA, a.Balance)
 	require.Equal(t, 0, big.Cmp(injectedFils, a.Balance))
 
-	bl, err = kit.WaitSubnetActorBalance(ctx, subnetAddr, subnetNewAddr, sentFils, nodeA)
+	_, err = kit.WaitSubnetActorBalance(ctx, subnetAddr, subnetNewAddr, sentFils, nodeA)
 	require.NoError(t, err)
-	t.Logf(" [*] sent funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
 
 	a, err = nodeA.SubnetStateGetActor(ctx, subnetAddr, subnetNewAddr, types.EmptyTSK)
 	require.NoError(t, err)
 	t.Logf("[*] node A %s new addr balance: %d", subnetNewAddr, a.Balance)
 	require.Equal(t, 0, big.Cmp(sentFils, a.Balance))
 
-	bl, err = kit.WaitSubnetActorBalance(ctx, subnetAddr, subnetNewAddr, sentFils, nodeB)
+	_, err = kit.WaitSubnetActorBalance(ctx, subnetAddr, subnetNewAddr, sentFils, nodeB)
 	require.NoError(t, err)
-	t.Logf(" [*] sent funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
 
 	b, err := nodeB.SubnetStateGetActor(ctx, subnetAddr, subnetNewAddr, types.EmptyTSK)
 	require.NoError(t, err)
@@ -871,10 +848,9 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 
 	sc1, err := nodeA.JoinSubnet(ctx, minerA, big.Int(val), subnetAAddr, "")
 	require.NoError(t, err)
-	t1 := time.Now()
-	c1, err := nodeA.StateWaitMsg(ctx, sc1, 1, 100, false)
+
+	_, err = nodeA.StateWaitMsg(ctx, sc1, 1, 100, false)
 	require.NoError(t, err)
-	t.Logf("[*] node A: message was found in %d epoch of root in %v sec", c1.Height, time.Since(t1).Seconds())
 
 	// Second subnet created on node B.
 	subnetBName := "testSubnetB"
@@ -893,10 +869,9 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 
 	sc2, err := nodeB.JoinSubnet(ctx, minerB, big.Int(val), subnetBAddr, "")
 	require.NoError(t, err)
-	t1 = time.Now()
-	c, err := nodeA.StateWaitMsg(ctx, sc2, 1, 100, false)
+
+	_, err = nodeA.StateWaitMsg(ctx, sc2, 1, 100, false)
 	require.NoError(t, err)
-	t.Logf("[*] node B: message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
 
 	t.Log("[*] listing subnets")
 	sn1, err := nodeA.ListSubnets(ctx, address.RootSubnet)
@@ -937,10 +912,8 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 	_, err = nodeA.FundSubnet(ctx, minerA, subnetAAddr, injectedFils)
 	require.NoError(t, err)
 
-	t1 = time.Now()
-	bl, err := kit.WaitSubnetActorBalance(ctx, subnetAAddr, minerA, injectedFils, nodeA)
+	_, err = kit.WaitSubnetActorBalance(ctx, subnetAAddr, minerA, injectedFils, nodeA)
 	require.NoError(t, err)
-	t.Logf(" [*] sent funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
 
 	aa, err := nodeA.SubnetStateGetActor(ctx, subnetAAddr, minerA, types.EmptyTSK)
 	require.NoError(t, err)
@@ -977,10 +950,8 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 	}, nil)
 	require.NoError(t, err)
 
-	t1 = time.Now()
-	c, err = nodeA.StateWaitMsg(ctx, msg.Cid(), 1, 100, false)
+	_, err = nodeA.StateWaitMsg(ctx, msg.Cid(), 1, 100, false)
 	require.NoError(t, err)
-	t.Logf(" [*] cross message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
 
 	msg, err = nodeA.MpoolPushMessage(ctx, &types.Message{
 		To:    subnetBNewAddr,
@@ -989,14 +960,11 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 	}, nil)
 	require.NoError(t, err)
 
-	t1 = time.Now()
-	c, err = nodeA.StateWaitMsg(ctx, msg.Cid(), 1, 100, false)
+	_, err = nodeA.StateWaitMsg(ctx, msg.Cid(), 1, 100, false)
 	require.NoError(t, err)
-	t.Logf("[*] message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
 
-	bl, err = kit.WaitSubnetActorBalance(ctx, subnetBAddr, subnetBNewAddr, sentFils, nodeB)
+	_, err = kit.WaitSubnetActorBalance(ctx, subnetBAddr, subnetBNewAddr, sentFils, nodeB)
 	require.NoError(t, err)
-	t.Logf(" [*] sent funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
 
 	ba, err := nodeB.SubnetStateGetActor(ctx, subnetBAddr, subnetBNewAddr, types.EmptyTSK)
 	require.NoError(t, err)
