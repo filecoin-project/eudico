@@ -70,7 +70,6 @@ func WaitSubnetActorBalance(ctx context.Context, subnetAddr addr.SubnetID, addr 
 			return 0, xerrors.New("finality timer exceeded")
 		}
 	}
-	// return 0, xerrors.New("unable to wait the target amount")
 }
 
 func WaitForBalance(ctx context.Context, addr addr.Address, balance uint64, api napi.FullNode) error {
@@ -110,18 +109,20 @@ func SubnetPerformHeightCheckForBlocks(ctx context.Context, validatedBlocksNumbe
 		return xerrors.New("wrong validated blocks number")
 	}
 
+	// ChainNotify returns channel with chain head updates.
+	// First message is guaranteed to be of len == 1, and type == 'current'.
+	// Without forks we can expect that its len always to be 1.
 	initHead := <-subnetHeads
 	if len(initHead) < 1 {
 		return xerrors.New("empty chain head")
 	}
-
 	currHeight := initHead[0].Val.Height()
+
 	head, err := api.SubnetChainHead(ctx, subnetAddr)
 	if err != nil {
 		return err
 	}
 	height := head.Height()
-
 	if height != currHeight {
 		return xerrors.New("wrong initial block height")
 	}
@@ -131,22 +132,22 @@ func SubnetPerformHeightCheckForBlocks(ctx context.Context, validatedBlocksNumbe
 		select {
 		case <-ctx.Done():
 			return xerrors.New("closed channel")
-		case <-subnetHeads:
+		case heads := <-subnetHeads:
+			if len(heads) != 1 {
+				return xerrors.New("chain head length is not one")
+			}
+
 			if i > validatedBlocksNumber {
 				return nil
 			}
-			i++
-			head, err := api.SubnetChainHead(ctx, subnetAddr)
-			if err != nil {
-				return err
-			}
-			height := head.Height()
+			height := heads[0].Val.Height()
 
 			if height <= currHeight {
 				return xerrors.Errorf("wrong %d block height: prev block height - %d, current head height - %d",
 					i, currHeight, height)
 			}
-			currHeight = head.Height()
+			currHeight = height
+			i++
 		}
 	}
 

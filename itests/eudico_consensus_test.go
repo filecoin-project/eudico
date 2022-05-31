@@ -311,9 +311,6 @@ func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
 		return
 	}
 	require.NoError(t, err)
-
-	err = ens.Stop()
-	require.NoError(t, err)
 }
 
 func runTSPoWConsensusTests(t *testing.T, opts ...interface{}) {
@@ -355,7 +352,7 @@ func (ts *eudicoConsensusSuite) testTSPoWMining(t *testing.T) {
 		}
 	}()
 
-	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 3, address.RootSubnet, full)
+	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 10, address.RootSubnet, full)
 	require.NoError(t, err)
 }
 
@@ -409,23 +406,24 @@ func (ts *eudicoConsensusSuite) testDelegatedMining(t *testing.T) {
 	initHead := (<-newHeads)[0]
 	baseHeight := initHead.Val.Height()
 
-	h1, err := full.ChainHead(ctx)
-	require.NoError(t, err)
-	require.Equal(t, int64(h1.Height()), int64(baseHeight))
+	h1 := <-newHeads
+	require.Equal(t, 1, len(h1))
+	require.Equal(t, int64(h1[0].Val.Height()), int64(baseHeight))
 
-	<-newHeads
+	h2 := <-newHeads
+	require.Equal(t, 1, len(h2))
+	require.Greater(t, int64(h2[0].Val.Height()), int64(h1[0].Val.Height()))
+	require.Equal(t, h2[0].Val.Blocks()[0].Miner, k.Address)
 
-	h2, err := full.ChainHead(ctx)
-	require.NoError(t, err)
-	require.Greater(t, int64(h2.Height()), int64(h1.Height()))
-	require.Equal(t, h2.Blocks()[0].Miner, k.Address)
+	h3 := <-newHeads
+	require.Equal(t, 1, len(h3))
+	require.Greater(t, int64(h3[0].Val.Height()), int64(h2[0].Val.Height()))
+	require.Equal(t, h3[0].Val.Blocks()[0].Miner, k.Address)
 
-	<-newHeads
-
-	h3, err := full.ChainHead(ctx)
-	require.NoError(t, err)
-	require.Greater(t, int64(h3.Height()), int64(h2.Height()))
-	require.Equal(t, h3.Blocks()[0].Miner, k.Address)
+	h4 := <-newHeads
+	require.Equal(t, 1, len(h4))
+	require.Greater(t, int64(h4[0].Val.Height()), int64(h3[0].Val.Height()))
+	require.Equal(t, h4[0].Val.Blocks()[0].Miner, k.Address)
 }
 
 func runTendermintConsensusTests(t *testing.T, opts ...interface{}) {
@@ -487,19 +485,21 @@ func (ts *eudicoConsensusSuite) testTendermintMining(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(h1.Height()), int64(baseHeight))
 
-	<-newHeads
+	h2 := <-newHeads
+	require.Equal(t, 1, len(h2))
+	require.Greater(t, int64(h2[0].Val.Height()), int64(h1.Height()))
+	require.Equal(t, h2[0].Val.Blocks()[0].Miner, k.Address)
 
-	h2, err := full.ChainHead(ctx)
-	require.NoError(t, err)
-	require.Greater(t, int64(h2.Height()), int64(h1.Height()))
-	require.Equal(t, h2.Blocks()[0].Miner, k.Address)
+	h3 := <-newHeads
+	require.Equal(t, 1, len(h3))
+	require.Greater(t, int64(h3[0].Val.Height()), int64(h2[0].Val.Height()))
+	require.Equal(t, h3[0].Val.Blocks()[0].Miner, k.Address)
 
-	<-newHeads
+	h4 := <-newHeads
+	require.Equal(t, 1, len(h4))
+	require.Greater(t, int64(h4[0].Val.Height()), int64(h3[0].Val.Height()))
+	require.Equal(t, h4[0].Val.Blocks()[0].Miner, k.Address)
 
-	h3, err := full.ChainHead(ctx)
-	require.NoError(t, err)
-	require.Greater(t, int64(h3.Height()), int64(h2.Height()))
-	require.Equal(t, h3.Blocks()[0].Miner, k.Address)
 }
 
 func runFilcnsConsensusTests(t *testing.T, opts ...interface{}) {
@@ -516,6 +516,6 @@ func (ts *eudicoConsensusSuite) testFilcnsMining(t *testing.T) {
 	bm := kit.NewBlockMiner(t, miner)
 	bm.MineBlocks(ctx, 1*time.Second)
 
-	err := kit.SubnetPerformHeightCheckForBlocks(ctx, 3, address.RootSubnet, full)
+	err := kit.SubnetPerformHeightCheckForBlocks(ctx, 5, address.RootSubnet, full)
 	require.NoError(t, err)
 }

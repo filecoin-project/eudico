@@ -19,6 +19,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/mir"
+	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/itests/kit"
@@ -33,7 +34,7 @@ func TestEudicoSubnetSmoke(t *testing.T) {
 
 func TestEudicoSubnetTwoNodesBasic(t *testing.T) {
 	t.Run("/root/pow-/subnet/mir", func(t *testing.T) {
-		runSubnetTestsTwoNodes(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetMir())
+		runSubnetTestsTwoNodes(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetMir())
 	})
 }
 
@@ -248,9 +249,6 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 		return
 	}
 
-	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 4, subnetAddr, full)
-	require.NoError(t, err)
-
 	// Inject new funds to the own address in the subnet.
 
 	t.Log("[*] funding subnet")
@@ -452,13 +450,6 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 
 	t.Log("[*] running consensus in root net")
 
-	err = os.Setenv(mir.ValidatorsEnv, fmt.Sprintf("%s@%s,%s@%s",
-		"/root:"+minerA.String(), "127.0.0.1:10005",
-		"/root:"+minerB.String(), "127.0.0.1:10006"))
-	require.NoError(t, err)
-
-	t.Log("[*] running consensus in root net")
-
 	wg.Add(2)
 
 	go func() {
@@ -467,7 +458,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 			wg.Done()
 			t.Log("[*] miner A in root net stopped")
 		}()
-		err := mir.Mine(ctx, minerA, nodeA)
+		err := tspow.Mine(ctx, minerA, nodeA)
 		if err != nil {
 			t.Error(err)
 			cancel()
@@ -481,7 +472,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 			wg.Done()
 			t.Log("[*] miner B in root net stopped")
 		}()
-		err := mir.Mine(ctx, minerB, nodeB)
+		err := tspow.Mine(ctx, minerB, nodeB)
 		if err != nil {
 			t.Error(err)
 			cancel()
@@ -489,13 +480,6 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 		}
 	}()
 
-	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 4, address.RootSubnet, nodeA)
-	require.NoError(t, err)
-
-	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 4, address.RootSubnet, nodeB)
-	require.NoError(t, err)
-
-	os.Unsetenv(mir.ValidatorsEnv) // nolint
 	t.Log("[*] adding and joining subnet")
 
 	parent := address.RootSubnet
@@ -564,8 +548,6 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 	require.NotEqual(t, 0, sn2[0].Subnet.Status)
 	require.Equal(t, hierarchical.Mir, sn2[0].Consensus)
 
-	t.Log("[*] run Mir in subnets")
-
 	t.Log("[*] miner A in subnet starting")
 	mp := hierarchical.MiningParams{}
 	err = nodeA.MineSubnet(ctx, minerA, subnetAddr, false, &mp)
@@ -576,6 +558,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 	}
 
 	t.Log("[*] miner B in subnet starting")
+
 	mp = hierarchical.MiningParams{}
 	err = nodeB.MineSubnet(ctx, minerB, subnetAddr, false, &mp)
 	if err != nil {
@@ -584,11 +567,101 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 		return
 	}
 
-	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 4, subnetAddr, nodeA)
+	err = kit.WaitForBalance(ctx, minerA, 20, nodeA)
 	require.NoError(t, err)
 
-	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 4, subnetAddr, nodeB)
+	err = kit.WaitForBalance(ctx, minerB, 20, nodeB)
 	require.NoError(t, err)
+
+	// Inject new funds to the own address in the subnet.
+
+	t.Log("[*] funding subnet")
+	injectedFils := big.Int(types.MustParseFIL("3"))
+	_, err = nodeA.FundSubnet(ctx, minerA, subnetAddr, injectedFils)
+	require.NoError(t, err)
+
+	// Send a message to the new address.
+	t.Log("[*] sending a message")
+
+	sentFils := big.Int(types.MustParseFIL("3"))
+	require.NoError(t, err)
+
+	subnetNewAddr, err := nodeA.WalletNew(ctx, types.KTSecp256k1)
+	require.NoError(t, err)
+	t.Logf("[*] subnet new addr: %s", subnetNewAddr)
+
+	var params lcli.SendParams
+	params.Method = builtin.MethodSend
+	params.To = subnetNewAddr
+	params.From = minerA
+	params.Val = sentFils
+	proto, err := kit.MessageForSend(ctx, nodeA, params)
+	require.NoError(t, err)
+
+	crossParams := &sca.CrossMsgParams{
+		Destination: subnetAddr,
+		Msg:         proto.Message,
+	}
+	serparams, err := actors.SerializeParams(crossParams)
+	require.NoError(t, err)
+
+	msg, err := nodeA.MpoolPushMessage(ctx, &types.Message{
+		To:     hierarchical.SubnetCoordActorAddr,
+		From:   params.From,
+		Value:  params.Val,
+		Method: sca.Methods.SendCross,
+		Params: serparams,
+	}, nil)
+	require.NoError(t, err)
+
+	t1 = time.Now()
+	c, err = nodeA.StateWaitMsg(ctx, msg.Cid(), 1, 100, false)
+	require.NoError(t, err)
+	t.Logf(" [*] cross message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
+
+	msg, err = nodeA.MpoolPushMessage(ctx, &types.Message{
+		To:    subnetNewAddr,
+		From:  params.From,
+		Value: sentFils,
+	}, nil)
+	require.NoError(t, err)
+
+	t1 = time.Now()
+	c, err = nodeA.StateWaitMsg(ctx, msg.Cid(), 1, 100, false)
+	require.NoError(t, err)
+	t.Logf("[*] message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
+
+	c, err = nodeB.StateWaitMsg(ctx, msg.Cid(), 1, 100, false)
+	require.NoError(t, err)
+	t.Logf("[*] message was found in %d epoch of root in %v sec", c.Height, time.Since(t1).Seconds())
+
+	t1 = time.Now()
+	bl, err := kit.WaitSubnetActorBalance(ctx, subnetAddr, minerA, injectedFils, nodeA)
+	require.NoError(t, err)
+	t.Logf(" [*] sent funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
+
+	a, err := nodeA.SubnetStateGetActor(ctx, subnetAddr, minerA, types.EmptyTSK)
+	require.NoError(t, err)
+	t.Logf("[*] %s addr balance: %d", minerA, a.Balance)
+	require.Equal(t, 0, big.Cmp(injectedFils, a.Balance))
+
+	bl, err = kit.WaitSubnetActorBalance(ctx, subnetAddr, subnetNewAddr, sentFils, nodeA)
+	require.NoError(t, err)
+	t.Logf(" [*] sent funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
+
+	a, err = nodeA.SubnetStateGetActor(ctx, subnetAddr, subnetNewAddr, types.EmptyTSK)
+	require.NoError(t, err)
+	t.Logf("[*] node A %s new addr balance: %d", subnetNewAddr, a.Balance)
+	require.Equal(t, 0, big.Cmp(sentFils, a.Balance))
+
+	bl, err = kit.WaitSubnetActorBalance(ctx, subnetAddr, subnetNewAddr, sentFils, nodeB)
+	require.NoError(t, err)
+	t.Logf(" [*] sent funds in %v sec and %d blocks", time.Since(t1).Seconds(), bl)
+
+	b, err := nodeB.SubnetStateGetActor(ctx, subnetAddr, subnetNewAddr, types.EmptyTSK)
+	require.NoError(t, err)
+	t.Logf("[*] node B %s new addr balance: %d", subnetNewAddr, b.Balance)
+	require.Equal(t, 0, big.Cmp(sentFils, a.Balance))
 
 	t.Log("[*] miner A in subnet stopping")
 	err = nodeA.MineSubnet(ctx, minerA, subnetAddr, true, &mp)
@@ -803,7 +876,7 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("[*] node A: message was found in %d epoch of root in %v sec", c1.Height, time.Since(t1).Seconds())
 
-	// Second subnet
+	// Second subnet created on node B.
 	subnetBName := "testSubnetB"
 	subnetBActor, err := nodeB.AddSubnet(ctx, minerB, parent, subnetBName, uint64(hierarchical.PoW), minerStake, checkPeriod, hp)
 	require.NoError(t, err)
@@ -836,41 +909,6 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 
 	t.Log("[*] run PoW in each subnet")
 
-	/*
-		wg.Add(2)
-
-		go func() {
-			t.Log("[*] subnet A miner started")
-			defer func() {
-				wg.Done()
-				t.Log("[*] subnet A miner stopped")
-			}()
-			mp := hierarchical.MiningParams{}
-			err := nodeA.MineSubnet(ctx, minerA, subnetAAddr, false, &mp)
-			if err != nil {
-				t.Error(err)
-				cancel()
-				return
-			}
-		}()
-
-		go func() {
-			t.Log("[*] subnet B miner started")
-			defer func() {
-				wg.Done()
-				t.Log("[*] subnet B miner stopped")
-			}()
-			mp := hierarchical.MiningParams{}
-			err := nodeB.MineSubnet(ctx, minerB, subnetBAddr, false, &mp)
-			if err != nil {
-				t.Error(err)
-				cancel()
-				return
-			}
-		}()
-
-	*/
-
 	t.Log("[*] subnet A miner starting")
 	mp := hierarchical.MiningParams{}
 	err = nodeA.MineSubnet(ctx, minerA, subnetAAddr, false, &mp)
@@ -889,13 +927,7 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 		return
 	}
 
-	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 4, subnetAAddr, nodeA)
-	require.NoError(t, err)
-
-	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 4, subnetBAddr, nodeB)
-	require.NoError(t, err)
-
-	// Sending message from subnet A to subnet B
+	// Sending a message from subnet A to subnet B
 	subnetBNewAddr, err := nodeB.WalletNew(ctx, types.KTSecp256k1)
 	require.NoError(t, err)
 	t.Logf("[*] subnet B new addr: %s", subnetBNewAddr)
@@ -915,7 +947,7 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 	t.Logf("[*] subnet A %s addr balance: %d", subnetAAddr, aa.Balance)
 	require.Equal(t, 0, big.Cmp(injectedFils, aa.Balance))
 
-	// Send nodeA message to new address.
+	// Send node A message to new address.
 	t.Log("[*] sending a cross-subnet message")
 
 	sentFils := big.Int(types.MustParseFIL("3"))
