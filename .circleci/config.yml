@@ -164,7 +164,7 @@ jobs:
         default: golang
       go-test-flags:
         type: string
-        default: "-tags=2k -timeout 30m"
+        default: "-tags=2k -timeout 40m"
         description: Flags passed to go test.
       target:
         type: string
@@ -812,7 +812,7 @@ workflows:
       - test-subnet-races:
           name: hierarchical-test-subnet-with-race-detector
           suite: hierarchical-consensus
-          go-test-flags: "-race -tags=2k -timeout 30m"
+          go-test-flags: "-race -tags=2k -timeout 40m"
           target: "./itests/eudico_subnet_test.go"
           requires:
             - hierarchical-test-subnet

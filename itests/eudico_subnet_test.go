@@ -699,7 +699,6 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 	err = os.Setenv(mir.ValidatorsEnv, fmt.Sprintf("%s@%s,%s@%s",
 		"/root:"+minerA.String(), "127.0.0.1:10005",
 		"/root:"+minerB.String(), "127.0.0.1:10006"))
-	defer os.Unsetenv(mir.ValidatorsEnv) // nolint
 	require.NoError(t, err)
 
 	t.Log("[*] running consensus in root net")
@@ -745,6 +744,8 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 
 	err = kit.WaitForBalance(ctx, minerB, 20, nodeB)
 	require.NoError(t, err)
+
+	os.Unsetenv(mir.ValidatorsEnv) // nolint
 
 	balance1, err := nodeA.WalletBalance(ctx, minerA)
 	require.NoError(t, err)
