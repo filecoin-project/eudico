@@ -6,9 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
+	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
 	verifreg0 "github.com/filecoin-project/specs-actors/actors/builtin/verifreg"
 	adt0 "github.com/filecoin-project/specs-actors/actors/util/adt"
@@ -16,9 +14,6 @@ import (
 	"github.com/filecoin-project/go-state-types/network"
 
 	"github.com/filecoin-project/lotus/chain/actors/builtin/multisig"
-
-	"github.com/filecoin-project/lotus/chain/consensus/actors/registry"
-	rew "github.com/filecoin-project/lotus/chain/consensus/actors/reward"
 
 	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/account"
@@ -182,7 +177,7 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 
 	// Setup reward
 	// RewardActor's state is overwritten by SetupStorageMiners, but needs to exist for miner creation messages
-	rewact, err := SetupHierarchicalRewardActor(ctx, bs, big.Zero(), av)
+	rewact, err := SetupRewardActor(ctx, bs, big.Zero(), av)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup reward actor: %w", err)
 	}
@@ -199,22 +194,6 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 	}
 	if err := state.SetActor(cron.Address, cronact); err != nil {
 		return nil, nil, xerrors.Errorf("set cron actor: %w", err)
-	}
-
-	// Setup sca actor
-	// FIXME: make it configurable?
-	checkPeriod := abi.ChainEpoch(100)
-	params := &sca.ConstructorParams{
-		NetworkName:      template.NetworkName,
-		CheckpointPeriod: uint64(checkPeriod),
-	}
-	scaact, err := SetupSCAActor(ctx, bs, params)
-	if err != nil {
-		return nil, nil, err
-	}
-	err = state.SetActor(hierarchical.SubnetCoordActorAddr, scaact)
-	if err != nil {
-		return nil, nil, xerrors.Errorf("set SCA actor: %w", err)
 	}
 
 	// Create empty power actor
@@ -397,7 +376,7 @@ func MakeAccountActor(ctx context.Context, cst cbor.IpldStore, av actors.Version
 		return nil, err
 	}
 
-	actcid, err := account.GetActorCodeID(av)
+	actcid, err := builtin.GetAccountActorCodeID(av)
 	if err != nil {
 		return nil, err
 	}
@@ -479,7 +458,7 @@ func CreateMultisigAccount(ctx context.Context, cst cbor.IpldStore, state *state
 		return err
 	}
 
-	actcid, err := multisig.GetActorCodeID(av)
+	actcid, err := builtin.GetMultisigActorCodeID(av)
 	if err != nil {
 		return err
 	}
@@ -509,14 +488,14 @@ func VerifyPreSealedData(ctx context.Context, cs *store.ChainStore, sys vm.Sysca
 		Epoch:          0,
 		Rand:           &fakeRand{},
 		Bstore:         cs.StateBlockstore(),
-		Actors:         registry.NewActorRegistry(),
+		Actors:         filcns.NewActorRegistry(),
 		Syscalls:       mkFakedSigSyscalls(sys),
 		CircSupplyCalc: csc,
 		FilVested:      big.Zero(),
 		NetworkVersion: nv,
 		BaseFee:        big.Zero(),
 	}
-	vm, err := vm.NewLegacyVM(ctx, &vmopt)
+	vm, err := vm.NewVM(ctx, &vmopt)
 	if err != nil {
 		return cid.Undef, xerrors.Errorf("failed to create NewLegacyVM: %w", err)
 	}
@@ -610,7 +589,6 @@ func MakeGenesisBlock(ctx context.Context, j journal.Journal, bs bstore.Blocksto
 	mm := &types.MsgMeta{
 		BlsMessages:   emptyroot,
 		SecpkMessages: emptyroot,
-		CrossMessages: emptyroot,
 	}
 	mmb, err := mm.ToStorageBlock()
 	if err != nil {
@@ -684,47 +662,4 @@ func MakeGenesisBlock(ctx context.Context, j journal.Journal, bs bstore.Blocksto
 	return &GenesisBootstrap{
 		Genesis: b,
 	}, nil
-}
-
-func SetupSCAActor(ctx context.Context, bs bstore.Blockstore, params *sca.ConstructorParams) (*types.Actor, error) {
-	cst := cbor.NewCborStore(bs)
-	st, err := sca.ConstructSCAState(adt.WrapStore(ctx, cst), params)
-	if err != nil {
-		return nil, err
-	}
-
-	statecid, err := cst.Put(ctx, st)
-	if err != nil {
-		return nil, err
-	}
-
-	act := &types.Actor{
-		Code:    actor.SubnetCoordActorCodeID,
-		Balance: big.Zero(),
-		Head:    statecid,
-	}
-
-	return act, nil
-}
-
-func SetupHierarchicalRewardActor(ctx context.Context, bs bstore.Blockstore, qaPower big.Int, av actors.Version) (*types.Actor, error) {
-	cst := cbor.NewCborStore(bs)
-	rst := rew.ConstructState(qaPower)
-
-	statecid, err := cst.Put(ctx, rst)
-	if err != nil {
-		return nil, err
-	}
-
-	// NOTE: For now, everything in the reward actor is the same except the code,
-	// where we included an additional method to fund accounts. This may change
-	// in the future when we design specific reward system for subnets.
-	act := &types.Actor{
-		Code: actor.RewardActorCodeID,
-		// NOTE: This sets up the initial balance of the reward actor.
-		Balance: types.BigInt{Int: build.InitialRewardBalance},
-		Head:    statecid,
-	}
-
-	return act, nil
 }

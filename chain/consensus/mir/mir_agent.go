@@ -5,12 +5,10 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"time"
 
 	logging "github.com/ipfs/go-log/v2"
 	"golang.org/x/xerrors"
 
-	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/mir"
 	mirCrypto "github.com/filecoin-project/mir/pkg/crypto"
@@ -145,7 +143,7 @@ func (m *MirAgent) Start(ctx context.Context) chan error {
 	}()
 
 	go func() {
-		errChan <- m.Node.Run(ctx, time.NewTicker(time.Duration(build.MirTimer)*time.Millisecond).C)
+		errChan <- m.Node.Run(ctx)
 		agentCancel()
 	}()
 

@@ -237,7 +237,7 @@ func (c *ClientNodeAdapter) ValidatePublishedDeal(ctx context.Context, deal stor
 			dealIdx, len(params.Deals), pubmsg.Cid())
 	}
 
-	valid, outIdx, err := res.IsDealValid(uint64(dealIdx))
+	valid, err := res.IsDealValid(uint64(dealIdx))
 	if err != nil {
 		return 0, xerrors.Errorf("determining deal validity: %w", err)
 	}
@@ -246,7 +246,7 @@ func (c *ClientNodeAdapter) ValidatePublishedDeal(ctx context.Context, deal stor
 		return 0, xerrors.New("deal was invalid at publication")
 	}
 
-	return dealIDs[outIdx], nil
+	return dealIDs[dealIdx], nil
 }
 
 var clientOverestimation = struct {

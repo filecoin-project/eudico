@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"os"
-	"sync/atomic"
 	"time"
 
 	"github.com/ipfs/go-cid"
@@ -315,7 +314,6 @@ func NewFVM(ctx context.Context, opts *VMOpts) (*FVM, error) {
 
 func (vm *FVM) ApplyMessage(ctx context.Context, cmsg types.ChainMsg) (*ApplyRet, error) {
 	start := build.Clock.Now()
-	defer atomic.AddUint64(&StatApplied, 1)
 	msgBytes, err := cmsg.VMMessage().Serialize()
 	if err != nil {
 		return nil, xerrors.Errorf("serializing msg: %w", err)
@@ -365,7 +363,6 @@ func (vm *FVM) ApplyMessage(ctx context.Context, cmsg types.ChainMsg) (*ApplyRet
 
 func (vm *FVM) ApplyImplicitMessage(ctx context.Context, cmsg *types.Message) (*ApplyRet, error) {
 	start := build.Clock.Now()
-	defer atomic.AddUint64(&StatApplied, 1)
 	msgBytes, err := cmsg.VMMessage().Serialize()
 	if err != nil {
 		return nil, xerrors.Errorf("serializing msg: %w", err)

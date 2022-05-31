@@ -17,6 +17,7 @@ import (
 	auth "github.com/filecoin-project/go-jsonrpc/auth"
 	abi "github.com/filecoin-project/go-state-types/abi"
 	big "github.com/filecoin-project/go-state-types/big"
+	miner "github.com/filecoin-project/go-state-types/builtin/v8/miner"
 	paych "github.com/filecoin-project/go-state-types/builtin/v8/paych"
 	crypto "github.com/filecoin-project/go-state-types/crypto"
 	dline "github.com/filecoin-project/go-state-types/dline"
@@ -24,7 +25,6 @@ import (
 	api "github.com/filecoin-project/lotus/api"
 	apitypes "github.com/filecoin-project/lotus/api/types"
 	v0api "github.com/filecoin-project/lotus/api/v0api"
-	miner "github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	miner0 "github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	hierarchical "github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	sca "github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
@@ -2530,21 +2530,6 @@ func (m *MockFullNode) StateGetActor(arg0 context.Context, arg1 address.Address,
 func (mr *MockFullNodeMockRecorder) StateGetActor(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StateGetActor", reflect.TypeOf((*MockFullNode)(nil).StateGetActor), arg0, arg1, arg2)
-}
-
-// StateGetNetworkParams mocks base method.
-func (m *MockFullNode) StateGetNetworkParams(arg0 context.Context) (*api.NetworkParams, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StateGetNetworkParams", arg0)
-	ret0, _ := ret[0].(*api.NetworkParams)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// StateGetNetworkParams indicates an expected call of StateGetNetworkParams.
-func (mr *MockFullNodeMockRecorder) StateGetNetworkParams(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StateGetNetworkParams", reflect.TypeOf((*MockFullNode)(nil).StateGetNetworkParams), arg0)
 }
 
 // StateGetRandomnessFromBeacon mocks base method.

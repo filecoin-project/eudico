@@ -693,7 +693,7 @@ func SetupStorageMarketActor(ctx context.Context, bs blockstore.Blockstore, av a
 		return nil, err
 	}
 
-	actcid, err := market.GetActorCodeID(av)
+	actcid, err := actbuiltin.GetMarketActorCodeID(av)
 	if err != nil {
 		return nil, err
 	}
@@ -720,7 +720,7 @@ func SetupStoragePowerActor(ctx context.Context, bs blockstore.Blockstore, av ac
 		return nil, err
 	}
 
-	actcid, err := power.GetActorCodeID(av)
+	actcid, err := actbuiltin.GetPowerActorCodeID(av)
 	if err != nil {
 		return nil, err
 	}

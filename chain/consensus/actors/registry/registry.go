@@ -1,7 +1,7 @@
 package registry
 
 import (
-	exported7 "github.com/filecoin-project/specs-actors/v7/actors/builtin/exported"
+	exported8 "github.com/filecoin-project/specs-actors/v7/actors/builtin/exported"
 
 	"github.com/filecoin-project/lotus/chain/actors"
 	replace "github.com/filecoin-project/lotus/chain/consensus/actors/atomic-replace"
@@ -17,17 +17,17 @@ func NewActorRegistry() *vm.ActorRegistry {
 	inv := vm.NewActorRegistry()
 
 	// TODO: drop unneeded
-	inv.Register(vm.ActorsVersionPredicate(actors.Version7), exported7.BuiltinActors()...)
-	inv.Register(nil, initactor.InitActor{}) // use our custom init actor
+	inv.Register(actors.Version8, vm.ActorsVersionPredicate(actors.Version8), exported8.BuiltinActors()...)
+	inv.Register(actors.Version8, nil, initactor.InitActor{}) // use our custom init actor
 
 	// Hierarchical consensus
-	inv.Register(nil, reward.Actor{})
-	inv.Register(nil, subnet.SubnetActor{})
-	inv.Register(nil, sca.SubnetCoordActor{})
+	inv.Register(actors.Version8, nil, reward.Actor{})
+	inv.Register(actors.Version8, nil, subnet.SubnetActor{})
+	inv.Register(actors.Version8, nil, sca.SubnetCoordActor{})
 
 	// Custom actors
-	inv.Register(nil, split.SplitActor{})
-	inv.Register(nil, replace.ReplaceActor{})
+	inv.Register(actors.Version8, nil, split.SplitActor{})
+	inv.Register(actors.Version8, nil, replace.ReplaceActor{})
 
 	return inv
 }
