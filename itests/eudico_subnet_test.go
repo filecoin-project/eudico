@@ -19,7 +19,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/mir"
-	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/itests/kit"
@@ -34,7 +33,7 @@ func TestEudicoSubnetSmoke(t *testing.T) {
 
 func TestEudicoSubnetTwoNodesBasic(t *testing.T) {
 	t.Run("/root/pow-/subnet/mir", func(t *testing.T) {
-		runSubnetTestsTwoNodes(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetMir())
+		runSubnetTestsTwoNodes(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetMir())
 	})
 }
 
@@ -439,6 +438,11 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 
 	t.Log("[*] running consensus in root net")
 
+	err = os.Setenv(mir.ValidatorsEnv, fmt.Sprintf("%s@%s,%s@%s",
+		"/root:"+minerA.String(), "127.0.0.1:10005",
+		"/root:"+minerB.String(), "127.0.0.1:10006"))
+	require.NoError(t, err)
+
 	wg.Add(2)
 
 	go func() {
@@ -447,7 +451,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 			wg.Done()
 			t.Log("[*] miner A in root net stopped")
 		}()
-		err := tspow.Mine(ctx, minerA, nodeA)
+		err := mir.Mine(ctx, minerA, nodeA)
 		if err != nil {
 			t.Error(err)
 			cancel()
@@ -461,7 +465,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 			wg.Done()
 			t.Log("[*] miner B in root net stopped")
 		}()
-		err := tspow.Mine(ctx, minerB, nodeB)
+		err := mir.Mine(ctx, minerB, nodeB)
 		if err != nil {
 			t.Error(err)
 			cancel()
@@ -489,6 +493,8 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 	balance2, err := nodeB.WalletBalance(ctx, minerB)
 	require.NoError(t, err)
 	t.Logf("[*] node B %s balance: %d", minerB, balance2)
+
+	os.Unsetenv(mir.ValidatorsEnv) // nolint
 
 	hp := &hierarchical.ConsensusParams{
 		MinValidators: 2,
@@ -675,27 +681,6 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 			notStopped = false
 		}
 	}
-
-	// Leaving the subnet.
-
-	t.Log("[*] leaving subnet")
-	_, err = nodeA.LeaveSubnet(ctx, minerA, subnetAddr)
-	require.NoError(t, err)
-
-	sn1, err = nodeA.ListSubnets(ctx, address.RootSubnet)
-	require.NoError(t, err)
-	require.Equal(t, 1, len(sn1))
-	require.NotEqual(t, 0, sn1[0].Subnet.Status)
-
-	_, err = nodeB.LeaveSubnet(ctx, minerB, subnetAddr)
-	require.NoError(t, err)
-
-	sn2, err = nodeB.ListSubnets(ctx, address.RootSubnet)
-	require.NoError(t, err)
-	require.Equal(t, 1, len(sn2))
-	require.NotEqual(t, 0, sn2[0].Subnet.Status)
-
-	t.Logf("[*] test time: %v\n", time.Since(startTime).Seconds())
 }
 
 func runSubnetTwoNodesCrossMessage(t *testing.T, opts ...interface{}) {
