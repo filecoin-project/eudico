@@ -32,7 +32,7 @@ func TestEudicoSubnetSmoke(t *testing.T) {
 }
 
 func TestEudicoSubnetTwoNodesBasic(t *testing.T) {
-	t.Run("/root/pow-/subnet/mir", func(t *testing.T) {
+	t.Run("/root/mir-/subnet/mir", func(t *testing.T) {
 		runSubnetTestsTwoNodes(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetMir())
 	})
 }
@@ -44,20 +44,12 @@ func TestEudicoSubnetTwoNodesCrossMessage(t *testing.T) {
 }
 
 func TestEudicoSubnetMir(t *testing.T) {
-	t.Run("/root/mir-/subnet/dummy", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDummy())
-	})
-
 	t.Run("/root/dummy-/subnet/mir", func(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetMir(), kit.MinValidators(1), kit.ValidatorAddress("127.0.0.1:11001"))
 	})
 
 	t.Run("/root/mir-/subnet/delegated", func(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDelegated())
-	})
-
-	t.Run("/root/delegated-/subnet/mir", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetMir(), kit.MinValidators(1), kit.ValidatorAddress("127.0.0.1:11002"))
 	})
 }
 
@@ -156,7 +148,6 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 
 	n, valAddr := ens.ValidatorInfo()
 
-	startTime := time.Now()
 	addr, err := full.WalletDefaultAddress(ctx)
 	require.NoError(t, err)
 	t.Logf("[*] wallet addr: %s", addr)
@@ -196,7 +187,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	minerStake := abi.NewStoragePower(1e8)
 	checkPeriod := abi.ChainEpoch(10)
 
-	err = kit.WaitForBalance(ctx, addr, 20, full)
+	err = kit.WaitForBalance(ctx, addr, 12, full)
 	require.NoError(t, err)
 
 	balance, err := full.WalletBalance(ctx, addr)
@@ -339,20 +330,6 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	err = full.MineSubnet(ctx, addr, subnetAddr, true, &mp)
 	require.NoError(t, err)
 
-	newHeads, err := full.SubnetChainNotify(ctx, subnetAddr)
-	require.NoError(t, err)
-
-	notStopped := true
-	for notStopped {
-		select {
-		case b := <-newHeads:
-			t.Logf("[*] stopping mining: mined a block: %d", b[0].Val.Height())
-		default:
-			t.Log("[*] miner stopped eventually")
-			notStopped = false
-		}
-	}
-
 	// Leaving the subnet.
 
 	t.Log("[*] leaving subnet")
@@ -363,8 +340,6 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(sn))
 	require.NotEqual(t, 0, sn[0].Subnet.Status)
-
-	t.Logf("[*] test time: %v\n", time.Since(startTime).Seconds())
 }
 
 func runSubnetTestsTwoNodes(t *testing.T, opts ...interface{}) {
@@ -652,34 +627,6 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 	t.Log("[*] miner B in subnet stopping")
 	err = nodeB.MineSubnet(ctx, minerB, subnetAddr, true, &mp)
 	require.NoError(t, err)
-
-	newHeads, err := nodeA.SubnetChainNotify(ctx, subnetAddr)
-	require.NoError(t, err)
-
-	notStopped := true
-	for notStopped {
-		select {
-		case b := <-newHeads:
-			t.Logf("[*] node A: stopping mining: mined a block: %d", b[0].Val.Height())
-		default:
-			t.Log("[*] node A: stopped miner eventually")
-			notStopped = false
-		}
-	}
-
-	newHeads, err = nodeB.SubnetChainNotify(ctx, subnetAddr)
-	require.NoError(t, err)
-
-	notStopped = true
-	for notStopped {
-		select {
-		case b := <-newHeads:
-			t.Logf("[*] node B: stopping mining: mined a block: %d", b[0].Val.Height())
-		default:
-			t.Log("[*] node B: stopped miner eventually")
-			notStopped = false
-		}
-	}
 }
 
 func runSubnetTwoNodesCrossMessage(t *testing.T, opts ...interface{}) {
@@ -962,32 +909,4 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 	t.Log("[*] miner B in subnet stopping")
 	err = nodeB.MineSubnet(ctx, minerB, subnetBAddr, true, &mp)
 	require.NoError(t, err)
-
-	newHeads, err := nodeA.SubnetChainNotify(ctx, subnetAAddr)
-	require.NoError(t, err)
-
-	notStopped := true
-	for notStopped {
-		select {
-		case b := <-newHeads:
-			t.Logf("[*] node A: stopping mining: mined a block: %d", b[0].Val.Height())
-		default:
-			t.Log("[*] node A: stopped miner eventually")
-			notStopped = false
-		}
-	}
-
-	newHeads, err = nodeB.SubnetChainNotify(ctx, subnetBAddr)
-	require.NoError(t, err)
-
-	notStopped = true
-	for notStopped {
-		select {
-		case b := <-newHeads:
-			t.Logf("[*] node B: stopping mining: mined a block: %d", b[0].Val.Height())
-		default:
-			t.Log("[*] node B: stopped miner eventually")
-			notStopped = false
-		}
-	}
 }
