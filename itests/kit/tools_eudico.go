@@ -109,11 +109,22 @@ func SubnetPerformHeightCheckForBlocks(ctx context.Context, validatedBlocksNumbe
 	if validatedBlocksNumber < 2 || validatedBlocksNumber > 100 {
 		return xerrors.New("wrong validated blocks number")
 	}
+
 	initHead := <-subnetHeads
 	if len(initHead) < 1 {
 		return xerrors.New("empty chain head")
 	}
-	prevHeight := initHead[0].Val.Height()
+
+	currHeight := initHead[0].Val.Height()
+	head, err := api.SubnetChainHead(ctx, subnetAddr)
+	if err != nil {
+		return err
+	}
+	height := head.Height()
+
+	if height != currHeight {
+		return xerrors.New("wrong initial block height")
+	}
 
 	i := 1
 	for i < validatedBlocksNumber {
@@ -124,17 +135,18 @@ func SubnetPerformHeightCheckForBlocks(ctx context.Context, validatedBlocksNumbe
 			if i > validatedBlocksNumber {
 				return nil
 			}
+			i++
 			head, err := api.SubnetChainHead(ctx, subnetAddr)
 			if err != nil {
 				return err
 			}
 			height := head.Height()
-			if head.Height() <= prevHeight {
-				return xerrors.Errorf("wrong %d block height: prev block height - %d, current head - %d",
-					i, prevHeight, height)
+
+			if height <= currHeight {
+				return xerrors.Errorf("wrong %d block height: prev block height - %d, current head height - %d",
+					i, currHeight, height)
 			}
-			prevHeight = head.Height()
-			i++
+			currHeight = head.Height()
 		}
 	}
 
