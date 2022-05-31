@@ -15,7 +15,7 @@ func (m *Manager) WorkerStats(ctx context.Context) map[uuid.UUID]storiface.Worke
 
 	out := map[uuid.UUID]storiface.WorkerStats{}
 
-	cb := func(ctx context.Context, id storiface.WorkerID, handle *WorkerHandle) {
+	cb := func(ctx context.Context, id storiface.WorkerID, handle *workerHandle) {
 		handle.lk.Lock()
 
 		ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
@@ -32,25 +32,18 @@ func (m *Manager) WorkerStats(ctx context.Context) map[uuid.UUID]storiface.Worke
 		}
 
 		out[uuid.UUID(id)] = storiface.WorkerStats{
-			Info:       handle.Info,
+			Info:       handle.info,
 			Tasks:      taskList,
-			Enabled:    handle.Enabled,
+			Enabled:    handle.enabled,
 			MemUsedMin: handle.active.memUsedMin,
 			MemUsedMax: handle.active.memUsedMax,
 			GpuUsed:    handle.active.gpuUsed,
 			CpuUse:     handle.active.cpuUse,
-
-			TaskCounts: map[string]int{},
 		}
-
-		for tt, count := range handle.active.taskCounters {
-			out[uuid.UUID(id)].TaskCounts[tt.String()] = count
-		}
-
 		handle.lk.Unlock()
 	}
 
-	for id, handle := range m.sched.Workers {
+	for id, handle := range m.sched.workers {
 		cb(ctx, id, handle)
 	}
 
@@ -79,14 +72,14 @@ func (m *Manager) WorkerJobs() map[uuid.UUID][]storiface.WorkerJob {
 
 	m.sched.workersLk.RLock()
 
-	for id, handle := range m.sched.Workers {
+	for id, handle := range m.sched.workers {
 		handle.wndLk.Lock()
 		for wi, window := range handle.activeWindows {
-			for _, request := range window.Todo {
+			for _, request := range window.todo {
 				out[uuid.UUID(id)] = append(out[uuid.UUID(id)], storiface.WorkerJob{
 					ID:      storiface.UndefCall,
-					Sector:  request.Sector.ID,
-					Task:    request.TaskType,
+					Sector:  request.sector.ID,
+					Task:    request.taskType,
 					RunWait: wi + 2,
 					Start:   request.start,
 				})

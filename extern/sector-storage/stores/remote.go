@@ -95,8 +95,6 @@ func (r *Remote) AcquireSector(ctx context.Context, s storage.SectorRef, existin
 		return storiface.SectorPaths{}, storiface.SectorPaths{}, xerrors.New("can't both find and allocate a sector")
 	}
 
-	// First make sure that no other goroutines are trying to fetch this sector;
-	// wait if there are any.
 	for {
 		r.fetchLk.Lock()
 
@@ -124,7 +122,6 @@ func (r *Remote) AcquireSector(ctx context.Context, s storage.SectorRef, existin
 		r.fetchLk.Unlock()
 	}()
 
-	// Try to get the sector from local storage
 	paths, stores, err := r.local.AcquireSector(ctx, s, existing, allocate, pathType, op)
 	if err != nil {
 		return storiface.SectorPaths{}, storiface.SectorPaths{}, xerrors.Errorf("local acquire error: %w", err)
@@ -151,9 +148,6 @@ func (r *Remote) AcquireSector(ctx context.Context, s storage.SectorRef, existin
 		odt = storiface.FsOverheadFinalized
 	}
 
-	// If any path types weren't found in local storage, try fetching them
-
-	// First reserve storage
 	releaseStorage, err := r.local.Reserve(ctx, s, toFetch, ids, odt)
 	if err != nil {
 		return storiface.SectorPaths{}, storiface.SectorPaths{}, xerrors.Errorf("reserving storage space: %w", err)
@@ -833,7 +827,7 @@ func (r *Remote) GenerateSingleVanillaProof(ctx context.Context, minerID abi.Act
 					log.Error("response close: ", err)
 				}
 
-				return nil, xerrors.Errorf("non-200 code from %s: '%s'", url, strings.TrimSpace(string(body)))
+				return nil, xerrors.Errorf("non-200 code from %s: '%s'", url, string(body))
 			}
 
 			body, err := ioutil.ReadAll(resp.Body)

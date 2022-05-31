@@ -3,6 +3,7 @@ package vm
 import (
 	"bytes"
 	"context"
+	"os"
 	"sync/atomic"
 	"time"
 
@@ -13,8 +14,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/policy"
 
 	"github.com/filecoin-project/go-state-types/network"
-
-	"github.com/filecoin-project/go-state-types/big"
 
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/state"
@@ -31,6 +30,7 @@ import (
 	ffi "github.com/filecoin-project/filecoin-ffi"
 	ffi_cgo "github.com/filecoin-project/filecoin-ffi/cgo"
 
+	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -257,7 +257,6 @@ type FVM struct {
 }
 
 func NewFVM(ctx context.Context, opts *VMOpts) (*FVM, error) {
-	log.Info("using the FVM, this is experimental!")
 	circToReport := opts.FilVested
 	// For v14 (and earlier), we perform the FilVested portion of the calculation, and let the FVM dynamically do the rest
 	// v15 and after, the circ supply is always constant per epoch, so we calculate the base and report it at creation
@@ -273,9 +272,15 @@ func NewFVM(ctx context.Context, opts *VMOpts) (*FVM, error) {
 		}
 	}
 
-	fvmOpts := ffi.FVMOpts{
-		FVMVersion:     0,
-		Externs:        &FvmExtern{Rand: opts.Rand, Blockstore: opts.Bstore, lbState: opts.LookbackState, base: opts.StateBase, epoch: opts.Epoch, nv: opts.NetworkVersion},
+	fvmopts := &ffi.FVMOpts{
+		FVMVersion: 0,
+		Externs: &FvmExtern{
+			Rand:       opts.Rand,
+			Blockstore: opts.Bstore,
+			lbState:    opts.LookbackState,
+			base:       opts.StateBase,
+			epoch:      opts.Epoch,
+		},
 		Epoch:          opts.Epoch,
 		BaseFee:        opts.BaseFee,
 		BaseCircSupply: circToReport,
@@ -284,7 +289,21 @@ func NewFVM(ctx context.Context, opts *VMOpts) (*FVM, error) {
 		Tracing:        EnableDetailedTracing,
 	}
 
-	fvm, err := ffi.CreateFVM(&fvmOpts)
+	if os.Getenv("LOTUS_USE_FVM_CUSTOM_BUNDLE") == "1" {
+		av, err := actors.VersionForNetwork(opts.NetworkVersion)
+		if err != nil {
+			return nil, xerrors.Errorf("mapping network version to actors version: %w", err)
+		}
+
+		c, ok := actors.GetManifest(av)
+		if !ok {
+			return nil, xerrors.Errorf("no manifest for custom bundle (actors version %d)", av)
+		}
+
+		fvmopts.Manifest = c
+	}
+
+	fvm, err := ffi.CreateFVM(fvmopts)
 	if err != nil {
 		return nil, err
 	}
@@ -330,14 +349,13 @@ func (vm *FVM) ApplyMessage(ctx context.Context, cmsg types.ChainMsg) (*ApplyRet
 			GasUsed:  ret.GasUsed,
 		},
 		GasCosts: &GasOutputs{
-			// TODO: do the other optional fields eventually
-			BaseFeeBurn:        big.Zero(),
-			OverEstimationBurn: big.Zero(),
+			BaseFeeBurn:        ret.BaseFeeBurn,
+			OverEstimationBurn: ret.OverEstimationBurn,
 			MinerPenalty:       ret.MinerPenalty,
 			MinerTip:           ret.MinerTip,
-			Refund:             big.Zero(),
-			GasRefund:          0,
-			GasBurned:          0,
+			Refund:             ret.Refund,
+			GasRefund:          ret.GasRefund,
+			GasBurned:          ret.GasBurned,
 		},
 		ActorErr:       aerr,
 		ExecutionTrace: et.ToExecutionTrace(),

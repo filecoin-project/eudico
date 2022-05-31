@@ -15,13 +15,15 @@ import (
 	"github.com/filecoin-project/go-fil-markets/storagemarket"
 	"github.com/filecoin-project/go-jsonrpc/auth"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/builtin/v8/miner"
+	"github.com/filecoin-project/go-state-types/builtin/v8/paych"
 	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/go-state-types/dline"
 	abinetwork "github.com/filecoin-project/go-state-types/network"
+	"github.com/filecoin-project/go-state-types/proof"
 	apitypes "github.com/filecoin-project/lotus/api/types"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
-	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
-	"github.com/filecoin-project/lotus/chain/actors/builtin/paych"
+	lminer "github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
@@ -33,7 +35,6 @@ import (
 	"github.com/filecoin-project/lotus/journal/alerting"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/repo/imports"
-	"github.com/filecoin-project/specs-actors/v5/actors/runtime/proof"
 	"github.com/filecoin-project/specs-storage/storage"
 	"github.com/google/uuid"
 	"github.com/ipfs/go-cid"
@@ -375,7 +376,7 @@ type FullNodeStruct struct {
 
 		StateMarketBalance func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (MarketBalance, error) `perm:"read"`
 
-		StateMarketDeals func(p0 context.Context, p1 types.TipSetKey) (map[string]MarketDeal, error) `perm:"read"`
+		StateMarketDeals func(p0 context.Context, p1 types.TipSetKey) (map[string]*MarketDeal, error) `perm:"read"`
 
 		StateMarketParticipants func(p0 context.Context, p1 types.TipSetKey) (map[string]MarketBalance, error) `perm:"read"`
 
@@ -389,7 +390,7 @@ type FullNodeStruct struct {
 
 		StateMinerFaults func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (bitfield.BitField, error) `perm:"read"`
 
-		StateMinerInfo func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (miner.MinerInfo, error) `perm:"read"`
+		StateMinerInfo func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (MinerInfo, error) `perm:"read"`
 
 		StateMinerInitialPledgeCollateral func(p0 context.Context, p1 address.Address, p2 miner.SectorPreCommitInfo, p3 types.TipSetKey) (types.BigInt, error) `perm:"read"`
 
@@ -419,11 +420,11 @@ type FullNodeStruct struct {
 
 		StateSearchMsg func(p0 context.Context, p1 types.TipSetKey, p2 cid.Cid, p3 abi.ChainEpoch, p4 bool) (*MsgLookup, error) `perm:"read"`
 
-		StateSectorExpiration func(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (*miner.SectorExpiration, error) `perm:"read"`
+		StateSectorExpiration func(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (*lminer.SectorExpiration, error) `perm:"read"`
 
 		StateSectorGetInfo func(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (*miner.SectorOnChainInfo, error) `perm:"read"`
 
-		StateSectorPartition func(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (*miner.SectorLocation, error) `perm:"read"`
+		StateSectorPartition func(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (*lminer.SectorLocation, error) `perm:"read"`
 
 		StateSectorPreCommitInfo func(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (miner.SectorPreCommitOnChainInfo, error) `perm:"read"`
 
@@ -547,7 +548,7 @@ type GatewayStruct struct {
 
 		StateMarketStorageDeal func(p0 context.Context, p1 abi.DealID, p2 types.TipSetKey) (*MarketDeal, error) ``
 
-		StateMinerInfo func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (miner.MinerInfo, error) ``
+		StateMinerInfo func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (MinerInfo, error) ``
 
 		StateMinerPower func(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (*MinerPower, error) ``
 
@@ -745,7 +746,7 @@ type StorageMinerStruct struct {
 
 		DealsImportData func(p0 context.Context, p1 cid.Cid, p2 string) error `perm:"admin"`
 
-		DealsList func(p0 context.Context) ([]MarketDeal, error) `perm:"admin"`
+		DealsList func(p0 context.Context) ([]*MarketDeal, error) `perm:"admin"`
 
 		DealsPieceCidBlocklist func(p0 context.Context) ([]cid.Cid, error) `perm:"admin"`
 
@@ -783,7 +784,7 @@ type StorageMinerStruct struct {
 
 		MarketListDataTransfers func(p0 context.Context) ([]DataTransferChannel, error) `perm:"write"`
 
-		MarketListDeals func(p0 context.Context) ([]MarketDeal, error) `perm:"read"`
+		MarketListDeals func(p0 context.Context) ([]*MarketDeal, error) `perm:"read"`
 
 		MarketListIncompleteDeals func(p0 context.Context) ([]storagemarket.MinerDeal, error) `perm:"read"`
 
@@ -2639,15 +2640,15 @@ func (s *FullNodeStub) StateMarketBalance(p0 context.Context, p1 address.Address
 	return *new(MarketBalance), ErrNotSupported
 }
 
-func (s *FullNodeStruct) StateMarketDeals(p0 context.Context, p1 types.TipSetKey) (map[string]MarketDeal, error) {
+func (s *FullNodeStruct) StateMarketDeals(p0 context.Context, p1 types.TipSetKey) (map[string]*MarketDeal, error) {
 	if s.Internal.StateMarketDeals == nil {
-		return *new(map[string]MarketDeal), ErrNotSupported
+		return *new(map[string]*MarketDeal), ErrNotSupported
 	}
 	return s.Internal.StateMarketDeals(p0, p1)
 }
 
-func (s *FullNodeStub) StateMarketDeals(p0 context.Context, p1 types.TipSetKey) (map[string]MarketDeal, error) {
-	return *new(map[string]MarketDeal), ErrNotSupported
+func (s *FullNodeStub) StateMarketDeals(p0 context.Context, p1 types.TipSetKey) (map[string]*MarketDeal, error) {
+	return *new(map[string]*MarketDeal), ErrNotSupported
 }
 
 func (s *FullNodeStruct) StateMarketParticipants(p0 context.Context, p1 types.TipSetKey) (map[string]MarketBalance, error) {
@@ -2716,15 +2717,15 @@ func (s *FullNodeStub) StateMinerFaults(p0 context.Context, p1 address.Address, 
 	return *new(bitfield.BitField), ErrNotSupported
 }
 
-func (s *FullNodeStruct) StateMinerInfo(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (miner.MinerInfo, error) {
+func (s *FullNodeStruct) StateMinerInfo(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (MinerInfo, error) {
 	if s.Internal.StateMinerInfo == nil {
-		return *new(miner.MinerInfo), ErrNotSupported
+		return *new(MinerInfo), ErrNotSupported
 	}
 	return s.Internal.StateMinerInfo(p0, p1, p2)
 }
 
-func (s *FullNodeStub) StateMinerInfo(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (miner.MinerInfo, error) {
-	return *new(miner.MinerInfo), ErrNotSupported
+func (s *FullNodeStub) StateMinerInfo(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (MinerInfo, error) {
+	return *new(MinerInfo), ErrNotSupported
 }
 
 func (s *FullNodeStruct) StateMinerInitialPledgeCollateral(p0 context.Context, p1 address.Address, p2 miner.SectorPreCommitInfo, p3 types.TipSetKey) (types.BigInt, error) {
@@ -2881,14 +2882,14 @@ func (s *FullNodeStub) StateSearchMsg(p0 context.Context, p1 types.TipSetKey, p2
 	return nil, ErrNotSupported
 }
 
-func (s *FullNodeStruct) StateSectorExpiration(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (*miner.SectorExpiration, error) {
+func (s *FullNodeStruct) StateSectorExpiration(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (*lminer.SectorExpiration, error) {
 	if s.Internal.StateSectorExpiration == nil {
 		return nil, ErrNotSupported
 	}
 	return s.Internal.StateSectorExpiration(p0, p1, p2, p3)
 }
 
-func (s *FullNodeStub) StateSectorExpiration(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (*miner.SectorExpiration, error) {
+func (s *FullNodeStub) StateSectorExpiration(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (*lminer.SectorExpiration, error) {
 	return nil, ErrNotSupported
 }
 
@@ -2903,14 +2904,14 @@ func (s *FullNodeStub) StateSectorGetInfo(p0 context.Context, p1 address.Address
 	return nil, ErrNotSupported
 }
 
-func (s *FullNodeStruct) StateSectorPartition(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (*miner.SectorLocation, error) {
+func (s *FullNodeStruct) StateSectorPartition(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (*lminer.SectorLocation, error) {
 	if s.Internal.StateSectorPartition == nil {
 		return nil, ErrNotSupported
 	}
 	return s.Internal.StateSectorPartition(p0, p1, p2, p3)
 }
 
-func (s *FullNodeStub) StateSectorPartition(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (*miner.SectorLocation, error) {
+func (s *FullNodeStub) StateSectorPartition(p0 context.Context, p1 address.Address, p2 abi.SectorNumber, p3 types.TipSetKey) (*lminer.SectorLocation, error) {
 	return nil, ErrNotSupported
 }
 
@@ -3519,15 +3520,15 @@ func (s *GatewayStub) StateMarketStorageDeal(p0 context.Context, p1 abi.DealID, 
 	return nil, ErrNotSupported
 }
 
-func (s *GatewayStruct) StateMinerInfo(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (miner.MinerInfo, error) {
+func (s *GatewayStruct) StateMinerInfo(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (MinerInfo, error) {
 	if s.Internal.StateMinerInfo == nil {
-		return *new(miner.MinerInfo), ErrNotSupported
+		return *new(MinerInfo), ErrNotSupported
 	}
 	return s.Internal.StateMinerInfo(p0, p1, p2)
 }
 
-func (s *GatewayStub) StateMinerInfo(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (miner.MinerInfo, error) {
-	return *new(miner.MinerInfo), ErrNotSupported
+func (s *GatewayStub) StateMinerInfo(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (MinerInfo, error) {
+	return *new(MinerInfo), ErrNotSupported
 }
 
 func (s *GatewayStruct) StateMinerPower(p0 context.Context, p1 address.Address, p2 types.TipSetKey) (*MinerPower, error) {
@@ -4432,15 +4433,15 @@ func (s *StorageMinerStub) DealsImportData(p0 context.Context, p1 cid.Cid, p2 st
 	return ErrNotSupported
 }
 
-func (s *StorageMinerStruct) DealsList(p0 context.Context) ([]MarketDeal, error) {
+func (s *StorageMinerStruct) DealsList(p0 context.Context) ([]*MarketDeal, error) {
 	if s.Internal.DealsList == nil {
-		return *new([]MarketDeal), ErrNotSupported
+		return *new([]*MarketDeal), ErrNotSupported
 	}
 	return s.Internal.DealsList(p0)
 }
 
-func (s *StorageMinerStub) DealsList(p0 context.Context) ([]MarketDeal, error) {
-	return *new([]MarketDeal), ErrNotSupported
+func (s *StorageMinerStub) DealsList(p0 context.Context) ([]*MarketDeal, error) {
+	return *new([]*MarketDeal), ErrNotSupported
 }
 
 func (s *StorageMinerStruct) DealsPieceCidBlocklist(p0 context.Context) ([]cid.Cid, error) {
@@ -4641,15 +4642,15 @@ func (s *StorageMinerStub) MarketListDataTransfers(p0 context.Context) ([]DataTr
 	return *new([]DataTransferChannel), ErrNotSupported
 }
 
-func (s *StorageMinerStruct) MarketListDeals(p0 context.Context) ([]MarketDeal, error) {
+func (s *StorageMinerStruct) MarketListDeals(p0 context.Context) ([]*MarketDeal, error) {
 	if s.Internal.MarketListDeals == nil {
-		return *new([]MarketDeal), ErrNotSupported
+		return *new([]*MarketDeal), ErrNotSupported
 	}
 	return s.Internal.MarketListDeals(p0)
 }
 
-func (s *StorageMinerStub) MarketListDeals(p0 context.Context) ([]MarketDeal, error) {
-	return *new([]MarketDeal), ErrNotSupported
+func (s *StorageMinerStub) MarketListDeals(p0 context.Context) ([]*MarketDeal, error) {
+	return *new([]*MarketDeal), ErrNotSupported
 }
 
 func (s *StorageMinerStruct) MarketListIncompleteDeals(p0 context.Context) ([]storagemarket.MinerDeal, error) {

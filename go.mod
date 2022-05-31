@@ -37,26 +37,27 @@ require (
 	github.com/filecoin-project/go-data-transfer v1.15.1
 	github.com/filecoin-project/go-fil-commcid v0.1.0
 	github.com/filecoin-project/go-fil-commp-hashhash v0.1.0
-	github.com/filecoin-project/go-fil-markets v1.20.1
+	github.com/filecoin-project/go-fil-markets v1.20.1-v16-1
 	github.com/filecoin-project/go-jsonrpc v0.1.5
-	github.com/filecoin-project/go-legs v0.3.7
+	github.com/filecoin-project/go-legs v0.3.10
 	github.com/filecoin-project/go-padreader v0.0.1
 	github.com/filecoin-project/go-paramfetch v0.0.4
-	github.com/filecoin-project/go-state-types v0.1.4
+	github.com/filecoin-project/go-state-types v0.1.8-0.20220523171308-92f973e10902
 	github.com/filecoin-project/go-statemachine v1.0.2
 	github.com/filecoin-project/go-statestore v0.2.0
 	github.com/filecoin-project/go-storedcounter v0.1.0
 	github.com/filecoin-project/index-provider v0.5.0
-	github.com/filecoin-project/mir v0.0.0-20220510082156-0a9866313648
+	github.com/filecoin-project/mir v0.0.0-20220530131146-5a6547186fdb
 	github.com/filecoin-project/pubsub v1.0.0
-	github.com/filecoin-project/specs-actors v0.9.14
+	github.com/filecoin-project/specs-actors v0.9.15-0.20220514164640-94e0d5e123bd
 	github.com/filecoin-project/specs-actors/v2 v2.3.6
-	github.com/filecoin-project/specs-actors/v3 v3.1.1
-	github.com/filecoin-project/specs-actors/v4 v4.0.1
-	github.com/filecoin-project/specs-actors/v5 v5.0.4
-	github.com/filecoin-project/specs-actors/v6 v6.0.1
-	github.com/filecoin-project/specs-actors/v7 v7.0.0
-	github.com/filecoin-project/specs-storage v0.2.3-0.20220426183226-1a0a63c5990f
+	github.com/filecoin-project/specs-actors/v3 v3.1.2
+	github.com/filecoin-project/specs-actors/v4 v4.0.2
+	github.com/filecoin-project/specs-actors/v5 v5.0.6-0.20220514165557-0b29a778685b
+	github.com/filecoin-project/specs-actors/v6 v6.0.2-0.20220511204807-569c6d12432b
+	github.com/filecoin-project/specs-actors/v7 v7.0.1-0.20220511223846-637436c27154
+	github.com/filecoin-project/specs-actors/v8 v8.0.0-20220422153930-0afe155bfffa
+	github.com/filecoin-project/specs-storage v0.4.0
 	github.com/filecoin-project/test-vectors/schema v0.0.5
 	github.com/gammazero/keymutex v0.0.2
 	github.com/gbrlsnchs/jwt/v3 v3.0.1
@@ -160,9 +161,9 @@ require (
 	go.uber.org/fx v1.15.0
 	go.uber.org/multierr v1.8.0
 	go.uber.org/zap v1.21.0
-	golang.org/x/net v0.0.0-20220418201149-a630d4f3e7a2
+	golang.org/x/net v0.0.0-20220425223048-2871e0cb64e4
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/sys v0.0.0-20220412211240-33da011f77ad
+	golang.org/x/sys v0.0.0-20220503163025-988cb79eb6c6
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac
 	golang.org/x/tools v0.1.10
 	golang.org/x/xerrors v0.0.0-20220411194840-2f41105eb62f
@@ -179,7 +180,7 @@ require (
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/Stebalien/go-bitfield v0.0.1 // indirect
 	github.com/akavel/rsrc v0.8.0 // indirect
-	github.com/alecthomas/units v0.0.0-20210927113745-59d0afb8317a // indirect
+	github.com/alecthomas/units v0.0.0-20211218093645-b94a6e3cc137 // indirect
 	github.com/benbjohnson/clock v1.3.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bep/debounce v1.2.0 // indirect
@@ -327,11 +328,11 @@ require (
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/spacemonkeygo/spacelog v0.0.0-20180420211403-2296661a0572 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
-	github.com/tidwall/gjson v1.9.3 // indirect
+	github.com/tidwall/gjson v1.14.1 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
-	github.com/tidwall/tinylru v1.0.2 // indirect
-	github.com/tidwall/wal v0.1.3 // indirect
+	github.com/tidwall/tinylru v1.1.0 // indirect
+	github.com/tidwall/wal v1.1.7 // indirect
 	github.com/tj/go-spin v1.1.0 // indirect
 	github.com/uber/jaeger-client-go v2.25.0+incompatible // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
@@ -351,16 +352,16 @@ require (
 	go.uber.org/dig v1.12.0 // indirect
 	go4.org v0.0.0-20200411211856-f5505b9728dd // indirect
 	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4 // indirect
-	golang.org/x/exp v0.0.0-20210715201039-d37aa40e8013 // indirect
+	golang.org/x/exp v0.0.0-20220428152302-39d4317da171 // indirect
 	golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3 // indirect
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
 	golang.org/x/text v0.3.7 // indirect
-	google.golang.org/genproto v0.0.0-20210917145530-b395a37504d4 // indirect
-	google.golang.org/grpc v1.45.0 // indirect
+	google.golang.org/genproto v0.0.0-20220505152158-f39f71e6c8f3 // indirect
+	google.golang.org/grpc v1.46.0 // indirect
 	google.golang.org/protobuf v1.28.0 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	howett.net/plist v0.0.0-20181124034731-591f970eefbb // indirect
 	modernc.org/cc v1.0.0 // indirect
 	modernc.org/golex v1.0.1 // indirect
@@ -373,7 +374,7 @@ require (
 // in the eudico repo.
 // In this fork we also include a SendWithSerializedParams required to forward messages with already serialized
 // params from an actor.
-replace github.com/filecoin-project/specs-actors/v7 => github.com/adlrocha/specs-actors/v7 v7.0.0-rc1.0.20220215102846-08bb2fde502a
+// replace github.com/filecoin-project/specs-actors/v7 => github.com/adlrocha/specs-actors/v7 v7.0.0-rc1.0.20220215102846-08bb2fde502a
 
 // FIXME: Replacing with a fork that includes support to hierarchical consensus addresses.
 replace github.com/filecoin-project/go-address => github.com/adlrocha/go-address v0.0.7-0.20220201161333-9140b209222d

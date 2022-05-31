@@ -2,34 +2,34 @@ package sectorstorage
 
 import "sort"
 
-type RequestQueue []*WorkerRequest
+type requestQueue []*workerRequest
 
-func (q RequestQueue) Len() int { return len(q) }
+func (q requestQueue) Len() int { return len(q) }
 
-func (q RequestQueue) Less(i, j int) bool {
-	oneMuchLess, muchLess := q[i].TaskType.MuchLess(q[j].TaskType)
+func (q requestQueue) Less(i, j int) bool {
+	oneMuchLess, muchLess := q[i].taskType.MuchLess(q[j].taskType)
 	if oneMuchLess {
 		return muchLess
 	}
 
-	if q[i].Priority != q[j].Priority {
-		return q[i].Priority > q[j].Priority
+	if q[i].priority != q[j].priority {
+		return q[i].priority > q[j].priority
 	}
 
-	if q[i].TaskType != q[j].TaskType {
-		return q[i].TaskType.Less(q[j].TaskType)
+	if q[i].taskType != q[j].taskType {
+		return q[i].taskType.Less(q[j].taskType)
 	}
 
-	return q[i].Sector.ID.Number < q[j].Sector.ID.Number // optimize minerActor.NewSectors bitfield
+	return q[i].sector.ID.Number < q[j].sector.ID.Number // optimize minerActor.NewSectors bitfield
 }
 
-func (q RequestQueue) Swap(i, j int) {
+func (q requestQueue) Swap(i, j int) {
 	q[i], q[j] = q[j], q[i]
 	q[i].index = i
 	q[j].index = j
 }
 
-func (q *RequestQueue) Push(x *WorkerRequest) {
+func (q *requestQueue) Push(x *workerRequest) {
 	n := len(*q)
 	item := x
 	item.index = n
@@ -37,7 +37,7 @@ func (q *RequestQueue) Push(x *WorkerRequest) {
 	sort.Sort(q)
 }
 
-func (q *RequestQueue) Remove(i int) *WorkerRequest {
+func (q *requestQueue) Remove(i int) *workerRequest {
 	old := *q
 	n := len(old)
 	item := old[i]

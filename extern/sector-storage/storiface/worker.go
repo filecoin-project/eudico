@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/filecoin-project/go-state-types/proof"
+
 	"github.com/google/uuid"
 	"github.com/ipfs/go-cid"
 
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/specs-actors/actors/runtime/proof"
 	"github.com/filecoin-project/specs-storage/storage"
 
 	"github.com/filecoin-project/lotus/extern/sector-storage/sealtasks"
@@ -75,8 +76,6 @@ type WorkerStats struct {
 	MemUsedMax uint64
 	GpuUsed    float64 // nolint
 	CpuUse     uint64  // nolint
-
-	TaskCounts map[string]int
 }
 
 const (
@@ -119,7 +118,6 @@ var UndefCall CallID
 
 type WorkerCalls interface {
 	// async
-	DataCid(ctx context.Context, pieceSize abi.UnpaddedPieceSize, pieceData storage.Data) (CallID, error)
 	AddPiece(ctx context.Context, sector storage.SectorRef, pieceSizes []abi.UnpaddedPieceSize, newPieceSize abi.UnpaddedPieceSize, pieceData storage.Data) (CallID, error)
 	SealPreCommit1(ctx context.Context, sector storage.SectorRef, ticket abi.SealRandomness, pieces []abi.PieceInfo) (CallID, error)
 	SealPreCommit2(ctx context.Context, sector storage.SectorRef, pc1o storage.PreCommit1Out) (CallID, error)
@@ -200,7 +198,6 @@ func Err(code ErrorCode, sub error) *CallError {
 }
 
 type WorkerReturn interface {
-	ReturnDataCid(ctx context.Context, callID CallID, pi abi.PieceInfo, err *CallError) error
 	ReturnAddPiece(ctx context.Context, callID CallID, pi abi.PieceInfo, err *CallError) error
 	ReturnSealPreCommit1(ctx context.Context, callID CallID, p1o storage.PreCommit1Out, err *CallError) error
 	ReturnSealPreCommit2(ctx context.Context, callID CallID, sealed storage.SectorCids, err *CallError) error

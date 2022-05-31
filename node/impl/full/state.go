@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"strconv"
 
-	"github.com/ipfs/go-cid"
+	"github.com/libp2p/go-libp2p-core/peer"
+
+	cid "github.com/ipfs/go-cid"
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
 
@@ -20,6 +22,7 @@ import (
 	"github.com/filecoin-project/go-state-types/network"
 	"github.com/filecoin-project/lotus/build"
 
+	minertypes "github.com/filecoin-project/go-state-types/builtin/v8/miner"
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/market"
@@ -52,7 +55,7 @@ type StateModuleAPI interface {
 	StateLookupID(ctx context.Context, addr address.Address, tsk types.TipSetKey) (address.Address, error)
 	StateMarketBalance(ctx context.Context, addr address.Address, tsk types.TipSetKey) (api.MarketBalance, error)
 	StateMarketStorageDeal(ctx context.Context, dealId abi.DealID, tsk types.TipSetKey) (*api.MarketDeal, error)
-	StateMinerInfo(ctx context.Context, actor address.Address, tsk types.TipSetKey) (miner.MinerInfo, error)
+	StateMinerInfo(ctx context.Context, actor address.Address, tsk types.TipSetKey) (api.MinerInfo, error)
 	StateMinerProvingDeadline(ctx context.Context, addr address.Address, tsk types.TipSetKey) (*dline.Info, error)
 	StateMinerPower(context.Context, address.Address, types.TipSetKey) (*api.MinerPower, error)
 	StateNetworkVersion(ctx context.Context, key types.TipSetKey) (network.Version, error)
@@ -131,27 +134,52 @@ func (a *StateAPI) StateMinerActiveSectors(ctx context.Context, maddr address.Ad
 	return mas.LoadSectors(&activeSectors)
 }
 
-func (m *StateModule) StateMinerInfo(ctx context.Context, actor address.Address, tsk types.TipSetKey) (miner.MinerInfo, error) {
+func (m *StateModule) StateMinerInfo(ctx context.Context, actor address.Address, tsk types.TipSetKey) (api.MinerInfo, error) {
 	ts, err := m.Chain.GetTipSetFromKey(ctx, tsk)
 	if err != nil {
-		return miner.MinerInfo{}, xerrors.Errorf("failed to load tipset: %w", err)
+		return api.MinerInfo{}, xerrors.Errorf("failed to load tipset: %w", err)
 	}
 
 	act, err := m.StateManager.LoadActor(ctx, actor, ts)
 	if err != nil {
-		return miner.MinerInfo{}, xerrors.Errorf("failed to load miner actor: %w", err)
+		return api.MinerInfo{}, xerrors.Errorf("failed to load miner actor: %w", err)
 	}
 
 	mas, err := miner.Load(m.StateManager.ChainStore().ActorStore(ctx), act)
 	if err != nil {
-		return miner.MinerInfo{}, xerrors.Errorf("failed to load miner actor state: %w", err)
+		return api.MinerInfo{}, xerrors.Errorf("failed to load miner actor state: %w", err)
 	}
 
 	info, err := mas.Info()
 	if err != nil {
-		return miner.MinerInfo{}, err
+		return api.MinerInfo{}, err
 	}
-	return info, nil
+
+	var pid *peer.ID
+	if peerID, err := peer.IDFromBytes(info.PeerId); err == nil {
+		pid = &peerID
+	}
+
+	ret := api.MinerInfo{
+		Owner:                      info.Owner,
+		Worker:                     info.Worker,
+		ControlAddresses:           info.ControlAddresses,
+		NewWorker:                  address.Undef,
+		WorkerChangeEpoch:          -1,
+		PeerId:                     pid,
+		Multiaddrs:                 info.Multiaddrs,
+		WindowPoStProofType:        info.WindowPoStProofType,
+		SectorSize:                 info.SectorSize,
+		WindowPoStPartitionSectors: info.WindowPoStPartitionSectors,
+		ConsensusFaultElapsed:      info.ConsensusFaultElapsed,
+	}
+
+	if info.PendingWorkerKey != nil {
+		ret.NewWorker = info.PendingWorkerKey.NewWorker
+		ret.WorkerChangeEpoch = info.PendingWorkerKey.EffectiveAt
+	}
+
+	return ret, nil
 }
 
 func (a *StateAPI) StateMinerDeadlines(ctx context.Context, m address.Address, tsk types.TipSetKey) ([]api.Deadline, error) {
@@ -578,15 +606,16 @@ func (m *StateModule) StateWaitMsg(ctx context.Context, msg cid.Cid, confidence 
 		vmsg := cmsg.VMMessage()
 
 		t, err := stmgr.GetReturnType(ctx, m.StateManager, vmsg.To, vmsg.Method, ts)
-		if err != nil {
-			return nil, xerrors.Errorf("failed to get return type: %w", err)
-		}
+		if err == nil {
+			// user actors by definition are unknown, so don't cry over spilled milk
+			if err := t.UnmarshalCBOR(bytes.NewReader(recpt.Return)); err != nil {
+				return nil, err
+			}
 
-		if err := t.UnmarshalCBOR(bytes.NewReader(recpt.Return)); err != nil {
-			return nil, err
+			returndec = t
+		} else {
+			log.Warnf("unknown method %d for actor %s", vmsg.Method, vmsg.To)
 		}
-
-		returndec = t
 	}
 
 	return &api.MsgLookup{
@@ -684,8 +713,8 @@ func (a *StateAPI) StateMarketParticipants(ctx context.Context, tsk types.TipSet
 	return out, nil
 }
 
-func (a *StateAPI) StateMarketDeals(ctx context.Context, tsk types.TipSetKey) (map[string]api.MarketDeal, error) {
-	out := map[string]api.MarketDeal{}
+func (a *StateAPI) StateMarketDeals(ctx context.Context, tsk types.TipSetKey) (map[string]*api.MarketDeal, error) {
+	out := map[string]*api.MarketDeal{}
 
 	ts, err := a.Chain.GetTipSetFromKey(ctx, tsk)
 	if err != nil {
@@ -714,7 +743,7 @@ func (a *StateAPI) StateMarketDeals(ctx context.Context, tsk types.TipSetKey) (m
 		} else if !found {
 			s = market.EmptyDealState()
 		}
-		out[strconv.FormatInt(int64(dealID), 10)] = api.MarketDeal{
+		out[strconv.FormatInt(int64(dealID), 10)] = &api.MarketDeal{
 			Proposal: d,
 			State:    *s,
 		}
@@ -790,17 +819,17 @@ func (a *StateAPI) StateMinerSectorCount(ctx context.Context, addr address.Addre
 	return api.MinerSectors{Live: liveCount, Active: activeCount, Faulty: faultyCount}, nil
 }
 
-func (a *StateAPI) StateSectorPreCommitInfo(ctx context.Context, maddr address.Address, n abi.SectorNumber, tsk types.TipSetKey) (miner.SectorPreCommitOnChainInfo, error) {
+func (a *StateAPI) StateSectorPreCommitInfo(ctx context.Context, maddr address.Address, n abi.SectorNumber, tsk types.TipSetKey) (minertypes.SectorPreCommitOnChainInfo, error) {
 	ts, err := a.Chain.GetTipSetFromKey(ctx, tsk)
 	if err != nil {
-		return miner.SectorPreCommitOnChainInfo{}, xerrors.Errorf("loading tipset %s: %w", tsk, err)
+		return minertypes.SectorPreCommitOnChainInfo{}, xerrors.Errorf("loading tipset %s: %w", tsk, err)
 	}
 
 	pci, err := stmgr.PreCommitInfo(ctx, a.StateManager, maddr, n, ts)
 	if err != nil {
-		return miner.SectorPreCommitOnChainInfo{}, err
+		return minertypes.SectorPreCommitOnChainInfo{}, err
 	} else if pci == nil {
-		return miner.SectorPreCommitOnChainInfo{}, xerrors.Errorf("precommit info is not exists")
+		return minertypes.SectorPreCommitOnChainInfo{}, xerrors.Errorf("precommit info is not exists")
 	}
 
 	return *pci, err
@@ -1066,7 +1095,7 @@ func (m *StateModule) MsigGetPending(ctx context.Context, addr address.Address, 
 var initialPledgeNum = types.NewInt(110)
 var initialPledgeDen = types.NewInt(100)
 
-func (a *StateAPI) StateMinerPreCommitDepositForPower(ctx context.Context, maddr address.Address, pci miner.SectorPreCommitInfo, tsk types.TipSetKey) (types.BigInt, error) {
+func (a *StateAPI) StateMinerPreCommitDepositForPower(ctx context.Context, maddr address.Address, pci minertypes.SectorPreCommitInfo, tsk types.TipSetKey) (types.BigInt, error) {
 	ts, err := a.Chain.GetTipSetFromKey(ctx, tsk)
 	if err != nil {
 		return types.EmptyInt, xerrors.Errorf("loading tipset %s: %w", tsk, err)
@@ -1126,7 +1155,7 @@ func (a *StateAPI) StateMinerPreCommitDepositForPower(ctx context.Context, maddr
 	return types.BigDiv(types.BigMul(deposit, initialPledgeNum), initialPledgeDen), nil
 }
 
-func (a *StateAPI) StateMinerInitialPledgeCollateral(ctx context.Context, maddr address.Address, pci miner.SectorPreCommitInfo, tsk types.TipSetKey) (types.BigInt, error) {
+func (a *StateAPI) StateMinerInitialPledgeCollateral(ctx context.Context, maddr address.Address, pci minertypes.SectorPreCommitInfo, tsk types.TipSetKey) (types.BigInt, error) {
 	// TODO: this repeats a lot of the previous function. Fix that.
 	ts, err := a.Chain.GetTipSetFromKey(ctx, tsk)
 	if err != nil {
