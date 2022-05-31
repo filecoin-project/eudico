@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -65,8 +66,14 @@ func runDummyConsensusTests(t *testing.T, opts ...interface{}) {
 }
 
 func (ts *eudicoConsensusSuite) testDummyMining(t *testing.T) {
+	var wg sync.WaitGroup
+
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	defer func() {
+		t.Log("[*] defer: cancelling test context")
+		cancel()
+		wg.Wait()
+	}()
 
 	full, _ := kit.EudicoEnsembleFullNodeOnly(t, ts.opts...)
 
@@ -76,7 +83,13 @@ func (ts *eudicoConsensusSuite) testDummyMining(t *testing.T) {
 		t.Fatal("wallet key list is empty")
 	}
 
+	wg.Add(1)
 	go func() {
+		t.Log("[*] miner started")
+		defer func() {
+			t.Log("[*] miner stopped")
+			wg.Done()
+		}()
 		err := dummy.Mine(ctx, l[0], full)
 		if err != nil {
 			t.Error(err)
@@ -97,12 +110,19 @@ func runMirConsensusTests(t *testing.T, opts ...interface{}) {
 }
 
 func (ts *eudicoConsensusSuite) testMirTwoNodes(t *testing.T) {
+	var wg sync.WaitGroup
+
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	defer func() {
+		t.Log("[*] defer: cancelling test context")
+		cancel()
+		wg.Wait()
+	}()
 
 	one, two, ens := kit.EudicoEnsembleTwoNodes(t, ts.opts...)
-
 	defer func() {
+		t.Log("[*] stopping test ensemble")
+		defer t.Log("[*] ensemble stopped")
 		err := ens.Stop()
 		require.NoError(t, err)
 	}()
@@ -168,8 +188,13 @@ func (ts *eudicoConsensusSuite) testMirTwoNodes(t *testing.T) {
 	err = os.Setenv(mir.ValidatorsEnv, env)
 	require.NoError(t, err)
 
+	wg.Add(2)
 	go func() {
-		defer t.Log("node one was stopped")
+		t.Log("[*] node one started")
+		defer func() {
+			t.Log("[*] node one stopped")
+			wg.Done()
+		}()
 		err := mir.Mine(ctx, oneAddr, one)
 		if xerrors.Is(mapi.ErrStopped, err) {
 			return
@@ -182,7 +207,11 @@ func (ts *eudicoConsensusSuite) testMirTwoNodes(t *testing.T) {
 	}()
 
 	go func() {
-		defer t.Log("node two was stopped")
+		t.Log("[*] node two started")
+		defer func() {
+			t.Log("[*] node two stopped")
+			wg.Done()
+		}()
 		err := mir.Mine(ctx, twoAddr, two)
 		if xerrors.Is(mapi.ErrStopped, err) {
 			return
@@ -232,8 +261,14 @@ func (ts *eudicoConsensusSuite) testMirTwoNodes(t *testing.T) {
 }
 
 func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
+	var wg sync.WaitGroup
+
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	defer func() {
+		t.Log("[*] defer: cancelling test context")
+		cancel()
+		wg.Wait()
+	}()
 
 	full, ens := kit.EudicoEnsembleFullNodeOnly(t, ts.opts...)
 	defer func() {
@@ -253,7 +288,13 @@ func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
 	require.NoError(t, err)
 	defer os.Unsetenv(mir.ValidatorsEnv) // nolint
 
+	wg.Add(1)
 	go func() {
+		t.Log("[*] miner started")
+		defer func() {
+			t.Log("[*] miner stopped")
+			wg.Done()
+		}()
 		err := mir.Mine(ctx, l[0], full)
 		if xerrors.Is(mapi.ErrStopped, err) {
 			return
@@ -282,8 +323,14 @@ func runTSPoWConsensusTests(t *testing.T, opts ...interface{}) {
 }
 
 func (ts *eudicoConsensusSuite) testTSPoWMining(t *testing.T) {
+	var wg sync.WaitGroup
+
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	defer func() {
+		t.Log("[*] defer: cancelling test context")
+		cancel()
+		wg.Wait()
+	}()
 
 	full, _ := kit.EudicoEnsembleFullNodeOnly(t, ts.opts...)
 
@@ -293,7 +340,13 @@ func (ts *eudicoConsensusSuite) testTSPoWMining(t *testing.T) {
 		t.Fatal("wallet key list is empty")
 	}
 
+	wg.Add(1)
 	go func() {
+		t.Log("[*] miner started")
+		defer func() {
+			t.Log("[*] miner stopped")
+			wg.Done()
+		}()
 		err := tspow.Mine(ctx, l[0], full)
 		if err != nil {
 			t.Error(err)
@@ -312,8 +365,14 @@ func runDelegatedConsensusTests(t *testing.T, opts ...interface{}) {
 }
 
 func (ts *eudicoConsensusSuite) testDelegatedMining(t *testing.T) {
+	var wg sync.WaitGroup
+
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	defer func() {
+		t.Log("[*] defer: cancelling test context")
+		cancel()
+		wg.Wait()
+	}()
 
 	full, _ := kit.EudicoEnsembleFullNodeOnly(t, ts.opts...)
 
@@ -330,7 +389,13 @@ func (ts *eudicoConsensusSuite) testDelegatedMining(t *testing.T) {
 	k, err := wallet.NewKey(ki)
 	require.NoError(t, err)
 
+	wg.Add(1)
 	go func() {
+		t.Log("[*] miner started")
+		defer func() {
+			t.Log("[*] miner stopped")
+			wg.Done()
+		}()
 		err := delegcns.Mine(ctx, address.Undef, full)
 		if err != nil {
 			t.Error(err)
@@ -369,12 +434,20 @@ func runTendermintConsensusTests(t *testing.T, opts ...interface{}) {
 }
 
 func (ts *eudicoConsensusSuite) testTendermintMining(t *testing.T) {
+	var wg sync.WaitGroup
+
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	defer func() {
+		t.Log("[*] defer: cancelling test context")
+		cancel()
+		wg.Wait()
+	}()
 
 	full, ens := kit.EudicoEnsembleFullNodeOnly(t, ts.opts...)
 	var err error
 	defer func() {
+		t.Log("[*] stopping test ensemble")
+		defer t.Log("[*] ensemble stopped")
 		err = ens.Stop()
 		require.NoError(t, err)
 	}()
@@ -390,7 +463,13 @@ func (ts *eudicoConsensusSuite) testTendermintMining(t *testing.T) {
 		t.Fatal("wallet key list is empty")
 	}
 
+	wg.Add(1)
 	go func() {
+		t.Log("[*] miner started")
+		defer func() {
+			t.Log("[*] miner stopped")
+			wg.Done()
+		}()
 		err := tendermint.Mine(ctx, l[0], full)
 		if err != nil {
 			t.Error(err)
