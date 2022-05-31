@@ -391,7 +391,6 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 		require.NoError(t, err)
 	}()
 
-	startTime := time.Now()
 	t.Log("[*] connecting nodes")
 
 	// Fail if genesis blocks are different
