@@ -2,6 +2,7 @@ package common
 
 import (
 	"context"
+	"os"
 	"sync/atomic"
 
 	"github.com/filecoin-project/go-state-types/abi"
@@ -32,7 +33,7 @@ func DefaultUpgradeSchedule() stmgr.UpgradeSchedule {
 
 	updates := []stmgr.Upgrade{{
 		Height:    -1,
-		Network:   network.Version15,
+		Network:   network.Version16,
 		Migration: nil,
 		Expensive: true,
 	},
@@ -88,6 +89,19 @@ func (t *tipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateManager
 			NetworkVersion: sm.GetNetworkVersion(ctx, e),
 			BaseFee:        baseFee,
 			LookbackState:  stmgr.LookbackStateGetterForTipset(sm, ts),
+		}
+
+		if os.Getenv("LOTUS_USE_FVM_EXPERIMENTAL") == "1" {
+			// This is needed so that the FVM does not have to duplicate the genesis vesting schedule, one
+			// of the components of the circ supply calc.
+			// This field is NOT needed by the LegacyVM, and also NOT needed by the FVM from v15 onwards.
+			filVested, err := sm.GetFilVested(ctx, e)
+			if err != nil {
+				return nil, err
+			}
+
+			vmopt.FilVested = filVested
+			return vm.NewFVM(ctx, vmopt)
 		}
 
 		return sm.VMConstructor()(ctx, vmopt)
@@ -278,7 +292,6 @@ func (t *tipSetExecutor) ExecuteTipSet(ctx context.Context, sm *stmgr.StateManag
 	}
 
 	baseFee := blks[0].ParentBaseFee
-
 	return t.ApplyBlocks(ctx, sm, cr, parentEpoch, pstate, blkmsgs, blks[0].Height, r, em, baseFee, ts)
 }
 

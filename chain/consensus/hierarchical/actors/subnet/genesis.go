@@ -40,11 +40,12 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/wallet"
 	"github.com/filecoin-project/lotus/genesis"
+	"github.com/filecoin-project/lotus/node/bundle"
 	adt0 "github.com/filecoin-project/specs-actors/actors/util/adt"
 )
 
 const (
-	networkVersion = network.Version15
+	networkVersion = network.Version16
 )
 
 func makeGenesisBlock(
@@ -55,6 +56,12 @@ func makeGenesisBlock(
 	e abi.ChainEpoch,
 ) (*genesis2.GenesisBootstrap, error) {
 	var err error
+
+	// load appropriate bundles
+	if err := bundle.FetchAndLoadBundles(ctx, bs, build.BuiltinActorReleases); err != nil {
+		return nil, err
+	}
+
 	st, _, err := MakeInitialStateTree(ctx, bs, t, e)
 	if err != nil {
 		return nil, xerrors.Errorf("make initial state tree failed: %w", err)
@@ -66,6 +73,7 @@ func makeGenesisBlock(
 	}
 
 	store := adt.WrapStore(ctx, cbor.NewCborStore(bs))
+
 	emptyRoot, err := adt0.MakeEmptyArray(store).Root()
 	if err != nil {
 		return nil, xerrors.Errorf("amt build failed: %w", err)
@@ -468,11 +476,16 @@ func SetupRewardActor(ctx context.Context, bs bstore.Blockstore, qaPower big.Int
 		return nil, err
 	}
 
+	actcid, err := builtin.GetRewardActorCodeID(av)
+	if err != nil {
+		return nil, err
+	}
+
 	// NOTE: For now, everything in the reward actor is the same except the code,
 	// where we included an additional method to fund accounts. This may change
 	// in the future when we design specific reward system for subnets.
 	act := &types.Actor{
-		Code: actor.RewardActorCodeID,
+		Code: actcid,
 		// NOTE: This sets up the initial balance of the reward actor.
 		Balance: types.BigInt{Int: build.InitialRewardBalance},
 		Head:    statecid,

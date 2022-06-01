@@ -37,6 +37,7 @@ const (
 	RewardKey   = "reward"
 	SystemKey   = "system"
 	VerifregKey = "verifiedregistry"
+	SCAKey = "hierarchical_sca"
 )
 
 var (
@@ -100,6 +101,7 @@ func loadManifests(ctx context.Context, store cbor.IpldStore) error {
 			RewardKey,
 			SystemKey,
 			VerifregKey,
+			SCAKey,
 		} {
 			c, ok := mf.Get(name)
 			if ok {

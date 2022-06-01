@@ -1,3 +1,4 @@
 [[bundles]]
 version = 8
-release = "05c6a27054fb5478"
+path = {mainnet = "./chain/consensus/hierarchical/actors/bundle.car"}
+development = true
