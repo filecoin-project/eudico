@@ -156,6 +156,8 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("[*] wallet new addr: %s", newAddr)
 
+	startTime := time.Now()
+
 	// Start mining in root net: start Filecoin consensus or Eudico consensus.
 	switch miner := rootMiner.(type) {
 	case *kit.TestMiner:
@@ -340,6 +342,8 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(sn))
 	require.NotEqual(t, 0, sn[0].Subnet.Status)
+
+	t.Logf("[*] test time: %v\n", time.Since(startTime).Seconds())
 }
 
 func runSubnetTestsTwoNodes(t *testing.T, opts ...interface{}) {
@@ -411,6 +415,8 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 	minerB := l[0]
 
 	t.Log("[*] running consensus in root net")
+
+	startTime := time.Now()
 
 	err = os.Setenv(mir.ValidatorsEnv, fmt.Sprintf("%s@%s,%s@%s",
 		"/root:"+minerA.String(), "127.0.0.1:10005",
@@ -627,6 +633,8 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 	t.Log("[*] miner B in subnet stopping")
 	err = nodeB.MineSubnet(ctx, minerB, subnetAddr, true, &mp)
 	require.NoError(t, err)
+
+	t.Logf("[*] test time: %v\n", time.Since(startTime).Seconds())
 }
 
 func runSubnetTwoNodesCrossMessage(t *testing.T, opts ...interface{}) {
@@ -702,6 +710,8 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Log("[*] running consensus in root net")
+
+	startTime := time.Now()
 
 	wg.Add(2)
 
@@ -910,4 +920,6 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 	t.Log("[*] miner B in subnet stopping")
 	err = nodeB.MineSubnet(ctx, minerB, subnetBAddr, true, &mp)
 	require.NoError(t, err)
+
+	t.Logf("[*] test time: %v\n", time.Since(startTime).Seconds())
 }

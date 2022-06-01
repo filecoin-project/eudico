@@ -57,7 +57,7 @@ rm -rvf $NODE_3_NETADDR
 rm -rf ./eudico_daemon_*.log
 rm -rf ./eudico_miner_*.log
 
-LOG_LEVEL="info,mir-consensus=debug,mir-agent=info"
+LOG_LEVEL="info,mir-consensus=debug,mir-manager=debug"
 
 tmux new-session -d -s "mir" \; \
   new-window   -t "mir" \; \
@@ -106,6 +106,7 @@ tmux new-session -d -s "mir" \; \
         ./eudico wait-api;
         ./eudico net listen | grep '/ip6/::1/' > $NODE_2_NETADDR; sleep 3;
         ./eudico net connect \$(cat $NODE_0_NETADDR);
+        ./eudico net connect \$(cat $NODE_1_NETADDR);
         ./eudico wallet import --as-default $NODE_2_KEY
         ./eudico mir miner --default-key 2>&1 | tee $NODE_2_MINER_LOG" Enter \; \
     send-keys -t "mir:1.2" "
@@ -119,6 +120,8 @@ tmux new-session -d -s "mir" \; \
        ./eudico wait-api;
        ./eudico net listen | grep '/ip6/::1/' > $NODE_3_NETADDR; sleep 3;
        ./eudico net connect \$(cat $NODE_0_NETADDR);
+       ./eudico net connect \$(cat $NODE_1_NETADDR);
+       ./eudico net connect \$(cat $NODE_2_NETADDR);
        ./eudico wallet import --as-default $NODE_3_KEY
        ./eudico mir miner --default-key 2>&1  | tee $NODE_3_MINER_LOG" Enter \; \
-  attach-session -t "mir:0.1"
+  attach-session -t "mir:1.0"

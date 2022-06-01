@@ -4,6 +4,14 @@ import (
 	"sync"
 )
 
+// TODO:
+// Case 1:
+// Eudico's mempool and the request pool (that is actually a proxy to the mempool) are distributed.
+// If Eudico daemon is restarted or crashes and miner was not, then the messages that Eudico has already sent
+// are not in mempool anymore, but their hashes are still in the request cache.
+// It may happen that Eudico receives a hash from the block and the corresponding message is in the cache,
+// but not not in the mempool.
+
 // Request cache is the simplest temporal cache to store mapping between request hashes and client requests.
 func newRequestCache() *requestCache {
 	return &requestCache{

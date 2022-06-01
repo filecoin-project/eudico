@@ -72,7 +72,8 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			return err
 		case hashes := <-mirHead:
 			msgs, crossMsgs := m.GetMessagesByHashes(hashes)
-			log.Infof("[subnet: %s, epoch: %d] try to create a block", m.SubnetID, base.Height()+1)
+			log.Infof("[subnet: %s, epoch: %d] try to create a block: msgs - %d, crossMsgs - %d",
+				m.SubnetID, base.Height()+1, len(msgs), len(crossMsgs))
 
 			bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
 				Miner:            epochMiner,
