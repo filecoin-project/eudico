@@ -21,9 +21,7 @@ import (
 
 	"github.com/filecoin-project/go-jsonrpc"
 	"github.com/filecoin-project/go-state-types/abi"
-
-	"github.com/filecoin-project/lotus/extern/storage-sealing/lib/nullreader"
-	"github.com/filecoin-project/lotus/lib/httpreader"
+	sealing "github.com/filecoin-project/lotus/extern/storage-sealing"
 )
 
 var log = logging.Logger("rpcenc")
@@ -35,7 +33,6 @@ type StreamType string
 const (
 	Null       StreamType = "null"
 	PushStream StreamType = "push"
-	HTTP       StreamType = "http"
 	// TODO: Data transfer handoff to workers?
 )
 
@@ -104,11 +101,8 @@ func ReaderParamEncoder(addr string) jsonrpc.Option {
 	return jsonrpc.WithParamEncoder(new(io.Reader), func(value reflect.Value) (reflect.Value, error) {
 		r := value.Interface().(io.Reader)
 
-		if r, ok := r.(*nullreader.NullReader); ok {
+		if r, ok := r.(*sealing.NullReader); ok {
 			return reflect.ValueOf(ReaderStream{Type: Null, Info: fmt.Sprint(r.N)}), nil
-		}
-		if r, ok := r.(*httpreader.HttpReader); ok && r.URL != "" {
-			return reflect.ValueOf(ReaderStream{Type: HTTP, Info: r.URL}), nil
 		}
 
 		reqID := uuid.New()
@@ -217,7 +211,6 @@ type RpcReader struct {
 	postBody     io.ReadCloser   // nil on initial head request
 	next         chan *RpcReader // on head will get us the postBody after sending resStart
 	mustRedirect bool
-	eof          bool
 
 	res       chan readRes
 	beginOnce *sync.Once
@@ -273,10 +266,6 @@ func (w *RpcReader) Read(p []byte) (int, error) {
 		w.beginPost()
 	})
 
-	if w.eof {
-		return 0, io.EOF
-	}
-
 	if w.mustRedirect {
 		return 0, ErrMustRedirect
 	}
@@ -287,9 +276,6 @@ func (w *RpcReader) Read(p []byte) (int, error) {
 
 	n, err := w.postBody.Read(p)
 	if err != nil {
-		if err == io.EOF {
-			w.eof = true
-		}
 		w.closeOnce.Do(func() {
 			close(w.res)
 		})
@@ -418,16 +404,13 @@ func ReaderParamDecoder() (http.HandlerFunc, jsonrpc.ServerOption) {
 			return reflect.Value{}, xerrors.Errorf("unmarshaling reader id: %w", err)
 		}
 
-		switch rs.Type {
-		case Null:
+		if rs.Type == Null {
 			n, err := strconv.ParseInt(rs.Info, 10, 64)
 			if err != nil {
 				return reflect.Value{}, xerrors.Errorf("parsing null byte count: %w", err)
 			}
 
-			return reflect.ValueOf(nullreader.NewNullReader(abi.UnpaddedPieceSize(n))), nil
-		case HTTP:
-			return reflect.ValueOf(&httpreader.HttpReader{URL: rs.Info}), nil
+			return reflect.ValueOf(sealing.NewNullReader(abi.UnpaddedPieceSize(n))), nil
 		}
 
 		u, err := uuid.Parse(rs.Info)

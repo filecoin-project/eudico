@@ -44,14 +44,7 @@ const UpgradeChocolateHeight = -17
 
 const UpgradeOhSnapHeight = 240
 
-var SupportedProofTypes = []abi.RegisteredSealProof{
-	abi.RegisteredSealProof_StackedDrg512MiBV1,
-	abi.RegisteredSealProof_StackedDrg32GiBV1,
-	abi.RegisteredSealProof_StackedDrg64GiBV1,
-}
-var ConsensusMinerMinPower = abi.NewStoragePower(2 << 30)
-var MinVerifiedDealSize = abi.NewStoragePower(1 << 20)
-var PreCommitChallengeDelay = abi.ChainEpoch(150)
+var UpgradeFVM1Height = abi.ChainEpoch(99999999999999)
 
 func init() {
 	policy.SetSupportedProofTypes(SupportedProofTypes...)

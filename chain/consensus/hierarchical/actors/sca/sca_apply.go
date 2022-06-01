@@ -28,7 +28,7 @@ func fromToRawAddr(rt runtime.Runtime, from, to address.Address) (address.Addres
 
 func applyTopDown(rt runtime.Runtime, msg types.Message) {
 	var st SCAState
-	_, rto := fromToRawAddr(rt, msg.From, msg.To)
+	// _, rto := fromToRawAddr(rt, msg.From, msg.To)
 	sto, err := msg.To.Subnet()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get subnet from HAddress")
 
@@ -65,17 +65,19 @@ func applyTopDown(rt runtime.Runtime, msg types.Message) {
 			commitTopDownMsg(rt, &st, msg)
 		})
 	} else {
+		// FIXME: THIS IS WRONG! BUT WE ARE NOT USING THE FORK OF SPECS-ACTORS ANYMORE.
+		// THIS CODE SHOULD BE DEPRECATED TO USE THE FVM ACTORS.
 		// Send the cross-message
 		// FIXME: Should we not discard the output for any reason?
-		code = rt.SendWithSerializedParams(rto, msg.Method, msg.Params, msg.Value, &builtin.Discard{})
-		requireSuccessWithNoop(rt, msg, code, "error applying bottomUp message")
+		// code = rt.SendWithSerializedParams(rto, msg.Method, msg.Params, msg.Value, &builtin.Discard{})
+		// requireSuccessWithNoop(rt, msg, code, "error applying bottomUp message")
 	}
 }
 
 func applyBottomUp(rt runtime.Runtime, msg types.Message) {
 	var st SCAState
 
-	_, rto := fromToRawAddr(rt, msg.From, msg.To)
+	// _, rto := fromToRawAddr(rt, msg.From, msg.To)
 	sto, err := msg.To.Subnet()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get subnet from HAddress")
 
@@ -93,10 +95,12 @@ func applyBottomUp(rt runtime.Runtime, msg types.Message) {
 	})
 
 	if sto == st.NetworkName {
+		// FIXME: THIS IS WRONG! BUT WE ARE NOT USING THE FORK OF SPECS-ACTORS ANYMORE.
+		// THIS CODE SHOULD BE DEPRECATED TO USE THE FVM ACTORS.
 		// Release funds to the destination address if it is directed to the current network.
 		// FIXME: Should we not discard the output for any reason?
-		code := rt.SendWithSerializedParams(rto, msg.Method, msg.Params, msg.Value, &builtin.Discard{})
-		requireSuccessWithNoop(rt, msg, code, "error applying bottomUp message")
+		// code := rt.SendWithSerializedParams(rto, msg.Method, msg.Params, msg.Value, &builtin.Discard{})
+		// requireSuccessWithNoop(rt, msg, code, "error applying bottomUp message")
 	}
 }
 

@@ -1,0 +1,4 @@
+[[bundles]]
+version = 8
+path = {mainnet = "./chain/consensus/hierarchical/actors/bundle.car"}
+development = true

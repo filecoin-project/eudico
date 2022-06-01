@@ -11,11 +11,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/filecoin-project/go-state-types/proof"
+
 	"golang.org/x/xerrors"
 
 	ffi "github.com/filecoin-project/filecoin-ffi"
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/specs-actors/actors/runtime/proof"
 	"github.com/filecoin-project/specs-storage/storage"
 
 	"github.com/filecoin-project/lotus/extern/sector-storage/fsutil"
@@ -88,8 +89,6 @@ type path struct {
 }
 
 func (p *path) stat(ls LocalStorage) (fsutil.FsStat, error) {
-	start := time.Now()
-
 	stat, err := ls.Stat(p.local)
 	if err != nil {
 		return fsutil.FsStat{}, xerrors.Errorf("stat %s: %w", p.local, err)
@@ -157,10 +156,6 @@ func (p *path) stat(ls LocalStorage) (fsutil.FsStat, error) {
 		}
 	}
 
-	if time.Now().Sub(start) > 5*time.Second {
-		log.Warnw("slow storage stat", "took", time.Now().Sub(start), "reservations", len(p.reservations))
-	}
-
 	return stat, err
 }
 
@@ -172,7 +167,7 @@ type URLs []string
 
 func NewLocal(ctx context.Context, ls LocalStorage, index SectorIndex, urls []string) (*Local, error) {
 	l := &Local{
-		localStorage: newCachedLocalStorage(ls),
+		localStorage: ls,
 		index:        index,
 		urls:         urls,
 

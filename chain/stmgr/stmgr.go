@@ -7,7 +7,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 
-	"github.com/filecoin-project/specs-actors/v7/actors/migration/nv15"
+	"github.com/filecoin-project/specs-actors/v8/actors/migration/nv16"
 
 	"github.com/filecoin-project/lotus/chain/rand"
 
@@ -58,7 +58,7 @@ type versionSpec struct {
 type migration struct {
 	upgrade       MigrationFunc
 	preMigrations []PreMigration
-	cache         *nv15.MemMigrationCache
+	cache         *nv16.MemMigrationCache
 }
 
 type Executor interface {
@@ -128,7 +128,7 @@ func NewStateManager(cs *store.ChainStore, exec Executor, cr *resolver.Resolver,
 				migration := &migration{
 					upgrade:       upgrade.Migration,
 					preMigrations: upgrade.PreMigrations,
-					cache:         nv15.NewMemMigrationCache(),
+					cache:         nv16.NewMemMigrationCache(),
 				}
 				stateMigrations[upgrade.Height] = migration
 			}

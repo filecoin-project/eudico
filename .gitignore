@@ -43,7 +43,6 @@ build/paramfetch.sh
 /darwin
 /linux
 *.snap
-build/builtin-actors
 
 *-fuzz.zip
 /chain/types/work_msg/
@@ -54,3 +53,6 @@ scratchpad
 gen.gen
 
 **/*-wal/
+
+build/builtin-actors/v*
+build/builtin-actors/*.car

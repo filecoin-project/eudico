@@ -11,6 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/filecoin-project/go-state-types/proof"
+
 	"github.com/elastic/go-sysinfo"
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-multierror"
@@ -20,7 +22,6 @@ import (
 	ffi "github.com/filecoin-project/filecoin-ffi"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-statestore"
-	"github.com/filecoin-project/specs-actors/actors/runtime/proof"
 	"github.com/filecoin-project/specs-storage/storage"
 
 	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
@@ -180,7 +181,6 @@ func (l *LocalWorker) ffiExec() (ffiwrapper.Storage, error) {
 type ReturnType string
 
 const (
-	DataCid               ReturnType = "DataCid"
 	AddPiece              ReturnType = "AddPiece"
 	SealPreCommit1        ReturnType = "SealPreCommit1"
 	SealPreCommit2        ReturnType = "SealPreCommit2"
@@ -233,7 +233,6 @@ func rfunc(in interface{}) func(context.Context, storiface.CallID, storiface.Wor
 }
 
 var returnFunc = map[ReturnType]func(context.Context, storiface.CallID, storiface.WorkerReturn, interface{}, *storiface.CallError) error{
-	DataCid:               rfunc(storiface.WorkerReturn.ReturnDataCid),
 	AddPiece:              rfunc(storiface.WorkerReturn.ReturnAddPiece),
 	SealPreCommit1:        rfunc(storiface.WorkerReturn.ReturnSealPreCommit1),
 	SealPreCommit2:        rfunc(storiface.WorkerReturn.ReturnSealPreCommit2),
@@ -289,7 +288,7 @@ func (l *LocalWorker) asyncCall(ctx context.Context, sector storage.SectorRef, r
 				log.Errorf("get hostname err: %+v", err)
 			}
 
-			err = xerrors.Errorf("%w [Hostname: %s]", err, hostname)
+			err = xerrors.Errorf("%w [Hostname: %s]", err.Error(), hostname)
 		}
 
 		if doReturn(ctx, rt, ci, l.ret, res, toCallError(err)) {
@@ -341,17 +340,6 @@ func (l *LocalWorker) NewSector(ctx context.Context, sector storage.SectorRef) e
 	}
 
 	return sb.NewSector(ctx, sector)
-}
-
-func (l *LocalWorker) DataCid(ctx context.Context, pieceSize abi.UnpaddedPieceSize, pieceData storage.Data) (storiface.CallID, error) {
-	sb, err := l.executor()
-	if err != nil {
-		return storiface.UndefCall, err
-	}
-
-	return l.asyncCall(ctx, storage.NoSectorRef, DataCid, func(ctx context.Context, ci storiface.CallID) (interface{}, error) {
-		return sb.DataCid(ctx, pieceSize, pieceData)
-	})
 }
 
 func (l *LocalWorker) AddPiece(ctx context.Context, sector storage.SectorRef, epcs []abi.UnpaddedPieceSize, sz abi.UnpaddedPieceSize, r io.Reader) (storiface.CallID, error) {

@@ -1,19 +1,8 @@
 package sealtasks
 
-import (
-	"fmt"
-	"strconv"
-	"strings"
-
-	"golang.org/x/xerrors"
-
-	"github.com/filecoin-project/go-state-types/abi"
-)
-
 type TaskType string
 
 const (
-	TTDataCid    TaskType = "seal/v0/datacid"
 	TTAddPiece   TaskType = "seal/v0/addpiece"
 	TTPreCommit1 TaskType = "seal/v0/precommit/1"
 	TTPreCommit2 TaskType = "seal/v0/precommit/2"
@@ -36,8 +25,7 @@ const (
 )
 
 var order = map[TaskType]int{
-	TTRegenSectorKey:      11, // least priority
-	TTDataCid:             10,
+	TTRegenSectorKey:      10, // least priority
 	TTAddPiece:            9,
 	TTReplicaUpdate:       8,
 	TTProveReplicaUpdate2: 7,
@@ -56,7 +44,6 @@ var order = map[TaskType]int{
 }
 
 var shortNames = map[TaskType]string{
-	TTDataCid:  "DC",
 	TTAddPiece: "AP",
 
 	TTPreCommit1: "PC1",
@@ -113,38 +100,4 @@ func (a TaskType) Short() string {
 	}
 
 	return n
-}
-
-type SealTaskType struct {
-	TaskType
-	abi.RegisteredSealProof
-}
-
-func (a TaskType) SealTask(spt abi.RegisteredSealProof) SealTaskType {
-	return SealTaskType{
-		TaskType:            a,
-		RegisteredSealProof: spt,
-	}
-}
-
-func SttFromString(s string) (SealTaskType, error) {
-	var res SealTaskType
-
-	sub := strings.SplitN(s, ":", 2)
-	if len(sub) != 2 {
-		return res, xerrors.Errorf("seal task type string invalid")
-	}
-
-	res.TaskType = TaskType(sub[1])
-	spt, err := strconv.ParseInt(sub[0], 10, 64)
-	if err != nil {
-		return SealTaskType{}, err
-	}
-	res.RegisteredSealProof = abi.RegisteredSealProof(spt)
-
-	return res, nil
-}
-
-func (a SealTaskType) String() string {
-	return fmt.Sprintf("%d:%s", a.RegisteredSealProof, a.TaskType)
 }

@@ -26,8 +26,6 @@ type Resources struct {
 	MaxParallelismGPU int `envname:"MAX_PARALLELISM_GPU"` // when 0, inherits MaxParallelism
 
 	BaseMinMemory uint64 `envname:"BASE_MIN_MEMORY"` // What Must be in RAM for decent perf (shared between threads)
-
-	MaxConcurrent int `envname:"MAX_CONCURRENT"` // Maximum number of tasks of this type that can be scheduled on a worker (0=default, no limit)
 }
 
 /*
@@ -571,7 +569,6 @@ var ResourceTable = map[sealtasks.TaskType]map[abi.RegisteredSealProof]Resources
 func init() {
 	ResourceTable[sealtasks.TTUnseal] = ResourceTable[sealtasks.TTPreCommit1] // TODO: measure accurately
 	ResourceTable[sealtasks.TTRegenSectorKey] = ResourceTable[sealtasks.TTReplicaUpdate]
-	ResourceTable[sealtasks.TTDataCid] = ResourceTable[sealtasks.TTAddPiece]
 
 	// V1_1 is the same as V1
 	for _, m := range ResourceTable {
