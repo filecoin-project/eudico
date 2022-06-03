@@ -3,6 +3,9 @@ package subnetmgr
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"io"
+	"os"
 	"sync"
 
 	"github.com/ipfs/go-blockservice"
@@ -20,6 +23,8 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
+	init8 "github.com/filecoin-project/go-state-types/builtin/v8/init"
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/blockstore"
@@ -27,7 +32,6 @@ import (
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
-	act "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
@@ -53,7 +57,6 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/modules/helpers"
 	"github.com/filecoin-project/specs-actors/actors/builtin"
-	init_ "github.com/filecoin-project/specs-actors/actors/builtin/init"
 	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 )
 
@@ -366,45 +369,109 @@ func (s *SubnetMgr) GetSubnetState(ctx context.Context, id address.SubnetID, act
 	return st, nil
 }
 
-func (s *SubnetMgr) AddSubnet(
-	ctx context.Context, wallet address.Address,
-	parent address.SubnetID, name string,
-	consensus uint64, minerStake abi.TokenAmount,
-	checkPeriod abi.ChainEpoch,
-	consensusParams *hierarchical.ConsensusParams) (address.Address, error) {
-
+func (s *SubnetMgr) AddSubnet(ctx context.Context, wallet address.Address, parent address.SubnetID,
+	name string, cns uint64, minerStake abi.TokenAmount,
+	checkPeriod abi.ChainEpoch, p *hierarchical.ConsensusParams) (address.Address, error) {
+	var err error
 	// Get the api for the parent network hosting the subnet actor for the subnet.
 	parentAPI := s.getAPI(parent)
 	if parentAPI == nil {
 		return address.Undef, xerrors.Errorf("not syncing with parent network")
 	}
 	// Populate constructor parameters for subnet actor
-	addp := &subnet.ConstructParams{
-		NetworkName:   string(s.api.NetName),
-		MinMinerStake: minerStake,
-		Name:          name,
-		Consensus:     hierarchical.ConsensusType(consensus),
-		CheckPeriod:   checkPeriod,
-		ConsensusParams: &hierarchical.ConsensusParams{
-			DelegMiner:    consensusParams.DelegMiner,
-			MinValidators: consensusParams.MinValidators,
+	id, _ := address.NewIDAddress(0)
+	addp := &hierarchical.ConstructParams{
+		Parent: hierarchical.SubnetID{
+			Parent: "/root",
+			Actor:  id,
 		},
+		MinValidatorStake: abi.NewTokenAmount(1),
+		Name:              "test",
+		Consensus:         hierarchical.PoW,
+		CheckPeriod:       abi.ChainEpoch(10),
+	}
+	addp.Genesis, err = initGenesis(addp)
+	fmt.Println(">>>>>>>>>>>>>>>>> LENGTH GENESIS", len(addp.Genesis))
+	addp.Genesis = []byte{}
+	if err != nil {
+		return address.Undef, err
 	}
 
-	if consensus == uint64(hierarchical.Mir) && consensusParams.MinValidators == 0 {
-		return address.Undef, xerrors.New("min number of validators must be more than 0")
+	filename := "chain/consensus/hierarchical/actors/fil_hierarchical_subnet_actor.compact.wasm"
+	file, err := os.Open(filename)
+	if err != nil {
+		return address.Undef, err
 	}
+	defer file.Close() //nolint
+
+	code, err := io.ReadAll(file)
+	if err != nil {
+		return address.Undef, err
+	}
+
+	params, err := actors.SerializeParams(&init8.InstallParams{
+		Code: code,
+	})
+	if err != nil {
+		return address.Undef, xerrors.Errorf("failed to serialize params: %w", err)
+	}
+
+	msg := &types.Message{
+		To:     builtin.InitActorAddr,
+		From:   wallet,
+		Value:  big.Zero(),
+		Method: 3,
+		Params: params,
+	}
+
+	fmt.Println("sending message...")
+	smsg, err := parentAPI.MpoolPushMessage(ctx, msg, nil)
+	if err != nil {
+		return address.Undef, xerrors.Errorf("failed to push message: %w", err)
+	}
+
+	fmt.Printf("gas limit: %d\n", smsg.Message.GasLimit)
+
+	fmt.Println("waiting for message to execute...")
+	wait, err := parentAPI.StateWaitMsg(ctx, smsg.Cid(), build.MessageConfidence, api.LookbackNoLimit, true)
+	if err != nil {
+		return address.Undef, xerrors.Errorf("error waiting for message: %w", err)
+	}
+
+	// check it executed successfully
+	if wait.Receipt.ExitCode != 0 {
+		return address.Undef, xerrors.Errorf("actor installation failed")
+	}
+
+	var installResult init8.InstallReturn
+	r := bytes.NewReader(wait.Receipt.Return)
+	if err := installResult.UnmarshalCBOR(r); err != nil {
+		return address.Undef, xerrors.Errorf("error unmarshaling return value: %w", err)
+	}
+
+	fmt.Printf("Actor Code CID: %s\n", installResult.CodeCid)
+	fmt.Printf("Installed: %t\n", installResult.Installed)
+
+	// if consensus == uint64(hierarchical.Mir) && consensusParams.MinValidators == 0 {
+	// 	return address.Undef, xerrors.New("min number of validators must be more than 0")
+	// }
 
 	seraddp, err := actors.SerializeParams(addp)
 	if err != nil {
 		return address.Undef, err
 	}
+	fmt.Println(">>>>>", seraddp)
+	fmt.Println(">>>>>>>>>< Deserialize")
+	pp := hierarchical.ConstructParams{}
+	err = pp.UnmarshalCBOR(bytes.NewReader(seraddp))
+	fmt.Println(">>>>>>>", pp, err)
 
-	params := &init_.ExecParams{
-		CodeCID:           act.SubnetActorCodeID,
+	initParams := &init8.ExecParams{
+		CodeCID:           installResult.CodeCid,
 		ConstructorParams: seraddp,
 	}
-	serparams, err := actors.SerializeParams(params)
+
+	serparams, err := actors.SerializeParams(initParams)
 	if err != nil {
 		return address.Undef, xerrors.Errorf("failed serializing init actor params: %s", err)
 	}
@@ -420,17 +487,16 @@ func (s *SubnetMgr) AddSubnet(
 		return address.Undef, aerr
 	}
 
-	msg := smsg.Cid()
-	mw, aerr := parentAPI.StateWaitMsg(ctx, msg, build.MessageConfidence, api.LookbackNoLimit, true)
+	var result init8.ExecReturn
+	mw, aerr := parentAPI.StateWaitMsg(ctx, smsg.Cid(), build.MessageConfidence, api.LookbackNoLimit, true)
 	if aerr != nil {
 		return address.Undef, aerr
 	}
 
-	r := &init_.ExecReturn{}
-	if err := r.UnmarshalCBOR(bytes.NewReader(mw.Receipt.Return)); err != nil {
+	if err := result.UnmarshalCBOR(bytes.NewReader(mw.Receipt.Return)); err != nil {
 		return address.Undef, err
 	}
-	return r.IDAddress, nil
+	return result.IDAddress, nil
 }
 
 func (s *SubnetMgr) JoinSubnet(

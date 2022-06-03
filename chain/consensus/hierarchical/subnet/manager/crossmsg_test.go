@@ -1,13 +1,42 @@
 package subnetmgr
 
 import (
+	"bytes"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/lotus/chain/actors"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 )
+
+func TestSer(t *testing.T) {
+	id, _ := address.NewIDAddress(0)
+	addp := &hierarchical.ConstructParams{
+		Parent: hierarchical.SubnetID{
+			Parent: "/root",
+			Actor:  id,
+		},
+		MinValidatorStake: abi.NewTokenAmount(1),
+		Name:              "test",
+		Consensus:         hierarchical.PoW,
+		CheckPeriod:       abi.ChainEpoch(10),
+		Genesis:           []byte{1},
+	}
+
+	seraddp, err := actors.SerializeParams(addp)
+	require.NoError(t, err)
+	fmt.Println(">>>>>", seraddp)
+	fmt.Println(">>>>>>>>>< Deserialize")
+	pp := &hierarchical.ConstructParams{}
+	aerr := pp.UnmarshalCBOR(bytes.NewReader(seraddp))
+	require.NoError(t, aerr)
+	fmt.Println(">>>>>>>", pp, err)
+	require.Equal(t, addp, pp)
+}
 
 func TestPoolTopDown(t *testing.T) {
 	cm := newCrossMsgPool()

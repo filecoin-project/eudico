@@ -10,6 +10,8 @@ func main() {
 	if err := gen.WriteTupleEncodersToFile("./cbor_gen.go", "hierarchical",
 		hierarchical.ConsensusParams{},
 		hierarchical.Validator{},
+		hierarchical.SubnetID{},
+		hierarchical.ConstructParams{},
 	); err != nil {
 		panic(err)
 	}
