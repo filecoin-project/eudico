@@ -79,3 +79,6 @@ issues:
 linters-settings:
   goconst:
     min-occurrences: 6
+
+run:
+  go: 1.18

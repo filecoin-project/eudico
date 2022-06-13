@@ -437,6 +437,8 @@ type FullNodeStruct struct {
 
 		StateWaitMsg func(p0 context.Context, p1 cid.Cid, p2 uint64, p3 abi.ChainEpoch, p4 bool) (*MsgLookup, error) `perm:"read"`
 
+		SyncBlock func(p0 context.Context, p1 *types.BlockMsg) error `perm:"write"`
+
 		SyncCheckBad func(p0 context.Context, p1 cid.Cid) (string, error) `perm:"read"`
 
 		SyncCheckpoint func(p0 context.Context, p1 types.TipSetKey) error `perm:"admin"`
@@ -2978,6 +2980,17 @@ func (s *FullNodeStruct) StateWaitMsg(p0 context.Context, p1 cid.Cid, p2 uint64,
 
 func (s *FullNodeStub) StateWaitMsg(p0 context.Context, p1 cid.Cid, p2 uint64, p3 abi.ChainEpoch, p4 bool) (*MsgLookup, error) {
 	return nil, ErrNotSupported
+}
+
+func (s *FullNodeStruct) SyncBlock(p0 context.Context, p1 *types.BlockMsg) error {
+	if s.Internal.SyncBlock == nil {
+		return ErrNotSupported
+	}
+	return s.Internal.SyncBlock(p0, p1)
+}
+
+func (s *FullNodeStub) SyncBlock(p0 context.Context, p1 *types.BlockMsg) error {
+	return ErrNotSupported
 }
 
 func (s *FullNodeStruct) SyncCheckBad(p0 context.Context, p1 cid.Cid) (string, error) {
