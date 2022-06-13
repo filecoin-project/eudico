@@ -75,6 +75,8 @@ type SubnetState struct {
 	Genesis []byte
 	// Checkpointing period.
 	CheckPeriod abi.ChainEpoch
+	// Finality threshold.
+	FinalityThreshold abi.ChainEpoch
 	// Checkpoints submit to SubnetActor per epoch
 	Checkpoints cid.Cid // HAMT[epoch]Checkpoint
 	// WindowChecks
@@ -128,6 +130,15 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 		period = sca.DefaultCheckpointPeriod
 	}
 
+	finalityThreshold := params.FinalityThreshold
+	if finalityThreshold < 1 {
+		finalityThreshold = params.FinalityThreshold
+	}
+	if finalityThreshold >= period {
+		return nil, xerrors.Errorf("finality threshold (%v) must be less than checkpoint period (%v)",
+			finalityThreshold, period)
+	}
+
 	// TODO: @alfonso do we need this?
 	/* Initialize AMT of miners.
 	emptyArr, err := adt.MakeEmptyArray(adt.AsStore(rt), LaneStatesAmtBitwidth)
@@ -139,17 +150,18 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 	parentID := address.SubnetID(params.NetworkName)
 
 	return &SubnetState{
-		ParentID:      parentID,
-		Consensus:     params.Consensus,
-		MinMinerStake: params.MinMinerStake,
-		Miners:        make([]address.Address, 0),
-		Stake:         emptyStakeCid,
-		Status:        Instantiated,
-		CheckPeriod:   period,
-		Checkpoints:   emptyCheckpointsMapCid,
-		WindowChecks:  emptyWindowChecks,
-		ValidatorSet:  make([]hierarchical.Validator, 0),
-		MinValidators: params.ConsensusParams.MinValidators,
+		ParentID:          parentID,
+		Consensus:         params.Consensus,
+		MinMinerStake:     params.MinMinerStake,
+		Miners:            make([]address.Address, 0),
+		Stake:             emptyStakeCid,
+		Status:            Instantiated,
+		CheckPeriod:       period,
+		Checkpoints:       emptyCheckpointsMapCid,
+		FinalityThreshold: finalityThreshold,
+		WindowChecks:      emptyWindowChecks,
+		ValidatorSet:      make([]hierarchical.Validator, 0),
+		MinValidators:     params.ConsensusParams.MinValidators,
 	}, nil
 
 }

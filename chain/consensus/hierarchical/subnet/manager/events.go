@@ -27,6 +27,8 @@ import (
 // This should always be less than the checkpoint period.
 const FinalityThreshold = 5
 
+const Timeout = 76587687658765876
+
 // struct used to propagate detected changes.
 type diffInfo struct {
 	checkToSign *signInfo
@@ -99,7 +101,13 @@ func (s *SubnetMgr) listenSubnetEvents(ctx context.Context, sh *Subnet) {
 
 	}
 
-	err := evs.StateChanged(checkFunc, changeHandler, revertHandler, FinalityThreshold, 76587687658765876, match)
+	finalityThreshold := FinalityThreshold
+	if sh != nil {
+		finalityThreshold = int(sh.finalityThreshold)
+	}
+
+	err := evs.StateChanged(checkFunc, changeHandler, revertHandler, finalityThreshold, Timeout, match)
+	// TODO: implement error handling properly
 	if err != nil {
 		return
 	}
@@ -219,7 +227,6 @@ func (s *SubnetMgr) matchCheckpointSignature(ctx context.Context, sh *Subnet, ne
 	}
 	// If not return.
 	return false, nil
-
 }
 
 func (s *SubnetMgr) triggerChange(ctx context.Context, sh *Subnet, diff *diffInfo) (more bool, err error) {

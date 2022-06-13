@@ -1,6 +1,7 @@
 package hierarchical
 
 import (
+	"fmt"
 	"strings"
 
 	"golang.org/x/xerrors"
@@ -50,6 +51,26 @@ func ConsensusName(alg ConsensusType) string {
 		return "Dummy"
 	default:
 		return "unknown"
+	}
+}
+
+// Consensus returns the consensus algorithm.
+func Consensus(name string) ConsensusType {
+	switch {
+	case strings.EqualFold(name, "delegated"):
+		return Delegated
+	case strings.EqualFold(name, "pow"):
+		return PoW
+	case strings.EqualFold(name, "tendermint"):
+		return Tendermint
+	case strings.EqualFold(name, "filecoinec"):
+		return FilecoinEC
+	case strings.EqualFold(name, "mir"):
+		return Mir
+	case strings.EqualFold(name, "dummy"):
+		return Dummy
+	default:
+		panic(fmt.Sprintf("unknown consensus name %s", name))
 	}
 }
 

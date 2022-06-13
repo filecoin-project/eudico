@@ -19,8 +19,7 @@ import (
 	"github.com/filecoin-project/specs-actors/actors/util/adt"
 )
 
-// signingState keeps track of checkpoint signing state
-// for an epoch.
+// signingState keeps track of checkpoint signing state for an epoch.
 type signingState struct {
 	wait        abi.ChainEpoch
 	currEpoch   abi.ChainEpoch
@@ -112,7 +111,8 @@ func (sh *Subnet) hasSigned() bool {
 func (sh *Subnet) sigWaitReached() bool {
 	sh.checklk.RLock()
 	defer sh.checklk.RUnlock()
-	return sh.signingState.wait >= FinalityThreshold
+
+	return sh.signingState.wait >= sh.finalityThreshold
 }
 
 func (sh *Subnet) sigWindow() abi.ChainEpoch {

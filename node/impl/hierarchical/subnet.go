@@ -25,12 +25,17 @@ type HierarchicalAPI struct {
 }
 
 func (a *HierarchicalAPI) AddSubnet(
-	ctx context.Context, wallet address.Address,
-	parent address.SubnetID, name string,
-	consensus uint64, minerStake abi.TokenAmount,
+	ctx context.Context,
+	wallet address.Address,
+	parent address.SubnetID,
+	subnetName string,
+	consensus uint64,
+	stake abi.TokenAmount,
 	checkPeriod abi.ChainEpoch,
-	params *hierarchical.ConsensusParams) (address.Address, error) {
-	return a.Sub.AddSubnet(ctx, wallet, parent, name, consensus, minerStake, checkPeriod, params)
+	finalityThreshold abi.ChainEpoch,
+	params *hierarchical.ConsensusParams,
+) (address.Address, error) {
+	return a.Sub.AddSubnet(ctx, wallet, parent, subnetName, consensus, stake, checkPeriod, finalityThreshold, params)
 }
 
 func (a *HierarchicalAPI) JoinSubnet(ctx context.Context, wallet address.Address,

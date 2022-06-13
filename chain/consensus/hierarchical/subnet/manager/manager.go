@@ -93,6 +93,12 @@ type SubnetMgr struct {
 	j journal.Journal
 }
 
+type SubnetParams struct {
+	FinalityThreshold abi.ChainEpoch
+	CheckPeriod       abi.ChainEpoch
+	Consenus          hierarchical.ConsensusType
+}
+
 func NewSubnetMgr(
 	mctx helpers.MetricsCtx,
 	lc fx.Lifecycle,
@@ -174,21 +180,25 @@ func NewSubnetMgr(
 }
 
 func (s *SubnetMgr) startSubnet(id address.SubnetID,
-	parentAPI *API, consensus hierarchical.ConsensusType,
+	parentAPI *API, params *SubnetParams,
 	genesis []byte) error {
 	// Subnets inherit the context from the SubnetManager.
 	ctx, cancel := context.WithCancel(s.ctx)
 
+	consensus := params.Consenus
+
 	log.Infow("Creating new subnet", "subnetID", id)
 	sh := &Subnet{
-		ctx:        ctx,
-		ctxCancel:  cancel,
-		ID:         id,
-		host:       s.host,
-		pubsub:     s.pubsub,
-		nodeServer: s.nodeServer,
-		pmgr:       s.pmgr,
-		consType:   consensus,
+		ctx:               ctx,
+		ctxCancel:         cancel,
+		ID:                id,
+		host:              s.host,
+		pubsub:            s.pubsub,
+		nodeServer:        s.nodeServer,
+		pmgr:              s.pmgr,
+		consType:          consensus,
+		finalityThreshold: params.FinalityThreshold,
+		checkPeriod:       params.CheckPeriod,
 	}
 
 	sh.checklk.Lock()
@@ -367,11 +377,16 @@ func (s *SubnetMgr) GetSubnetState(ctx context.Context, id address.SubnetID, act
 }
 
 func (s *SubnetMgr) AddSubnet(
-	ctx context.Context, wallet address.Address,
-	parent address.SubnetID, name string,
-	consensus uint64, minerStake abi.TokenAmount,
+	ctx context.Context,
+	wallet address.Address,
+	parent address.SubnetID,
+	name string,
+	consensus uint64,
+	minerStake abi.TokenAmount,
 	checkPeriod abi.ChainEpoch,
-	consensusParams *hierarchical.ConsensusParams) (address.Address, error) {
+	finalityThreshold abi.ChainEpoch,
+	consensusParams *hierarchical.ConsensusParams,
+) (address.Address, error) {
 
 	// Get the api for the parent network hosting the subnet actor for the subnet.
 	parentAPI := s.getAPI(parent)
@@ -380,15 +395,21 @@ func (s *SubnetMgr) AddSubnet(
 	}
 	// Populate constructor parameters for subnet actor
 	addp := &subnet.ConstructParams{
-		NetworkName:   string(s.api.NetName),
-		MinMinerStake: minerStake,
-		Name:          name,
-		Consensus:     hierarchical.ConsensusType(consensus),
-		CheckPeriod:   checkPeriod,
+		NetworkName:       string(s.api.NetName),
+		MinMinerStake:     minerStake,
+		Name:              name,
+		Consensus:         hierarchical.ConsensusType(consensus),
+		CheckPeriod:       checkPeriod,
+		FinalityThreshold: finalityThreshold,
 		ConsensusParams: &hierarchical.ConsensusParams{
 			DelegMiner:    consensusParams.DelegMiner,
 			MinValidators: consensusParams.MinValidators,
 		},
+	}
+
+	if finalityThreshold >= checkPeriod {
+		return address.Undef, xerrors.Errorf("finality threshold (%v) must be less than checkpoint period (%v)",
+			finalityThreshold, checkPeriod)
 	}
 
 	if consensus == uint64(hierarchical.Mir) && consensusParams.MinValidators == 0 {
@@ -542,7 +563,13 @@ func (s *SubnetMgr) syncSubnet(ctx context.Context, id address.SubnetID, parentA
 		return err
 	}
 
-	return s.startSubnet(id, parentAPI, st.Consensus, st.Genesis)
+	params := &SubnetParams{
+		Consenus:          st.Consensus,
+		FinalityThreshold: st.FinalityThreshold,
+		CheckPeriod:       st.CheckPeriod,
+	}
+
+	return s.startSubnet(id, parentAPI, params, st.Genesis)
 }
 
 // SyncSubnet starts syncing with a subnet even if we are not an active participant.

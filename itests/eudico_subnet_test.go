@@ -32,18 +32,20 @@ func TestEudicoSubnetMir(t *testing.T) {
 	t.Run("/root/mir-/subnet/dummy", func(t *testing.T) {
 		runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDummy())
 	})
+	/*
+		t.Run("/root/dummy-/subnet/mir", func(t *testing.T) {
+			runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetMir(), kit.MinValidators(1), kit.ValidatorAddress("127.0.0.1:11001"))
+		})
 
-	t.Run("/root/dummy-/subnet/mir", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetMir(), kit.MinValidators(1), kit.ValidatorAddress("127.0.0.1:11001"))
-	})
+		t.Run("/root/mir-/subnet/delegated", func(t *testing.T) {
+			runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDelegated())
+		})
 
-	t.Run("/root/mir-/subnet/delegated", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDelegated())
-	})
+		t.Run("/root/delegated-/subnet/mir", func(t *testing.T) {
+			runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetMir(), kit.MinValidators(1), kit.ValidatorAddress("127.0.0.1:11002"))
+		})
 
-	t.Run("/root/delegated-/subnet/mir", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetMir(), kit.MinValidators(1), kit.ValidatorAddress("127.0.0.1:11002"))
-	})
+	*/
 }
 
 func TestEudicoSubnet(t *testing.T) {
@@ -167,6 +169,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	subnetName := "testSubnet"
 	minerStake := abi.NewStoragePower(1e8)
 	checkPeriod := abi.ChainEpoch(10)
+	finalityThreshold := abi.ChainEpoch(5)
 
 	err = kit.WaitForBalance(ctx, addr, 20, full)
 	require.NoError(t, err)
@@ -180,7 +183,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 		MinValidators: n,
 		DelegMiner:    addr,
 	}
-	actorAddr, err := full.AddSubnet(ctx, addr, parent, subnetName, cns, minerStake, checkPeriod, p)
+	actorAddr, err := full.AddSubnet(ctx, addr, parent, subnetName, cns, minerStake, checkPeriod, finalityThreshold, p)
 	require.NoError(t, err)
 
 	subnetAddr := address.NewSubnetID(parent, actorAddr)

@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"golang.org/x/xerrors"
+
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/crypto"
-	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
@@ -34,8 +35,7 @@ type AddrInfo struct {
 
 var _ Signer = SingleSigner{}
 
-// SingleSignVerifier is a simple verifier that checks
-// if the signature envolope included in the checkpoint is valid.
+// SingleSigner is a simple verifier that checks if the signature envolope included in the checkpoint is valid.
 type SingleSigner struct{}
 
 func NewSingleSigner() SingleSigner {

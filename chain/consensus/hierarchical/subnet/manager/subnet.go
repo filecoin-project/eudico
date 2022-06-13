@@ -15,6 +15,7 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
@@ -53,6 +54,10 @@ type Subnet struct {
 	consType hierarchical.ConsensusType
 	// Consensus of the subnet
 	cons consensus.Consensus
+	// Finality threshold.
+	finalityThreshold abi.ChainEpoch
+	// Check period.
+	checkPeriod abi.ChainEpoch
 	// Mempool for the subnet.
 	mpool *messagepool.MessagePool
 	// Syncer for the subnet chain

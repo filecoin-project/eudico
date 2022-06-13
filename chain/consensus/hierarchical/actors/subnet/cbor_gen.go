@@ -21,7 +21,7 @@ var _ = cid.Undef
 var _ = math.E
 var _ = sort.Sort
 
-var lengthBufSubnetState = []byte{142}
+var lengthBufSubnetState = []byte{143}
 
 func (t *SubnetState) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -124,6 +124,17 @@ func (t *SubnetState) MarshalCBOR(w io.Writer) error {
 		}
 	}
 
+	// t.FinalityThreshold (abi.ChainEpoch) (int64)
+	if t.FinalityThreshold >= 0 {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.FinalityThreshold)); err != nil {
+			return err
+		}
+	} else {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.FinalityThreshold-1)); err != nil {
+			return err
+		}
+	}
+
 	// t.Checkpoints (cid.Cid) (struct)
 
 	if err := cbg.WriteCidBuf(scratch, w, t.Checkpoints); err != nil {
@@ -173,7 +184,7 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 14 {
+	if extra != 15 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -330,6 +341,31 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) error {
 
 		t.CheckPeriod = abi.ChainEpoch(extraI)
 	}
+	// t.FinalityThreshold (abi.ChainEpoch) (int64)
+	{
+		maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+		var extraI int64
+		if err != nil {
+			return err
+		}
+		switch maj {
+		case cbg.MajUnsignedInt:
+			extraI = int64(extra)
+			if extraI < 0 {
+				return fmt.Errorf("int64 positive overflow")
+			}
+		case cbg.MajNegativeInt:
+			extraI = int64(extra)
+			if extraI < 0 {
+				return fmt.Errorf("int64 negative oveflow")
+			}
+			extraI = -1 - extraI
+		default:
+			return fmt.Errorf("wrong type for int64 field: %d", maj)
+		}
+
+		t.FinalityThreshold = abi.ChainEpoch(extraI)
+	}
 	// t.Checkpoints (cid.Cid) (struct)
 
 	{
@@ -400,7 +436,7 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufConstructParams = []byte{134}
+var lengthBufConstructParams = []byte{135}
 
 func (t *ConstructParams) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -463,6 +499,17 @@ func (t *ConstructParams) MarshalCBOR(w io.Writer) error {
 			return err
 		}
 	}
+
+	// t.FinalityThreshold (abi.ChainEpoch) (int64)
+	if t.FinalityThreshold >= 0 {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.FinalityThreshold)); err != nil {
+			return err
+		}
+	} else {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.FinalityThreshold-1)); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -480,7 +527,7 @@ func (t *ConstructParams) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 6 {
+	if extra != 7 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -570,6 +617,31 @@ func (t *ConstructParams) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		t.CheckPeriod = abi.ChainEpoch(extraI)
+	}
+	// t.FinalityThreshold (abi.ChainEpoch) (int64)
+	{
+		maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+		var extraI int64
+		if err != nil {
+			return err
+		}
+		switch maj {
+		case cbg.MajUnsignedInt:
+			extraI = int64(extra)
+			if extraI < 0 {
+				return fmt.Errorf("int64 positive overflow")
+			}
+		case cbg.MajNegativeInt:
+			extraI = int64(extra)
+			if extraI < 0 {
+				return fmt.Errorf("int64 negative oveflow")
+			}
+			extraI = -1 - extraI
+		default:
+			return fmt.Errorf("wrong type for int64 field: %d", maj)
+		}
+
+		t.FinalityThreshold = abi.ChainEpoch(extraI)
 	}
 	return nil
 }
