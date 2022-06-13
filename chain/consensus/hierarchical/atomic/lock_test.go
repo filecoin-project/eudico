@@ -161,7 +161,7 @@ func (t *SampleState) UnmarshalCBOR(r io.Reader) error {
 	// t.S (string) (string)
 
 	{
-		sval, err := cbg.ReadStringBuf(br, scratch)
+		sval, err := cbg.ReadString(br)
 		if err != nil {
 			return err
 		}

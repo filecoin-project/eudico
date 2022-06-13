@@ -26,18 +26,19 @@ func (t *ResolveMsg) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufResolveMsg); err != nil {
+
+	cw := cbg.NewCborWriter(w)
+
+	if _, err := cw.Write(lengthBufResolveMsg); err != nil {
 		return err
 	}
-
-	scratch := make([]byte, 9)
 
 	// t.From (address.SubnetID) (string)
 	if len(t.From) > cbg.MaxLength {
 		return xerrors.Errorf("Value in field t.From was too long")
 	}
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.From))); err != nil {
+	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len(t.From))); err != nil {
 		return err
 	}
 	if _, err := io.WriteString(w, string(t.From)); err != nil {
@@ -46,23 +47,23 @@ func (t *ResolveMsg) MarshalCBOR(w io.Writer) error {
 
 	// t.Type (resolver.MsgType) (uint64)
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.Type)); err != nil {
+	if err := cw.WriteMajorTypeHeader(cbg.MajUnsignedInt, uint64(t.Type)); err != nil {
 		return err
 	}
 
 	// t.Cid (cid.Cid) (struct)
 
-	if err := cbg.WriteCidBuf(scratch, w, t.Cid); err != nil {
+	if err := cbg.WriteCid(cw, t.Cid); err != nil {
 		return xerrors.Errorf("failed to write cid field t.Cid: %w", err)
 	}
 
 	// t.CrossMsgs (sca.CrossMsgs) (struct)
-	if err := t.CrossMsgs.MarshalCBOR(w); err != nil {
+	if err := t.CrossMsgs.MarshalCBOR(cw); err != nil {
 		return err
 	}
 
 	// t.Locked (atomic.LockedState) (struct)
-	if err := t.Locked.MarshalCBOR(w); err != nil {
+	if err := t.Locked.MarshalCBOR(cw); err != nil {
 		return err
 	}
 
@@ -71,7 +72,7 @@ func (t *ResolveMsg) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("Value in field t.Actor was too long")
 	}
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Actor))); err != nil {
+	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len(t.Actor))); err != nil {
 		return err
 	}
 	if _, err := io.WriteString(w, string(t.Actor)); err != nil {
@@ -80,16 +81,21 @@ func (t *ResolveMsg) MarshalCBOR(w io.Writer) error {
 	return nil
 }
 
-func (t *ResolveMsg) UnmarshalCBOR(r io.Reader) error {
+func (t *ResolveMsg) UnmarshalCBOR(r io.Reader) (err error) {
 	*t = ResolveMsg{}
 
-	br := cbg.GetPeeker(r)
-	scratch := make([]byte, 8)
+	cr := cbg.NewCborReader(r)
 
-	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	maj, extra, err := cr.ReadHeader()
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if err == io.EOF {
+			err = io.ErrUnexpectedEOF
+		}
+	}()
+
 	if maj != cbg.MajArray {
 		return fmt.Errorf("cbor input should be of type array")
 	}
@@ -101,7 +107,7 @@ func (t *ResolveMsg) UnmarshalCBOR(r io.Reader) error {
 	// t.From (address.SubnetID) (string)
 
 	{
-		sval, err := cbg.ReadStringBuf(br, scratch)
+		sval, err := cbg.ReadString(cr)
 		if err != nil {
 			return err
 		}
@@ -112,7 +118,7 @@ func (t *ResolveMsg) UnmarshalCBOR(r io.Reader) error {
 
 	{
 
-		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		maj, extra, err = cr.ReadHeader()
 		if err != nil {
 			return err
 		}
@@ -126,7 +132,7 @@ func (t *ResolveMsg) UnmarshalCBOR(r io.Reader) error {
 
 	{
 
-		c, err := cbg.ReadCid(br)
+		c, err := cbg.ReadCid(cr)
 		if err != nil {
 			return xerrors.Errorf("failed to read cid field t.Cid: %w", err)
 		}
@@ -138,7 +144,7 @@ func (t *ResolveMsg) UnmarshalCBOR(r io.Reader) error {
 
 	{
 
-		if err := t.CrossMsgs.UnmarshalCBOR(br); err != nil {
+		if err := t.CrossMsgs.UnmarshalCBOR(cr); err != nil {
 			return xerrors.Errorf("unmarshaling t.CrossMsgs: %w", err)
 		}
 
@@ -147,7 +153,7 @@ func (t *ResolveMsg) UnmarshalCBOR(r io.Reader) error {
 
 	{
 
-		if err := t.Locked.UnmarshalCBOR(br); err != nil {
+		if err := t.Locked.UnmarshalCBOR(cr); err != nil {
 			return xerrors.Errorf("unmarshaling t.Locked: %w", err)
 		}
 
@@ -155,7 +161,7 @@ func (t *ResolveMsg) UnmarshalCBOR(r io.Reader) error {
 	// t.Actor (string) (string)
 
 	{
-		sval, err := cbg.ReadStringBuf(br, scratch)
+		sval, err := cbg.ReadString(cr)
 		if err != nil {
 			return err
 		}

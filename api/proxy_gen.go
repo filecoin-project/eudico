@@ -437,6 +437,8 @@ type FullNodeStruct struct {
 
 		StateWaitMsg func(p0 context.Context, p1 cid.Cid, p2 uint64, p3 abi.ChainEpoch, p4 bool) (*MsgLookup, error) `perm:"read"`
 
+		SyncBlock func(p0 context.Context, p1 *types.BlockMsg) error `perm:"write"`
+
 		SyncCheckBad func(p0 context.Context, p1 cid.Cid) (string, error) `perm:"read"`
 
 		SyncCheckpoint func(p0 context.Context, p1 types.TipSetKey) error `perm:"admin"`
@@ -518,6 +520,8 @@ type GatewayStruct struct {
 		ChainNotify func(p0 context.Context) (<-chan []*HeadChange, error) ``
 
 		ChainReadObj func(p0 context.Context, p1 cid.Cid) ([]byte, error) ``
+
+		Discover func(p0 context.Context) (apitypes.OpenRPCDocument, error) ``
 
 		GasEstimateMessageGas func(p0 context.Context, p1 *types.Message, p2 *MessageSendSpec, p3 types.TipSetKey) (*types.Message, error) ``
 
@@ -726,6 +730,8 @@ type StorageMinerStruct struct {
 		DagstoreLookupPieces func(p0 context.Context, p1 cid.Cid) ([]DagstoreShardInfo, error) `perm:"admin"`
 
 		DagstoreRecoverShard func(p0 context.Context, p1 string) error `perm:"write"`
+
+		DagstoreRegisterShard func(p0 context.Context, p1 string) error `perm:"admin"`
 
 		DealsConsiderOfflineRetrievalDeals func(p0 context.Context) (bool, error) `perm:"admin"`
 
@@ -2976,6 +2982,17 @@ func (s *FullNodeStub) StateWaitMsg(p0 context.Context, p1 cid.Cid, p2 uint64, p
 	return nil, ErrNotSupported
 }
 
+func (s *FullNodeStruct) SyncBlock(p0 context.Context, p1 *types.BlockMsg) error {
+	if s.Internal.SyncBlock == nil {
+		return ErrNotSupported
+	}
+	return s.Internal.SyncBlock(p0, p1)
+}
+
+func (s *FullNodeStub) SyncBlock(p0 context.Context, p1 *types.BlockMsg) error {
+	return ErrNotSupported
+}
+
 func (s *FullNodeStruct) SyncCheckBad(p0 context.Context, p1 cid.Cid) (string, error) {
 	if s.Internal.SyncCheckBad == nil {
 		return "", ErrNotSupported
@@ -3359,6 +3376,17 @@ func (s *GatewayStruct) ChainReadObj(p0 context.Context, p1 cid.Cid) ([]byte, er
 
 func (s *GatewayStub) ChainReadObj(p0 context.Context, p1 cid.Cid) ([]byte, error) {
 	return *new([]byte), ErrNotSupported
+}
+
+func (s *GatewayStruct) Discover(p0 context.Context) (apitypes.OpenRPCDocument, error) {
+	if s.Internal.Discover == nil {
+		return *new(apitypes.OpenRPCDocument), ErrNotSupported
+	}
+	return s.Internal.Discover(p0)
+}
+
+func (s *GatewayStub) Discover(p0 context.Context) (apitypes.OpenRPCDocument, error) {
+	return *new(apitypes.OpenRPCDocument), ErrNotSupported
 }
 
 func (s *GatewayStruct) GasEstimateMessageGas(p0 context.Context, p1 *types.Message, p2 *MessageSendSpec, p3 types.TipSetKey) (*types.Message, error) {
@@ -4326,6 +4354,17 @@ func (s *StorageMinerStruct) DagstoreRecoverShard(p0 context.Context, p1 string)
 }
 
 func (s *StorageMinerStub) DagstoreRecoverShard(p0 context.Context, p1 string) error {
+	return ErrNotSupported
+}
+
+func (s *StorageMinerStruct) DagstoreRegisterShard(p0 context.Context, p1 string) error {
+	if s.Internal.DagstoreRegisterShard == nil {
+		return ErrNotSupported
+	}
+	return s.Internal.DagstoreRegisterShard(p0, p1)
+}
+
+func (s *StorageMinerStub) DagstoreRegisterShard(p0 context.Context, p1 string) error {
 	return ErrNotSupported
 }
 

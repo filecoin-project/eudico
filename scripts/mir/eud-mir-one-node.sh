@@ -6,7 +6,6 @@ NODE_0_MINER_LOG="./eudico_miner_0.log"
 
 LOG_LEVEL="info,mir-consensus=debug,mir-agent=debug"
 NODES=/root:t1wpixt5mihkj75lfhrnaa6v56n27epvlgwparujy@127.0.0.1:10000
-NODE_0=/root:t1wpixt5mihkj75lfhrnaa6v56n27epvlgwparujy
 
 rm -rf ./eudico
 make eudico
@@ -27,8 +26,7 @@ tmux new-session -d -s "mir" \; \
   send-keys -t "mir:0.1" "
         export EUDICO_PATH=$NODE_0_PATH
         export GOLOG_LOG_LEVEL=$LOG_LEVEL
-        export EUDICO_MIR_ID=$NODE_0
-        export EUDICO_MIR_MINERS=$NODES
+        export EUDICO_MIR_VALIDATORS=$NODES
         sleep 3
         ./eudico wait-api;
         ./eudico wallet import --as-default ./testdata/wallet/node0.key;

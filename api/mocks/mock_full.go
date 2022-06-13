@@ -3338,6 +3338,20 @@ func (mr *MockFullNodeMockRecorder) SubnetStateWaitMsg(arg0, arg1, arg2, arg3, a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubnetStateWaitMsg", reflect.TypeOf((*MockFullNode)(nil).SubnetStateWaitMsg), arg0, arg1, arg2, arg3, arg4, arg5)
 }
 
+// SyncBlock mocks base method.
+func (m *MockFullNode) SyncBlock(arg0 context.Context, arg1 *types.BlockMsg) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SyncBlock", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SyncBlock indicates an expected call of SyncBlock.
+func (mr *MockFullNodeMockRecorder) SyncBlock(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncBlock", reflect.TypeOf((*MockFullNode)(nil).SyncBlock), arg0, arg1)
+}
+
 // SyncCheckBad mocks base method.
 func (m *MockFullNode) SyncCheckBad(arg0 context.Context, arg1 cid.Cid) (string, error) {
 	m.ctrl.T.Helper()

@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync/atomic"
 
-	cid "github.com/ipfs/go-cid"
+	"github.com/ipfs/go-cid"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
@@ -104,6 +104,57 @@ func (a *SyncAPI) SyncSubmitBlock(ctx context.Context, blk *types.BlockMsg) erro
 	}
 
 	return a.PubSub.Publish(build.BlocksTopic(a.NetName), b) //nolint:staticcheck
+}
+
+func (a *SyncAPI) SyncBlock(ctx context.Context, blk *types.BlockMsg) error {
+	parent, err := a.Syncer.ChainStore().GetBlock(ctx, blk.Header.Parents[0])
+	if err != nil {
+		return xerrors.Errorf("loading parent block: %w", err)
+	}
+
+	if a.SlashFilter != nil {
+		if err := a.SlashFilter.MinedBlock(ctx, blk.Header, parent.Height); err != nil {
+			log.Errorf("<!!> SLASH FILTER ERROR: %s", err)
+			return xerrors.Errorf("<!!> SLASH FILTER ERROR: %w", err)
+		}
+	}
+
+	// TODO: should we have some sort of fast path to adding a local block?
+	bmsgs, err := a.Syncer.ChainStore().LoadMessagesFromCids(ctx, blk.BlsMessages)
+	if err != nil {
+		return xerrors.Errorf("failed to load bls messages: %w", err)
+	}
+
+	smsgs, err := a.Syncer.ChainStore().LoadSignedMessagesFromCids(ctx, blk.SecpkMessages)
+	if err != nil {
+		return xerrors.Errorf("failed to load secpk message: %w", err)
+	}
+
+	crossmsgs, err := a.Syncer.ChainStore().LoadMessagesFromCids(ctx, blk.CrossMessages)
+	if err != nil {
+		return xerrors.Errorf("failed to load secpk message: %w", err)
+	}
+
+	fb := &types.FullBlock{
+		Header:        blk.Header,
+		BlsMessages:   bmsgs,
+		SecpkMessages: smsgs,
+		CrossMessages: crossmsgs,
+	}
+
+	if err := a.Syncer.ValidateMsgMeta(fb); err != nil {
+		return xerrors.Errorf("provided messages did not match block: %w", err)
+	}
+
+	ts, err := types.NewTipSet([]*types.BlockHeader{blk.Header})
+	if err != nil {
+		return xerrors.Errorf("somehow failed to make a tipset out of a single block: %w", err)
+	}
+	if err := a.Syncer.Sync(ctx, ts); err != nil {
+		return xerrors.Errorf("sync to submitted block failed: %w", err)
+	}
+
+	return nil
 }
 
 func (a *SyncAPI) SyncIncomingBlocks(ctx context.Context) (<-chan *types.BlockHeader, error) {

@@ -26,37 +26,43 @@ func (t *MergeParams) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufMergeParams); err != nil {
+
+	cw := cbg.NewCborWriter(w)
+
+	if _, err := cw.Write(lengthBufMergeParams); err != nil {
 		return err
 	}
-
-	scratch := make([]byte, 9)
 
 	// t.State ([]uint8) (slice)
 	if len(t.State) > cbg.ByteArrayMaxLen {
 		return xerrors.Errorf("Byte array in field t.State was too long")
 	}
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajByteString, uint64(len(t.State))); err != nil {
+	if err := cw.WriteMajorTypeHeader(cbg.MajByteString, uint64(len(t.State))); err != nil {
 		return err
 	}
 
-	if _, err := w.Write(t.State[:]); err != nil {
+	if _, err := cw.Write(t.State[:]); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (t *MergeParams) UnmarshalCBOR(r io.Reader) error {
+func (t *MergeParams) UnmarshalCBOR(r io.Reader) (err error) {
 	*t = MergeParams{}
 
-	br := cbg.GetPeeker(r)
-	scratch := make([]byte, 8)
+	cr := cbg.NewCborReader(r)
 
-	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	maj, extra, err := cr.ReadHeader()
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if err == io.EOF {
+			err = io.ErrUnexpectedEOF
+		}
+	}()
+
 	if maj != cbg.MajArray {
 		return fmt.Errorf("cbor input should be of type array")
 	}
@@ -67,7 +73,7 @@ func (t *MergeParams) UnmarshalCBOR(r io.Reader) error {
 
 	// t.State ([]uint8) (slice)
 
-	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	maj, extra, err = cr.ReadHeader()
 	if err != nil {
 		return err
 	}
@@ -83,7 +89,7 @@ func (t *MergeParams) UnmarshalCBOR(r io.Reader) error {
 		t.State = make([]uint8, extra)
 	}
 
-	if _, err := io.ReadFull(br, t.State[:]); err != nil {
+	if _, err := io.ReadFull(cr, t.State[:]); err != nil {
 		return err
 	}
 	return nil
@@ -96,14 +102,15 @@ func (t *UnlockParams) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufUnlockParams); err != nil {
+
+	cw := cbg.NewCborWriter(w)
+
+	if _, err := cw.Write(lengthBufUnlockParams); err != nil {
 		return err
 	}
 
-	scratch := make([]byte, 9)
-
 	// t.Params (atomic.LockParams) (struct)
-	if err := t.Params.MarshalCBOR(w); err != nil {
+	if err := t.Params.MarshalCBOR(cw); err != nil {
 		return err
 	}
 
@@ -112,26 +119,31 @@ func (t *UnlockParams) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("Byte array in field t.State was too long")
 	}
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajByteString, uint64(len(t.State))); err != nil {
+	if err := cw.WriteMajorTypeHeader(cbg.MajByteString, uint64(len(t.State))); err != nil {
 		return err
 	}
 
-	if _, err := w.Write(t.State[:]); err != nil {
+	if _, err := cw.Write(t.State[:]); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (t *UnlockParams) UnmarshalCBOR(r io.Reader) error {
+func (t *UnlockParams) UnmarshalCBOR(r io.Reader) (err error) {
 	*t = UnlockParams{}
 
-	br := cbg.GetPeeker(r)
-	scratch := make([]byte, 8)
+	cr := cbg.NewCborReader(r)
 
-	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	maj, extra, err := cr.ReadHeader()
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if err == io.EOF {
+			err = io.ErrUnexpectedEOF
+		}
+	}()
+
 	if maj != cbg.MajArray {
 		return fmt.Errorf("cbor input should be of type array")
 	}
@@ -144,16 +156,16 @@ func (t *UnlockParams) UnmarshalCBOR(r io.Reader) error {
 
 	{
 
-		b, err := br.ReadByte()
+		b, err := cr.ReadByte()
 		if err != nil {
 			return err
 		}
 		if b != cbg.CborNull[0] {
-			if err := br.UnreadByte(); err != nil {
+			if err := cr.UnreadByte(); err != nil {
 				return err
 			}
 			t.Params = new(LockParams)
-			if err := t.Params.UnmarshalCBOR(br); err != nil {
+			if err := t.Params.UnmarshalCBOR(cr); err != nil {
 				return xerrors.Errorf("unmarshaling t.Params pointer: %w", err)
 			}
 		}
@@ -161,7 +173,7 @@ func (t *UnlockParams) UnmarshalCBOR(r io.Reader) error {
 	}
 	// t.State ([]uint8) (slice)
 
-	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	maj, extra, err = cr.ReadHeader()
 	if err != nil {
 		return err
 	}
@@ -177,7 +189,7 @@ func (t *UnlockParams) UnmarshalCBOR(r io.Reader) error {
 		t.State = make([]uint8, extra)
 	}
 
-	if _, err := io.ReadFull(br, t.State[:]); err != nil {
+	if _, err := io.ReadFull(cr, t.State[:]); err != nil {
 		return err
 	}
 	return nil
@@ -190,15 +202,16 @@ func (t *LockParams) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufLockParams); err != nil {
+
+	cw := cbg.NewCborWriter(w)
+
+	if _, err := cw.Write(lengthBufLockParams); err != nil {
 		return err
 	}
 
-	scratch := make([]byte, 9)
-
 	// t.Method (abi.MethodNum) (uint64)
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.Method)); err != nil {
+	if err := cw.WriteMajorTypeHeader(cbg.MajUnsignedInt, uint64(t.Method)); err != nil {
 		return err
 	}
 
@@ -207,26 +220,31 @@ func (t *LockParams) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("Byte array in field t.Params was too long")
 	}
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajByteString, uint64(len(t.Params))); err != nil {
+	if err := cw.WriteMajorTypeHeader(cbg.MajByteString, uint64(len(t.Params))); err != nil {
 		return err
 	}
 
-	if _, err := w.Write(t.Params[:]); err != nil {
+	if _, err := cw.Write(t.Params[:]); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (t *LockParams) UnmarshalCBOR(r io.Reader) error {
+func (t *LockParams) UnmarshalCBOR(r io.Reader) (err error) {
 	*t = LockParams{}
 
-	br := cbg.GetPeeker(r)
-	scratch := make([]byte, 8)
+	cr := cbg.NewCborReader(r)
 
-	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	maj, extra, err := cr.ReadHeader()
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if err == io.EOF {
+			err = io.ErrUnexpectedEOF
+		}
+	}()
+
 	if maj != cbg.MajArray {
 		return fmt.Errorf("cbor input should be of type array")
 	}
@@ -239,7 +257,7 @@ func (t *LockParams) UnmarshalCBOR(r io.Reader) error {
 
 	{
 
-		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		maj, extra, err = cr.ReadHeader()
 		if err != nil {
 			return err
 		}
@@ -251,7 +269,7 @@ func (t *LockParams) UnmarshalCBOR(r io.Reader) error {
 	}
 	// t.Params ([]uint8) (slice)
 
-	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	maj, extra, err = cr.ReadHeader()
 	if err != nil {
 		return err
 	}
@@ -267,7 +285,7 @@ func (t *LockParams) UnmarshalCBOR(r io.Reader) error {
 		t.Params = make([]uint8, extra)
 	}
 
-	if _, err := io.ReadFull(br, t.Params[:]); err != nil {
+	if _, err := io.ReadFull(cr, t.Params[:]); err != nil {
 		return err
 	}
 	return nil
@@ -280,31 +298,37 @@ func (t *LockedOutput) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufLockedOutput); err != nil {
+
+	cw := cbg.NewCborWriter(w)
+
+	if _, err := cw.Write(lengthBufLockedOutput); err != nil {
 		return err
 	}
 
-	scratch := make([]byte, 9)
-
 	// t.Cid (cid.Cid) (struct)
 
-	if err := cbg.WriteCidBuf(scratch, w, t.Cid); err != nil {
+	if err := cbg.WriteCid(cw, t.Cid); err != nil {
 		return xerrors.Errorf("failed to write cid field t.Cid: %w", err)
 	}
 
 	return nil
 }
 
-func (t *LockedOutput) UnmarshalCBOR(r io.Reader) error {
+func (t *LockedOutput) UnmarshalCBOR(r io.Reader) (err error) {
 	*t = LockedOutput{}
 
-	br := cbg.GetPeeker(r)
-	scratch := make([]byte, 8)
+	cr := cbg.NewCborReader(r)
 
-	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	maj, extra, err := cr.ReadHeader()
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if err == io.EOF {
+			err = io.ErrUnexpectedEOF
+		}
+	}()
+
 	if maj != cbg.MajArray {
 		return fmt.Errorf("cbor input should be of type array")
 	}
@@ -317,7 +341,7 @@ func (t *LockedOutput) UnmarshalCBOR(r io.Reader) error {
 
 	{
 
-		c, err := cbg.ReadCid(br)
+		c, err := cbg.ReadCid(cr)
 		if err != nil {
 			return xerrors.Errorf("failed to read cid field t.Cid: %w", err)
 		}
@@ -335,11 +359,12 @@ func (t *LockedState) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufLockedState); err != nil {
+
+	cw := cbg.NewCborWriter(w)
+
+	if _, err := cw.Write(lengthBufLockedState); err != nil {
 		return err
 	}
-
-	scratch := make([]byte, 9)
 
 	// t.Lock (bool) (bool)
 	if err := cbg.WriteBool(w, t.Lock); err != nil {
@@ -351,26 +376,31 @@ func (t *LockedState) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("Byte array in field t.S was too long")
 	}
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajByteString, uint64(len(t.S))); err != nil {
+	if err := cw.WriteMajorTypeHeader(cbg.MajByteString, uint64(len(t.S))); err != nil {
 		return err
 	}
 
-	if _, err := w.Write(t.S[:]); err != nil {
+	if _, err := cw.Write(t.S[:]); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (t *LockedState) UnmarshalCBOR(r io.Reader) error {
+func (t *LockedState) UnmarshalCBOR(r io.Reader) (err error) {
 	*t = LockedState{}
 
-	br := cbg.GetPeeker(r)
-	scratch := make([]byte, 8)
+	cr := cbg.NewCborReader(r)
 
-	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	maj, extra, err := cr.ReadHeader()
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if err == io.EOF {
+			err = io.ErrUnexpectedEOF
+		}
+	}()
+
 	if maj != cbg.MajArray {
 		return fmt.Errorf("cbor input should be of type array")
 	}
@@ -381,7 +411,7 @@ func (t *LockedState) UnmarshalCBOR(r io.Reader) error {
 
 	// t.Lock (bool) (bool)
 
-	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	maj, extra, err = cr.ReadHeader()
 	if err != nil {
 		return err
 	}
@@ -398,7 +428,7 @@ func (t *LockedState) UnmarshalCBOR(r io.Reader) error {
 	}
 	// t.S ([]uint8) (slice)
 
-	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	maj, extra, err = cr.ReadHeader()
 	if err != nil {
 		return err
 	}
@@ -414,7 +444,7 @@ func (t *LockedState) UnmarshalCBOR(r io.Reader) error {
 		t.S = make([]uint8, extra)
 	}
 
-	if _, err := io.ReadFull(br, t.S[:]); err != nil {
+	if _, err := io.ReadFull(cr, t.S[:]); err != nil {
 		return err
 	}
 	return nil

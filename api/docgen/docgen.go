@@ -12,8 +12,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-bitfield"
 	"github.com/google/uuid"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-graphsync"
@@ -24,11 +22,16 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/multiformats/go-multiaddr"
 
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-bitfield"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+
+	textselector "github.com/ipld/go-ipld-selector-text-lite"
+
 	datatransfer "github.com/filecoin-project/go-data-transfer"
-	filestore "github.com/filecoin-project/go-fil-markets/filestore"
+	"github.com/filecoin-project/go-fil-markets/filestore"
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
 	"github.com/filecoin-project/go-jsonrpc/auth"
-	textselector "github.com/ipld/go-ipld-selector-text-lite"
 
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/crypto"
@@ -48,12 +51,13 @@ import (
 )
 
 var ExampleValues = map[reflect.Type]interface{}{
-	reflect.TypeOf(api.MinerSubsystem(0)): api.MinerSubsystem(1),
-	reflect.TypeOf(auth.Permission("")):   auth.Permission("write"),
-	reflect.TypeOf(""):                    "string value",
-	reflect.TypeOf(uint64(42)):            uint64(42),
-	reflect.TypeOf(byte(7)):               byte(7),
-	reflect.TypeOf([]byte{}):              []byte("byte array"),
+	reflect.TypeOf(api.MinerSubsystem(0)):         api.MinerSubsystem(1),
+	reflect.TypeOf(auth.Permission("")):           auth.Permission("write"),
+	reflect.TypeOf(""):                            "string value",
+	reflect.TypeOf(uint64(42)):                    uint64(42),
+	reflect.TypeOf(byte(7)):                       byte(7),
+	reflect.TypeOf([]byte{}):                      []byte("byte array"),
+	reflect.TypeOf(hierarchical.ConsensusType(1)): hierarchical.ConsensusType(1),
 }
 
 func addExample(v interface{}) {
@@ -356,6 +360,10 @@ func GetAPIType(name, pkg string) (i interface{}, t reflect.Type, permStruct []r
 			i = &api.WorkerStruct{}
 			t = reflect.TypeOf(new(struct{ api.Worker })).Elem()
 			permStruct = append(permStruct, reflect.TypeOf(api.WorkerStruct{}.Internal))
+		case "Gateway":
+			i = &api.GatewayStruct{}
+			t = reflect.TypeOf(new(struct{ api.Gateway })).Elem()
+			permStruct = append(permStruct, reflect.TypeOf(api.GatewayStruct{}.Internal))
 		default:
 			panic("unknown type")
 		}
@@ -402,7 +410,7 @@ func ExampleValue(method string, t, parent reflect.Type) interface{} {
 	case reflect.Ptr:
 		if t.Elem().Kind() == reflect.Struct {
 			es := exampleStruct(method, t.Elem(), t)
-			//ExampleValues[t] = es
+			// ExampleValues[t] = es
 			return es
 		}
 	case reflect.Interface:

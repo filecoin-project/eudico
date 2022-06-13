@@ -1,8 +1,9 @@
 package common
 
 const (
-	SignedMessageType       = 1
-	CrossMessageType        = 2
+	ConfigMessageType       = 0 // Mir config request
+	SignedMessageType       = 1 // Eudico signed message
+	CrossMessageType        = 2 // Eudico cross-message
 	RegistrationMessageType = 3 // Tendermint specific message type
 )
 

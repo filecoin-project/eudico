@@ -1,5 +1,4 @@
-// Package mirbft implements integration with Mir library,
-// available at https://github.com/hyperledger-labs/mirbft.
+// Package mir implements Eudico consensus in Mir framework.
 package mir
 
 import (
@@ -39,7 +38,7 @@ import (
 const (
 	MaxHeightDrift = 5
 	SubmitInterval = 5000 * time.Millisecond
-	MirMinersEnv   = "EUDICO_MIR_MINERS"
+	ValidatorsEnv  = "EUDICO_MIR_VALIDATORS"
 )
 
 var (
@@ -83,7 +82,7 @@ func NewConsensus(
 	}, nil
 }
 
-// CreateBlock creates a final Filecoin block from the input block template.
+// CreateBlock creates a Filecoin block from the input block template.
 func (bft *Mir) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.BlockTemplate) (*types.FullBlock, error) {
 	b, err := common.PrepareBlockForSignature(ctx, bft.sm, bt)
 	if err != nil {
@@ -167,9 +166,7 @@ func (bft *Mir) ValidateBlock(ctx context.Context, b *types.FullBlock) (err erro
 				points[i] = fmt.Sprintf("* %+v", err)
 			}
 
-			return fmt.Sprintf(
-				"%d errors occurred:\n\t%s\n\n",
-				len(es), strings.Join(points, "\n\t"))
+			return fmt.Sprintf("%d errors occurred:\n\t%s\n\n", len(es), strings.Join(points, "\n\t"))
 		}
 		return mulErr
 	}
@@ -280,12 +277,12 @@ func decodeAndCheckBlock(msg *pubsub.Message) (*types.BlockMsg, string, error) {
 	}
 
 	if count := len(blk.BlsMessages) + len(blk.SecpkMessages); count > build.BlockMessageLimit {
-		return nil, "too_many_messages", fmt.Errorf("block contains too many messages (%d)", count)
+		return nil, "too_many_messages", xerrors.Errorf("block contains too many messages (%d)", count)
 	}
 
 	// make sure we have a signature
 	if blk.Header.BlockSig != nil {
-		return nil, "missing_signature", fmt.Errorf("block with a signature")
+		return nil, "missing_signature", xerrors.Errorf("block with a signature")
 	}
 
 	return blk, "", nil

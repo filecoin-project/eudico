@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,6 +13,9 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-state-types/exitcode"
+	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
 	"github.com/filecoin-project/lotus/chain/consensus/dummy"
 	"github.com/filecoin-project/lotus/chain/consensus/mir"
@@ -62,8 +66,14 @@ func runDummyConsensusTests(t *testing.T, opts ...interface{}) {
 }
 
 func (ts *eudicoConsensusSuite) testDummyMining(t *testing.T) {
+	var wg sync.WaitGroup
+
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	defer func() {
+		t.Log("[*] defer: cancelling test context")
+		cancel()
+		wg.Wait()
+	}()
 
 	full, _ := kit.EudicoEnsembleFullNodeOnly(t, ts.opts...)
 
@@ -73,7 +83,13 @@ func (ts *eudicoConsensusSuite) testDummyMining(t *testing.T) {
 		t.Fatal("wallet key list is empty")
 	}
 
+	wg.Add(1)
 	go func() {
+		t.Log("[*] miner started")
+		defer func() {
+			t.Log("[*] miner stopped")
+			wg.Done()
+		}()
 		err := dummy.Mine(ctx, l[0], full)
 		if err != nil {
 			t.Error(err)
@@ -90,11 +106,169 @@ func runMirConsensusTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoConsensusSuite{opts: opts}
 
 	t.Run("testMirMining", ts.testMirMining)
+	t.Run("testMirTwoNodes", ts.testMirTwoNodes)
+}
+
+func (ts *eudicoConsensusSuite) testMirTwoNodes(t *testing.T) {
+	var wg sync.WaitGroup
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		t.Log("[*] defer: cancelling test context")
+		cancel()
+		wg.Wait()
+	}()
+
+	one, two, ens := kit.EudicoEnsembleTwoNodes(t, ts.opts...)
+	defer func() {
+		t.Log("[*] stopping test ensemble")
+		defer t.Log("[*] ensemble stopped")
+		err := ens.Stop()
+		require.NoError(t, err)
+	}()
+
+	// Fail if genesis blocks are different
+	gen1, err := one.ChainGetGenesis(ctx)
+	require.NoError(t, err)
+	gen2, err := two.ChainGetGenesis(ctx)
+	require.NoError(t, err)
+	require.Equal(t, gen1.String(), gen2.String())
+
+	// Fail if no peers
+	p, err := one.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Empty(t, p, "node one has peers")
+
+	p, err = two.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Empty(t, p, "node two has peers")
+
+	ens.Connect(one, two)
+
+	peers, err := one.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Lenf(t, peers, 1, "node one doesn't have a peer")
+
+	peers, err = two.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Lenf(t, peers, 1, "node two doesn't have a peer")
+
+	l1, err := one.WalletList(ctx)
+	require.NoError(t, err)
+	if len(l1) != 1 {
+		t.Fatal("one's wallet key list is empty")
+	}
+	oneAddr := l1[0]
+
+	l2, err := two.WalletList(ctx)
+	require.NoError(t, err)
+	if len(l2) != 1 {
+		t.Fatal("two's wallet key list is empty")
+	}
+	twoAddr := l2[0]
+
+	msg1 := &types.Message{
+		From:  oneAddr,
+		To:    twoAddr,
+		Value: big.Zero(),
+	}
+
+	msg2 := &types.Message{
+		From:  twoAddr,
+		To:    oneAddr,
+		Value: big.Zero(),
+	}
+
+	mirNodeOne := fmt.Sprintf("%s:%s", address.RootSubnet, l1[0].String())
+	mirNodeTwo := fmt.Sprintf("%s:%s", address.RootSubnet, l2[0].String())
+	env := fmt.Sprintf("%s@%s,%s@%s",
+		mirNodeOne, "127.0.0.1:10001",
+		mirNodeTwo, "127.0.0.1:10002",
+	)
+	err = os.Setenv(mir.ValidatorsEnv, env)
+	require.NoError(t, err)
+
+	wg.Add(2)
+	go func() {
+		t.Log("[*] node one started")
+		defer func() {
+			t.Log("[*] node one stopped")
+			wg.Done()
+		}()
+		err := mir.Mine(ctx, oneAddr, one)
+		if xerrors.Is(mapi.ErrStopped, err) {
+			return
+		}
+		if err != nil {
+			t.Error(err)
+			cancel()
+			return
+		}
+	}()
+
+	go func() {
+		t.Log("[*] node two started")
+		defer func() {
+			t.Log("[*] node two stopped")
+			wg.Done()
+		}()
+		err := mir.Mine(ctx, twoAddr, two)
+		if xerrors.Is(mapi.ErrStopped, err) {
+			return
+		}
+		if err != nil {
+			t.Error(err)
+			cancel()
+			return
+		}
+	}()
+
+	err = kit.WaitForBalance(ctx, oneAddr, 4, one)
+	require.NoError(t, err)
+
+	err = kit.WaitForBalance(ctx, twoAddr, 4, two)
+	require.NoError(t, err)
+
+	// Send first message
+
+	smsg1, err := one.MpoolPushMessage(ctx, msg1, nil)
+	require.NoError(t, err)
+
+	res, err := one.StateWaitMsg(ctx, smsg1.Cid(), 1, lapi.LookbackNoLimit, true)
+	require.NoError(t, err)
+
+	require.Equal(t, exitcode.Ok, res.Receipt.ExitCode, "msg1 not successful")
+
+	res, err = two.StateWaitMsg(ctx, smsg1.Cid(), 1, lapi.LookbackNoLimit, true)
+	require.NoError(t, err)
+
+	require.Equal(t, exitcode.Ok, res.Receipt.ExitCode, "msg1 not successful")
+
+	// Send second message
+
+	smsg2, err := two.MpoolPushMessage(ctx, msg2, nil)
+	require.NoError(t, err)
+
+	res, err = two.StateWaitMsg(ctx, smsg2.Cid(), 1, lapi.LookbackNoLimit, true)
+	require.NoError(t, err)
+
+	require.Equal(t, exitcode.Ok, res.Receipt.ExitCode, "msg2 not successful")
+
+	res, err = one.StateWaitMsg(ctx, smsg2.Cid(), 1, lapi.LookbackNoLimit, true)
+	require.NoError(t, err)
+
+	require.Equal(t, exitcode.Ok, res.Receipt.ExitCode, "msg2 not successful")
 }
 
 func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
+	var wg sync.WaitGroup
+
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	defer func() {
+		t.Log("[*] defer: cancelling test context")
+		cancel()
+		wg.Wait()
+	}()
 
 	full, ens := kit.EudicoEnsembleFullNodeOnly(t, ts.opts...)
 	defer func() {
@@ -110,12 +284,17 @@ func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
 
 	mirNodeID := fmt.Sprintf("%s:%s", address.RootSubnet, l[0].String())
 
-	if err := os.Setenv(mir.MirMinersEnv, fmt.Sprintf("%s@%s", mirNodeID, "127.0.0.1:10000")); err != nil {
-		require.NoError(t, err)
-	}
-	defer os.Unsetenv(mir.MirMinersEnv) // nolint
+	err = os.Setenv(mir.ValidatorsEnv, fmt.Sprintf("%s@%s", mirNodeID, "127.0.0.1:10000"))
+	require.NoError(t, err)
+	defer os.Unsetenv(mir.ValidatorsEnv) // nolint
 
+	wg.Add(1)
 	go func() {
+		t.Log("[*] miner started")
+		defer func() {
+			t.Log("[*] miner stopped")
+			wg.Done()
+		}()
 		err := mir.Mine(ctx, l[0], full)
 		if xerrors.Is(mapi.ErrStopped, err) {
 			return
@@ -132,20 +311,23 @@ func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
 		return
 	}
 	require.NoError(t, err)
-
-	err = ens.Stop()
-	require.NoError(t, err)
 }
 
 func runTSPoWConsensusTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoConsensusSuite{opts: opts}
 
-	t.Run("testTSpoWMining", ts.testTSPoWMining)
+	t.Run("testTSPoWMining", ts.testTSPoWMining)
 }
 
 func (ts *eudicoConsensusSuite) testTSPoWMining(t *testing.T) {
+	var wg sync.WaitGroup
+
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	defer func() {
+		t.Log("[*] defer: cancelling test context")
+		cancel()
+		wg.Wait()
+	}()
 
 	full, _ := kit.EudicoEnsembleFullNodeOnly(t, ts.opts...)
 
@@ -155,7 +337,13 @@ func (ts *eudicoConsensusSuite) testTSPoWMining(t *testing.T) {
 		t.Fatal("wallet key list is empty")
 	}
 
+	wg.Add(1)
 	go func() {
+		t.Log("[*] miner started")
+		defer func() {
+			t.Log("[*] miner stopped")
+			wg.Done()
+		}()
 		err := tspow.Mine(ctx, l[0], full)
 		if err != nil {
 			t.Error(err)
@@ -164,7 +352,7 @@ func (ts *eudicoConsensusSuite) testTSPoWMining(t *testing.T) {
 		}
 	}()
 
-	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 3, address.RootSubnet, full)
+	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 10, address.RootSubnet, full)
 	require.NoError(t, err)
 }
 
@@ -174,8 +362,14 @@ func runDelegatedConsensusTests(t *testing.T, opts ...interface{}) {
 }
 
 func (ts *eudicoConsensusSuite) testDelegatedMining(t *testing.T) {
+	var wg sync.WaitGroup
+
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	defer func() {
+		t.Log("[*] defer: cancelling test context")
+		cancel()
+		wg.Wait()
+	}()
 
 	full, _ := kit.EudicoEnsembleFullNodeOnly(t, ts.opts...)
 
@@ -192,7 +386,13 @@ func (ts *eudicoConsensusSuite) testDelegatedMining(t *testing.T) {
 	k, err := wallet.NewKey(ki)
 	require.NoError(t, err)
 
+	wg.Add(1)
 	go func() {
+		t.Log("[*] miner started")
+		defer func() {
+			t.Log("[*] miner stopped")
+			wg.Done()
+		}()
 		err := delegcns.Mine(ctx, address.Undef, full)
 		if err != nil {
 			t.Error(err)
@@ -210,19 +410,20 @@ func (ts *eudicoConsensusSuite) testDelegatedMining(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(h1.Height()), int64(baseHeight))
 
-	<-newHeads
+	h2 := <-newHeads
+	require.Equal(t, 1, len(h2))
+	require.Greater(t, int64(h2[0].Val.Height()), int64(h1.Height()))
+	require.Equal(t, h2[0].Val.Blocks()[0].Miner, k.Address)
 
-	h2, err := full.ChainHead(ctx)
-	require.NoError(t, err)
-	require.Greater(t, int64(h2.Height()), int64(h1.Height()))
-	require.Equal(t, h2.Blocks()[0].Miner, k.Address)
+	h3 := <-newHeads
+	require.Equal(t, 1, len(h3))
+	require.Greater(t, int64(h3[0].Val.Height()), int64(h2[0].Val.Height()))
+	require.Equal(t, h3[0].Val.Blocks()[0].Miner, k.Address)
 
-	<-newHeads
-
-	h3, err := full.ChainHead(ctx)
-	require.NoError(t, err)
-	require.Greater(t, int64(h3.Height()), int64(h2.Height()))
-	require.Equal(t, h3.Blocks()[0].Miner, k.Address)
+	h4 := <-newHeads
+	require.Equal(t, 1, len(h4))
+	require.Greater(t, int64(h4[0].Val.Height()), int64(h3[0].Val.Height()))
+	require.Equal(t, h4[0].Val.Blocks()[0].Miner, k.Address)
 }
 
 func runTendermintConsensusTests(t *testing.T, opts ...interface{}) {
@@ -231,12 +432,20 @@ func runTendermintConsensusTests(t *testing.T, opts ...interface{}) {
 }
 
 func (ts *eudicoConsensusSuite) testTendermintMining(t *testing.T) {
+	var wg sync.WaitGroup
+
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	defer func() {
+		t.Log("[*] defer: cancelling test context")
+		cancel()
+		wg.Wait()
+	}()
 
 	full, ens := kit.EudicoEnsembleFullNodeOnly(t, ts.opts...)
 	var err error
 	defer func() {
+		t.Log("[*] stopping test ensemble")
+		defer t.Log("[*] ensemble stopped")
 		err = ens.Stop()
 		require.NoError(t, err)
 	}()
@@ -252,7 +461,13 @@ func (ts *eudicoConsensusSuite) testTendermintMining(t *testing.T) {
 		t.Fatal("wallet key list is empty")
 	}
 
+	wg.Add(1)
 	go func() {
+		t.Log("[*] miner started")
+		defer func() {
+			t.Log("[*] miner stopped")
+			wg.Done()
+		}()
 		err := tendermint.Mine(ctx, l[0], full)
 		if err != nil {
 			t.Error(err)
@@ -270,19 +485,21 @@ func (ts *eudicoConsensusSuite) testTendermintMining(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(h1.Height()), int64(baseHeight))
 
-	<-newHeads
+	h2 := <-newHeads
+	require.Equal(t, 1, len(h2))
+	require.Greater(t, int64(h2[0].Val.Height()), int64(h1.Height()))
+	require.Equal(t, h2[0].Val.Blocks()[0].Miner, k.Address)
 
-	h2, err := full.ChainHead(ctx)
-	require.NoError(t, err)
-	require.Greater(t, int64(h2.Height()), int64(h1.Height()))
-	require.Equal(t, h2.Blocks()[0].Miner, k.Address)
+	h3 := <-newHeads
+	require.Equal(t, 1, len(h3))
+	require.Greater(t, int64(h3[0].Val.Height()), int64(h2[0].Val.Height()))
+	require.Equal(t, h3[0].Val.Blocks()[0].Miner, k.Address)
 
-	<-newHeads
+	h4 := <-newHeads
+	require.Equal(t, 1, len(h4))
+	require.Greater(t, int64(h4[0].Val.Height()), int64(h3[0].Val.Height()))
+	require.Equal(t, h4[0].Val.Blocks()[0].Miner, k.Address)
 
-	h3, err := full.ChainHead(ctx)
-	require.NoError(t, err)
-	require.Greater(t, int64(h3.Height()), int64(h2.Height()))
-	require.Equal(t, h3.Blocks()[0].Miner, k.Address)
 }
 
 func runFilcnsConsensusTests(t *testing.T, opts ...interface{}) {
@@ -299,6 +516,6 @@ func (ts *eudicoConsensusSuite) testFilcnsMining(t *testing.T) {
 	bm := kit.NewBlockMiner(t, miner)
 	bm.MineBlocks(ctx, 1*time.Second)
 
-	err := kit.SubnetPerformHeightCheckForBlocks(ctx, 3, address.RootSubnet, full)
+	err := kit.SubnetPerformHeightCheckForBlocks(ctx, 5, address.RootSubnet, full)
 	require.NoError(t, err)
 }
