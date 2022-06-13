@@ -107,9 +107,8 @@ func (s *SubnetMgr) listenSubnetEvents(ctx context.Context, sh *Subnet) {
 	}
 
 	err := evs.StateChanged(checkFunc, changeHandler, revertHandler, finalityThreshold, Timeout, match)
-	// TODO: implement error handling properly
 	if err != nil {
-		return
+		log.Errorw("Error getting state changed", "err", err)
 	}
 }
 

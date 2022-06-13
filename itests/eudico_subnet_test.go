@@ -42,20 +42,18 @@ func TestEudicoSubnetTwoNodesCrossMessage(t *testing.T) {
 		runSubnetTwoNodesCrossMessage(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetTSPoW())
 	})
 
-	/*
-		t.Run("/root/dummy-/subnet/mir", func(t *testing.T) {
-			runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetMir(), kit.MinValidators(1), kit.ValidatorAddress("127.0.0.1:11001"))
-		})
+	t.Run("/root/dummy-/subnet/mir", func(t *testing.T) {
+		runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetMir(), kit.MinValidators(1), kit.ValidatorAddress("127.0.0.1:11001"))
+	})
 
-		t.Run("/root/mir-/subnet/delegated", func(t *testing.T) {
-			runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDelegated())
-		})
+	t.Run("/root/mir-/subnet/delegated", func(t *testing.T) {
+		runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDelegated())
+	})
 
-		t.Run("/root/delegated-/subnet/mir", func(t *testing.T) {
-			runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetMir(), kit.MinValidators(1), kit.ValidatorAddress("127.0.0.1:11002"))
-		})
+	t.Run("/root/delegated-/subnet/mir", func(t *testing.T) {
+		runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetMir(), kit.MinValidators(1), kit.ValidatorAddress("127.0.0.1:11002"))
+	})
 
-	*/
 }
 
 func TestEudicoSubnetMir(t *testing.T) {
@@ -201,7 +199,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 
 	parent := address.RootSubnet
 	subnetName := "testSubnet"
-	minerStake := abi.NewStoragePower(1e8)
+	stake := abi.NewStoragePower(1e8)
 	checkPeriod := abi.ChainEpoch(10)
 	finalityThreshold := abi.ChainEpoch(5)
 
@@ -217,7 +215,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 		MinValidators: n,
 		DelegMiner:    addr,
 	}
-	actorAddr, err := full.AddSubnet(ctx, addr, parent, subnetName, cns, minerStake, checkPeriod, finalityThreshold, p)
+	actorAddr, err := full.AddSubnet(ctx, addr, parent, subnetName, cns, stake, checkPeriod, finalityThreshold, p)
 	require.NoError(t, err)
 
 	subnetAddr := address.NewSubnetID(parent, actorAddr)
@@ -473,7 +471,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 
 	parent := address.RootSubnet
 	subnetName := "testSubnet"
-	minerStake := abi.NewStoragePower(1e8)
+	stake := abi.NewStoragePower(1e8)
 	checkPeriod := abi.ChainEpoch(10)
 	finalityThreshold := abi.ChainEpoch(1)
 
@@ -497,7 +495,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 		MinValidators: 2,
 		DelegMiner:    minerA,
 	}
-	actorAddr, err := nodeA.AddSubnet(ctx, minerA, parent, subnetName, uint64(hierarchical.Mir), minerStake, checkPeriod, finalityThreshold, hp)
+	actorAddr, err := nodeA.AddSubnet(ctx, minerA, parent, subnetName, uint64(hierarchical.Mir), stake, checkPeriod, finalityThreshold, hp)
 	require.NoError(t, err)
 
 	subnetAddr := address.NewSubnetID(parent, actorAddr)
@@ -763,7 +761,7 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 	t.Log("[*] adding and joining subnets")
 
 	parent := address.RootSubnet
-	minerStake := abi.NewStoragePower(1e8)
+	stake := abi.NewStoragePower(1e8)
 	checkPeriod := abi.ChainEpoch(10)
 	finalityThreshold := abi.ChainEpoch(1)
 
@@ -790,7 +788,7 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 
 	// First subnet created on node A.
 	subnetA := "testSubnetA"
-	subnetAActor, err := nodeA.AddSubnet(ctx, minerA, parent, subnetA, uint64(hierarchical.PoW), minerStake, checkPeriod, finalityThreshold, hp)
+	subnetAActor, err := nodeA.AddSubnet(ctx, minerA, parent, subnetA, uint64(hierarchical.PoW), stake, checkPeriod, finalityThreshold, hp)
 	require.NoError(t, err)
 
 	subnetAAddr := address.NewSubnetID(parent, subnetAActor)
@@ -814,7 +812,7 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 
 	// Second subnet created on node B.
 	subnetBName := "testSubnetB"
-	subnetBActor, err := nodeB.AddSubnet(ctx, minerB, parent, subnetBName, uint64(hierarchical.PoW), minerStake, checkPeriod, finalityThreshold, hp)
+	subnetBActor, err := nodeB.AddSubnet(ctx, minerB, parent, subnetBName, uint64(hierarchical.PoW), stake, checkPeriod, finalityThreshold, hp)
 	require.NoError(t, err)
 
 	subnetBAddr := address.NewSubnetID(parent, subnetBActor)

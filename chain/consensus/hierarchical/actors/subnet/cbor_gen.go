@@ -127,11 +127,11 @@ func (t *SubnetState) MarshalCBOR(w io.Writer) error {
 
 	// t.FinalityThreshold (abi.ChainEpoch) (int64)
 	if t.FinalityThreshold >= 0 {
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.FinalityThreshold)); err != nil {
+		if err := cw.WriteMajorTypeHeader(cbg.MajUnsignedInt, uint64(t.FinalityThreshold)); err != nil {
 			return err
 		}
 	} else {
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.FinalityThreshold-1)); err != nil {
+		if err := cw.WriteMajorTypeHeader(cbg.MajNegativeInt, uint64(-t.FinalityThreshold-1)); err != nil {
 			return err
 		}
 	}
@@ -349,7 +349,7 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) (err error) {
 	}
 	// t.FinalityThreshold (abi.ChainEpoch) (int64)
 	{
-		maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+		maj, extra, err := cr.ReadHeader()
 		var extraI int64
 		if err != nil {
 			return err
@@ -509,11 +509,11 @@ func (t *ConstructParams) MarshalCBOR(w io.Writer) error {
 
 	// t.FinalityThreshold (abi.ChainEpoch) (int64)
 	if t.FinalityThreshold >= 0 {
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.FinalityThreshold)); err != nil {
+		if err := cw.WriteMajorTypeHeader(cbg.MajUnsignedInt, uint64(t.FinalityThreshold)); err != nil {
 			return err
 		}
 	} else {
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.FinalityThreshold-1)); err != nil {
+		if err := cw.WriteMajorTypeHeader(cbg.MajNegativeInt, uint64(-t.FinalityThreshold-1)); err != nil {
 			return err
 		}
 	}
@@ -632,7 +632,7 @@ func (t *ConstructParams) UnmarshalCBOR(r io.Reader) (err error) {
 	}
 	// t.FinalityThreshold (abi.ChainEpoch) (int64)
 	{
-		maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+		maj, extra, err := cr.ReadHeader()
 		var extraI int64
 		if err != nil {
 			return err
