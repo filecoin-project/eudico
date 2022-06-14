@@ -240,7 +240,8 @@ func (st *SubnetState) verifyCheck(rt runtime.Runtime, ch *schema.Checkpoint) ad
 
 	// Check that the epoch is correct.
 	if ch.Epoch()%st.CheckPeriod != 0 {
-		rt.Abortf(exitcode.ErrIllegalArgument, "epoch in checkpoint doesn't correspond with signing window")
+		rt.Abortf(exitcode.ErrIllegalArgument, "epoch in checkpoint doesn't correspond with signing window: epoch - %v, check period - %v",
+			ch.Epoch(), st.CheckPeriod)
 	}
 
 	// Check that the previous checkpoint is correct.
