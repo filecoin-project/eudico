@@ -121,10 +121,10 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}
 
-	// Don't allow really small checkpoint periods for now.
+	// Don't allow checkpoint periods less than minimal allowed value.
 	checkPeriod := params.CheckPeriod
 	if checkPeriod < sca.MinCheckpointPeriod {
-		checkPeriod = sca.DefaultCheckpointPeriod
+		checkPeriod = hierarchical.ConsensusCheckPeriod(params.Consensus)
 	}
 
 	// TODO: @alfonso do we need this?

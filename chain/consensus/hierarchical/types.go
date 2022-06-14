@@ -64,6 +64,25 @@ func Consensus(name string) ConsensusType {
 	}
 }
 
+func ConsensusCheckPeriod(alg ConsensusType) abi.ChainEpoch {
+	switch alg {
+	case Delegated:
+		return 11 // delegcns.CheckPeriod()
+	case PoW:
+		return 11 // tspow.CheckPeriod()
+	case Tendermint:
+		return 11 // /tendermint.CheckPeriod()
+	case FilecoinEC:
+		return 11 // filcns.CheckPeriod()
+	case Mir:
+		return 11 // mir.CheckPeriod()
+	case Dummy:
+		return 11 // dummy.CheckPeriod()
+	default:
+		panic(fmt.Sprintf("unknown consensus algorithm %v", alg))
+	}
+}
+
 // MsgType of cross message.
 type MsgType uint64
 

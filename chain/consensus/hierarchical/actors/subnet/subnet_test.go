@@ -19,6 +19,7 @@ import (
 	checkpoint "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/utils"
+	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/wallet"
 	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
@@ -480,7 +481,7 @@ func (h *shActorHarness) constructAndVerifyZeroCheck(t *testing.T, rt *mock.Runt
 	var st actor.SubnetState
 
 	rt.GetState(&st)
-	assert.Equal(h.t, st.CheckPeriod, sca.DefaultCheckpointPeriod)
+	assert.Equal(h.t, st.CheckPeriod, tspow.CheckPeriod())
 }
 
 func verifyEmptyMap(t testing.TB, rt *mock.Runtime, cid cid.Cid) {

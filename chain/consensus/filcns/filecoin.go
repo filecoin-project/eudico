@@ -944,3 +944,7 @@ func (filec *FilecoinEC) Type() hierarchical.ConsensusType {
 func (filec *FilecoinEC) Finality() abi.ChainEpoch {
 	return build.FilecoinECFinality
 }
+
+func CheckPeriod() abi.ChainEpoch {
+	return build.FilecoinECCheckPeriod
+}

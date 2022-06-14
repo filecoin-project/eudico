@@ -243,3 +243,7 @@ func Weight(ctx context.Context, stateBs bstore.Blockstore, ts *types.TipSet) (t
 func (bft *Dummy) Finality() abi.ChainEpoch {
 	return build.DummyFinality
 }
+
+func CheckPeriod() abi.ChainEpoch {
+	return build.DummyCheckPeriod
+}

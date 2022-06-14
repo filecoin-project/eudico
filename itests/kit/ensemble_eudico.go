@@ -53,7 +53,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/dummy"
 	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	snmgr "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/manager"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
@@ -454,26 +453,26 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 	var gferr error
 	switch n.options.rootConsensus {
 	case hierarchical.PoW:
-		err := subnet.CreateGenesisFile(ctx, TSPoWConsensusGenesisTestFile, hierarchical.PoW, address.Undef, sca.DefaultCheckpointPeriod)
+		err := subnet.CreateGenesisFile(ctx, TSPoWConsensusGenesisTestFile, hierarchical.PoW, address.Undef)
 		require.NoError(n.t, err)
 		rootGenesisBytes, gferr = ioutil.ReadFile(TSPoWConsensusGenesisTestFile)
 	case hierarchical.Delegated:
 		miner, err := address.NewFromString(DelegatedConsnensusMinerAddr)
 		require.NoError(n.t, err)
 		require.Equal(n.t, address.SECP256K1, miner.Protocol())
-		cerr := subnet.CreateGenesisFile(ctx, DelegatedConsensusGenesisTestFile, hierarchical.Delegated, miner, sca.DefaultCheckpointPeriod)
+		cerr := subnet.CreateGenesisFile(ctx, DelegatedConsensusGenesisTestFile, hierarchical.Delegated, miner)
 		require.NoError(n.t, cerr)
 		rootGenesisBytes, gferr = ioutil.ReadFile(DelegatedConsensusGenesisTestFile)
 	case hierarchical.Tendermint:
-		err := subnet.CreateGenesisFile(ctx, TendermintConsensusGenesisTestFile, hierarchical.Tendermint, address.Undef, sca.DefaultCheckpointPeriod)
+		err := subnet.CreateGenesisFile(ctx, TendermintConsensusGenesisTestFile, hierarchical.Tendermint, address.Undef)
 		require.NoError(n.t, err)
 		rootGenesisBytes, gferr = ioutil.ReadFile(TendermintConsensusGenesisTestFile)
 	case hierarchical.Mir:
-		err := subnet.CreateGenesisFile(ctx, MirConsensusGenesisTestFile, hierarchical.Mir, address.Undef, sca.DefaultCheckpointPeriod)
+		err := subnet.CreateGenesisFile(ctx, MirConsensusGenesisTestFile, hierarchical.Mir, address.Undef)
 		require.NoError(n.t, err)
 		rootGenesisBytes, gferr = ioutil.ReadFile(MirConsensusGenesisTestFile)
 	case hierarchical.Dummy:
-		err := subnet.CreateGenesisFile(ctx, DummyConsensusGenesisTestFile, hierarchical.Dummy, address.Undef, sca.DefaultCheckpointPeriod)
+		err := subnet.CreateGenesisFile(ctx, DummyConsensusGenesisTestFile, hierarchical.Dummy, address.Undef)
 		require.NoError(n.t, err)
 		rootGenesisBytes, gferr = ioutil.ReadFile(DummyConsensusGenesisTestFile)
 	case hierarchical.FilecoinEC:

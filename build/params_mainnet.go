@@ -108,3 +108,10 @@ const TendermintFinality = 1
 const MirFinality = 1
 const DummyFinality = 1
 const FilecoinECFinality = 5
+
+const DelegatedPoWCheckPeriod = 10
+const PoWCheckPeriod = 10
+const TendermintCheckPeriod = 10
+const MirCheckPeriod = 10
+const DummyCheckPeriod = 10
+const FilecoinECCheckPeriod = 10

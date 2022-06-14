@@ -17,12 +17,8 @@ import (
 )
 
 const (
-	// DefaultCheckpointPeriod defines 10 epochs
-	// as the default checkpoint period for a subnet.
-	// This may be too short, but at this point it comes pretty handy
-	// for testing purposes.
-	DefaultCheckpointPeriod = abi.ChainEpoch(10)
-	// MinCheckpointPeriod allowed for subnets
+	// MinCheckpointPeriod defines minimal allowed checkpoint period for a subnet.
+	// At present, it is the same for all consensus algorithms.
 	MinCheckpointPeriod = abi.ChainEpoch(10)
 
 	// CrossMsgsAMTBitwidth determines the bitwidth to use for cross-msg AMT.
@@ -112,7 +108,7 @@ func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, e
 	// Don't allow really small checkpoint periods for now.
 	period := abi.ChainEpoch(params.CheckpointPeriod)
 	if period < MinCheckpointPeriod {
-		period = DefaultCheckpointPeriod
+		period = MinCheckpointPeriod
 	}
 
 	return &SCAState{

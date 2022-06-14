@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/Gurpartap/async"
-	"github.com/filecoin-project/pubsub"
 	"github.com/hashicorp/go-multierror"
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
@@ -22,6 +21,8 @@ import (
 	"go.opencensus.io/stats"
 	"go.opencensus.io/trace"
 	"golang.org/x/xerrors"
+
+	"github.com/filecoin-project/pubsub"
 
 	"github.com/filecoin-project/go-state-types/crypto"
 	// named msgarray here to make it clear that these are the types used by
@@ -1177,7 +1178,7 @@ func persistMessages(ctx context.Context, bs bstore.Blockstore, bst *exchange.Co
 	defer span.End()
 
 	for _, m := range bst.Bls {
-		//log.Infof("putting BLS message: %s", m.Cid())
+		// log.Infof("putting BLS message: %s", m.Cid())
 		if _, err := store.PutMessage(ctx, bs, m); err != nil {
 			log.Errorf("failed to persist messages: %+v", err)
 			return xerrors.Errorf("BLS message processing failed: %w", err)
@@ -1187,14 +1188,14 @@ func persistMessages(ctx context.Context, bs bstore.Blockstore, bst *exchange.Co
 		if m.Signature.Type != crypto.SigTypeSecp256k1 {
 			return xerrors.Errorf("unknown signature type on message %s: %q", m.Cid(), m.Signature.Type)
 		}
-		//log.Infof("putting secp256k1 message: %s", m.Cid())
+		// log.Infof("putting secp256k1 message: %s", m.Cid())
 		if _, err := store.PutMessage(ctx, bs, m); err != nil {
 			log.Errorf("failed to persist messages: %+v", err)
 			return xerrors.Errorf("secp256k1 message processing failed: %w", err)
 		}
 	}
 	for _, m := range bst.Cross {
-		//log.Infof("putting Cross message: %s", m.Cid())
+		// log.Infof("putting Cross message: %s", m.Cid())
 		if _, err := store.PutMessage(ctx, bs, m); err != nil {
 			log.Errorf("failed to persist messages: %+v", err)
 			return xerrors.Errorf("Cross message processing failed: %w", err)

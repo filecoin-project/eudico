@@ -383,3 +383,7 @@ func (tm *Tendermint) getEudicoMessagesFromTendermintBlock(b *tmtypes.Block) ([]
 func (tm *Tendermint) Finality() abi.ChainEpoch {
 	return build.TendermintFinality
 }
+
+func CheckPeriod() abi.ChainEpoch {
+	return build.TendermintCheckPeriod
+}

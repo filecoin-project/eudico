@@ -13,7 +13,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
@@ -63,8 +62,7 @@ var tpowGenesisCmd = &cli.Command{
 
 		fName := cctx.Args().First()
 
-		// TODO: Make checkPeriod configurable
-		if err := subnet.CreateGenesisFile(cctx.Context, fName, hierarchical.PoW, address.Undef, sca.DefaultCheckpointPeriod); err != nil {
+		if err := subnet.CreateGenesisFile(cctx.Context, fName, hierarchical.PoW, address.Undef); err != nil {
 			return xerrors.Errorf("creating genesis: %w", err)
 		}
 
