@@ -247,14 +247,16 @@ func (s *Service) getSCAStateWithFinality(ctx context.Context, api *API, id addr
 	finTs := api.ChainAPI.Chain.GetHeaviestTipSet()
 	height := finTs.Height()
 
-	sn, err := s.getSubnet(id)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	finalityThreshold := abi.ChainEpoch(hierarchical.FinalityThreshold)
-	if sn != nil {
-		finalityThreshold = sn.finalityThreshold
+	if !s.isRoot(id) {
+		sn, err := s.getSubnet(id)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if sn != nil {
+			finalityThreshold = sn.finalityThreshold
+		}
 	}
 
 	// Avoid negative epochs
