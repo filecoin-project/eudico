@@ -3,8 +3,9 @@ package consensus
 import (
 	"context"
 
-	"github.com/filecoin-project/go-state-types/abi"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+
+	"github.com/filecoin-project/go-state-types/abi"
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
@@ -18,4 +19,7 @@ type Consensus interface {
 
 	CreateBlock(ctx context.Context, w api.Wallet, bt *api.BlockTemplate) (*types.FullBlock, error)
 	Type() hierarchical.ConsensusType
+
+	// Finality determines the number of epochs to wait before considering a change "final".
+	Finality() abi.ChainEpoch
 }

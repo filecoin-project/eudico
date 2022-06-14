@@ -43,7 +43,7 @@ func (s *Service) listenSubnetEvents(ctx context.Context, sh *Subnet) {
 	evs := s.events
 	id := address.RootSubnet
 	root := true
-	finalityThreshold := hierarchical.FinalityThreshold
+	finalityThreshold := s.api.Consensus.Finality()
 
 	// If subnet is nil, we are listening from the root chain.
 	// TODO: Revisit this, there is probably a more elegant way to
@@ -53,9 +53,9 @@ func (s *Service) listenSubnetEvents(ctx context.Context, sh *Subnet) {
 		id = sh.ID
 		evs = sh.events
 		sh.resetSigState(abi.ChainEpoch(0))
-		finalityThreshold = int(sh.finalityThreshold)
+		finalityThreshold = sh.finalityThreshold
 	}
-
+	
 	checkFunc := func(ctx context.Context, ts *types.TipSet) (done bool, more bool, err error) {
 		return false, true, nil
 	}
@@ -96,7 +96,7 @@ func (s *Service) listenSubnetEvents(ctx context.Context, sh *Subnet) {
 
 	}
 
-	err := evs.StateChanged(checkFunc, changeHandler, revertHandler, finalityThreshold, Timeout, match)
+	err := evs.StateChanged(checkFunc, changeHandler, revertHandler, int(finalityThreshold), Timeout, match)
 	if err != nil {
 		log.Errorw("Error getting state changed", "err", err)
 	}

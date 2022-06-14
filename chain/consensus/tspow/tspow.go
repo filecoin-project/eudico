@@ -361,3 +361,7 @@ func BestWorkBlock(ts *types.TipSet) *types.BlockHeader {
 	})
 	return blks[0]
 }
+
+func (tsp *TSPoW) Finality() abi.ChainEpoch {
+	return build.PoWFinality
+}

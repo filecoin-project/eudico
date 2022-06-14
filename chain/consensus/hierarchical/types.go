@@ -11,13 +11,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
-// FinalityThreshold determines the number of epochs to wait
-// before considering a change "final" and consider signing the
-// checkpoint
-//
-// This should always be less than the checkpoint period.
-const FinalityThreshold = 5
-
 // ConsensusType for subnet.
 type ConsensusType uint64
 

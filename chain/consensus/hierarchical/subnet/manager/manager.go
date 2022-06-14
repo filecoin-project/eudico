@@ -189,16 +189,15 @@ func (s *Service) startSubnet(id address.SubnetID,
 
 	log.Infow("Creating new subnet", "subnetID", id)
 	sh := &Subnet{
-		ctx:               ctx,
-		ctxCancel:         cancel,
-		ID:                id,
-		host:              s.host,
-		pubsub:            s.pubsub,
-		nodeServer:        s.nodeServer,
-		pmgr:              s.pmgr,
-		consType:          consensus,
-		finalityThreshold: params.FinalityThreshold,
-		checkPeriod:       params.CheckPeriod,
+		ctx:         ctx,
+		ctxCancel:   cancel,
+		ID:          id,
+		host:        s.host,
+		pubsub:      s.pubsub,
+		nodeServer:  s.nodeServer,
+		pmgr:        s.pmgr,
+		consType:    consensus,
+		checkPeriod: params.CheckPeriod,
 	}
 
 	sh.checklk.Lock()
@@ -254,6 +253,14 @@ func (s *Service) startSubnet(id address.SubnetID,
 		return err
 	}
 	log.Infow("Genesis and consensus for subnet created", "subnetID", id, "consensus", consensus)
+
+	// Validate input finality threshold and use default value if it failed.
+	var fth abi.ChainEpoch
+	if params.FinalityThreshold < 1 || params.FinalityThreshold >= params.CheckPeriod {
+		fth = sh.cons.Finality()
+	}
+	sh.finalityThreshold = fth
+	log.Infof("Finality threshold for %s is %v", sh.ID, sh.finalityThreshold)
 
 	// We configure a new handler for the subnet syncing exchange protocol.
 	sh.exchangeServer()

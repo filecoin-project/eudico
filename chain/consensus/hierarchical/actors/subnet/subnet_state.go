@@ -127,15 +127,6 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 		checkPeriod = sca.DefaultCheckpointPeriod
 	}
 
-	finalityThreshold := params.FinalityThreshold
-	if finalityThreshold < 1 {
-		finalityThreshold = hierarchical.FinalityThreshold
-	}
-	if finalityThreshold >= checkPeriod {
-		return nil, xerrors.Errorf("finality threshold (%v) must be less than checkpoint period (%v)",
-			finalityThreshold, checkPeriod)
-	}
-
 	// TODO: @alfonso do we need this?
 	/* Initialize AMT of miners.
 	emptyArr, err := adt.MakeEmptyArray(adt.AsStore(rt), LaneStatesAmtBitwidth)
@@ -155,7 +146,7 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 		Status:            Instantiated,
 		CheckPeriod:       checkPeriod,
 		Checkpoints:       emptyCheckpointsMapCid,
-		FinalityThreshold: finalityThreshold,
+		FinalityThreshold: params.FinalityThreshold,
 		WindowChecks:      emptyWindowChecks,
 		ValidatorSet:      make([]hierarchical.Validator, 0),
 		MinValidators:     params.ConsensusParams.MinValidators,

@@ -277,3 +277,7 @@ func (deleg *Delegated) validateBlockHeader(ctx context.Context, b *types.BlockH
 func (deleg *Delegated) Type() hierarchical.ConsensusType {
 	return hierarchical.Delegated
 }
+
+func (deleg *Delegated) Finality() abi.ChainEpoch {
+	return build.DelegatedPoWFinality
+}
