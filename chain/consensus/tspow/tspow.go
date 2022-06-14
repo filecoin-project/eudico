@@ -365,7 +365,3 @@ func BestWorkBlock(ts *types.TipSet) *types.BlockHeader {
 func (tsp *TSPoW) Finality() abi.ChainEpoch {
 	return build.PoWFinality
 }
-
-func CheckPeriod() abi.ChainEpoch {
-	return build.PoWCheckPeriod
-}

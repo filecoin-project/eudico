@@ -281,7 +281,3 @@ func (deleg *Delegated) Type() hierarchical.ConsensusType {
 func (deleg *Delegated) Finality() abi.ChainEpoch {
 	return build.DelegatedPoWFinality
 }
-
-func CheckPeriod() abi.ChainEpoch {
-	return build.DelegatedPoWCheckPeriod
-}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
@@ -67,17 +68,17 @@ func Consensus(name string) ConsensusType {
 func ConsensusCheckPeriod(alg ConsensusType) abi.ChainEpoch {
 	switch alg {
 	case Delegated:
-		return 11 // delegcns.CheckPeriod()
+		return build.DelegatedPoWCheckPeriod
 	case PoW:
-		return 11 // tspow.CheckPeriod()
+		return build.PoWCheckPeriod
 	case Tendermint:
-		return 11 // /tendermint.CheckPeriod()
+		return build.TendermintCheckPeriod
 	case FilecoinEC:
-		return 11 // filcns.CheckPeriod()
+		return build.FilecoinECCheckPeriod
 	case Mir:
-		return 11 // mir.CheckPeriod()
+		return build.MirCheckPeriod
 	case Dummy:
-		return 11 // dummy.CheckPeriod()
+		return build.DummyCheckPeriod
 	default:
 		panic(fmt.Sprintf("unknown consensus algorithm %v", alg))
 	}
