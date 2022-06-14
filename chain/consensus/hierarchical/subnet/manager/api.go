@@ -57,7 +57,7 @@ type API struct {
 	DS          dtypes.MetadataDS
 	NetworkName dtypes.NetworkName
 
-	*SubnetMgr
+	*Service
 }
 
 // getSubnetState returns subnet actor state for the specified subnet.
@@ -184,7 +184,7 @@ func (sh *Subnet) populateAPIs(
 		BeaconAPI:   parentAPI.BeaconAPI,
 		DS:          sh.ds,
 		NetworkName: dtypes.NetworkName(sh.ID.String()),
-		SubnetMgr:   parentAPI.SubnetMgr,
+		Service:     parentAPI.Service,
 	}
 
 	// Register API so it can be accessed from CLI

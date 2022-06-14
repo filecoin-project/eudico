@@ -7,17 +7,19 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/filecoin-project/go-state-types/big"
 	"github.com/multiformats/go-multihash"
 	"go.opencensus.io/stats"
 
+	"github.com/filecoin-project/go-state-types/big"
+
 	"github.com/Gurpartap/async"
-	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/hashicorp/go-multierror"
 	logging "github.com/ipfs/go-log/v2"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"golang.org/x/xerrors"
+
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 
 	bstore "github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
@@ -90,7 +92,7 @@ type TSPoW struct {
 
 	genesis *types.TipSet
 
-	subMgr subnet.SubnetMgr
+	subMgr subnet.Manager
 
 	r *resolver.Resolver
 
@@ -104,7 +106,7 @@ const MaxHeightDrift = 5
 func NewTSPoWConsensus(
 	ctx context.Context,
 	sm *stmgr.StateManager,
-	submgr subnet.SubnetMgr,
+	submgr subnet.Manager,
 	beacon beacon.Schedule,
 	r *resolver.Resolver,
 	verifier ffiwrapper.Verifier,

@@ -10,6 +10,7 @@ import (
 	discoveryimpl "github.com/filecoin-project/go-fil-markets/discovery/impl"
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
 	"github.com/filecoin-project/go-fil-markets/storagemarket"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/chain"
@@ -18,7 +19,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	module "github.com/filecoin-project/lotus/chain/consensus/hierarchical/modules"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	snmgr "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/manager"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/exchange"
@@ -142,8 +142,8 @@ var ChainNode = Options(
 	// Subneting
 	// Start hierarchical sub to listen to shard events
 	Override(new(*resolver.Resolver), resolver.NewRootResolver),
-	Override(new(*snmgr.SubnetMgr), snmgr.NewSubnetMgr),
-	Override(new(subnet.SubnetMgr), module.SetSubMgrIface),
+	Override(new(*snmgr.Service), snmgr.NewService),
+	Override(new(subnet.Manager), module.SetSubMgrIface),
 	Override(new(api.FullNodeServer), func(path string, api api.FullNode) error { return nil }),
 
 	Override(StartSubnetMgrKey, snmgr.BuildSubnetMgr),

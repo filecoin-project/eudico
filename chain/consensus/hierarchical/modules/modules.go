@@ -2,9 +2,9 @@ package module
 
 import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
-	subnetmgr "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/manager"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/manager"
 )
 
-func SetSubMgrIface(mgr *subnetmgr.SubnetMgr) subnet.SubnetMgr {
+func SetSubMgrIface(mgr *manager.Service) subnet.Manager {
 	return mgr
 }

@@ -8,25 +8,26 @@ import (
 	"sync"
 	"time"
 
-	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-state-types/cbor"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
 	nsds "github.com/ipfs/go-datastore/namespace"
 	ipldcbor "github.com/ipfs/go-ipld-cbor"
 	logging "github.com/ipfs/go-log/v2"
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"go.uber.org/fx"
-	xerrors "golang.org/x/xerrors"
+	"golang.org/x/xerrors"
+
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/cbor"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/modules/helpers"
@@ -97,7 +98,7 @@ type ResolveMsg struct {
 	// Checkpoint schema.Checkpoint
 	// LockedState being propagated (if any).
 	Locked atomic.LockedState
-	Actor  string //address.Address wrapped as string to support undef serialization
+	Actor  string // address.Address wrapped as string to support undef serialization
 }
 
 type msgReceiptCache struct {
@@ -152,14 +153,14 @@ func NewResolver(self peer.ID, ds dtypes.MetadataDS, pubsub *pubsub.PubSub, netN
 	}
 }
 
-func HandleMsgs(mctx helpers.MetricsCtx, lc fx.Lifecycle, r *Resolver, submgr subnet.SubnetMgr) {
+func HandleMsgs(mctx helpers.MetricsCtx, lc fx.Lifecycle, r *Resolver, submgr subnet.Manager) {
 	ctx := helpers.LifecycleCtx(mctx, lc)
 	if err := r.HandleMsgs(ctx, submgr); err != nil {
 		panic(err)
 	}
 }
 
-func (r *Resolver) HandleMsgs(ctx context.Context, submgr subnet.SubnetMgr) error {
+func (r *Resolver) HandleMsgs(ctx context.Context, submgr subnet.Manager) error {
 	// Register new message validator for resolver msgs.
 	v := NewValidator(submgr, r)
 	if err := r.pubsub.RegisterTopicValidator(SubnetResolverTopic(r.netName), v.Validate); err != nil {
@@ -169,7 +170,7 @@ func (r *Resolver) HandleMsgs(ctx context.Context, submgr subnet.SubnetMgr) erro
 	log.Infof("subscribing to subnet content resolver topic %s", SubnetResolverTopic(r.netName))
 
 	// Subscribe to subnet resolver topic.
-	msgSub, err := r.pubsub.Subscribe(SubnetResolverTopic(r.netName)) //nolint
+	msgSub, err := r.pubsub.Subscribe(SubnetResolverTopic(r.netName)) // nolint
 	if err != nil {
 		return err
 	}
@@ -219,10 +220,10 @@ func EncodeResolveMsg(m *ResolveMsg) ([]byte, error) {
 
 type Validator struct {
 	r      *Resolver
-	submgr subnet.SubnetMgr
+	submgr subnet.Manager
 }
 
-func NewValidator(submgr subnet.SubnetMgr, r *Resolver) *Validator {
+func NewValidator(submgr subnet.Manager, r *Resolver) *Validator {
 	return &Validator{r, submgr}
 }
 
@@ -291,7 +292,7 @@ func (r *Resolver) HandleIncomingResolveMsg(ctx context.Context, sub *pubsub.Sub
 	}
 }
 
-func (r *Resolver) processResolveMsg(ctx context.Context, submgr subnet.SubnetMgr, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
+func (r *Resolver) processResolveMsg(ctx context.Context, submgr subnet.Manager, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
 	switch rmsg.Type {
 	case PushMeta:
 		return r.processPush(ctx, rmsg)
@@ -329,7 +330,7 @@ func (r *Resolver) processPush(ctx context.Context, rmsg *ResolveMsg) (pubsub.Va
 	return pubsub.ValidationAccept, nil
 }
 
-func (r *Resolver) processPullMeta(submgr subnet.SubnetMgr, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
+func (r *Resolver) processPullMeta(submgr subnet.Manager, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
 	// Inspect the state of the SCA to get crossMsgs behind the CID.
 	st, store, err := submgr.GetSCAState(context.TODO(), r.netName)
 	if err != nil {
@@ -363,7 +364,7 @@ func (r *Resolver) processResponseMeta(ctx context.Context, rmsg *ResolveMsg) (p
 	return pubsub.ValidationAccept, nil
 }
 
-func (r *Resolver) processPullLocked(submgr subnet.SubnetMgr, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
+func (r *Resolver) processPullLocked(submgr subnet.Manager, rmsg *ResolveMsg) (pubsub.ValidationResult, error) {
 	// FIXME: Make this configurable
 	lstate, found, err := r.getLockedStateFromActor(context.TODO(), submgr, rmsg)
 	if err != nil {
@@ -396,7 +397,7 @@ func (r *Resolver) publishLockedResponse(lstate atomic.LockedState, to address.S
 	return r.publishMsg(&m, to)
 }
 
-func (r *Resolver) getLockedStateFromActor(ctx context.Context, submgr subnet.SubnetMgr, rmsg *ResolveMsg) (*atomic.LockedState, bool, error) {
+func (r *Resolver) getLockedStateFromActor(ctx context.Context, submgr subnet.Manager, rmsg *ResolveMsg) (*atomic.LockedState, bool, error) {
 	api, err := submgr.GetSubnetAPI(r.netName)
 	if err != nil {
 		return nil, false, err

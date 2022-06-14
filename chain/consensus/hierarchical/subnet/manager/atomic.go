@@ -24,20 +24,20 @@ import (
 	"github.com/filecoin-project/specs-actors/actors/util/adt"
 )
 
-func (s *SubnetMgr) LockState(
+func (s *Service) LockState(
 	ctx context.Context, wallet address.Address, actor address.Address,
 	subnet address.SubnetID, method abi.MethodNum) (cid.Cid, error) {
 	return s.handleLock(ctx, wallet, actor, subnet, method, false)
 }
 
-func (s *SubnetMgr) UnlockState(
+func (s *Service) UnlockState(
 	ctx context.Context, wallet address.Address, actor address.Address,
 	subnet address.SubnetID, method abi.MethodNum) error {
 	_, err := s.handleLock(ctx, wallet, actor, subnet, method, true)
 	return err
 }
 
-func (s *SubnetMgr) handleLock(ctx context.Context, wallet address.Address, actor address.Address,
+func (s *Service) handleLock(ctx context.Context, wallet address.Address, actor address.Address,
 	subnet address.SubnetID, method abi.MethodNum, unlock bool) (cid.Cid, error) {
 
 	sapi, err := s.GetSubnetAPI(subnet)
@@ -87,7 +87,7 @@ func (s *SubnetMgr) handleLock(ctx context.Context, wallet address.Address, acto
 	}
 	return r.Cid, nil
 }
-func (s *SubnetMgr) InitAtomicExec(
+func (s *Service) InitAtomicExec(
 	ctx context.Context, wallet address.Address, inputs map[string]sca.LockedState,
 	msgs []types.Message) (cid.Cid, error) {
 
@@ -132,7 +132,7 @@ func (s *SubnetMgr) InitAtomicExec(
 	return r.Cid, nil
 }
 
-func (s *SubnetMgr) ListAtomicExecs(
+func (s *Service) ListAtomicExecs(
 	ctx context.Context, id address.SubnetID, addr address.Address) ([]sca.AtomicExec, error) {
 
 	// TODO: Think a bit deeper the locking strategy for subnets.
@@ -182,7 +182,7 @@ func getAtomicExec(ctx context.Context, api *API, c cid.Cid) (*sca.AtomicExec, b
 	return st.GetAtomicExec(pstore, c)
 }
 
-func (s *SubnetMgr) ComputeAndSubmitExec(ctx context.Context, wallet address.Address,
+func (s *Service) ComputeAndSubmitExec(ctx context.Context, wallet address.Address,
 	id address.SubnetID, execID cid.Cid) (sca.ExecStatus, error) {
 
 	// FIXME: Make this timeout configurable.
@@ -261,7 +261,7 @@ func (s *SubnetMgr) ComputeAndSubmitExec(ctx context.Context, wallet address.Add
 	return r.Status, nil
 }
 
-func (s *SubnetMgr) resolveLockedStates(ctx context.Context, wallet address.Address, ae *sca.AtomicExec) ([]atomic.LockableState, address.SubnetID, address.Address, error) {
+func (s *Service) resolveLockedStates(ctx context.Context, wallet address.Address, ae *sca.AtomicExec) ([]atomic.LockableState, address.SubnetID, address.Address, error) {
 	locked := make([]atomic.LockableState, 0)
 	var (
 		actor address.Address
@@ -316,7 +316,7 @@ func (s *SubnetMgr) resolveLockedStates(ctx context.Context, wallet address.Addr
 	return locked, sub, actor, nil
 }
 
-func (s *SubnetMgr) AbortAtomicExec(ctx context.Context, wallet address.Address,
+func (s *Service) AbortAtomicExec(ctx context.Context, wallet address.Address,
 	id address.SubnetID, execID cid.Cid) (sca.ExecStatus, error) {
 
 	sapi := s.getAPI(id)

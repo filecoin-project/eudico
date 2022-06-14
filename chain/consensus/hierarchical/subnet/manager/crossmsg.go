@@ -97,7 +97,7 @@ func (cm *crossMsgPool) isBottomUpApplied(n uint64, id address.SubnetID, height 
 }
 
 // getCrossMsgs returns top-down and bottom-up messages.
-func (s *SubnetMgr) getCrossMsgs(
+func (s *Service) getCrossMsgs(
 	ctx context.Context, id address.SubnetID, height abi.ChainEpoch) ([]*types.Message, []*types.Message, error) {
 	// TODO: Think a bit deeper the locking strategy for subnets.
 	// s.lk.RLock()
@@ -127,7 +127,7 @@ func (s *SubnetMgr) getCrossMsgs(
 }
 
 // GetCrossMsgsPool returns a list with `num` number of cross messages pending for validation.
-func (s *SubnetMgr) GetCrossMsgsPool(
+func (s *Service) GetCrossMsgsPool(
 	ctx context.Context, id address.SubnetID, height abi.ChainEpoch) ([]*types.Message, error) {
 
 	topdown, bottomup, err := s.getCrossMsgs(ctx, id, height)
@@ -145,7 +145,7 @@ func (s *SubnetMgr) GetCrossMsgsPool(
 
 // GetUnverifiedCrossMsgsPool returns a list with `num` number of cross messages with their type information
 // (top-down or bottom-up) pending for validation.
-func (s *SubnetMgr) GetUnverifiedCrossMsgsPool(
+func (s *Service) GetUnverifiedCrossMsgsPool(
 	ctx context.Context, id address.SubnetID, height abi.ChainEpoch,
 ) ([]*types.UnverifiedCrossMsg, error) {
 	topdown, bottomup, err := s.getCrossMsgs(ctx, id, height)
@@ -174,7 +174,7 @@ func (s *SubnetMgr) GetUnverifiedCrossMsgsPool(
 
 // FundSubnet injects funds in a subnet and returns the Cid of the
 // message of the parent chain that included it.
-func (s *SubnetMgr) FundSubnet(
+func (s *Service) FundSubnet(
 	ctx context.Context, wallet address.Address,
 	id address.SubnetID, value abi.TokenAmount) (cid.Cid, error) {
 
@@ -212,7 +212,7 @@ func (s *SubnetMgr) FundSubnet(
 }
 
 // ReleaseFunds releases some funds from a subnet
-func (s *SubnetMgr) ReleaseFunds(
+func (s *Service) ReleaseFunds(
 	ctx context.Context, wallet address.Address,
 	id address.SubnetID, value abi.TokenAmount) (cid.Cid, error) {
 
@@ -242,7 +242,7 @@ func (s *SubnetMgr) ReleaseFunds(
 	return smsg.Cid(), nil
 }
 
-func (s *SubnetMgr) getSCAStateWithFinality(ctx context.Context, api *API, id address.SubnetID) (*sca.SCAState, adt.Store, error) {
+func (s *Service) getSCAStateWithFinality(ctx context.Context, api *API, id address.SubnetID) (*sca.SCAState, adt.Store, error) {
 	var err error
 	finTs := api.ChainAPI.Chain.GetHeaviestTipSet()
 	height := finTs.Height()
@@ -284,7 +284,7 @@ func (s *SubnetMgr) getSCAStateWithFinality(ctx context.Context, api *API, id ad
 
 // getParentSCAWithFinality returns the state of the SCA of the parent with `FinalityThreshold`
 // epochs ago to ensure that no reversion happens and we can operate with the state we got.
-func (s *SubnetMgr) getParentSCAWithFinality(ctx context.Context, id address.SubnetID) (*sca.SCAState, adt.Store, error) {
+func (s *Service) getParentSCAWithFinality(ctx context.Context, id address.SubnetID) (*sca.SCAState, adt.Store, error) {
 	parentAPI, err := s.getParentAPI(id)
 	if err != nil {
 		return nil, nil, err
@@ -292,7 +292,7 @@ func (s *SubnetMgr) getParentSCAWithFinality(ctx context.Context, id address.Sub
 	return s.getSCAStateWithFinality(ctx, parentAPI, id)
 }
 
-func (s *SubnetMgr) getTopDownPool(ctx context.Context, id address.SubnetID, height abi.ChainEpoch) ([]*types.Message, error) {
+func (s *Service) getTopDownPool(ctx context.Context, id address.SubnetID, height abi.ChainEpoch) ([]*types.Message, error) {
 
 	// Get status for SCA in subnet to determine from which nonce to fetch messages
 	subAPI := s.getAPI(id)
@@ -352,7 +352,7 @@ func (s *SubnetMgr) getTopDownPool(ctx context.Context, id address.SubnetID, hei
 	return out, nil
 }
 
-func (s *SubnetMgr) getBottomUpPool(ctx context.Context, id address.SubnetID, height abi.ChainEpoch) ([]*types.Message, error) {
+func (s *Service) getBottomUpPool(ctx context.Context, id address.SubnetID, height abi.ChainEpoch) ([]*types.Message, error) {
 	subAPI := s.getAPI(id)
 	if subAPI == nil {
 		return nil, xerrors.Errorf("Not listening to subnet")
@@ -426,7 +426,7 @@ func (s *SubnetMgr) getBottomUpPool(ctx context.Context, id address.SubnetID, he
 	return out, nil
 }
 
-func (s *SubnetMgr) getSubnetResolver(id address.SubnetID) *resolver.Resolver {
+func (s *Service) getSubnetResolver(id address.SubnetID) *resolver.Resolver {
 	r := s.r
 	if !s.isRoot(id) {
 		r = s.subnets[id].r
@@ -434,13 +434,13 @@ func (s *SubnetMgr) getSubnetResolver(id address.SubnetID) *resolver.Resolver {
 	return r
 }
 
-func (s *SubnetMgr) CrossMsgResolve(ctx context.Context, id address.SubnetID, c cid.Cid, from address.SubnetID) ([]types.Message, error) {
+func (s *Service) CrossMsgResolve(ctx context.Context, id address.SubnetID, c cid.Cid, from address.SubnetID) ([]types.Message, error) {
 	r := s.getSubnetResolver(id)
 	msgs, _, err := r.ResolveCrossMsgs(ctx, c, from)
 	return msgs, err
 }
 
-func (s *SubnetMgr) WaitCrossMsgResolved(ctx context.Context, id address.SubnetID, c cid.Cid, from address.SubnetID) chan error {
+func (s *Service) WaitCrossMsgResolved(ctx context.Context, id address.SubnetID, c cid.Cid, from address.SubnetID) chan error {
 	r := s.getSubnetResolver(id)
 	return r.WaitCrossMsgsResolved(ctx, c, from)
 }

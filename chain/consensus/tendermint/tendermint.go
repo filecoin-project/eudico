@@ -56,7 +56,7 @@ type Tendermint struct {
 	sm       *stmgr.StateManager
 	verifier ffiwrapper.Verifier
 	genesis  *types.TipSet
-	subMgr   subnet.SubnetMgr
+	subMgr   subnet.Manager
 	netName  address.SubnetID
 	resolver *resolver.Resolver
 
@@ -79,7 +79,7 @@ type Tendermint struct {
 func NewConsensus(
 	ctx context.Context,
 	sm *stmgr.StateManager,
-	submgr subnet.SubnetMgr,
+	submgr subnet.Manager,
 	b beacon.Schedule,
 	r *resolver.Resolver,
 	v ffiwrapper.Verifier,

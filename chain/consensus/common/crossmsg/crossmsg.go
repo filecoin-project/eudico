@@ -6,12 +6,11 @@ import (
 	"sort"
 	"time"
 
-	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-state-types/big"
-	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 	logging "github.com/ipfs/go-log/v2"
 	"golang.org/x/xerrors"
 
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
@@ -22,6 +21,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/vm"
+	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 )
 
 var log = logging.Logger("crossmsg-val")
@@ -110,7 +110,7 @@ func hasMsg(meta *schema.CrossMsgMeta, msg *types.Message, batch []types.Message
 		// Changing original nonce to that of the MsgMeta as done
 		// by the crossPool.
 		m.Nonce = uint64(meta.Nonce)
-		if msg.Equals(&m) { //nolint
+		if msg.Equals(&m) { // nolint
 			return true
 		}
 	}
@@ -146,7 +146,7 @@ func checkTopDownMsg(pstore blockadt.Store, parentSCA, snSCA *sca.SCAState, msg 
 
 }
 
-func ApplyCrossMsg(ctx context.Context, vmi vm.Interface, submgr subnet.SubnetMgr,
+func ApplyCrossMsg(ctx context.Context, vmi vm.Interface, submgr subnet.Manager,
 	em stmgr.ExecMonitor, msg *types.Message,
 	ts *types.TipSet) error {
 	switch hierarchical.GetMsgType(msg) {
@@ -220,7 +220,7 @@ func applyMsg(ctx context.Context, vmi vm.Interface, em stmgr.ExecMonitor,
 	return nil
 }
 
-func GetSCAState(ctx context.Context, sm *stmgr.StateManager, submgr subnet.SubnetMgr, id address.SubnetID, ts *types.TipSet) (*sca.SCAState, blockadt.Store, error) {
+func GetSCAState(ctx context.Context, sm *stmgr.StateManager, submgr subnet.Manager, id address.SubnetID, ts *types.TipSet) (*sca.SCAState, blockadt.Store, error) {
 
 	var st sca.SCAState
 	// if submgr == nil we are in root, so we can load the actor using the state manager.

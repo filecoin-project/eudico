@@ -139,7 +139,7 @@ func (sh *Subnet) populateCheckpoint(ctx context.Context, store adt.Store, st *s
 	return nil
 }
 
-func (s *SubnetMgr) SubmitSignedCheckpoint(
+func (s *Service) SubmitSignedCheckpoint(
 	ctx context.Context, wallet address.Address,
 	id address.SubnetID, ch *schema.Checkpoint) (cid.Cid, error) {
 
@@ -191,7 +191,7 @@ func (s *SubnetMgr) SubmitSignedCheckpoint(
 	return smsg.Cid(), nil
 }
 
-func (s *SubnetMgr) ListCheckpoints(
+func (s *Service) ListCheckpoints(
 	ctx context.Context, id address.SubnetID, num int) ([]*schema.Checkpoint, error) {
 
 	// TODO: Think a bit deeper the locking strategy for subnets.
@@ -248,7 +248,7 @@ func (s *SubnetMgr) ListCheckpoints(
 	return out, nil
 }
 
-func (s *SubnetMgr) ValidateCheckpoint(
+func (s *Service) ValidateCheckpoint(
 	ctx context.Context, id address.SubnetID, epoch abi.ChainEpoch) (*schema.Checkpoint, error) {
 
 	// TODO: Think a bit deeper the locking strategy for subnets.

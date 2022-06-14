@@ -4,15 +4,16 @@ import (
 	"context"
 	"sync/atomic"
 
-	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/big"
-	"github.com/filecoin-project/go-state-types/network"
-	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 	"github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/trace"
 	"golang.org/x/xerrors"
+
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-state-types/network"
+	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 
 	"github.com/filecoin-project/lotus/chain/consensus/actors/registry"
 	"github.com/filecoin-project/lotus/chain/consensus/actors/reward"
@@ -51,14 +52,14 @@ func DefaultUpgradeSchedule() stmgr.UpgradeSchedule {
 }
 
 type tipSetExecutor struct {
-	submgr subnet.SubnetMgr
+	submgr subnet.Manager
 }
 
 func (t *tipSetExecutor) NewActorRegistry() *vm.ActorRegistry {
 	return registry.NewActorRegistry()
 }
 
-func TipSetExecutor(submgr subnet.SubnetMgr) stmgr.Executor {
+func TipSetExecutor(submgr subnet.Manager) stmgr.Executor {
 	return &tipSetExecutor{submgr}
 }
 

@@ -39,7 +39,7 @@ type signInfo struct {
 // This routine listens mainly for the following events:
 // * Pending checkpoints to sign if we are miners in a subnet.
 // * New checkpoints for child chains committed in SCA of the subnet.
-func (s *SubnetMgr) listenSubnetEvents(ctx context.Context, sh *Subnet) {
+func (s *Service) listenSubnetEvents(ctx context.Context, sh *Subnet) {
 	evs := s.events
 	id := address.RootSubnet
 	root := true
@@ -102,7 +102,7 @@ func (s *SubnetMgr) listenSubnetEvents(ctx context.Context, sh *Subnet) {
 	}
 }
 
-func (s *SubnetMgr) matchCheckpointSignature(ctx context.Context, sh *Subnet, newTs *types.TipSet, diff *diffInfo) (bool, error) {
+func (s *Service) matchCheckpointSignature(ctx context.Context, sh *Subnet, newTs *types.TipSet, diff *diffInfo) (bool, error) {
 	// Get the epoch for the current tipset in subnet.
 	subnetEpoch := newTs.Height()
 
@@ -218,7 +218,7 @@ func (s *SubnetMgr) matchCheckpointSignature(ctx context.Context, sh *Subnet, ne
 	return false, nil
 }
 
-func (s *SubnetMgr) triggerChange(ctx context.Context, sh *Subnet, diff *diffInfo) (more bool, err error) {
+func (s *Service) triggerChange(ctx context.Context, sh *Subnet, diff *diffInfo) (more bool, err error) {
 	// If there's a checkpoint to sign.
 	if diff.checkToSign != nil {
 		err := s.signAndSubmitCheckpoint(ctx, sh, diff.checkToSign)
@@ -232,7 +232,7 @@ func (s *SubnetMgr) triggerChange(ctx context.Context, sh *Subnet, diff *diffInf
 	return true, nil
 }
 
-func (s *SubnetMgr) signAndSubmitCheckpoint(ctx context.Context, sh *Subnet, info *signInfo) error {
+func (s *Service) signAndSubmitCheckpoint(ctx context.Context, sh *Subnet, info *signInfo) error {
 	log.Infow("Signing checkpoint for subnet", "subnetID", info.checkpoint.Source().String())
 	// Using simple signature to sign checkpoint using the subnet wallet.
 	ver := checkpoint.NewSingleSigner()
