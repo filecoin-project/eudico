@@ -55,7 +55,7 @@ func (s *Service) listenSubnetEvents(ctx context.Context, sh *Subnet) {
 		sh.resetSigState(abi.ChainEpoch(0))
 		finalityThreshold = sh.finalityThreshold
 	}
-	
+
 	checkFunc := func(ctx context.Context, ts *types.TipSet) (done bool, more bool, err error) {
 		return false, true, nil
 	}
