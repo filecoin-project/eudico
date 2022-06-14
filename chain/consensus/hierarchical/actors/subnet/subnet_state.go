@@ -19,9 +19,6 @@ import (
 )
 
 var (
-	// MinSubnetStake required to create a new subnet
-	MinSubnetStake = abi.NewTokenAmount(1e18)
-
 	// MinMinerStake is the minimum take required for a
 	// miner to be granted mining rights in the subnet and join it.
 	MinMinerStake = abi.NewTokenAmount(1e18)
