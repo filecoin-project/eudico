@@ -11,20 +11,17 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
+// FinalityThreshold determines the number of epochs to wait
+// before considering a change "final" and consider signing the
+// checkpoint
+//
+// This should always be less than the checkpoint period.
+const FinalityThreshold = 5
+
 // ConsensusType for subnet.
 type ConsensusType uint64
 
-type ConsensusParams struct {
-	DelegMiner    address.Address // Miner in delegated consensus.
-	MinValidators uint64          // Min number of validators required to start a network.
-}
-
-type MiningParams struct {
-	LogLevel    string
-	LogFileName string
-}
-
-// List of supported/implemented consensus for subnets.
+// List of supported/implemented consensus algorithms for subnets.
 const (
 	Delegated ConsensusType = iota
 	PoW
@@ -109,6 +106,27 @@ var SubnetCoordActorAddr = func() address.Address {
 	}
 	return a
 }()
+
+type SubnetParams struct {
+	Name              string           // Subnet name.
+	Addr              address.Address  // Subnet address.
+	Parent            address.SubnetID // Parent subnet ID.
+	Stake             abi.TokenAmount  // Initial stake.
+	CheckPeriod       abi.ChainEpoch   // Checkpointing period for a subnet.
+	FinalityThreshold abi.ChainEpoch   // Finality threshold for a subnet.
+	Consensus         ConsensusParams  // Consensus params.
+}
+
+type ConsensusParams struct {
+	Alg           ConsensusType   // Consensus algorithm.
+	DelegMiner    address.Address // Miner in delegated consensus.
+	MinValidators uint64          // Min number of validators required to start a network.
+}
+
+type MiningParams struct {
+	LogLevel    string
+	LogFileName string
+}
 
 // SubnetKey implements Keyer interface, so it can be used as a key for maps.
 type SubnetKey address.SubnetID

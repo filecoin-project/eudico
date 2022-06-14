@@ -152,7 +152,7 @@ var addCmd = &cli.Command{
 		if !cctx.IsSet("consensus") {
 			return lcli.ShowHelp(cctx, fmt.Errorf("consensus is not specified"))
 		}
-		cns := uint64(hierarchical.Consensus(cctx.String("consensus")))
+		cns := hierarchical.Consensus(cctx.String("consensus"))
 
 		if !cctx.IsSet("name") {
 			return lcli.ShowHelp(cctx, fmt.Errorf("no name for subnet specified"))
@@ -185,11 +185,21 @@ var addCmd = &cli.Command{
 		stake := abi.NewStoragePower(1e8) // TODO: Make this value configurable in a flag/argument
 		checkPeriod := abi.ChainEpoch(cctx.Int("check-period"))
 		finalityThreshold := abi.ChainEpoch(cctx.Int("finality-threshold"))
-		params := &hierarchical.ConsensusParams{
-			DelegMiner:    delegMiner,
-			MinValidators: minVals,
+
+		params := &hierarchical.SubnetParams{
+			Addr:              addr,
+			Parent:            parent,
+			Name:              subnetName,
+			Stake:             stake,
+			CheckPeriod:       checkPeriod,
+			FinalityThreshold: finalityThreshold,
+			Consensus: hierarchical.ConsensusParams{
+				DelegMiner:    delegMiner,
+				MinValidators: minVals,
+				Alg:           cns,
+			},
 		}
-		actorAddr, err := api.AddSubnet(ctx, addr, parent, subnetName, cns, stake, checkPeriod, finalityThreshold, params)
+		actorAddr, err := api.AddSubnet(ctx, params)
 		if err != nil {
 			return err
 		}

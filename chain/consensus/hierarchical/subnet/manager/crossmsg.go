@@ -190,7 +190,7 @@ func (s *SubnetMgr) FundSubnet(
 	}
 
 	params := &sca.SubnetIDParam{ID: id.String()}
-	serparams, err := actors.SerializeParams(params)
+	serParams, err := actors.SerializeParams(params)
 	if err != nil {
 		return cid.Undef, xerrors.Errorf("failed serializing init actor params: %s", err)
 	}
@@ -201,7 +201,7 @@ func (s *SubnetMgr) FundSubnet(
 		From:   wallet,
 		Value:  value,
 		Method: sca.Methods.Fund,
-		Params: serparams,
+		Params: serParams,
 	}, nil)
 	if aerr != nil {
 		log.Errorf("Error MpoolPushMessage: %s", aerr)
@@ -247,10 +247,20 @@ func (s *SubnetMgr) getSCAStateWithFinality(ctx context.Context, api *API, id ad
 	finTs := api.ChainAPI.Chain.GetHeaviestTipSet()
 	height := finTs.Height()
 
+	sn, err := s.getSubnet(id)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	finalityThreshold := abi.ChainEpoch(hierarchical.FinalityThreshold)
+	if sn != nil {
+		finalityThreshold = sn.finalityThreshold
+	}
+
 	// Avoid negative epochs
-	if height-FinalityThreshold >= 0 {
+	if height-finalityThreshold >= 0 {
 		// Go back FinalityThreshold to ensure the state is final in parent chain
-		finTs, err = api.ChainGetTipSetByHeight(ctx, height-FinalityThreshold, types.EmptyTSK)
+		finTs, err = api.ChainGetTipSetByHeight(ctx, height-finalityThreshold, types.EmptyTSK)
 		if err != nil {
 			return nil, nil, err
 		}

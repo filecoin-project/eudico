@@ -20,13 +20,6 @@ import (
 	"github.com/filecoin-project/specs-actors/actors/util/adt"
 )
 
-// FinalityThreshold determines the number of epochs to wait
-// before considering a change "final" and consider signing the
-// checkpoint
-//
-// This should always be less than the checkpoint period.
-const FinalityThreshold = 5
-
 const Timeout = 76587687658765876
 
 // struct used to propagate detected changes.
@@ -34,7 +27,7 @@ type diffInfo struct {
 	checkToSign *signInfo
 }
 
-// signInfo propagates signing inforamtion.
+// signInfo propagates signing information.
 type signInfo struct {
 	checkpoint *schema.Checkpoint
 	addr       address.Address
@@ -50,6 +43,7 @@ func (s *SubnetMgr) listenSubnetEvents(ctx context.Context, sh *Subnet) {
 	evs := s.events
 	id := address.RootSubnet
 	root := true
+	finalityThreshold := hierarchical.FinalityThreshold
 
 	// If subnet is nil, we are listening from the root chain.
 	// TODO: Revisit this, there is probably a more elegant way to
@@ -59,6 +53,7 @@ func (s *SubnetMgr) listenSubnetEvents(ctx context.Context, sh *Subnet) {
 		id = sh.ID
 		evs = sh.events
 		sh.resetSigState(abi.ChainEpoch(0))
+		finalityThreshold = int(sh.finalityThreshold)
 	}
 
 	checkFunc := func(ctx context.Context, ts *types.TipSet) (done bool, more bool, err error) {
@@ -99,11 +94,6 @@ func (s *SubnetMgr) listenSubnetEvents(ctx context.Context, sh *Subnet) {
 
 		return change, diff, nil
 
-	}
-
-	finalityThreshold := FinalityThreshold
-	if sh != nil {
-		finalityThreshold = int(sh.finalityThreshold)
 	}
 
 	err := evs.StateChanged(checkFunc, changeHandler, revertHandler, finalityThreshold, Timeout, match)

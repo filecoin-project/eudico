@@ -12,7 +12,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
-	snmgr "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/manager"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/manager"
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
@@ -21,21 +21,11 @@ var _ api.HierarchicalCns = &HierarchicalAPI{}
 type HierarchicalAPI struct {
 	fx.In
 
-	Sub *snmgr.SubnetMgr
+	Sub *subnetmgr.SubnetMgr
 }
 
-func (a *HierarchicalAPI) AddSubnet(
-	ctx context.Context,
-	wallet address.Address,
-	parent address.SubnetID,
-	subnetName string,
-	consensus uint64,
-	stake abi.TokenAmount,
-	checkPeriod abi.ChainEpoch,
-	finalityThreshold abi.ChainEpoch,
-	params *hierarchical.ConsensusParams,
-) (address.Address, error) {
-	return a.Sub.AddSubnet(ctx, wallet, parent, subnetName, consensus, stake, checkPeriod, finalityThreshold, params)
+func (a *HierarchicalAPI) AddSubnet(ctx context.Context, new *hierarchical.SubnetParams) (address.Address, error) {
+	return a.Sub.AddSubnet(ctx, new)
 }
 
 func (a *HierarchicalAPI) JoinSubnet(ctx context.Context, wallet address.Address,

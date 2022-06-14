@@ -82,18 +82,18 @@ func (mr *MockFullNodeMockRecorder) AbortAtomicExec(arg0, arg1, arg2, arg3 inter
 }
 
 // AddSubnet mocks base method.
-func (m *MockFullNode) AddSubnet(arg0 context.Context, arg1 address.Address, arg2 address.SubnetID, arg3 string, arg4 uint64, arg5 big.Int, arg6, arg7 abi.ChainEpoch, arg8 *hierarchical.ConsensusParams) (address.Address, error) {
+func (m *MockFullNode) AddSubnet(arg0 context.Context, arg1 *hierarchical.SubnetParams) (address.Address, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddSubnet", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
+	ret := m.ctrl.Call(m, "AddSubnet", arg0, arg1)
 	ret0, _ := ret[0].(address.Address)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // AddSubnet indicates an expected call of AddSubnet.
-func (mr *MockFullNodeMockRecorder) AddSubnet(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8 interface{}) *gomock.Call {
+func (mr *MockFullNodeMockRecorder) AddSubnet(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddSubnet", reflect.TypeOf((*MockFullNode)(nil).AddSubnet), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddSubnet", reflect.TypeOf((*MockFullNode)(nil).AddSubnet), arg0, arg1)
 }
 
 // AuthNew mocks base method.

@@ -96,7 +96,7 @@ type SubnetMgr struct {
 type SubnetParams struct {
 	FinalityThreshold abi.ChainEpoch
 	CheckPeriod       abi.ChainEpoch
-	Consenus          hierarchical.ConsensusType
+	Consensus         hierarchical.ConsensusType
 }
 
 func NewSubnetMgr(
@@ -185,7 +185,7 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 	// Subnets inherit the context from the SubnetManager.
 	ctx, cancel := context.WithCancel(s.ctx)
 
-	consensus := params.Consenus
+	consensus := params.Consensus
 
 	log.Infow("Creating new subnet", "subnetID", id)
 	sh := &Subnet{
@@ -376,66 +376,58 @@ func (s *SubnetMgr) GetSubnetState(ctx context.Context, id address.SubnetID, act
 	return st, nil
 }
 
-func (s *SubnetMgr) AddSubnet(
-	ctx context.Context,
-	wallet address.Address,
-	parent address.SubnetID,
-	name string,
-	consensus uint64,
-	minerStake abi.TokenAmount,
-	checkPeriod abi.ChainEpoch,
-	finalityThreshold abi.ChainEpoch,
-	consensusParams *hierarchical.ConsensusParams,
-) (address.Address, error) {
-
+func (s *SubnetMgr) AddSubnet(ctx context.Context, sbn *hierarchical.SubnetParams) (address.Address, error) {
+	if sbn == nil {
+		return address.Undef, xerrors.New("nil subnet params")
+	}
 	// Get the api for the parent network hosting the subnet actor for the subnet.
-	parentAPI := s.getAPI(parent)
+	parentAPI := s.getAPI(sbn.Parent)
 	if parentAPI == nil {
 		return address.Undef, xerrors.Errorf("not syncing with parent network")
 	}
 	// Populate constructor parameters for subnet actor
 	addp := &subnet.ConstructParams{
 		NetworkName:       string(s.api.NetName),
-		MinMinerStake:     minerStake,
-		Name:              name,
-		Consensus:         hierarchical.ConsensusType(consensus),
-		CheckPeriod:       checkPeriod,
-		FinalityThreshold: finalityThreshold,
+		MinMinerStake:     sbn.Stake,
+		Name:              sbn.Name,
+		Consensus:         sbn.Consensus.Alg,
+		CheckPeriod:       sbn.CheckPeriod,
+		FinalityThreshold: sbn.FinalityThreshold,
 		ConsensusParams: &hierarchical.ConsensusParams{
-			DelegMiner:    consensusParams.DelegMiner,
-			MinValidators: consensusParams.MinValidators,
+			DelegMiner:    sbn.Consensus.DelegMiner,
+			MinValidators: sbn.Consensus.MinValidators,
 		},
 	}
 
-	if finalityThreshold >= checkPeriod {
+	if sbn.FinalityThreshold >= sbn.CheckPeriod {
 		return address.Undef, xerrors.Errorf("finality threshold (%v) must be less than checkpoint period (%v)",
-			finalityThreshold, checkPeriod)
+			sbn.FinalityThreshold, sbn.CheckPeriod)
 	}
 
-	if consensus == uint64(hierarchical.Mir) && consensusParams.MinValidators == 0 {
+	if sbn.Consensus.Alg == hierarchical.Mir && sbn.Consensus.MinValidators == 0 {
 		return address.Undef, xerrors.New("min number of validators must be more than 0")
 	}
 
-	seraddp, err := actors.SerializeParams(addp)
+	serParams, err := actors.SerializeParams(addp)
 	if err != nil {
 		return address.Undef, err
 	}
 
-	params := &init_.ExecParams{
+	execParams := &init_.ExecParams{
 		CodeCID:           act.SubnetActorCodeID,
-		ConstructorParams: seraddp,
+		ConstructorParams: serParams,
 	}
-	serparams, err := actors.SerializeParams(params)
+	serParams, err = actors.SerializeParams(execParams)
 	if err != nil {
 		return address.Undef, xerrors.Errorf("failed serializing init actor params: %s", err)
 	}
 
 	smsg, aerr := parentAPI.MpoolPushMessage(ctx, &types.Message{
 		To:     builtin.InitActorAddr,
-		From:   wallet,
+		From:   sbn.Addr,
 		Value:  abi.NewTokenAmount(0),
 		Method: builtin.MethodsInit.Exec,
-		Params: serparams,
+		Params: serParams,
 	}, nil)
 	if aerr != nil {
 		return address.Undef, aerr
@@ -564,7 +556,7 @@ func (s *SubnetMgr) syncSubnet(ctx context.Context, id address.SubnetID, parentA
 	}
 
 	params := &SubnetParams{
-		Consenus:          st.Consensus,
+		Consensus:         st.Consensus,
 		FinalityThreshold: st.FinalityThreshold,
 		CheckPeriod:       st.CheckPeriod,
 	}

@@ -125,18 +125,18 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 	}
 
 	// Don't allow really small checkpoint periods for now.
-	period := params.CheckPeriod
-	if period < sca.MinCheckpointPeriod {
-		period = sca.DefaultCheckpointPeriod
+	checkPeriod := params.CheckPeriod
+	if checkPeriod < sca.MinCheckpointPeriod {
+		checkPeriod = sca.DefaultCheckpointPeriod
 	}
 
 	finalityThreshold := params.FinalityThreshold
 	if finalityThreshold < 1 {
-		finalityThreshold = params.FinalityThreshold
+		finalityThreshold = hierarchical.FinalityThreshold
 	}
-	if finalityThreshold >= period {
+	if finalityThreshold >= checkPeriod {
 		return nil, xerrors.Errorf("finality threshold (%v) must be less than checkpoint period (%v)",
-			finalityThreshold, period)
+			finalityThreshold, checkPeriod)
 	}
 
 	// TODO: @alfonso do we need this?
@@ -156,7 +156,7 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 		Miners:            make([]address.Address, 0),
 		Stake:             emptyStakeCid,
 		Status:            Instantiated,
-		CheckPeriod:       period,
+		CheckPeriod:       checkPeriod,
 		Checkpoints:       emptyCheckpointsMapCid,
 		FinalityThreshold: finalityThreshold,
 		WindowChecks:      emptyWindowChecks,

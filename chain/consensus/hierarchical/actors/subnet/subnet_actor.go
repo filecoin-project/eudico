@@ -459,7 +459,7 @@ func (st *SubnetState) addStake(rt runtime.Runtime, sourceAddr address.Address, 
 func (st *SubnetState) rmStake(rt runtime.Runtime, sourceAddr address.Address, stakes *adt.BalanceTable, minerStake abi.TokenAmount) abi.TokenAmount {
 	retFunds := big.Div(minerStake, LeavingFeeCoeff)
 
-	// Remove from stakes
+	// Remove from stakes.
 	err := stakes.MustSubtract(sourceAddr, minerStake)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed subtracting ablanace for miner")
 	// Flush stakes adding miner stake.
@@ -467,7 +467,7 @@ func (st *SubnetState) rmStake(rt runtime.Runtime, sourceAddr address.Address, s
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flust stakes")
 
 	// Remove miner from list of miners if it is there.
-	// NOTE: If we decide to support part-recovery of stake from stards
+	// NOTE: If we decide to support part-recovery of stake from shards
 	// we need to check if the miner keeps its mining rights.
 	st.Miners = rmMiner(sourceAddr, st.Miners)
 

@@ -34,9 +34,9 @@ func TestExports(t *testing.T) {
 func TestConstruction(t *testing.T) {
 
 	t.Run("simple construction", func(t *testing.T) {
-		actor := newHarness(t)
+		a := newHarness(t)
 		rt := getRuntime(t)
-		actor.constructAndVerify(t, rt)
+		a.constructAndVerify(t, rt)
 	})
 
 }
@@ -238,7 +238,6 @@ func TestLeaveAndKill(t *testing.T) {
 	require.Equal(t, len(st.Miners), 0)
 	require.Equal(t, getStake(t, rt, joiner3), big.Zero())
 	require.Equal(t, st.TotalStake.Abs(), totalStake.Abs())
-
 }
 
 func TestCheckpoints(t *testing.T) {
@@ -250,7 +249,7 @@ func TestCheckpoints(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	miners := []address.Address{}
+	var miners []address.Address
 	for i := 0; i < 3; i++ {
 		addr, err := w.WalletNew(ctx, types.KTSecp256k1)
 		require.NoError(t, err)

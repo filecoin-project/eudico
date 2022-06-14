@@ -210,12 +210,21 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("[*] %s balance: %d", addr, balance)
 
-	cns := uint64(subnetMinerType)
-	p := &hierarchical.ConsensusParams{
-		MinValidators: n,
-		DelegMiner:    addr,
+	cns := subnetMinerType
+	subnetParams := &hierarchical.SubnetParams{
+		Addr:              addr,
+		Parent:            parent,
+		Name:              subnetName,
+		Stake:             stake,
+		CheckPeriod:       checkPeriod,
+		FinalityThreshold: finalityThreshold,
+		Consensus: hierarchical.ConsensusParams{
+			Alg:           cns,
+			MinValidators: n,
+			DelegMiner:    addr,
+		},
 	}
-	actorAddr, err := full.AddSubnet(ctx, addr, parent, subnetName, cns, stake, checkPeriod, finalityThreshold, p)
+	actorAddr, err := full.AddSubnet(ctx, subnetParams)
 	require.NoError(t, err)
 
 	subnetAddr := address.NewSubnetID(parent, actorAddr)
@@ -491,11 +500,20 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 
 	os.Unsetenv(mir.ValidatorsEnv) // nolint
 
-	hp := &hierarchical.ConsensusParams{
-		MinValidators: 2,
-		DelegMiner:    minerA,
+	subnetParams := &hierarchical.SubnetParams{
+		Addr:              minerA,
+		Parent:            parent,
+		Name:              subnetName,
+		Stake:             stake,
+		CheckPeriod:       checkPeriod,
+		FinalityThreshold: finalityThreshold,
+		Consensus: hierarchical.ConsensusParams{
+			Alg:           hierarchical.Mir,
+			MinValidators: 2,
+			DelegMiner:    minerA,
+		},
 	}
-	actorAddr, err := nodeA.AddSubnet(ctx, minerA, parent, subnetName, uint64(hierarchical.Mir), stake, checkPeriod, finalityThreshold, hp)
+	actorAddr, err := nodeA.AddSubnet(ctx, subnetParams)
 	require.NoError(t, err)
 
 	subnetAddr := address.NewSubnetID(parent, actorAddr)
@@ -781,14 +799,21 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("[*] miner %s balance: %d", minerB, balance2)
 
-	hp := &hierarchical.ConsensusParams{
-		MinValidators: 0,
-		DelegMiner:    minerA,
-	}
-
 	// First subnet created on node A.
-	subnetA := "testSubnetA"
-	subnetAActor, err := nodeA.AddSubnet(ctx, minerA, parent, subnetA, uint64(hierarchical.PoW), stake, checkPeriod, finalityThreshold, hp)
+	subnetParams := &hierarchical.SubnetParams{
+		Addr:              minerA,
+		Parent:            parent,
+		Name:              "subnetA",
+		Stake:             stake,
+		CheckPeriod:       checkPeriod,
+		FinalityThreshold: finalityThreshold,
+		Consensus: hierarchical.ConsensusParams{
+			Alg:           hierarchical.PoW,
+			MinValidators: 0,
+			DelegMiner:    minerA,
+		},
+	}
+	subnetAActor, err := nodeA.AddSubnet(ctx, subnetParams)
 	require.NoError(t, err)
 
 	subnetAAddr := address.NewSubnetID(parent, subnetAActor)
@@ -811,8 +836,20 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 	require.NoError(t, err)
 
 	// Second subnet created on node B.
-	subnetBName := "testSubnetB"
-	subnetBActor, err := nodeB.AddSubnet(ctx, minerB, parent, subnetBName, uint64(hierarchical.PoW), stake, checkPeriod, finalityThreshold, hp)
+	subnetParams = &hierarchical.SubnetParams{
+		Addr:              minerB,
+		Parent:            parent,
+		Name:              "subnetB",
+		Stake:             stake,
+		CheckPeriod:       checkPeriod,
+		FinalityThreshold: finalityThreshold,
+		Consensus: hierarchical.ConsensusParams{
+			Alg:           hierarchical.PoW,
+			MinValidators: 0,
+			DelegMiner:    minerA,
+		},
+	}
+	subnetBActor, err := nodeB.AddSubnet(ctx, subnetParams)
 	require.NoError(t, err)
 
 	subnetBAddr := address.NewSubnetID(parent, subnetBActor)
