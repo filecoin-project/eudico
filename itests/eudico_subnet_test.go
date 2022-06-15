@@ -372,7 +372,8 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 func runSubnetTestsTwoNodes(t *testing.T, opts ...interface{}) {
 	ts := eudicoSubnetSuite{opts: opts}
 
-	t.Run("testBasicSubnetFlowTwoNodes", ts.testBasicSubnetTwoNodes)
+	t.Run("testBasicSubnetFlowTwoNodes", ts.testBasicSubnetFlowTwoNodes)
+	t.Run("testBasicSubnetTwoNodesStartStop", ts.testBasicSubnetTwoNodesStartStop)
 }
 
 func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
@@ -669,7 +670,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 	t.Logf("[*] test time: %v\n", time.Since(startTime).Seconds())
 }
 
-func (ts *eudicoSubnetSuite) testBasicSubnetTwoNodes(t *testing.T) {
+func (ts *eudicoSubnetSuite) testBasicSubnetTwoNodesStartStop(t *testing.T) {
 	var wg sync.WaitGroup
 
 	nodeA, nodeB, ens := kit.EudicoEnsembleTwoNodes(t, ts.opts...)
@@ -880,6 +881,7 @@ func runSubnetTwoNodesCrossMessage(t *testing.T, opts ...interface{}) {
 	ts := eudicoSubnetSuite{opts: opts}
 
 	t.Run("testBasicSubnetFlowTwoNodes", ts.testSubnetTwoNodesCrossMessage)
+
 }
 
 func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
