@@ -373,7 +373,7 @@ func runSubnetTestsTwoNodes(t *testing.T, opts ...interface{}) {
 	ts := eudicoSubnetSuite{opts: opts}
 
 	t.Run("testBasicSubnetFlowTwoNodes", ts.testBasicSubnetFlowTwoNodes)
-	t.Run("testBasicSubnetTwoNodesStartStop", ts.testBasicSubnetTwoNodesStartStop)
+	// t.Run("testBasicSubnetTwoNodesStartStop", ts.testBasicSubnetTwoNodesStartStop)
 }
 
 func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
