@@ -74,7 +74,7 @@ type Manager struct {
 	MirID      string
 	Validators []hierarchical.Validator
 	EudicoNode v1api.FullNode
-	Cache      *requestCache
+	Pool       *requestPool
 	MirNode    *mir.Node
 	Wal        *simplewal.WAL
 	Net        *grpctransport.GrpcTransport
@@ -169,7 +169,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		NetName:    netName,
 		Validators: validators,
 		EudicoNode: api,
-		Cache:      newRequestCache(),
+		Pool:       newRequestPool(),
 		MirID:      mirID,
 		MirNode:    node,
 		Wal:        wal,
@@ -231,7 +231,7 @@ func (m *Manager) SubmitRequests(ctx context.Context, refs []*RequestRef) {
 func (m *Manager) GetMessagesByHashes(blockRequestHashes []Tx) (msgs []*types.SignedMessage, crossMsgs []*types.Message) {
 	log.Infof("received a block with %d hashes", len(blockRequestHashes))
 	for _, h := range blockRequestHashes {
-		req, found := m.Cache.getDel(string(h))
+		req, found := m.Pool.getDel(string(h))
 		if !found {
 			log.Errorf("unable to find a request with %v hash", h)
 			continue
@@ -263,7 +263,7 @@ func (m *Manager) AddSignedMessages(dst []*RequestRef, msgs []*types.SignedMessa
 			Type:     common.SignedMessageType,
 			Hash:     hash.Bytes(),
 		}
-		alreadyExist := m.Cache.addIfNotExist(clientID, string(r.Hash), msg)
+		alreadyExist := m.Pool.addIfNotExist(clientID, string(r.Hash), msg)
 		if !alreadyExist {
 			log.Infof(">>>> added message (%s, %d) to cache: client ID %s", msg.Message.To, nonce, clientID)
 			dst = append(dst, &r)
@@ -291,7 +291,7 @@ func (m *Manager) AddCrossMessages(dst []*RequestRef, msgs []*types.UnverifiedCr
 			Type:     common.CrossMessageType,
 			Hash:     hash.Bytes(),
 		}
-		alreadyExist := m.Cache.addIfNotExist(clientID, string(r.Hash), msg)
+		alreadyExist := m.Pool.addIfNotExist(clientID, string(r.Hash), msg)
 		if !alreadyExist {
 			log.Infof(">>>> added cross-message (%s, %d) to cache: clientID %s", msg.Message.To, nonce, clientID)
 			dst = append(dst, &r)
@@ -303,5 +303,5 @@ func (m *Manager) AddCrossMessages(dst []*RequestRef, msgs []*types.UnverifiedCr
 
 // GetRequest gets the request from the cache by the key.
 func (m *Manager) GetRequest(h string) (Request, bool) {
-	return m.Cache.getRequest(h)
+	return m.Pool.getRequest(h)
 }
