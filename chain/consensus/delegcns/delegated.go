@@ -279,5 +279,5 @@ func (deleg *Delegated) Type() hierarchical.ConsensusType {
 }
 
 func (deleg *Delegated) Finality() abi.ChainEpoch {
-	return build.DelegatedPoWFinality
+	return build.Finality
 }

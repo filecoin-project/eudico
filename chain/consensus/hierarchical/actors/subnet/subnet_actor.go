@@ -468,7 +468,7 @@ func (st *SubnetState) rmStake(rt runtime.Runtime, sourceAddr address.Address, s
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flust stakes")
 
 	// Remove miner from list of miners if it is there.
-	// NOTE: If we decide to support part-recovery of stake from shards
+	// NOTE: If we decide to support part-recovery of stake from subnets
 	// we need to check if the miner keeps its mining rights.
 	st.Miners = rmMiner(sourceAddr, st.Miners)
 

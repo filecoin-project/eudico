@@ -127,12 +127,12 @@ var (
 
 const BootstrapPeerThreshold = 1
 
-const DelegatedPoWFinality = 2
-const PoWFinality = 2
-const TendermintFinality = 1
-const MirFinality = 1
+const DelegatedPoWFinality = 3
+const PoWFinality = 3
+const TendermintFinality = 2
+const MirFinality = 2
 const DummyFinality = 1
-const FilecoinECFinality = 2
+const FilecoinECFinality = 5
 
 const DelegatedPoWCheckPeriod = 10
 const PoWCheckPeriod = 10

@@ -7,10 +7,9 @@ import (
 	"math"
 	"os"
 
-	"github.com/filecoin-project/go-state-types/network"
-
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/network"
 	builtin2 "github.com/filecoin-project/specs-actors/v2/actors/builtin"
 )
 
@@ -104,8 +103,8 @@ var WhitelistedBlock = MustParseCid("bafy2bzaceapyg2uyzk7vueh3xccxkuwbz3nxewjygu
 
 const DelegatedPoWFinality = 5
 const PoWFinality = 5
-const TendermintFinality = 1
-const MirFinality = 1
+const TendermintFinality = 2
+const MirFinality = 2
 const DummyFinality = 1
 const FilecoinECFinality = 5
 

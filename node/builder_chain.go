@@ -19,8 +19,8 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	module "github.com/filecoin-project/lotus/chain/consensus/hierarchical/modules"
-	snmgr "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/manager"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/submgr"
 	"github.com/filecoin-project/lotus/chain/exchange"
 	"github.com/filecoin-project/lotus/chain/gen/slashfilter"
 	"github.com/filecoin-project/lotus/chain/market"
@@ -47,7 +47,7 @@ import (
 	"github.com/filecoin-project/lotus/paychmgr/settler"
 )
 
-// Chain node provides access to the Filecoin blockchain, by setting up a full
+// ChainNode provides access to the Filecoin blockchain, by setting up a full
 // validator node, or by delegating some actions to other nodes (lite mode)
 var ChainNode = Options(
 	// Full node or lite node
@@ -142,11 +142,11 @@ var ChainNode = Options(
 	// Subneting
 	// Start hierarchical sub to listen to shard events
 	Override(new(*resolver.Resolver), resolver.NewRootResolver),
-	Override(new(*snmgr.Service), snmgr.NewService),
+	Override(new(*submgr.Service), submgr.NewService),
 	Override(new(subnet.Manager), module.SetSubMgrIface),
 	Override(new(api.FullNodeServer), func(path string, api api.FullNode) error { return nil }),
 
-	Override(StartSubnetMgrKey, snmgr.BuildSubnetMgr),
+	Override(StartSubnetMgrKey, submgr.BuildSubnetMgr),
 	Override(StartCrossMsgResolverMgrKey, resolver.HandleMsgs),
 	Override(RelayIndexerMessagesKey, modules.RelayIndexerMessages),
 

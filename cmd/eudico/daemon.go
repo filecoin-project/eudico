@@ -29,7 +29,7 @@ import (
 	"github.com/filecoin-project/go-jsonrpc"
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
-	snmgr "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/manager"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/submgr"
 	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/lib/peermgr"
@@ -291,12 +291,12 @@ func daemonCmd(overrides node.Option) *cli.Command {
 					}
 				} else {
 					// If not instantiate a subnet api
-					api, ok := iapi.(*snmgr.API)
+					api, ok := iapi.(*submgr.API)
 					if !ok {
 						return xerrors.Errorf("Couldn't instantiate new subnet API. Something went wrong: %s", err)
 					}
 					// Instantiate the full node handler.
-					h, err = snmgr.FullNodeHandler(pp, api, true, serverOptions...)
+					h, err = submgr.FullNodeHandler(pp, api, true, serverOptions...)
 					if err != nil {
 						return fmt.Errorf("failed to instantiate rpc handler: %s", err)
 					}
