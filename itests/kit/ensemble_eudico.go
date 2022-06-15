@@ -54,8 +54,8 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
-	snmgr "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/manager"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/submgr"
 	"github.com/filecoin-project/lotus/chain/consensus/mir"
 	"github.com/filecoin-project/lotus/chain/consensus/tendermint"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
@@ -384,12 +384,12 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 			}
 		} else {
 			// If not instantiate a subnet api
-			api, ok := iapi.(*snmgr.API)
+			api, ok := iapi.(*submgr.API)
 			if !ok {
 				return xerrors.Errorf("Couldn't instantiate new subnet API. Something went wrong: %s", err)
 			}
 			// Instantiate the full node handler.
-			h, err = snmgr.FullNodeHandler(pp, api, true, serverOptions...)
+			h, err = submgr.FullNodeHandler(pp, api, true, serverOptions...)
 			if err != nil {
 				return fmt.Errorf("failed to instantiate rpc handler: %s", err)
 			}
