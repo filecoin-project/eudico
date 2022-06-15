@@ -190,7 +190,7 @@ func (m *Manager) Start(ctx context.Context) chan error {
 	go func() {
 		select {
 		case <-ctx.Done():
-			log.Debugf("Mir manager: context closed")
+			log.Info("Mir manager: context closed")
 			m.Stop()
 		case <-managerCtx.Done():
 		}
@@ -213,7 +213,6 @@ func (m *Manager) Stop() {
 		log.Errorf("Could not close write-ahead log: %s", err)
 	}
 	m.Net.Stop()
-	close(m.App.ChainNotify)
 }
 
 func (m *Manager) SubmitRequests(ctx context.Context, refs []*RequestRef) {
