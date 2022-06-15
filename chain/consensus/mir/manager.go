@@ -2,6 +2,7 @@ package mir
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -182,23 +183,26 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 
 // Start starts the manager.
 func (m *Manager) Start(ctx context.Context) chan error {
-	log.Info("Mir manager starting")
+	log.Infof("Mir manager %s starting", m.MirID)
 
 	errChan := make(chan error, 1)
-	managerCtx, managerCancel := context.WithCancel(ctx)
+	managerCtx, managerCancel := context.WithCancel(context.Background())
 
 	go func() {
 		select {
 		case <-ctx.Done():
-			log.Info("Mir manager: context closed")
+			log.Infof("Mir manager %s: context closed", m.MirID)
 			m.Stop()
 		case <-managerCtx.Done():
+			log.Infof("Mir manager %s: manager context closed", m.MirID)
 		}
 	}()
 
 	go func() {
-		errChan <- m.MirNode.Run(ctx)
-		managerCancel()
+		if err := m.MirNode.Run(ctx); err != nil && !errors.Is(err, mir.ErrStopped) {
+			errChan <- err
+			managerCancel()
+		}
 	}()
 
 	return errChan
@@ -206,8 +210,8 @@ func (m *Manager) Start(ctx context.Context) chan error {
 
 // Stop stops the manager.
 func (m *Manager) Stop() {
-	log.Info("Mir manager shutting down")
-	defer log.Info("Mir manager stopped")
+	log.Infof("Mir manager %s shutting down", m.MirID)
+	defer log.Infof("Mir manager %s stopped", m.MirID)
 
 	if err := m.Wal.Close(); err != nil {
 		log.Errorf("Could not close write-ahead log: %s", err)
