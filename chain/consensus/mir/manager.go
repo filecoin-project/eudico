@@ -145,7 +145,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	}
 
 	app := NewApplication(reqStore)
-	
+
 	node, err := mir.NewNode(
 		t.NodeID(mirID),
 		&mir.NodeConfig{
