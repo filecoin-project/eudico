@@ -9,25 +9,28 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	filcrypto "github.com/filecoin-project/go-state-types/crypto"
-	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/lib/sigs"
-	mir "github.com/filecoin-project/mir/pkg/modules"
+	mircrypto "github.com/filecoin-project/mir/pkg/crypto"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
-var MsgMeta = api.MsgMeta{Type: "mir-request"}
-
-var _ mir.Crypto = &CryptoManager{}
+var _ mircrypto.Impl = &CryptoManager{}
 
 type CryptoManager struct {
 	addr   address.Address
-	wallet api.Wallet
+	wallet WalletCrypto
 }
 
-func NewCryptoManager(addr address.Address, wallet api.Wallet) (*CryptoManager, error) {
+type WalletCrypto interface {
+	WalletSign(ctx context.Context, k address.Address, msg []byte) (*filcrypto.Signature, error)
+	WalletVerify(ctx context.Context, k address.Address, msg []byte, sig *filcrypto.Signature) (bool, error)
+}
+
+func NewCryptoManager(addr address.Address, wallet WalletCrypto) (*CryptoManager, error) {
 	if addr.Protocol() != address.SECP256K1 {
 		return nil, xerrors.New("must be SECP address")
 	}
+
 	return &CryptoManager{addr, wallet}, nil
 }
 
@@ -38,7 +41,7 @@ func NewCryptoManager(addr address.Address, wallet api.Wallet) (*CryptoManager, 
 // Note that the private key used to produce the signature cannot be set ("registered") through this interface.
 // Storing and using the private key is completely implementation-dependent.
 func (c *CryptoManager) Sign(data [][]byte) (bytes []byte, err error) {
-	signature, err := c.wallet.WalletSign(context.Background(), c.addr, hash(data), MsgMeta)
+	signature, err := c.wallet.WalletSign(context.Background(), c.addr, hash(data))
 	return signature.MarshalBinary()
 }
 
@@ -52,34 +55,6 @@ func (c *CryptoManager) VerifyNodeSig(data [][]byte, signature []byte, nodeID t.
 		return err
 	}
 	return c.verifySig(data, signature, nodeAddr)
-}
-
-// RegisterNodeKey associates a public key with a numeric node ID.
-// The representation of the key is implementation-dependent.
-// Calls to VerifyNodeSig will fail until RegisterNodeKey is successfully called with the corresponding node ID.
-// Returns nil on success, a non-nil error on failure.
-func (c *CryptoManager) RegisterNodeKey(pubKey []byte, nodeID t.NodeID) error {
-	panic("not implemented")
-}
-
-// RegisterClientKey associates a public key with a numeric client ID.
-// The representation of the key is implementation-dependent.
-// Calls to VerifyClientSig will fail until RegisterClientKey is successfully called with the corresponding client ID.
-// Returns nil on success, a non-nil error on failure.
-func (c *CryptoManager) RegisterClientKey(pubKey []byte, clientID t.ClientID) error {
-	panic("not implemented")
-}
-
-// DeleteNodeKey removes the public key associated with nodeID from the module's state.
-// Any subsequent call to VerifyNodeSig(..., nodeID) will fail.
-func (c *CryptoManager) DeleteNodeKey(nodeID t.NodeID) {
-	panic("not implemented")
-}
-
-// DeleteClientKey removes the public key associated with clientID from the module's state.
-// Any subsequent call to VerifyClientSig(..., clientID) will fail.
-func (c *CryptoManager) DeleteClientKey(clientID t.ClientID) {
-	panic("not implemented")
 }
 
 // VerifyClientSig verifies a signature produced by the client with numeric ID clientID over data.
