@@ -2,7 +2,6 @@ package mir
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -25,12 +24,15 @@ func TestMirCryptoManager(t *testing.T) {
 	require.NoError(t, err)
 
 	data := [][]byte{{1, 2, 3}, {1, 2, 3}, {1, 2, 3}, {1, 2, 3}}
-
 	sigBytes, err := c.Sign(data)
 	require.NoError(t, err)
 
-	nodeID := mirTypes.NodeID(fmt.Sprintf("%s:%s", "/root", addr))
+	nodeID := mirTypes.NodeID(newMirID("/root", addr.String()))
 	err = c.VerifyNodeSig([][]byte{{1, 2, 3}}, sigBytes, nodeID)
+	require.Error(t, err)
+
+	clientID := mirTypes.ClientID(newMirID("/root", addr.String()))
+	err = c.VerifyClientSig([][]byte{{1, 2, 3}}, sigBytes, clientID)
 	require.Error(t, err)
 
 	err = c.VerifyNodeSig([][]byte{{1, 2, 3}}, sigBytes, nodeID)
@@ -43,7 +45,7 @@ func TestMirCryptoManager(t *testing.T) {
 	err = c.VerifyNodeSig(data, sigBytes, nodeID)
 	require.Error(t, err)
 
-	nodeID = mirTypes.NodeID(fmt.Sprintf("%s:%s", "/root:", addr))
+	nodeID = mirTypes.NodeID(newMirID("/root:", addr.String()))
 	err = c.VerifyNodeSig(data, sigBytes, nodeID)
 	require.Error(t, err)
 }

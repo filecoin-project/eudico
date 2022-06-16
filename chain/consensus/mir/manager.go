@@ -109,7 +109,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		return nil, xerrors.New("empty validator set")
 	}
 
-	mirID := fmt.Sprintf("%s:%s", subnetID, addr)
+	mirID := newMirID(subnetID.String(), addr.String())
 
 	log.Debugf("Mir manager %v is being created", mirID)
 	defer log.Debugf("Mir manager %v has been created", mirID)
@@ -255,7 +255,7 @@ func (m *Manager) GetMessagesByHashes(blockRequestHashes []Tx) (msgs []*types.Si
 func (m *Manager) AddSignedMessages(dst []*RequestRef, msgs []*types.SignedMessage) ([]*RequestRef, error) {
 	for _, msg := range msgs {
 		hash := msg.Cid()
-		clientID := fmt.Sprintf("%s:%s", m.SubnetID, msg.Message.From.String())
+		clientID := newMirID(m.SubnetID.String(), msg.Message.From.String())
 		nonce := msg.Message.Nonce
 		r := RequestRef{
 			ClientID: t.ClientID(clientID),
@@ -283,7 +283,7 @@ func (m *Manager) AddCrossMessages(dst []*RequestRef, msgs []*types.UnverifiedCr
 			log.Error("unable to get subnet from message:", err)
 			continue
 		}
-		clientID := fmt.Sprintf("%s:%s", msn, msg.Message.From.String())
+		clientID := newMirID(msn.String(), msg.Message.From.String())
 		nonce := msg.Message.Nonce
 		r := RequestRef{
 			ClientID: t.ClientID(clientID),
