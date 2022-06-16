@@ -145,20 +145,20 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	}
 
 	app := NewApplication(reqStore)
-
+	
 	node, err := mir.NewNode(
 		t.NodeID(mirID),
 		&mir.NodeConfig{
 			Logger: newMirLogger(managerLog),
 		},
-		&modules.Modules{
-			Net:          net,
-			WAL:          wal,
-			RequestStore: reqStore,
-			Protocol:     issProtocol,
-			App:          app,
-			Crypto:       &mirCrypto.DummyCrypto{DummySig: []byte{0}},
-		})
+		map[t.ModuleID]modules.Module{
+			"net":          net,
+			"requestStore": reqStore,
+			"iss":          issProtocol,
+			"app":          app,
+			"crypto":       mirCrypto.New(&mirCrypto.DummyCrypto{DummySig: []byte{0}}),
+		},
+		nil)
 	if err != nil {
 		return nil, err
 	}
