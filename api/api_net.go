@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	metrics "github.com/libp2p/go-libp2p-core/metrics"
+	"github.com/libp2p/go-libp2p-core/metrics"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
@@ -64,6 +64,9 @@ type Net interface {
 
 	// ID returns peerID of libp2p node backing this API
 	ID(context.Context) (peer.ID, error) //perm:read
+
+	// NetSign signs a message using the private key of the node with ID.
+	NetSign(ctx context.Context, id peer.ID, msg []byte) ([]byte, error)
 }
 
 type CommonNet interface {

@@ -2,8 +2,11 @@ package mir
 
 import (
 	"context"
+	"crypto/rand"
 	"testing"
 
+	libp2pcrypto "github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/xerrors"
 
@@ -16,14 +19,14 @@ import (
 	mirTypes "github.com/filecoin-project/mir/pkg/types"
 )
 
-type cryptoNode struct {
+type cryptoWallet struct {
 	w    *wallet.LocalWallet
 	addr address.Address
 }
 
 var msgMeta = api.MsgMeta{Type: "mir-request"}
 
-func newCryptoNode() (*cryptoNode, error) {
+func newCryptoWallet() (*cryptoWallet, error) {
 	w, err := wallet.NewWallet(wallet.NewMemKeyStore())
 	if err != nil {
 		return nil, err
@@ -33,12 +36,12 @@ func newCryptoNode() (*cryptoNode, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &cryptoNode{
+	return &cryptoWallet{
 		w, addr,
 	}, nil
 }
 
-func (n *cryptoNode) WalletSign(ctx context.Context, k address.Address, msg []byte) (signature *filcrypto.Signature, err error) {
+func (n *cryptoWallet) WalletSign(ctx context.Context, k address.Address, msg []byte) (signature *filcrypto.Signature, err error) {
 	if k.Protocol() != address.SECP256K1 {
 		return nil, xerrors.New("must be SECP address")
 	}
@@ -48,16 +51,43 @@ func (n *cryptoNode) WalletSign(ctx context.Context, k address.Address, msg []by
 	signature, err = n.w.WalletSign(ctx, k, msg, msgMeta)
 	return
 }
-func (n *cryptoNode) WalletVerify(ctx context.Context, k address.Address, msg []byte, sig *filcrypto.Signature) (bool, error) {
+func (n *cryptoWallet) WalletVerify(ctx context.Context, k address.Address, msg []byte, sig *filcrypto.Signature) (bool, error) {
 	err := sigs.Verify(sig, k, msg)
 	return err == nil, err
+}
+
+// ---------------
+
+type cryptoNode struct {
+	privKey libp2pcrypto.PrivKey
+	id      peer.ID
+}
+
+func newCryptoNode() (*cryptoNode, error) {
+	privkey, _, err := libp2pcrypto.GenerateEd25519Key(rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+
+	peerId, err := peer.IDFromPrivateKey(privkey)
+	if err != nil {
+		return nil, err
+	}
+	return &cryptoNode{
+		privKey: privkey,
+		id:      peerId,
+	}, nil
+}
+
+func (n *cryptoNode) Sign(ctx context.Context, id peer.ID, msg []byte) ([]byte, error) {
+	return n.privKey.Sign(msg)
 }
 
 func TestCryptoManager(t *testing.T) {
 	node, err := newCryptoNode()
 	require.NoError(t, err)
 
-	addr := node.addr
+	addr := node.id
 	c, err := NewCryptoManager(addr, node)
 	require.NoError(t, err)
 

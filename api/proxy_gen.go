@@ -37,7 +37,7 @@ import (
 	"github.com/filecoin-project/specs-storage/storage"
 	"github.com/google/uuid"
 	"github.com/ipfs/go-cid"
-	metrics "github.com/libp2p/go-libp2p-core/metrics"
+	"github.com/libp2p/go-libp2p-core/metrics"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
@@ -680,6 +680,8 @@ type NetStruct struct {
 		NetPubsubScores func(p0 context.Context) ([]PubsubScore, error) `perm:"read"`
 
 		NetSetLimit func(p0 context.Context, p1 string, p2 NetLimit) error `perm:"admin"`
+
+		NetSign func(p0 context.Context, p1 peer.ID, p2 []byte) ([]byte, error) ``
 
 		NetStat func(p0 context.Context, p1 string) (NetStat, error) `perm:"read"`
 	}
@@ -4179,6 +4181,17 @@ func (s *NetStruct) NetSetLimit(p0 context.Context, p1 string, p2 NetLimit) erro
 
 func (s *NetStub) NetSetLimit(p0 context.Context, p1 string, p2 NetLimit) error {
 	return ErrNotSupported
+}
+
+func (s *NetStruct) NetSign(p0 context.Context, p1 peer.ID, p2 []byte) ([]byte, error) {
+	if s.Internal.NetSign == nil {
+		return *new([]byte), ErrNotSupported
+	}
+	return s.Internal.NetSign(p0, p1, p2)
+}
+
+func (s *NetStub) NetSign(p0 context.Context, p1 peer.ID, p2 []byte) ([]byte, error) {
+	return *new([]byte), ErrNotSupported
 }
 
 func (s *NetStruct) NetStat(p0 context.Context, p1 string) (NetStat, error) {

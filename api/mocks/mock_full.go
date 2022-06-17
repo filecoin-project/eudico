@@ -2185,6 +2185,21 @@ func (mr *MockFullNodeMockRecorder) NetSetLimit(arg0, arg1, arg2 interface{}) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NetSetLimit", reflect.TypeOf((*MockFullNode)(nil).NetSetLimit), arg0, arg1, arg2)
 }
 
+// NetSign mocks base method.
+func (m *MockFullNode) NetSign(arg0 context.Context, arg1 peer.ID, arg2 []byte) ([]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NetSign", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// NetSign indicates an expected call of NetSign.
+func (mr *MockFullNodeMockRecorder) NetSign(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NetSign", reflect.TypeOf((*MockFullNode)(nil).NetSign), arg0, arg1, arg2)
+}
+
 // NetStat mocks base method.
 func (m *MockFullNode) NetStat(arg0 context.Context, arg1 string) (api.NetStat, error) {
 	m.ctrl.T.Helper()
