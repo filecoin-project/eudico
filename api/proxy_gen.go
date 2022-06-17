@@ -681,7 +681,7 @@ type NetStruct struct {
 
 		NetSetLimit func(p0 context.Context, p1 string, p2 NetLimit) error `perm:"admin"`
 
-		NetSign func(p0 context.Context, p1 peer.ID, p2 []byte) ([]byte, error) ``
+		NetSign func(p0 context.Context, p1 peer.ID, p2 []byte) ([]byte, error) `perm:"read"`
 
 		NetStat func(p0 context.Context, p1 string) (NetStat, error) `perm:"read"`
 	}
