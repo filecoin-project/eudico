@@ -8,55 +8,9 @@ import (
 	libp2pcrypto "github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/xerrors"
 
-	"github.com/filecoin-project/go-address"
-	filcrypto "github.com/filecoin-project/go-state-types/crypto"
-	"github.com/filecoin-project/lotus/api"
-	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/filecoin-project/lotus/chain/wallet"
-	"github.com/filecoin-project/lotus/lib/sigs"
 	mirTypes "github.com/filecoin-project/mir/pkg/types"
 )
-
-type cryptoWallet struct {
-	w    *wallet.LocalWallet
-	addr address.Address
-}
-
-var msgMeta = api.MsgMeta{Type: "mir-request"}
-
-func newCryptoWallet() (*cryptoWallet, error) {
-	w, err := wallet.NewWallet(wallet.NewMemKeyStore())
-	if err != nil {
-		return nil, err
-	}
-
-	addr, err := w.WalletNew(context.Background(), types.KTSecp256k1)
-	if err != nil {
-		return nil, err
-	}
-	return &cryptoWallet{
-		w, addr,
-	}, nil
-}
-
-func (n *cryptoWallet) WalletSign(ctx context.Context, k address.Address, msg []byte) (signature *filcrypto.Signature, err error) {
-	if k.Protocol() != address.SECP256K1 {
-		return nil, xerrors.New("must be SECP address")
-	}
-	if k != n.addr {
-		return nil, xerrors.New("wrong address")
-	}
-	signature, err = n.w.WalletSign(ctx, k, msg, msgMeta)
-	return
-}
-func (n *cryptoWallet) WalletVerify(ctx context.Context, k address.Address, msg []byte, sig *filcrypto.Signature) (bool, error) {
-	err := sigs.Verify(sig, k, msg)
-	return err == nil, err
-}
-
-// ---------------
 
 type cryptoNode struct {
 	privKey libp2pcrypto.PrivKey
