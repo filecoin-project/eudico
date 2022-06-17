@@ -66,7 +66,7 @@ type Net interface {
 	ID(context.Context) (peer.ID, error) //perm:read
 
 	// NetSign signs a message using the private key of the node with ID.
-	NetSign(ctx context.Context, id peer.ID, msg []byte) ([]byte, error)
+	NetSign(ctx context.Context, id peer.ID, msg []byte) ([]byte, error) //perm:read
 }
 
 type CommonNet interface {
