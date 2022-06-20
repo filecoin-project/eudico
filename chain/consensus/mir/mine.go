@@ -69,7 +69,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			log.Debug("Mir miner: context closed")
 			return nil
 		case err := <-mirErrors:
-			return err
+			return xerrors.Errorf("Mir miner consensus error", err)
 		case hashes := <-mirHead:
 			msgs, crossMsgs := m.GetMessagesByHashes(hashes)
 			log.Infof("[subnet: %s, epoch: %d] try to create a block: msgs - %d, crossMsgs - %d",
@@ -109,7 +109,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 
 			log.Infof("[subnet: %s, epoch: %d] %s mined a block %v",
 				m.SubnetID, bh.Header.Height, epochMiner, bh.Cid())
-		case <-submit.C:
+		default:
 			msgs, err := api.MpoolSelect(ctx, base.Key(), 1)
 			if err != nil {
 				log.Errorw("unable to select messages from mempool", "error", err)

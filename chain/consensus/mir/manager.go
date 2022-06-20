@@ -2,6 +2,7 @@ package mir
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -180,23 +181,26 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 
 // Start starts the manager.
 func (m *Manager) Start(ctx context.Context) chan error {
-	log.Info("Mir manager starting")
+	log.Infof("Mir manager %s starting", m.MirID)
 
 	errChan := make(chan error, 1)
-	managerCtx, managerCancel := context.WithCancel(ctx)
+	managerCtx, managerCancel := context.WithCancel(context.Background())
 
 	go func() {
 		select {
 		case <-ctx.Done():
-			log.Debugf("Mir manager: context closed")
+			log.Infof("Mir manager %s: context closed", m.MirID)
 			m.Stop()
 		case <-managerCtx.Done():
+			log.Infof("Mir manager %s: manager context closed", m.MirID)
 		}
 	}()
 
 	go func() {
-		errChan <- m.MirNode.Run(ctx)
-		managerCancel()
+		if err := m.MirNode.Run(ctx); err != nil && !errors.Is(err, mir.ErrStopped) {
+			errChan <- err
+			managerCancel()
+		}
 	}()
 
 	return errChan
@@ -269,6 +273,7 @@ func (m *Manager) AddSignedMessages(dst []*RequestRef, msgs []*types.SignedMessa
 		alreadyExist := m.Pool.addIfNotExist(clientID, string(r.Hash), msg)
 		if !alreadyExist {
 			log.Infof(">>>> added message (%s, %d) to cache: client ID %s", msg.Message.To, nonce, clientID)
+			log.Info("added message hash:", hash.Bytes())
 			dst = append(dst, &r)
 		}
 	}
@@ -297,6 +302,7 @@ func (m *Manager) AddCrossMessages(dst []*RequestRef, msgs []*types.UnverifiedCr
 		alreadyExist := m.Pool.addIfNotExist(clientID, string(r.Hash), msg)
 		if !alreadyExist {
 			log.Infof(">>>> added cross-message (%s, %d) to cache: clientID %s", msg.Message.To, nonce, clientID)
+			log.Info("added cross-message hash:", hash.Bytes())
 			dst = append(dst, &r)
 		}
 	}

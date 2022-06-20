@@ -433,7 +433,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 		}()
 		err := mir.Mine(ctx, minerA, nodeA)
 		if err != nil {
-			t.Error(err)
+			t.Error("miner A error:", err)
 			cancel()
 			return
 		}
@@ -447,7 +447,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 		}()
 		err := mir.Mine(ctx, minerB, nodeB)
 		if err != nil {
-			t.Error(err)
+			t.Error("miner B error:", err)
 			cancel()
 			return
 		}
@@ -624,7 +624,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 	b, err := nodeB.SubnetStateGetActor(ctx, subnetAddr, subnetNewAddr, types.EmptyTSK)
 	require.NoError(t, err)
 	t.Logf("[*] node B %s new addr balance: %d", subnetNewAddr, b.Balance)
-	require.Equal(t, 0, big.Cmp(sentFils, a.Balance))
+	require.Equal(t, 0, big.Cmp(sentFils, b.Balance))
 
 	t.Log("[*] miner A in subnet stopping")
 	err = nodeA.MineSubnet(ctx, minerA, subnetAddr, true, &mp)
