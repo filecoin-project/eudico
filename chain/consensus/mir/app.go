@@ -7,20 +7,17 @@ import (
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
-	"github.com/filecoin-project/mir/pkg/reqstore"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
 type Tx []byte
 
 type Application struct {
-	reqStore    *reqstore.VolatileRequestStore
 	ChainNotify chan []Tx
 }
 
-func NewApplication(reqStore *reqstore.VolatileRequestStore) *Application {
+func NewApplication() *Application {
 	app := Application{
-		reqStore:    reqStore,
 		ChainNotify: make(chan []Tx),
 	}
 	return &app
@@ -60,12 +57,8 @@ func (app *Application) ApplyEvent(event *eventpb.Event) (*events.EventList, err
 func (app *Application) ApplyBatch(batch *requestpb.Batch) error {
 	var block []Tx
 
-	for _, reqRef := range batch.Requests {
-		msg, err := app.reqStore.GetRequest(reqRef)
-		if err != nil {
-			return err
-		}
-		block = append(block, msg)
+	for _, req := range batch.Requests {
+		block = append(block, req.Req.Data)
 	}
 
 	app.ChainNotify <- block

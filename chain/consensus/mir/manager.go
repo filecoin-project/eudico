@@ -17,11 +17,12 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/mir"
 	mirCrypto "github.com/filecoin-project/mir/pkg/crypto"
+	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/grpctransport"
 	"github.com/filecoin-project/mir/pkg/iss"
 	mirLogging "github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
-	"github.com/filecoin-project/mir/pkg/reqstore"
+	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	"github.com/filecoin-project/mir/pkg/simplewal"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
@@ -135,8 +136,6 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	net.Connect(ctx)
 	log.Debug("Mir network transport connected")
 
-	reqStore := reqstore.NewVolatileRequestStore()
-
 	// Instantiate the ISS protocol module with default configuration.
 	issConfig := iss.DefaultConfig(nodeIds)
 	issProtocol, err := iss.New(t.NodeID(mirID), issConfig, newMirLogger(managerLog))
@@ -144,7 +143,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		return nil, xerrors.Errorf("could not instantiate ISS protocol module: %w", err)
 	}
 
-	app := NewApplication(reqStore)
+	app := NewApplication()
 
 	node, err := mir.NewNode(
 		t.NodeID(mirID),
@@ -152,11 +151,10 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 			Logger: newMirLogger(managerLog),
 		},
 		map[t.ModuleID]modules.Module{
-			"net":          net,
-			"requestStore": reqStore,
-			"iss":          issProtocol,
-			"app":          app,
-			"crypto":       mirCrypto.New(&mirCrypto.DummyCrypto{DummySig: []byte{0}}),
+			"net":    net,
+			"iss":    issProtocol,
+			"app":    app,
+			"crypto": mirCrypto.New(&mirCrypto.DummyCrypto{DummySig: []byte{0}}),
 		},
 		nil)
 	if err != nil {
@@ -218,8 +216,13 @@ func (m *Manager) Stop() {
 
 func (m *Manager) SubmitRequests(ctx context.Context, refs []*RequestRef) {
 	for _, r := range refs {
-		err := m.MirNode.SubmitRequest(ctx, r.ClientID, r.ReqNo, r.Hash, []byte{0})
-		if err != nil {
+
+		e := events.NewClientRequests("iss",
+			[]*requestpb.Request{
+				events.ClientRequest(r.ClientID, r.ReqNo, r.Hash),
+			})
+
+		if err := m.MirNode.InjectEvents(ctx, (&events.EventList{}).PushBack(e)); err != nil {
 			log.Errorf("unable to submit a request from %s to Mir: %v", r.ClientID, err)
 			continue
 		}

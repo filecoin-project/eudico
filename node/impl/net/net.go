@@ -192,8 +192,4 @@ func (a *NetAPI) NetBandwidthStatsByProtocol(ctx context.Context) (map[protocol.
 	return a.Reporter.GetBandwidthByProtocol(), nil
 }
 
-func (a *NetAPI) NetSign(ctx context.Context, id peer.ID, msg []byte) ([]byte, error) {
-	return a.Host.Peerstore().PrivKey(id).Sign(msg)
-}
-
 var _ api.Net = &NetAPI{}
