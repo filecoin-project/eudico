@@ -34,14 +34,14 @@ import (
 //    are received via state, after each validator joins the subnet.
 //    This is used to run Mir in a subnet.
 func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
+	log.With("addr", addr).Infof("Mir miner started")
+	defer log.With("addr", addr).Infof("Mir miner completed")
+
 	m, err := NewManager(ctx, addr, api)
 	if err != nil {
 		return fmt.Errorf("unable to create a manager: %w", err)
 	}
 	log := logging.FromContext(ctx, log).With("miner", m.MirID)
-
-	log.Infof("Mir miner started")
-	defer log.Infof("Mir miner completed")
 
 	log.Infof("Miner info:\n\twallet - %s\n\tnetwork - %s\n\tsubnet - %s\n\tMir ID - %s\n\tvalidators - %v",
 		m.Addr, m.NetName, m.SubnetID, m.MirID, m.Validators)

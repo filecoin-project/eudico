@@ -376,7 +376,7 @@ func runSubnetTestsTwoNodes(t *testing.T, opts ...interface{}) {
 	ts := eudicoSubnetSuite{opts: opts}
 
 	t.Run("testBasicSubnetFlowTwoNodes", ts.testBasicSubnetFlowTwoNodes)
-	// t.Run("testBasicSubnetTwoNodesStartStop", ts.testBasicSubnetTwoNodesStartStop)
+	t.Run("testTwoNodesTwoSubnetsStartStop", ts.testTwoNodesTwoSubnetsStartStop)
 }
 
 func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
@@ -683,7 +683,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 	t.Logf("[*] test time: %v\n", time.Since(startTime).Seconds())
 }
 
-func (ts *eudicoSubnetSuite) testBasicSubnetTwoNodesStartStop(t *testing.T) {
+func (ts *eudicoSubnetSuite) testTwoNodesTwoSubnetsStartStop(t *testing.T) {
 	var wg sync.WaitGroup
 
 	nodeA, nodeB, ens := kit.EudicoEnsembleTwoNodes(t, ts.opts...)
@@ -749,9 +749,14 @@ func (ts *eudicoSubnetSuite) testBasicSubnetTwoNodesStartStop(t *testing.T) {
 
 	startTime := time.Now()
 
+	aAddr, err := kit.GetFreeLocalAddr()
+	require.NoError(t, err)
+	bAddr, err := kit.GetFreeLocalAddr()
+	require.NoError(t, err)
+
 	err = os.Setenv(mir.ValidatorsEnv, fmt.Sprintf("%s@%s,%s@%s",
-		"/root:"+minerA.String(), "127.0.0.1:10005",
-		"/root:"+minerB.String(), "127.0.0.1:10006"))
+		"/root:"+minerA.String(), aAddr,
+		"/root:"+minerB.String(), bAddr))
 	require.NoError(t, err)
 
 	wg.Add(2)
@@ -764,7 +769,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetTwoNodesStartStop(t *testing.T) {
 		}()
 		err := mir.Mine(ctx, minerA, nodeA)
 		if err != nil {
-			t.Error(err)
+			t.Error("miner A error: ", err)
 			cancel()
 			return
 		}
@@ -778,7 +783,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetTwoNodesStartStop(t *testing.T) {
 		}()
 		err := mir.Mine(ctx, minerB, nodeB)
 		if err != nil {
-			t.Error(err)
+			t.Error("miner B error: ", err)
 			cancel()
 			return
 		}
@@ -790,7 +795,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetTwoNodesStartStop(t *testing.T) {
 	subnetName := "testSubnet"
 	stake := abi.NewStoragePower(1e8)
 	checkPeriod := abi.ChainEpoch(10)
-	finalityThreshold := abi.ChainEpoch(1)
+	finalityThreshold := abi.ChainEpoch(2)
 
 	err = kit.WaitForBalance(ctx, minerA, 20, nodeA)
 	require.NoError(t, err)
@@ -837,12 +842,17 @@ func (ts *eudicoSubnetSuite) testBasicSubnetTwoNodesStartStop(t *testing.T) {
 	_, err = nodeA.StateLookupID(ctx, minerA, types.EmptyTSK)
 	require.NoError(t, err)
 
-	sc, err := nodeA.JoinSubnet(ctx, minerA, big.Int(val), subnetAddr, "127.0.0.1:10015")
+	saAddr, err := kit.GetFreeLocalAddr()
+	require.NoError(t, err)
+	sbAddr, err := kit.GetFreeLocalAddr()
+	require.NoError(t, err)
+
+	sc, err := nodeA.JoinSubnet(ctx, minerA, big.Int(val), subnetAddr, saAddr)
 	require.NoError(t, err)
 	_, err = nodeA.StateWaitMsg(ctx, sc, 1, 100, false)
 	require.NoError(t, err)
 
-	sc, err = nodeB.JoinSubnet(ctx, minerB, big.Int(val), subnetAddr, "127.0.0.1:10016")
+	sc, err = nodeB.JoinSubnet(ctx, minerB, big.Int(val), subnetAddr, sbAddr)
 	require.NoError(t, err)
 
 	_, err = nodeA.StateWaitMsg(ctx, sc, 1, 100, false)

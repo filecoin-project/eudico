@@ -255,11 +255,10 @@ func (s *Service) startSubnet(id address.SubnetID,
 	log.Infow("Genesis and consensus for subnet created", "subnetID", id, "consensus", consensus)
 
 	// Validate input finality threshold and use default value if it failed.
-	var fth abi.ChainEpoch
-	if params.FinalityThreshold < 1 || params.FinalityThreshold >= params.CheckPeriod {
-		fth = sh.cons.Finality()
+	sh.finalityThreshold = sh.cons.Finality()
+	if params.FinalityThreshold > 1 && params.FinalityThreshold < params.CheckPeriod {
+		sh.finalityThreshold = params.FinalityThreshold
 	}
-	sh.finalityThreshold = fth
 	log.Infof("Finality threshold for %s is %v", sh.ID, sh.finalityThreshold)
 
 	// We configure a new handler for the subnet syncing exchange protocol.
