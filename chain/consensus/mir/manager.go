@@ -113,9 +113,6 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 
 	mirID := newMirID(subnetID.String(), addr.String())
 
-	log.Debugf("Mir manager %v is being created", mirID)
-	defer log.Debugf("Mir manager %v has been created", mirID)
-
 	nodeIds, nodeAddrs, err := hierarchical.ValidatorMembership(validators)
 	if err != nil {
 		return nil, err
@@ -135,7 +132,6 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	// GrpcTransport is a rather dummy one and this call blocks until all connections are established,
 	// which makes it, at this point, not fault-tolerant.
 	net.Connect(ctx)
-	log.Debug("Mir network transport connected")
 
 	// Instantiate the ISS protocol module with default configuration.
 	issConfig := iss.DefaultConfig(nodeIds)
@@ -145,6 +141,11 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	}
 
 	app := NewApplication()
+	pool := newRequestPool()
+	cryptoManager, err := NewCryptoManager(addr, api)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create crypto manager: %w", err)
+	}
 
 	node, err := mir.NewNode(
 		t.NodeID(mirID),
@@ -155,20 +156,20 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 			"net":    net,
 			"iss":    issProtocol,
 			"app":    app,
-			"crypto": mirCrypto.New(&mirCrypto.DummyCrypto{DummySig: []byte{0}}),
+			"crypto": mirCrypto.New(cryptoManager),
 		},
 		nil)
 	if err != nil {
 		return nil, err
 	}
 
-	a := Manager{
+	m := Manager{
 		Addr:       addr,
 		SubnetID:   subnetID,
 		NetName:    netName,
 		Validators: validators,
 		EudicoNode: api,
-		Pool:       newRequestPool(),
+		Pool:       pool,
 		MirID:      mirID,
 		MirNode:    node,
 		Wal:        wal,
@@ -176,7 +177,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		App:        app,
 	}
 
-	return &a, nil
+	return &m, nil
 }
 
 // Start starts the manager.
@@ -215,7 +216,6 @@ func (m *Manager) Stop() {
 		log.Errorf("Could not close write-ahead log: %s", err)
 	}
 	m.Net.Stop()
-	close(m.App.ChainNotify)
 }
 
 func (m *Manager) SubmitRequests(ctx context.Context, refs []*RequestRef) {
@@ -247,12 +247,12 @@ func (m *Manager) GetMessagesByHashes(blockRequestHashes []Tx) (msgs []*types.Si
 		switch msg := req.(type) {
 		case *types.SignedMessage:
 			msgs = append(msgs, msg)
-			log.Infof(">>>> got message (%s, %d) from cache", msg.Message.To, msg.Message.Nonce)
+			log.Infof("got message (%s, %d) from cache", msg.Message.To, msg.Message.Nonce)
 		case *types.UnverifiedCrossMsg:
 			crossMsgs = append(crossMsgs, msg.Message)
-			log.Infof(">>>> got cross-message (%s, %d) from cache", msg.Message.To, msg.Message.Nonce)
+			log.Infof("got cross-message (%s, %d) from cache", msg.Message.To, msg.Message.Nonce)
 		default:
-			log.Error(">>>> got unknown type request")
+			log.Error("got unknown type request in a block")
 		}
 	}
 	return
@@ -272,8 +272,7 @@ func (m *Manager) AddSignedMessages(dst []*RequestRef, msgs []*types.SignedMessa
 		}
 		alreadyExist := m.Pool.addIfNotExist(clientID, string(r.Hash), msg)
 		if !alreadyExist {
-			log.Infof(">>>> added message (%s, %d) to cache: client ID %s", msg.Message.To, nonce, clientID)
-			log.Info("added message hash:", hash.Bytes())
+			log.Infof("added message (%s, %d) to cache: client ID %s", msg.Message.To, nonce, clientID)
 			dst = append(dst, &r)
 		}
 	}
@@ -301,8 +300,7 @@ func (m *Manager) AddCrossMessages(dst []*RequestRef, msgs []*types.UnverifiedCr
 		}
 		alreadyExist := m.Pool.addIfNotExist(clientID, string(r.Hash), msg)
 		if !alreadyExist {
-			log.Infof(">>>> added cross-message (%s, %d) to cache: clientID %s", msg.Message.To, nonce, clientID)
-			log.Info("added cross-message hash:", hash.Bytes())
+			log.Infof("added cross-message (%s, %d) to cache: clientID %s", msg.Message.To, nonce, clientID)
 			dst = append(dst, &r)
 		}
 	}
