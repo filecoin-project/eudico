@@ -269,7 +269,7 @@ func (m *Manager) AddSignedMessages(dst []*RequestRef, msgs []*types.SignedMessa
 		}
 		alreadyExist := m.Pool.addIfNotExist(clientID, string(r.Hash), msg)
 		if !alreadyExist {
-			log.Infof("added message (%s, %d) to cache: client ID %s", msg.Message.To, nonce, clientID)
+			log.Infof("added message %s to cache", hash.Bytes())
 			dst = append(dst, &r)
 		}
 	}
@@ -297,7 +297,7 @@ func (m *Manager) AddCrossMessages(dst []*RequestRef, msgs []*types.UnverifiedCr
 		}
 		alreadyExist := m.Pool.addIfNotExist(clientID, string(r.Hash), msg)
 		if !alreadyExist {
-			log.Infof("added cross-message (%s, %d) to cache: clientID %s", msg.Message.To, nonce, clientID)
+			log.Infof("added cross-message %s to cache", hash.Bytes())
 			dst = append(dst, &r)
 		}
 	}
