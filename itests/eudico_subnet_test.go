@@ -57,8 +57,11 @@ func TestEudicoSubnetTwoNodesCrossMessage(t *testing.T) {
 }
 
 func TestEudicoSubnetMir(t *testing.T) {
+	a, err := kit.GetFreeLocalAddr()
+	require.NoError(t, err)
+
 	t.Run("/root/dummy-/subnet/mir", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetMir(), kit.MinValidators(1), kit.ValidatorAddress("127.0.0.1:11001"))
+		runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetMir(), kit.MinValidators(1), kit.ValidatorAddress(a))
 	})
 
 	t.Run("/root/mir-/subnet/delegated", func(t *testing.T) {
@@ -442,9 +445,14 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 
 	startTime := time.Now()
 
+	aAddr, err := kit.GetFreeLocalAddr()
+	require.NoError(t, err)
+	bAddr, err := kit.GetFreeLocalAddr()
+	require.NoError(t, err)
+
 	err = os.Setenv(mir.ValidatorsEnv, fmt.Sprintf("%s@%s,%s@%s",
-		"/root:"+minerA.String(), "127.0.0.1:10005",
-		"/root:"+minerB.String(), "127.0.0.1:10006"))
+		"/root:"+minerA.String(), aAddr,
+		"/root:"+minerB.String(), bAddr))
 	require.NoError(t, err)
 
 	wg.Add(2)
@@ -457,7 +465,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 		}()
 		err := mir.Mine(ctx, minerA, nodeA)
 		if err != nil {
-			t.Error(err)
+			t.Error("miner A error:", err)
 			cancel()
 			return
 		}
@@ -471,7 +479,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 		}()
 		err := mir.Mine(ctx, minerB, nodeB)
 		if err != nil {
-			t.Error(err)
+			t.Error("miner B error:", err)
 			cancel()
 			return
 		}
@@ -530,12 +538,17 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 	_, err = nodeA.StateLookupID(ctx, minerA, types.EmptyTSK)
 	require.NoError(t, err)
 
-	sc, err := nodeA.JoinSubnet(ctx, minerA, big.Int(val), subnetAddr, "127.0.0.1:10015")
+	saAddr, err := kit.GetFreeLocalAddr()
+	require.NoError(t, err)
+	sbAddr, err := kit.GetFreeLocalAddr()
+	require.NoError(t, err)
+
+	sc, err := nodeA.JoinSubnet(ctx, minerA, big.Int(val), subnetAddr, saAddr)
 	require.NoError(t, err)
 	_, err = nodeA.StateWaitMsg(ctx, sc, 1, 100, false)
 	require.NoError(t, err)
 
-	sc, err = nodeB.JoinSubnet(ctx, minerB, big.Int(val), subnetAddr, "127.0.0.1:10016")
+	sc, err = nodeB.JoinSubnet(ctx, minerB, big.Int(val), subnetAddr, sbAddr)
 	require.NoError(t, err)
 
 	_, err = nodeA.StateWaitMsg(ctx, sc, 1, 100, false)
@@ -657,7 +670,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 	b, err := nodeB.SubnetStateGetActor(ctx, subnetAddr, subnetNewAddr, types.EmptyTSK)
 	require.NoError(t, err)
 	t.Logf("[*] node B %s new addr balance: %d", subnetNewAddr, b.Balance)
-	require.Equal(t, 0, big.Cmp(sentFils, a.Balance))
+	require.Equal(t, 0, big.Cmp(sentFils, b.Balance))
 
 	t.Log("[*] stop miner A in the subnet")
 	err = nodeA.MineSubnet(ctx, minerA, subnetAddr, true, &mp)
@@ -945,9 +958,14 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 	}
 	minerB := lb[0]
 
+	aAddr, err := kit.GetFreeLocalAddr()
+	require.NoError(t, err)
+	bAddr, err := kit.GetFreeLocalAddr()
+	require.NoError(t, err)
+
 	err = os.Setenv(mir.ValidatorsEnv, fmt.Sprintf("%s@%s,%s@%s",
-		"/root:"+minerA.String(), "127.0.0.1:10005",
-		"/root:"+minerB.String(), "127.0.0.1:10006"))
+		"/root:"+minerA.String(), aAddr,
+		"/root:"+minerB.String(), bAddr))
 	require.NoError(t, err)
 
 	t.Log("[*] running consensus in root net")

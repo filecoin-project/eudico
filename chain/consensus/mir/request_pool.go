@@ -12,9 +12,9 @@ import (
 // It may happen that Eudico receives a hash from the block and the corresponding message is in the cache,
 // but not not in the mempool.
 
-// Request cache is the simplest temporal cache to store mapping between request hashes and client requests.
-func newRequestCache() *requestCache {
-	return &requestCache{
+// Request pool is the simplest temporal pool to store mapping between request hashes and client requests.
+func newRequestPool() *requestPool {
+	return &requestPool{
 		cache:          make(map[string]ClientRequest),
 		handledClients: make(map[string]bool),
 	}
@@ -25,7 +25,7 @@ type ClientRequest struct {
 	ClientID string
 }
 
-type requestCache struct {
+type requestPool struct {
 	lk sync.Mutex
 
 	cache          map[string]ClientRequest
@@ -33,7 +33,7 @@ type requestCache struct {
 }
 
 // addIfNotExist adds the request if key h doesn't exist .
-func (c *requestCache) addIfNotExist(clientID, h string, r Request) (exist bool) {
+func (c *requestPool) addIfNotExist(clientID, h string, r Request) (exist bool) {
 	c.lk.Lock()
 	defer c.lk.Unlock()
 
@@ -45,7 +45,7 @@ func (c *requestCache) addIfNotExist(clientID, h string, r Request) (exist bool)
 }
 
 // getDel gets the target request by the key h and deletes the keys.
-func (c *requestCache) getDel(h string) (Request, bool) {
+func (c *requestPool) getDel(h string) (Request, bool) {
 	c.lk.Lock()
 	defer c.lk.Unlock()
 
@@ -58,7 +58,7 @@ func (c *requestCache) getDel(h string) (Request, bool) {
 }
 
 // getRequest gets the request by the key.
-func (c *requestCache) getRequest(h string) (Request, bool) {
+func (c *requestPool) getRequest(h string) (Request, bool) {
 	c.lk.Lock()
 	defer c.lk.Unlock()
 

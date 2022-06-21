@@ -7,7 +7,7 @@ import (
 )
 
 func TestMirRequestCache(t *testing.T) {
-	c := newRequestCache()
+	c := newRequestPool()
 
 	c.addIfNotExist("client1", "key1", 0)
 

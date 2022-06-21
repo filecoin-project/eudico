@@ -8,7 +8,6 @@ import (
 	"path"
 
 	logging "github.com/ipfs/go-log/v2"
-	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/api/v1api"
@@ -18,11 +17,12 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/mir"
 	mirCrypto "github.com/filecoin-project/mir/pkg/crypto"
+	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/grpctransport"
 	"github.com/filecoin-project/mir/pkg/iss"
 	mirLogging "github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
-	"github.com/filecoin-project/mir/pkg/reqstore"
+	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	"github.com/filecoin-project/mir/pkg/simplewal"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
@@ -75,7 +75,7 @@ type Manager struct {
 	MirID      string
 	Validators []hierarchical.Validator
 	EudicoNode v1api.FullNode
-	Cache      *requestCache
+	Pool       *requestPool
 	MirNode    *mir.Node
 	Wal        *simplewal.WAL
 	Net        *grpctransport.GrpcTransport
@@ -95,25 +95,22 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	if validatorsEnv != "" {
 		validators, err = hierarchical.ValidatorsFromString(validatorsEnv)
 		if err != nil {
-			return nil, xerrors.Errorf("failed to get validators from string: %s", err)
+			return nil, fmt.Errorf("failed to get validators from string: %w", err)
 		}
 	} else {
 		if subnetID == address.RootSubnet {
-			return nil, xerrors.New("can't be run in rootnet without validators")
+			return nil, fmt.Errorf("can't be run in rootnet without validators")
 		}
 		validators, err = api.SubnetStateGetValidators(ctx, subnetID)
 		if err != nil {
-			return nil, xerrors.New("failed to get validators from state")
+			return nil, fmt.Errorf("failed to get validators from state")
 		}
 	}
 	if len(validators) == 0 {
-		return nil, xerrors.New("empty validator set")
+		return nil, fmt.Errorf("empty validator set")
 	}
 
-	mirID := fmt.Sprintf("%s:%s", subnetID, addr)
-
-	log.Debugf("Mir manager %v is being created", mirID)
-	defer log.Debugf("Mir manager %v has been created", mirID)
+	mirID := newMirID(subnetID.String(), addr.String())
 
 	nodeIds, nodeAddrs, err := hierarchical.ValidatorMembership(validators)
 	if err != nil {
@@ -134,43 +131,44 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	// GrpcTransport is a rather dummy one and this call blocks until all connections are established,
 	// which makes it, at this point, not fault-tolerant.
 	net.Connect(ctx)
-	log.Debug("Mir network transport connected")
-
-	reqStore := reqstore.NewVolatileRequestStore()
 
 	// Instantiate the ISS protocol module with default configuration.
 	issConfig := iss.DefaultConfig(nodeIds)
 	issProtocol, err := iss.New(t.NodeID(mirID), issConfig, newMirLogger(managerLog))
 	if err != nil {
-		return nil, xerrors.Errorf("could not instantiate ISS protocol module: %w", err)
+		return nil, fmt.Errorf("could not instantiate ISS protocol module: %w", err)
 	}
 
-	app := NewApplication(reqStore)
+	app := NewApplication()
+	pool := newRequestPool()
+	cryptoManager, err := NewCryptoManager(addr, api)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create crypto manager: %w", err)
+	}
 
 	node, err := mir.NewNode(
 		t.NodeID(mirID),
 		&mir.NodeConfig{
 			Logger: newMirLogger(managerLog),
 		},
-		&modules.Modules{
-			Net:          net,
-			WAL:          wal,
-			RequestStore: reqStore,
-			Protocol:     issProtocol,
-			App:          app,
-			Crypto:       &mirCrypto.DummyCrypto{DummySig: []byte{0}},
-		})
+		map[t.ModuleID]modules.Module{
+			"net":    net,
+			"iss":    issProtocol,
+			"app":    app,
+			"crypto": mirCrypto.New(cryptoManager),
+		},
+		nil)
 	if err != nil {
 		return nil, err
 	}
 
-	a := Manager{
+	m := Manager{
 		Addr:       addr,
 		SubnetID:   subnetID,
 		NetName:    netName,
 		Validators: validators,
 		EudicoNode: api,
-		Cache:      newRequestCache(),
+		Pool:       pool,
 		MirID:      mirID,
 		MirNode:    node,
 		Wal:        wal,
@@ -178,7 +176,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		App:        app,
 	}
 
-	return &a, nil
+	return &m, nil
 }
 
 // Start starts the manager.
@@ -186,23 +184,17 @@ func (m *Manager) Start(ctx context.Context) chan error {
 	log.Infof("Mir manager %s starting", m.MirID)
 
 	errChan := make(chan error, 1)
-	managerCtx, managerCancel := context.WithCancel(context.Background())
 
 	go func() {
-		select {
-		case <-ctx.Done():
-			log.Infof("Mir manager %s: context closed", m.MirID)
-			m.Stop()
-		case <-managerCtx.Done():
-			log.Infof("Mir manager %s: manager context closed", m.MirID)
-		}
-	}()
 
-	go func() {
+		// Run Mir node until it stops.
 		if err := m.MirNode.Run(ctx); err != nil && !errors.Is(err, mir.ErrStopped) {
+			log.Infof("Mir manager %s: Mir node stopped with error: %v", m.MirID, err)
 			errChan <- err
-			managerCancel()
 		}
+
+		// Perform cleanup of Node's modules.
+		m.Stop()
 	}()
 
 	return errChan
@@ -219,14 +211,17 @@ func (m *Manager) Stop() {
 	m.Net.Stop()
 }
 
-func (m *Manager) SubmitRequests(ctx context.Context, refs []*RequestRef) {
-	for _, r := range refs {
-		err := m.MirNode.SubmitRequest(ctx, r.ClientID, r.ReqNo, r.Hash, []byte{0})
-		if err != nil {
-			log.Errorf("unable to submit a request from %s to Mir: %v", r.ClientID, err)
-			continue
-		}
-		log.Debugf("successfully sent message %d from %s to Mir", r.Type, r.ClientID)
+func (m *Manager) SubmitRequests(ctx context.Context, reqRefs []*RequestRef) {
+	if len(reqRefs) == 0 {
+		return
+	}
+	var reqs []*requestpb.Request
+	for _, ref := range reqRefs {
+		reqs = append(reqs, events.ClientRequest(ref.ClientID, ref.ReqNo, ref.Hash))
+	}
+	e := events.NewClientRequests("iss", reqs)
+	if err := m.MirNode.InjectEvents(ctx, (&events.EventList{}).PushBack(e)); err != nil {
+		log.Errorf("failed to submit requests to Mir: %s", err)
 	}
 }
 
@@ -234,7 +229,7 @@ func (m *Manager) SubmitRequests(ctx context.Context, refs []*RequestRef) {
 func (m *Manager) GetMessagesByHashes(blockRequestHashes []Tx) (msgs []*types.SignedMessage, crossMsgs []*types.Message) {
 	log.Infof("received a block with %d hashes", len(blockRequestHashes))
 	for _, h := range blockRequestHashes {
-		req, found := m.Cache.getDel(string(h))
+		req, found := m.Pool.getDel(string(h))
 		if !found {
 			log.Errorf("unable to find a request with %v hash", h)
 			continue
@@ -243,12 +238,12 @@ func (m *Manager) GetMessagesByHashes(blockRequestHashes []Tx) (msgs []*types.Si
 		switch msg := req.(type) {
 		case *types.SignedMessage:
 			msgs = append(msgs, msg)
-			log.Infof(">>>> got message (%s, %d) from cache", msg.Message.To, msg.Message.Nonce)
+			log.Infof("got message (%s, %d) from cache", msg.Message.To, msg.Message.Nonce)
 		case *types.UnverifiedCrossMsg:
 			crossMsgs = append(crossMsgs, msg.Message)
-			log.Infof(">>>> got cross-message (%s, %d) from cache", msg.Message.To, msg.Message.Nonce)
+			log.Infof("got cross-message (%s, %d) from cache", msg.Message.To, msg.Message.Nonce)
 		default:
-			log.Error(">>>> got unknown type request")
+			log.Error("got unknown type request in a block")
 		}
 	}
 	return
@@ -258,7 +253,7 @@ func (m *Manager) GetMessagesByHashes(blockRequestHashes []Tx) (msgs []*types.Si
 func (m *Manager) AddSignedMessages(dst []*RequestRef, msgs []*types.SignedMessage) ([]*RequestRef, error) {
 	for _, msg := range msgs {
 		hash := msg.Cid()
-		clientID := fmt.Sprintf("%s:%s", m.SubnetID, msg.Message.From.String())
+		clientID := newMirID(m.SubnetID.String(), msg.Message.From.String())
 		nonce := msg.Message.Nonce
 		r := RequestRef{
 			ClientID: t.ClientID(clientID),
@@ -266,9 +261,9 @@ func (m *Manager) AddSignedMessages(dst []*RequestRef, msgs []*types.SignedMessa
 			Type:     common.SignedMessageType,
 			Hash:     hash.Bytes(),
 		}
-		alreadyExist := m.Cache.addIfNotExist(clientID, string(r.Hash), msg)
+		alreadyExist := m.Pool.addIfNotExist(clientID, string(r.Hash), msg)
 		if !alreadyExist {
-			log.Infof(">>>> added message (%s, %d) to cache: client ID %s", msg.Message.To, nonce, clientID)
+			log.Infof("added message %s to cache", hash.Bytes())
 			dst = append(dst, &r)
 		}
 	}
@@ -286,7 +281,7 @@ func (m *Manager) AddCrossMessages(dst []*RequestRef, msgs []*types.UnverifiedCr
 			log.Error("unable to get subnet from message:", err)
 			continue
 		}
-		clientID := fmt.Sprintf("%s:%s", msn, msg.Message.From.String())
+		clientID := newMirID(msn.String(), msg.Message.From.String())
 		nonce := msg.Message.Nonce
 		r := RequestRef{
 			ClientID: t.ClientID(clientID),
@@ -294,9 +289,9 @@ func (m *Manager) AddCrossMessages(dst []*RequestRef, msgs []*types.UnverifiedCr
 			Type:     common.CrossMessageType,
 			Hash:     hash.Bytes(),
 		}
-		alreadyExist := m.Cache.addIfNotExist(clientID, string(r.Hash), msg)
+		alreadyExist := m.Pool.addIfNotExist(clientID, string(r.Hash), msg)
 		if !alreadyExist {
-			log.Infof(">>>> added cross-message (%s, %d) to cache: clientID %s", msg.Message.To, nonce, clientID)
+			log.Infof("added cross-message %s to cache", hash.Bytes())
 			dst = append(dst, &r)
 		}
 	}
@@ -306,5 +301,5 @@ func (m *Manager) AddCrossMessages(dst []*RequestRef, msgs []*types.UnverifiedCr
 
 // GetRequest gets the request from the cache by the key.
 func (m *Manager) GetRequest(h string) (Request, bool) {
-	return m.Cache.getRequest(h)
+	return m.Pool.getRequest(h)
 }

@@ -1,6 +1,10 @@
 package mir
 
-import t "github.com/filecoin-project/mir/pkg/types"
+import (
+	"fmt"
+
+	t "github.com/filecoin-project/mir/pkg/types"
+)
 
 type RequestType int
 
@@ -11,4 +15,8 @@ type RequestRef struct {
 	ReqNo    t.ReqNo
 	Type     RequestType
 	Hash     []byte
+}
+
+func newMirID(subnet, addr string) string {
+	return fmt.Sprintf("%s:%s", subnet, addr)
 }
