@@ -3,9 +3,8 @@ package mir
 import (
 	"context"
 	"crypto/sha256"
+	"fmt"
 	"strings"
-
-	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	filcrypto "github.com/filecoin-project/go-state-types/crypto"
@@ -31,7 +30,7 @@ type CryptoManager struct {
 
 func NewCryptoManager(key address.Address, wallet WalletCrypto) (*CryptoManager, error) {
 	if key.Protocol() != address.SECP256K1 {
-		return nil, xerrors.New("must be SECP address")
+		return nil, fmt.Errorf("must be SECP address")
 	}
 	return &CryptoManager{key, wallet}, nil
 }
@@ -82,7 +81,7 @@ func hash(data [][]byte) []byte {
 func getAddr(nodeID string) (address.Address, error) {
 	addrParts := strings.Split(nodeID, ":")
 	if len(addrParts) != 2 {
-		return address.Undef, xerrors.Errorf("invalid node ID: %s", nodeID)
+		return address.Undef, fmt.Errorf("invalid node ID: %s", nodeID)
 	}
 	nodeAddr, err := address.NewFromString(addrParts[1])
 	if err != nil {

@@ -8,7 +8,6 @@ import (
 	"path"
 
 	logging "github.com/ipfs/go-log/v2"
-	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/api/v1api"
@@ -96,19 +95,19 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	if validatorsEnv != "" {
 		validators, err = hierarchical.ValidatorsFromString(validatorsEnv)
 		if err != nil {
-			return nil, xerrors.Errorf("failed to get validators from string: %s", err)
+			return nil, fmt.Errorf("failed to get validators from string: %w", err)
 		}
 	} else {
 		if subnetID == address.RootSubnet {
-			return nil, xerrors.New("can't be run in rootnet without validators")
+			return nil, fmt.Errorf("can't be run in rootnet without validators")
 		}
 		validators, err = api.SubnetStateGetValidators(ctx, subnetID)
 		if err != nil {
-			return nil, xerrors.New("failed to get validators from state")
+			return nil, fmt.Errorf("failed to get validators from state")
 		}
 	}
 	if len(validators) == 0 {
-		return nil, xerrors.New("empty validator set")
+		return nil, fmt.Errorf("empty validator set")
 	}
 
 	mirID := newMirID(subnetID.String(), addr.String())
@@ -137,14 +136,14 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	issConfig := iss.DefaultConfig(nodeIds)
 	issProtocol, err := iss.New(t.NodeID(mirID), issConfig, newMirLogger(managerLog))
 	if err != nil {
-		return nil, xerrors.Errorf("could not instantiate ISS protocol module: %w", err)
+		return nil, fmt.Errorf("could not instantiate ISS protocol module: %w", err)
 	}
 
 	app := NewApplication()
 	pool := newRequestPool()
 	cryptoManager, err := NewCryptoManager(addr, api)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to create crypto manager: %w", err)
+		return nil, fmt.Errorf("failed to create crypto manager: %w", err)
 	}
 
 	node, err := mir.NewNode(
@@ -181,6 +180,12 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 }
 
 // Start starts the manager.
+//
+// Stopping cases:
+// 	- miner stops gracefully: miner's ctx done is called, the signal is propagated via the Manager ctx
+//  - miner error: ?
+//  - Mir node stops
+//  - Mir node encounters an error
 func (m *Manager) Start(ctx context.Context) chan error {
 	log.Infof("Mir manager %s starting", m.MirID)
 
@@ -218,19 +223,17 @@ func (m *Manager) Stop() {
 	m.Net.Stop()
 }
 
-func (m *Manager) SubmitRequests(ctx context.Context, refs []*RequestRef) {
-	for _, r := range refs {
-
-		e := events.NewClientRequests("iss",
-			[]*requestpb.Request{
-				events.ClientRequest(r.ClientID, r.ReqNo, r.Hash),
-			})
-
-		if err := m.MirNode.InjectEvents(ctx, (&events.EventList{}).PushBack(e)); err != nil {
-			log.Errorf("unable to submit a request from %s to Mir: %v", r.ClientID, err)
-			continue
-		}
-		log.Debugf("successfully sent message %d from %s to Mir", r.Type, r.ClientID)
+func (m *Manager) SubmitRequests(ctx context.Context, reqRefs []*RequestRef) {
+	if len(reqRefs) == 0 {
+		return
+	}
+	var reqs []*requestpb.Request
+	for _, ref := range reqRefs {
+		reqs = append(reqs, events.ClientRequest(ref.ClientID, ref.ReqNo, ref.Hash))
+	}
+	e := events.NewClientRequests("iss", reqs)
+	if err := m.MirNode.InjectEvents(ctx, (&events.EventList{}).PushBack(e)); err != nil {
+		log.Errorf("failed to submit requests to Mir: %s", err)
 	}
 }
 

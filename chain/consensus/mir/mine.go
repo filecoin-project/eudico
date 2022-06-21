@@ -2,9 +2,8 @@ package mir
 
 import (
 	"context"
+	"fmt"
 	"time"
-
-	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	lapi "github.com/filecoin-project/lotus/api"
@@ -39,7 +38,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 
 	m, err := NewManager(ctx, addr, api)
 	if err != nil {
-		return xerrors.Errorf("unable to create a manager: %v", err)
+		return fmt.Errorf("unable to create a manager: %w", err)
 	}
 	log.Infof("Mir miner %s started", m.MirID)
 	defer log.Infof("Mir miner %s completed", m.MirID)
@@ -69,7 +68,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			log.Debug("Mir miner: context closed")
 			return nil
 		case err := <-mirErrors:
-			return xerrors.Errorf("Mir miner consensus error", err)
+			return fmt.Errorf("mir miner consensus error: %w", err)
 		case hashes := <-mirHead:
 			msgs, crossMsgs := m.GetMessagesByHashes(hashes)
 			log.Infof("[subnet: %s, epoch: %d] try to create a block: msgs - %d, crossMsgs - %d",

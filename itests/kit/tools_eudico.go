@@ -2,6 +2,8 @@ package kit
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"strings"
 	"time"
 
@@ -200,4 +202,16 @@ func MessageForSend(ctx context.Context, s api.FullNode, params lcli.SendParams)
 		ValidNonce: validNonce,
 	}
 	return prototype, nil
+}
+
+func GetFreeLocalAddr() (addr string, err error) {
+	var a *net.TCPAddr
+	if a, err = net.ResolveTCPAddr("tcp", "localhost:0"); err == nil {
+		var l *net.TCPListener
+		if l, err = net.ListenTCP("tcp", a); err == nil {
+			defer l.Close()
+			return fmt.Sprintf("127.0.0.1:%d", l.Addr().(*net.TCPAddr).Port), nil
+		}
+	}
+	return
 }
