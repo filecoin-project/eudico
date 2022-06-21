@@ -180,12 +180,6 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 }
 
 // Start starts the manager.
-//
-// Stopping cases:
-// 	- miner stops gracefully: miner's ctx done is called, the signal is propagated via the Manager ctx
-//  - miner error: ?
-//  - Mir node stops
-//  - Mir node encounters an error
 func (m *Manager) Start(ctx context.Context) chan error {
 	log.Infof("Mir manager %s starting", m.MirID)
 
