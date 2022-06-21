@@ -184,23 +184,17 @@ func (m *Manager) Start(ctx context.Context) chan error {
 	log.Infof("Mir manager %s starting", m.MirID)
 
 	errChan := make(chan error, 1)
-	managerCtx, managerCancel := context.WithCancel(context.Background())
 
 	go func() {
-		select {
-		case <-ctx.Done():
-			log.Infof("Mir manager %s: context closed", m.MirID)
-			m.Stop()
-		case <-managerCtx.Done():
-			log.Infof("Mir manager %s: manager context closed", m.MirID)
-		}
-	}()
 
-	go func() {
+		// Run Mir node until it stops.
 		if err := m.MirNode.Run(ctx); err != nil && !errors.Is(err, mir.ErrStopped) {
+			log.Infof("Mir manager %s: Mir node stopped with error: %v", m.MirID, err)
 			errChan <- err
-			managerCancel()
 		}
+
+		// Perform cleanup of Node's modules.
+		m.Stop()
 	}()
 
 	return errChan
