@@ -154,7 +154,7 @@ To create a deployment run the following script:
 
 Then run the following commands:
 ```
- ./eudico subnet add --consensus 2 --name tendermint
+ ./eudico subnet add --consensus tendermint --name tendermint
  ./eudico subnet join --subnet=/root/t01001 10
  ./eudico subnet mine  --subnet=/root/t01001
  ./eudico --subnet-api=/root/t01001 wallet list
