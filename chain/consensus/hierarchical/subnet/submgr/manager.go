@@ -102,7 +102,7 @@ type SubnetParams struct {
 func NewService(
 	mctx helpers.MetricsCtx,
 	lc fx.Lifecycle,
-	// api impl.FullNodeAPI,
+// api impl.FullNodeAPI,
 	self peer.ID,
 	pubsub *pubsub.PubSub,
 	ds dtypes.MetadataDS,
@@ -391,6 +391,18 @@ func (s *Service) AddSubnet(ctx context.Context, sbn *hierarchical.SubnetParams)
 	if parentAPI == nil {
 		return address.Undef, xerrors.Errorf("not syncing with parent network")
 	}
+
+	// Basic input validation
+	if sbn.FinalityThreshold > 0 &&
+		sbn.FinalityThreshold >= sbn.CheckPeriod {
+		return address.Undef, xerrors.Errorf("finality threshold (%v) must be less than checkpoint period (%v)",
+			sbn.FinalityThreshold, sbn.CheckPeriod)
+	}
+
+	if sbn.Consensus.Alg == hierarchical.Mir && sbn.Consensus.MinValidators == 0 {
+		return address.Undef, xerrors.New("minimum number of Mir validators must be more than 0")
+	}
+
 	// Populate constructor parameters for subnet actor
 	addp := &subnet.ConstructParams{
 		NetworkName:       string(s.api.NetName),
@@ -403,15 +415,6 @@ func (s *Service) AddSubnet(ctx context.Context, sbn *hierarchical.SubnetParams)
 			DelegMiner:    sbn.Consensus.DelegMiner,
 			MinValidators: sbn.Consensus.MinValidators,
 		},
-	}
-
-	if sbn.FinalityThreshold >= sbn.CheckPeriod {
-		return address.Undef, xerrors.Errorf("finality threshold (%v) must be less than checkpoint period (%v)",
-			sbn.FinalityThreshold, sbn.CheckPeriod)
-	}
-
-	if sbn.Consensus.Alg == hierarchical.Mir && sbn.Consensus.MinValidators == 0 {
-		return address.Undef, xerrors.New("min number of validators must be more than 0")
 	}
 
 	serParams, err := actors.SerializeParams(addp)

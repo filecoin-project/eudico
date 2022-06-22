@@ -43,7 +43,7 @@ To create a deployment run the following script:
 
 Then run the following commands:
 ```
- ./eudico subnet add --consensus 3 --name mir --min-validators 1
+ ./eudico subnet add --consensus mir --name mir --min-validators 1
  ./eudico subnet join --subnet=/root/t01004 -val-addr=127.0.0.1:10000 10 
  ./eudico subnet mine  --subnet=/root/t01004 --log-file=mir_miner_0.log --log-level=debug
  ./eudico --subnet-api=/root/t01004 wallet list

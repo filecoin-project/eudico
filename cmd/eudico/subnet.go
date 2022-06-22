@@ -118,7 +118,7 @@ var addCmd = &cli.Command{
 		},
 		&cli.Uint64Flag{
 			Name:  "min-validators",
-			Usage: "optionally specify number of validators in subnet",
+			Usage: "optionally specify minimum number of validators in subnet",
 			Value: 0,
 		},
 		&cli.IntFlag{
@@ -164,10 +164,7 @@ var addCmd = &cli.Command{
 			parent = address.SubnetID(cctx.String("parent"))
 		}
 
-		var minVals uint64
-		if cctx.IsSet("min-validators") {
-			minVals = cctx.Uint64("min-validators")
-		}
+		minVals := cctx.Uint64("min-validators")
 
 		// FIXME: This is a horrible workaround to avoid delegMiner from not being set.
 		//  But need to demo in 30 mins, so will fix it afterwards
