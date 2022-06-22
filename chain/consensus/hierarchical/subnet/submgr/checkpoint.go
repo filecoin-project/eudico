@@ -1,4 +1,4 @@
-package subnetmgr
+package submgr
 
 import (
 	"context"
@@ -19,8 +19,7 @@ import (
 	"github.com/filecoin-project/specs-actors/actors/util/adt"
 )
 
-// signingState keeps track of checkpoint signing state
-// for an epoch.
+// signingState keeps track of checkpoint signing state for an epoch.
 type signingState struct {
 	wait        abi.ChainEpoch
 	currEpoch   abi.ChainEpoch
@@ -112,7 +111,8 @@ func (sh *Subnet) hasSigned() bool {
 func (sh *Subnet) sigWaitReached() bool {
 	sh.checklk.RLock()
 	defer sh.checklk.RUnlock()
-	return sh.signingState.wait >= FinalityThreshold
+
+	return sh.signingState.wait >= sh.finalityThreshold
 }
 
 func (sh *Subnet) sigWindow() abi.ChainEpoch {
@@ -139,7 +139,7 @@ func (sh *Subnet) populateCheckpoint(ctx context.Context, store adt.Store, st *s
 	return nil
 }
 
-func (s *SubnetMgr) SubmitSignedCheckpoint(
+func (s *Service) SubmitSignedCheckpoint(
 	ctx context.Context, wallet address.Address,
 	id address.SubnetID, ch *schema.Checkpoint) (cid.Cid, error) {
 
@@ -191,7 +191,7 @@ func (s *SubnetMgr) SubmitSignedCheckpoint(
 	return smsg.Cid(), nil
 }
 
-func (s *SubnetMgr) ListCheckpoints(
+func (s *Service) ListCheckpoints(
 	ctx context.Context, id address.SubnetID, num int) ([]*schema.Checkpoint, error) {
 
 	// TODO: Think a bit deeper the locking strategy for subnets.
@@ -248,7 +248,7 @@ func (s *SubnetMgr) ListCheckpoints(
 	return out, nil
 }
 
-func (s *SubnetMgr) ValidateCheckpoint(
+func (s *Service) ValidateCheckpoint(
 	ctx context.Context, id address.SubnetID, epoch abi.ChainEpoch) (*schema.Checkpoint, error) {
 
 	// TODO: Think a bit deeper the locking strategy for subnets.

@@ -202,8 +202,8 @@ func (m *Manager) Start(ctx context.Context) chan error {
 
 // Stop stops the manager.
 func (m *Manager) Stop() {
-	log.Info("Mir manager shutting down")
-	defer log.Info("Mir manager stopped")
+	log.With("miner", m.MirID).Infof("Mir manager shutting down")
+	defer log.With("miner", m.MirID).Info("Mir manager stopped")
 
 	if err := m.Wal.Close(); err != nil {
 		log.Errorf("Could not close write-ahead log: %s", err)

@@ -120,3 +120,17 @@ const InteractivePoRepConfidence = 6
 const BootstrapPeerThreshold = 1
 
 var WhitelistedBlock = cid.Undef
+
+const DelegatedPoWFinality = 3
+const PoWFinality = 3
+const TendermintFinality = 2
+const MirFinality = 2
+const DummyFinality = 1
+const FilecoinECFinality = 5
+
+const DelegatedPoWCheckPeriod = 10
+const PoWCheckPeriod = 10
+const TendermintCheckPeriod = 10
+const MirCheckPeriod = 10
+const DummyCheckPeriod = 10
+const FilecoinECCheckPeriod = 10

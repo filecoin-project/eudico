@@ -13,7 +13,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/gen/slashfilter"
@@ -67,8 +66,7 @@ var delegatedGenesisCmd = &cli.Command{
 
 		fName := cctx.Args().Get(1)
 
-		// TODO: Make checkPeriod configurable
-		if err := subnet.CreateGenesisFile(cctx.Context, fName, hierarchical.Delegated, miner, sca.DefaultCheckpointPeriod); err != nil {
+		if err := subnet.CreateGenesisFile(cctx.Context, fName, hierarchical.Delegated, miner); err != nil {
 			return xerrors.Errorf("creating genesis: %w", err)
 		}
 
@@ -80,7 +78,7 @@ var delegatedGenesisCmd = &cli.Command{
 
 var delegatedMinerCmd = &cli.Command{
 	Name:  "miner",
-	Usage: "run delegated conesensus miner",
+	Usage: "run delegated consensus miner",
 	Action: func(cctx *cli.Context) error {
 		api, closer, err := lcli.GetFullNodeAPIV1(cctx)
 		if err != nil {

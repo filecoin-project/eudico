@@ -19,9 +19,6 @@ import (
 )
 
 var (
-	// MinSubnetStake required to create a new subnet
-	MinSubnetStake = abi.NewTokenAmount(1e18)
-
 	// MinMinerStake is the minimum take required for a
 	// miner to be granted mining rights in the subnet and join it.
 	MinMinerStake = abi.NewTokenAmount(1e18)
@@ -75,6 +72,8 @@ type SubnetState struct {
 	Genesis []byte
 	// Checkpointing period.
 	CheckPeriod abi.ChainEpoch
+	// Finality threshold.
+	FinalityThreshold abi.ChainEpoch
 	// Checkpoints submit to SubnetActor per epoch
 	Checkpoints cid.Cid // HAMT[epoch]Checkpoint
 	// WindowChecks
@@ -122,10 +121,10 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}
 
-	// Don't allow really small checkpoint periods for now.
-	period := params.CheckPeriod
-	if period < sca.MinCheckpointPeriod {
-		period = sca.DefaultCheckpointPeriod
+	// Don't allow checkpoint periods less than minimal allowed value.
+	checkPeriod := params.CheckPeriod
+	if checkPeriod < sca.MinCheckpointPeriod {
+		checkPeriod = hierarchical.ConsensusCheckPeriod(params.Consensus)
 	}
 
 	// TODO: @alfonso do we need this?
@@ -139,17 +138,18 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 	parentID := address.SubnetID(params.NetworkName)
 
 	return &SubnetState{
-		ParentID:      parentID,
-		Consensus:     params.Consensus,
-		MinMinerStake: params.MinMinerStake,
-		Miners:        make([]address.Address, 0),
-		Stake:         emptyStakeCid,
-		Status:        Instantiated,
-		CheckPeriod:   period,
-		Checkpoints:   emptyCheckpointsMapCid,
-		WindowChecks:  emptyWindowChecks,
-		ValidatorSet:  make([]hierarchical.Validator, 0),
-		MinValidators: params.ConsensusParams.MinValidators,
+		ParentID:          parentID,
+		Consensus:         params.Consensus,
+		MinMinerStake:     params.MinMinerStake,
+		Miners:            make([]address.Address, 0),
+		Stake:             emptyStakeCid,
+		Status:            Instantiated,
+		CheckPeriod:       checkPeriod,
+		Checkpoints:       emptyCheckpointsMapCid,
+		FinalityThreshold: params.FinalityThreshold,
+		WindowChecks:      emptyWindowChecks,
+		ValidatorSet:      make([]hierarchical.Validator, 0),
+		MinValidators:     params.ConsensusParams.MinValidators,
 	}, nil
 
 }

@@ -6,15 +6,16 @@ import (
 	"strings"
 
 	"github.com/Gurpartap/async"
-	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/big"
-	bstore "github.com/filecoin-project/lotus/blockstore"
 	"github.com/hashicorp/go-multierror"
 	logging "github.com/ipfs/go-log/v2"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"go.opencensus.io/stats"
 	"golang.org/x/xerrors"
+
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
+	bstore "github.com/filecoin-project/lotus/blockstore"
 
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain"
@@ -51,7 +52,7 @@ type Delegated struct {
 
 	genesis *types.TipSet
 
-	subMgr subnet.SubnetMgr
+	subMgr subnet.Manager
 
 	r *resolver.Resolver
 
@@ -75,7 +76,7 @@ const MaxHeightDrift = 5
 func NewDelegatedConsensus(
 	ctx context.Context,
 	sm *stmgr.StateManager,
-	submgr subnet.SubnetMgr,
+	submgr subnet.Manager,
 	beacon beacon.Schedule,
 	r *resolver.Resolver,
 	verifier ffiwrapper.Verifier,
@@ -275,4 +276,8 @@ func (deleg *Delegated) validateBlockHeader(ctx context.Context, b *types.BlockH
 
 func (deleg *Delegated) Type() hierarchical.ConsensusType {
 	return hierarchical.Delegated
+}
+
+func (deleg *Delegated) Finality() abi.ChainEpoch {
+	return build.Finality
 }

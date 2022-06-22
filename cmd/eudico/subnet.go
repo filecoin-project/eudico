@@ -100,26 +100,30 @@ var addCmd = &cli.Command{
 			Name:  "parent",
 			Usage: "specify the ID of the parent subnet from which to add",
 		},
-		&cli.Uint64Flag{
+		&cli.StringFlag{
 			Name:  "consensus",
-			Usage: "specify consensus for the subnet (0=delegated, 1=PoW, 2=Tendermint, 3=Mir)",
+			Usage: "specify consensus for the subnet (Delegated, PoW, Tendermint, Mir)",
 		},
 		&cli.IntFlag{
-			Name:  "checkperiod",
-			Usage: "optionally specify checkpointing period for subnet (default = 10epochs)",
+			Name:  "check-period",
+			Usage: "optionally specify checkpointing period for subnet (default = 10 epochs)",
 		},
 		&cli.StringFlag{
 			Name:  "name",
 			Usage: "specify name for the subnet",
 		},
 		&cli.StringFlag{
-			Name:  "delegminer",
+			Name:  "delegated-miner",
 			Usage: "optionally specify miner for delegated consensus",
 		},
 		&cli.Uint64Flag{
 			Name:  "min-validators",
 			Usage: "optionally specify number of validators in subnet",
 			Value: 0,
+		},
+		&cli.IntFlag{
+			Name:  "finality-threshold",
+			Usage: "the number of epochs to wait before considering a change final (default = 5 epochs)",
 		},
 	},
 	Action: func(cctx *cli.Context) error {
@@ -129,6 +133,7 @@ var addCmd = &cli.Command{
 			return err
 		}
 		defer closer()
+
 		if cctx.Args().Len() != 0 {
 			return lcli.ShowHelp(cctx, fmt.Errorf("'add' expects no arguments, just a set of flags"))
 		}
@@ -144,17 +149,15 @@ var addCmd = &cli.Command{
 			}
 		}
 
-		var cns uint64
-		if cctx.IsSet("consensus") {
-			cns = cctx.Uint64("consensus")
+		if !cctx.IsSet("consensus") {
+			return lcli.ShowHelp(cctx, fmt.Errorf("consensus is not specified"))
 		}
+		cns := hierarchical.Consensus(cctx.String("consensus"))
 
-		var name string
-		if cctx.IsSet("name") {
-			name = cctx.String("name")
-		} else {
+		if !cctx.IsSet("name") {
 			return lcli.ShowHelp(cctx, fmt.Errorf("no name for subnet specified"))
 		}
+		subnetName := cctx.String("name")
 
 		parent := address.RootSubnet
 		if cctx.IsSet("parent") {
@@ -166,31 +169,43 @@ var addCmd = &cli.Command{
 			minVals = cctx.Uint64("min-validators")
 		}
 
-		// FIXME: This is a horrible workaround to avoid delegminer from
-		// not being set. But need to demo in 30 mins, so will fix it afterwards
-		// (we all know I'll come across this comment in 2 years and laugh at it).
+		// FIXME: This is a horrible workaround to avoid delegMiner from not being set.
+		//  But need to demo in 30 mins, so will fix it afterwards
+		//  (we all know I'll come across this comment in 2 years and laugh at it).
 		delegMiner := hierarchical.SubnetCoordActorAddr
-		if cctx.IsSet("delegminer") {
-			d := cctx.String("delegminer")
+		if cctx.IsSet("delegated-miner") {
+			d := cctx.String("delegated-miner")
 			delegMiner, err = address.NewFromString(d)
 			if err != nil {
-				return xerrors.Errorf("couldn't parse deleg miner address: %s", err)
+				return xerrors.Errorf("failed parsing delegated miner address: %s", err)
 			}
 		} else if cns == 0 {
 			return lcli.ShowHelp(cctx, fmt.Errorf("no delegated miner for delegated consensus specified"))
 		}
-		minerStake := abi.NewStoragePower(1e8) // TODO: Make this value configurable in a flag/argument
-		checkperiod := abi.ChainEpoch(cctx.Int("checkperiod"))
-		params := &hierarchical.ConsensusParams{
-			DelegMiner:    delegMiner,
-			MinValidators: minVals,
+		stake := abi.NewStoragePower(1e8) // TODO: Make this value configurable in a flag/argument
+		checkPeriod := abi.ChainEpoch(cctx.Int("check-period"))
+		finalityThreshold := abi.ChainEpoch(cctx.Int("finality-threshold"))
+
+		params := &hierarchical.SubnetParams{
+			Addr:              addr,
+			Parent:            parent,
+			Name:              subnetName,
+			Stake:             stake,
+			CheckPeriod:       checkPeriod,
+			FinalityThreshold: finalityThreshold,
+			Consensus: hierarchical.ConsensusParams{
+				DelegMiner:    delegMiner,
+				MinValidators: minVals,
+				Alg:           cns,
+			},
 		}
-		actorAddr, err := api.AddSubnet(ctx, addr, parent, name, cns, minerStake, checkperiod, params)
+		actorAddr, err := api.AddSubnet(ctx, params)
 		if err != nil {
 			return err
 		}
 
-		fmt.Printf("[*] subnet actor deployed as %v and new subnet available with ID=%v\n\n", actorAddr, address.NewSubnetID(parent, actorAddr))
+		fmt.Printf("[*] subnet actor deployed as %v and new subnet available with ID=%v\n\n",
+			actorAddr, address.NewSubnetID(parent, actorAddr))
 		fmt.Printf("remember to join and register your subnet for it to be discoverable\n")
 		return nil
 	},

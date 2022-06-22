@@ -1,4 +1,4 @@
-package subnetmgr
+package submgr
 
 import (
 	"context"

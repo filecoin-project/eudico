@@ -1,29 +1,21 @@
 package hierarchical
 
 import (
+	"fmt"
 	"strings"
 
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/types"
 )
 
 // ConsensusType for subnet.
 type ConsensusType uint64
 
-type ConsensusParams struct {
-	DelegMiner    address.Address // Miner in delegated consensus.
-	MinValidators uint64          // Min number of validators required to start a network.
-}
-
-type MiningParams struct {
-	LogLevel    string
-	LogFileName string
-}
-
-// List of supported/implemented consensus for subnets.
+// List of supported/implemented consensus algorithms for subnets.
 const (
 	Delegated ConsensusType = iota
 	PoW
@@ -50,6 +42,45 @@ func ConsensusName(alg ConsensusType) string {
 		return "Dummy"
 	default:
 		return "unknown"
+	}
+}
+
+// Consensus returns the consensus algorithm.
+func Consensus(name string) ConsensusType {
+	switch {
+	case strings.EqualFold(name, "delegated"):
+		return Delegated
+	case strings.EqualFold(name, "pow"):
+		return PoW
+	case strings.EqualFold(name, "tendermint"):
+		return Tendermint
+	case strings.EqualFold(name, "filecoinec"):
+		return FilecoinEC
+	case strings.EqualFold(name, "mir"):
+		return Mir
+	case strings.EqualFold(name, "dummy"):
+		return Dummy
+	default:
+		panic(fmt.Sprintf("unknown consensus name %s", name))
+	}
+}
+
+func ConsensusCheckPeriod(alg ConsensusType) abi.ChainEpoch {
+	switch alg {
+	case Delegated:
+		return build.DelegatedPoWCheckPeriod
+	case PoW:
+		return build.PoWCheckPeriod
+	case Tendermint:
+		return build.TendermintCheckPeriod
+	case FilecoinEC:
+		return build.FilecoinECCheckPeriod
+	case Mir:
+		return build.MirCheckPeriod
+	case Dummy:
+		return build.DummyCheckPeriod
+	default:
+		panic(fmt.Sprintf("unknown consensus algorithm %v", alg))
 	}
 }
 
@@ -88,6 +119,27 @@ var SubnetCoordActorAddr = func() address.Address {
 	}
 	return a
 }()
+
+type SubnetParams struct {
+	Name              string           // Subnet name.
+	Addr              address.Address  // Subnet address.
+	Parent            address.SubnetID // Parent subnet ID.
+	Stake             abi.TokenAmount  // Initial stake.
+	CheckPeriod       abi.ChainEpoch   // Checkpointing period for a subnet.
+	FinalityThreshold abi.ChainEpoch   // Finality threshold for a subnet.
+	Consensus         ConsensusParams  // Consensus params.
+}
+
+type ConsensusParams struct {
+	Alg           ConsensusType   // Consensus algorithm.
+	DelegMiner    address.Address // Miner in delegated consensus.
+	MinValidators uint64          // Min number of validators required to start a network.
+}
+
+type MiningParams struct {
+	LogLevel    string
+	LogFileName string
+}
 
 // SubnetKey implements Keyer interface, so it can be used as a key for maps.
 type SubnetKey address.SubnetID

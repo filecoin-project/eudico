@@ -4,15 +4,17 @@ import (
 	"context"
 	"errors"
 
-	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 	"github.com/ipfs/go-cid"
+
+	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
+
+	cbg "github.com/whyrusleeping/cbor-gen"
+	"go.opencensus.io/trace"
+	"golang.org/x/xerrors"
 
 	// logging "github.com/ipfs/go-log/v2"
 	ffi "github.com/filecoin-project/filecoin-ffi"
 	"github.com/filecoin-project/go-state-types/crypto"
-	cbg "github.com/whyrusleeping/cbor-gen"
-	"go.opencensus.io/trace"
-	"golang.org/x/xerrors"
 )
 
 // var log = logging.Logger("consensus")

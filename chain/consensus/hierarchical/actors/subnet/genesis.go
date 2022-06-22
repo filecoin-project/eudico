@@ -176,7 +176,6 @@ func CreateGenesisFile(
 	fileName string,
 	cns consensus.ConsensusType,
 	addr address.Address,
-	checkPeriod abi.ChainEpoch,
 ) error {
 	memks := wallet.NewMemKeyStore()
 	w, err := wallet.NewWallet(memks)
@@ -199,6 +198,8 @@ func CreateGenesisFile(
 	}
 
 	t := uint64(time.Now().Unix())
+
+	checkPeriod := consensus.ConsensusCheckPeriod(cns)
 
 	if err := WriteGenesis(address.RootSubnet, cns, addr, vreg, rem, checkPeriod, t, f); err != nil {
 		return xerrors.Errorf("write genesis car: %w", err)

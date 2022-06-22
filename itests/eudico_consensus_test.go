@@ -179,14 +179,20 @@ func (ts *eudicoConsensusSuite) testMirTwoNodes(t *testing.T) {
 		Value: big.Zero(),
 	}
 
+	mirNodeOneAddr, err := kit.GetFreeLocalAddr()
+	require.NoError(t, err)
+	mirNodeTwoAddr, err := kit.GetFreeLocalAddr()
+	require.NoError(t, err)
+
 	mirNodeOne := fmt.Sprintf("%s:%s", address.RootSubnet, l1[0].String())
 	mirNodeTwo := fmt.Sprintf("%s:%s", address.RootSubnet, l2[0].String())
 	env := fmt.Sprintf("%s@%s,%s@%s",
-		mirNodeOne, "127.0.0.1:10001",
-		mirNodeTwo, "127.0.0.1:10002",
+		mirNodeOne, mirNodeOneAddr,
+		mirNodeTwo, mirNodeTwoAddr,
 	)
 	err = os.Setenv(mir.ValidatorsEnv, env)
 	require.NoError(t, err)
+	defer os.Unsetenv(mir.ValidatorsEnv) // nolint
 
 	wg.Add(2)
 	go func() {
@@ -284,7 +290,10 @@ func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
 
 	mirNodeID := fmt.Sprintf("%s:%s", address.RootSubnet, l[0].String())
 
-	err = os.Setenv(mir.ValidatorsEnv, fmt.Sprintf("%s@%s", mirNodeID, "127.0.0.1:10000"))
+	netAddr, err := kit.GetFreeLocalAddr()
+	require.NoError(t, err)
+
+	err = os.Setenv(mir.ValidatorsEnv, fmt.Sprintf("%s@%s", mirNodeID, netAddr))
 	require.NoError(t, err)
 	defer os.Unsetenv(mir.ValidatorsEnv) // nolint
 

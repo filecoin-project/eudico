@@ -52,7 +52,7 @@ type Mir struct {
 	sm       *stmgr.StateManager
 	verifier ffiwrapper.Verifier
 	genesis  *types.TipSet
-	subMgr   subnet.SubnetMgr
+	subMgr   subnet.Manager
 	netName  address.SubnetID
 	resolver *resolver.Resolver
 }
@@ -60,7 +60,7 @@ type Mir struct {
 func NewConsensus(
 	ctx context.Context,
 	sm *stmgr.StateManager,
-	submgr subnet.SubnetMgr,
+	submgr subnet.Manager,
 	b beacon.Schedule,
 	r *resolver.Resolver,
 	v ffiwrapper.Verifier,
@@ -286,4 +286,8 @@ func decodeAndCheckBlock(msg *pubsub.Message) (*types.BlockMsg, string, error) {
 	}
 
 	return blk, "", nil
+}
+
+func (bft *Mir) Finality() abi.ChainEpoch {
+	return build.MirFinality
 }

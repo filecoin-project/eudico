@@ -62,15 +62,15 @@ func (a SubnetActor) State() cbor.Er {
 	return new(SubnetState)
 }
 
-// ConstructParams specifies the configuration parameters for the
-// subnet actor constructor.
+// ConstructParams specifies the configuration parameters for the subnet actor constructor.
 type ConstructParams struct {
-	NetworkName     string                        // Name of the current network.
-	Name            string                        // Name for the subnet.
-	Consensus       hierarchical.ConsensusType    // Consensus for subnet.
-	ConsensusParams *hierarchical.ConsensusParams // Used parameters for the consensus protocol.
-	MinMinerStake   abi.TokenAmount               // MinStake to give miner rights.
-	CheckPeriod     abi.ChainEpoch                // Checkpointing period.
+	NetworkName       string                        // Name of the current network.
+	Name              string                        // Name for the subnet.
+	Consensus         hierarchical.ConsensusType    // Consensus for subnet.
+	ConsensusParams   *hierarchical.ConsensusParams // Used parameters for the consensus protocol.
+	MinMinerStake     abi.TokenAmount               // MinStake to give miner rights.
+	CheckPeriod       abi.ChainEpoch                // Checkpointing period.
+	FinalityThreshold abi.ChainEpoch                // Finality threshold.
 }
 
 func (a SubnetActor) Constructor(rt runtime.Runtime, params *ConstructParams) *abi.EmptyValue {
@@ -91,12 +91,12 @@ func (st *SubnetState) initGenesis(rt runtime.Runtime, params *ConstructParams) 
 	// We'll accept it as param in SubnetActor.Add in the next
 	// iteration (when we need it).
 	vreg, err := address.NewFromString("t3w4spg6jjgfp4adauycfa3fg5mayljflf6ak2qzitflcqka5sst7b7u2bagle3ttnddk6dn44rhhncijboc4q")
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed parsin vreg addr")
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed parsing vreg addr")
 
 	// TODO: Same here, hard coding an address
 	// until we need to set it in AddParams.
 	rem, err := address.NewFromString("t3tf274q6shnudgrwrwkcw5lzw3u247234wnep37fqx4sobyh2susfvs7qzdwxj64uaizztosuggvyump4xf7a")
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed parsin rem addr")
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed parsing rem addr")
 
 	// Getting actor ID from receiver.
 	netName := address.NewSubnetID(address.SubnetID(params.NetworkName), rt.Receiver())
@@ -240,7 +240,8 @@ func (st *SubnetState) verifyCheck(rt runtime.Runtime, ch *schema.Checkpoint) ad
 
 	// Check that the epoch is correct.
 	if ch.Epoch()%st.CheckPeriod != 0 {
-		rt.Abortf(exitcode.ErrIllegalArgument, "epoch in checkpoint doesn't correspond with signing window")
+		rt.Abortf(exitcode.ErrIllegalArgument, "epoch in checkpoint doesn't correspond with signing window: epoch - %v, check period - %v",
+			ch.Epoch(), st.CheckPeriod)
 	}
 
 	// Check that the previous checkpoint is correct.
@@ -459,7 +460,7 @@ func (st *SubnetState) addStake(rt runtime.Runtime, sourceAddr address.Address, 
 func (st *SubnetState) rmStake(rt runtime.Runtime, sourceAddr address.Address, stakes *adt.BalanceTable, minerStake abi.TokenAmount) abi.TokenAmount {
 	retFunds := big.Div(minerStake, LeavingFeeCoeff)
 
-	// Remove from stakes
+	// Remove from stakes.
 	err := stakes.MustSubtract(sourceAddr, minerStake)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed subtracting ablanace for miner")
 	// Flush stakes adding miner stake.
@@ -467,7 +468,7 @@ func (st *SubnetState) rmStake(rt runtime.Runtime, sourceAddr address.Address, s
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flust stakes")
 
 	// Remove miner from list of miners if it is there.
-	// NOTE: If we decide to support part-recovery of stake from stards
+	// NOTE: If we decide to support part-recovery of stake from subnets
 	// we need to check if the miner keeps its mining rights.
 	st.Miners = rmMiner(sourceAddr, st.Miners)
 

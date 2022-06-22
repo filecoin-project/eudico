@@ -1,4 +1,4 @@
-package subnetmgr
+package submgr
 
 import (
 	"bytes"
@@ -32,7 +32,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
-	subiface "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
+	iface "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	subcns "github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/consensus"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/events"
@@ -57,12 +57,12 @@ import (
 	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 )
 
-var _ subiface.SubnetMgr = &SubnetMgr{}
+var _ iface.Manager = &Service{}
 
 var log = logging.Logger("subnetMgr")
 
-// SubnetMgr is the subneting manager in the root chain.
-type SubnetMgr struct {
+// Service is the subnet manager in the root chain.
+type Service struct {
 	ctx context.Context
 	// Listener for events of the root chain.
 	events *events.Events
@@ -93,7 +93,13 @@ type SubnetMgr struct {
 	j journal.Journal
 }
 
-func NewSubnetMgr(
+type SubnetParams struct {
+	FinalityThreshold abi.ChainEpoch
+	CheckPeriod       abi.ChainEpoch
+	Consensus         hierarchical.ConsensusType
+}
+
+func NewService(
 	mctx helpers.MetricsCtx,
 	lc fx.Lifecycle,
 	// api impl.FullNodeAPI,
@@ -122,11 +128,11 @@ func NewSubnetMgr(
 	syncapi full.SyncAPI,
 	beaconapi full.BeaconAPI,
 	r *resolver.Resolver,
-	j journal.Journal) (*SubnetMgr, error) {
+	j journal.Journal) (*Service, error) {
 
 	ctx := helpers.LifecycleCtx(mctx, lc)
 
-	s := &SubnetMgr{
+	s := &Service{
 		ctx:          ctx,
 		pubsub:       pubsub,
 		host:         host,
@@ -173,22 +179,25 @@ func NewSubnetMgr(
 	return s, nil
 }
 
-func (s *SubnetMgr) startSubnet(id address.SubnetID,
-	parentAPI *API, consensus hierarchical.ConsensusType,
+func (s *Service) startSubnet(id address.SubnetID,
+	parentAPI *API, params *SubnetParams,
 	genesis []byte) error {
 	// Subnets inherit the context from the SubnetManager.
 	ctx, cancel := context.WithCancel(s.ctx)
 
+	consensus := params.Consensus
+
 	log.Infow("Creating new subnet", "subnetID", id)
 	sh := &Subnet{
-		ctx:        ctx,
-		ctxCancel:  cancel,
-		ID:         id,
-		host:       s.host,
-		pubsub:     s.pubsub,
-		nodeServer: s.nodeServer,
-		pmgr:       s.pmgr,
-		consType:   consensus,
+		ctx:         ctx,
+		ctxCancel:   cancel,
+		ID:          id,
+		host:        s.host,
+		pubsub:      s.pubsub,
+		nodeServer:  s.nodeServer,
+		pmgr:        s.pmgr,
+		consType:    consensus,
+		checkPeriod: params.CheckPeriod,
 	}
 
 	sh.checklk.Lock()
@@ -244,6 +253,13 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 		return err
 	}
 	log.Infow("Genesis and consensus for subnet created", "subnetID", id, "consensus", consensus)
+
+	// Validate input finality threshold and use default value if it failed.
+	sh.finalityThreshold = sh.cons.Finality()
+	if params.FinalityThreshold > 1 && params.FinalityThreshold < params.CheckPeriod {
+		sh.finalityThreshold = params.FinalityThreshold
+	}
+	log.Infof("Finality threshold for %s is %v", sh.ID, sh.finalityThreshold)
 
 	// We configure a new handler for the subnet syncing exchange protocol.
 	sh.exchangeServer()
@@ -318,13 +334,13 @@ func (s *SubnetMgr) startSubnet(id address.SubnetID,
 	return nil
 }
 
-func (s *SubnetMgr) Start(ctx context.Context) {
+func (s *Service) Start(ctx context.Context) {
 	// Start listening to events in the SCA contract from root right away.
 	// Every peer in the hierarchy needs to be aware of these events.
 	s.listenSubnetEvents(ctx, nil)
 }
 
-func (s *SubnetMgr) Close(ctx context.Context) error {
+func (s *Service) Close(ctx context.Context) error {
 	for _, sh := range s.subnets {
 		err := sh.Close(ctx)
 		if err != nil {
@@ -338,7 +354,7 @@ func (s *SubnetMgr) Close(ctx context.Context) error {
 	return s.r.Close()
 }
 
-func BuildSubnetMgr(mctx helpers.MetricsCtx, lc fx.Lifecycle, s *SubnetMgr) {
+func BuildSubnetMgr(mctx helpers.MetricsCtx, lc fx.Lifecycle, s *Service) {
 	ctx := helpers.LifecycleCtx(mctx, lc)
 	s.Start(ctx)
 
@@ -351,7 +367,7 @@ func BuildSubnetMgr(mctx helpers.MetricsCtx, lc fx.Lifecycle, s *SubnetMgr) {
 	})
 }
 
-func (s *SubnetMgr) GetSubnetState(ctx context.Context, id address.SubnetID, actor address.Address) (*subnet.SubnetState, error) {
+func (s *Service) GetSubnetState(ctx context.Context, id address.SubnetID, actor address.Address) (*subnet.SubnetState, error) {
 	// Get the api for the parent network hosting the subnet actor for the subnet.
 	parentAPI, err := s.getParentAPI(id)
 	if err != nil {
@@ -366,55 +382,58 @@ func (s *SubnetMgr) GetSubnetState(ctx context.Context, id address.SubnetID, act
 	return st, nil
 }
 
-func (s *SubnetMgr) AddSubnet(
-	ctx context.Context, wallet address.Address,
-	parent address.SubnetID, name string,
-	consensus uint64, minerStake abi.TokenAmount,
-	checkPeriod abi.ChainEpoch,
-	consensusParams *hierarchical.ConsensusParams) (address.Address, error) {
-
+func (s *Service) AddSubnet(ctx context.Context, sbn *hierarchical.SubnetParams) (address.Address, error) {
+	if sbn == nil {
+		return address.Undef, xerrors.New("nil subnet params")
+	}
 	// Get the api for the parent network hosting the subnet actor for the subnet.
-	parentAPI := s.getAPI(parent)
+	parentAPI := s.getAPI(sbn.Parent)
 	if parentAPI == nil {
 		return address.Undef, xerrors.Errorf("not syncing with parent network")
 	}
 	// Populate constructor parameters for subnet actor
 	addp := &subnet.ConstructParams{
-		NetworkName:   string(s.api.NetName),
-		MinMinerStake: minerStake,
-		Name:          name,
-		Consensus:     hierarchical.ConsensusType(consensus),
-		CheckPeriod:   checkPeriod,
+		NetworkName:       string(s.api.NetName),
+		MinMinerStake:     sbn.Stake,
+		Name:              sbn.Name,
+		Consensus:         sbn.Consensus.Alg,
+		CheckPeriod:       sbn.CheckPeriod,
+		FinalityThreshold: sbn.FinalityThreshold,
 		ConsensusParams: &hierarchical.ConsensusParams{
-			DelegMiner:    consensusParams.DelegMiner,
-			MinValidators: consensusParams.MinValidators,
+			DelegMiner:    sbn.Consensus.DelegMiner,
+			MinValidators: sbn.Consensus.MinValidators,
 		},
 	}
 
-	if consensus == uint64(hierarchical.Mir) && consensusParams.MinValidators == 0 {
+	if sbn.FinalityThreshold >= sbn.CheckPeriod {
+		return address.Undef, xerrors.Errorf("finality threshold (%v) must be less than checkpoint period (%v)",
+			sbn.FinalityThreshold, sbn.CheckPeriod)
+	}
+
+	if sbn.Consensus.Alg == hierarchical.Mir && sbn.Consensus.MinValidators == 0 {
 		return address.Undef, xerrors.New("min number of validators must be more than 0")
 	}
 
-	seraddp, err := actors.SerializeParams(addp)
+	serParams, err := actors.SerializeParams(addp)
 	if err != nil {
 		return address.Undef, err
 	}
 
-	params := &init_.ExecParams{
+	execParams := &init_.ExecParams{
 		CodeCID:           act.SubnetActorCodeID,
-		ConstructorParams: seraddp,
+		ConstructorParams: serParams,
 	}
-	serparams, err := actors.SerializeParams(params)
+	serParams, err = actors.SerializeParams(execParams)
 	if err != nil {
 		return address.Undef, xerrors.Errorf("failed serializing init actor params: %s", err)
 	}
 
 	smsg, aerr := parentAPI.MpoolPushMessage(ctx, &types.Message{
 		To:     builtin.InitActorAddr,
-		From:   wallet,
+		From:   sbn.Addr,
 		Value:  abi.NewTokenAmount(0),
 		Method: builtin.MethodsInit.Exec,
-		Params: serparams,
+		Params: serParams,
 	}, nil)
 	if aerr != nil {
 		return address.Undef, aerr
@@ -433,7 +452,7 @@ func (s *SubnetMgr) AddSubnet(
 	return r.IDAddress, nil
 }
 
-func (s *SubnetMgr) JoinSubnet(
+func (s *Service) JoinSubnet(
 	ctx context.Context, wallet address.Address,
 	value abi.TokenAmount,
 	id address.SubnetID,
@@ -525,7 +544,7 @@ func (s *SubnetMgr) JoinSubnet(
 	return smsg.Cid(), nil
 }
 
-func (s *SubnetMgr) syncSubnet(ctx context.Context, id address.SubnetID, parentAPI *API) error {
+func (s *Service) syncSubnet(ctx context.Context, id address.SubnetID, parentAPI *API) error {
 	// Get actor from subnet ID
 	SubnetActor, err := id.Actor()
 	if err != nil {
@@ -542,11 +561,17 @@ func (s *SubnetMgr) syncSubnet(ctx context.Context, id address.SubnetID, parentA
 		return err
 	}
 
-	return s.startSubnet(id, parentAPI, st.Consensus, st.Genesis)
+	params := &SubnetParams{
+		Consensus:         st.Consensus,
+		FinalityThreshold: st.FinalityThreshold,
+		CheckPeriod:       st.CheckPeriod,
+	}
+
+	return s.startSubnet(id, parentAPI, params, st.Genesis)
 }
 
 // SyncSubnet starts syncing with a subnet even if we are not an active participant.
-func (s *SubnetMgr) SyncSubnet(ctx context.Context, id address.SubnetID, stop bool) error {
+func (s *Service) SyncSubnet(ctx context.Context, id address.SubnetID, stop bool) error {
 	if stop {
 		return s.stopSyncSubnet(ctx, id)
 	}
@@ -559,7 +584,7 @@ func (s *SubnetMgr) SyncSubnet(ctx context.Context, id address.SubnetID, stop bo
 }
 
 // stopSyncSubnet stops syncing from a subnet
-func (s *SubnetMgr) stopSyncSubnet(ctx context.Context, id address.SubnetID) error {
+func (s *Service) stopSyncSubnet(ctx context.Context, id address.SubnetID) error {
 	if sh, _ := s.getSubnet(id); sh != nil {
 		delete(s.subnets, id)
 		return sh.Close(ctx)
@@ -567,7 +592,7 @@ func (s *SubnetMgr) stopSyncSubnet(ctx context.Context, id address.SubnetID) err
 	return xerrors.Errorf("Not currently syncing with subnet: %s", id)
 }
 
-func (s *SubnetMgr) MineSubnet(
+func (s *Service) MineSubnet(
 	ctx context.Context, wallet address.Address,
 	id address.SubnetID, stop bool,
 	params *hierarchical.MiningParams,
@@ -621,7 +646,7 @@ func (s *SubnetMgr) MineSubnet(
 	return xerrors.Errorf("Address %v Not a miner in subnet, or subnet already killed", wallet)
 }
 
-func (s *SubnetMgr) LeaveSubnet(
+func (s *Service) LeaveSubnet(
 	ctx context.Context, wallet address.Address,
 	id address.SubnetID) (cid.Cid, error) {
 
@@ -671,7 +696,7 @@ func (s *SubnetMgr) LeaveSubnet(
 	return smsg.Cid(), nil
 }
 
-func (s *SubnetMgr) ListSubnets(ctx context.Context, id address.SubnetID) ([]sca.SubnetOutput, error) {
+func (s *Service) ListSubnets(ctx context.Context, id address.SubnetID) ([]sca.SubnetOutput, error) {
 	sapi, err := s.GetSubnetAPI(id)
 	if err != nil {
 		return nil, err
@@ -725,7 +750,7 @@ func (s *SubnetMgr) ListSubnets(ctx context.Context, id address.SubnetID) ([]sca
 	return output, nil
 }
 
-func (s *SubnetMgr) KillSubnet(
+func (s *Service) KillSubnet(
 	ctx context.Context, wallet address.Address,
 	id address.SubnetID) (cid.Cid, error) {
 
@@ -771,11 +796,11 @@ func (s *SubnetMgr) KillSubnet(
 }
 
 // isRoot checks if the
-func (s *SubnetMgr) isRoot(id address.SubnetID) bool {
+func (s *Service) isRoot(id address.SubnetID) bool {
 	return id.String() == string(s.api.NetName)
 }
 
-func (s *SubnetMgr) getAPI(id address.SubnetID) *API {
+func (s *Service) getAPI(id address.SubnetID) *API {
 	if s.isRoot(id) || id == address.RootSubnet {
 		return s.api
 	}
@@ -786,7 +811,7 @@ func (s *SubnetMgr) getAPI(id address.SubnetID) *API {
 	return sh.api
 }
 
-func (s *SubnetMgr) getParentAPI(id address.SubnetID) (*API, error) {
+func (s *Service) getParentAPI(id address.SubnetID) (*API, error) {
 	parentAPI := s.getAPI(id.Parent())
 	if parentAPI == nil {
 		return nil, xerrors.Errorf("not syncing with parent network")
@@ -794,7 +819,7 @@ func (s *SubnetMgr) getParentAPI(id address.SubnetID) (*API, error) {
 	return parentAPI, nil
 }
 
-func (s *SubnetMgr) getSubnet(id address.SubnetID) (*Subnet, error) {
+func (s *Service) getSubnet(id address.SubnetID) (*Subnet, error) {
 	sh, ok := s.subnets[id]
 	if !ok {
 		return nil, xerrors.Errorf("Not part of subnet %v. Consider joining it", id)
@@ -802,7 +827,7 @@ func (s *SubnetMgr) getSubnet(id address.SubnetID) (*Subnet, error) {
 	return sh, nil
 }
 
-func (s *SubnetMgr) GetSubnetAPI(id address.SubnetID) (v1api.FullNode, error) {
+func (s *Service) GetSubnetAPI(id address.SubnetID) (v1api.FullNode, error) {
 	sapi := s.getAPI(id)
 	if sapi == nil {
 		return nil, xerrors.Errorf("subnet manager not syncing with network")
@@ -810,7 +835,7 @@ func (s *SubnetMgr) GetSubnetAPI(id address.SubnetID) (v1api.FullNode, error) {
 	return sapi, nil
 }
 
-func (s *SubnetMgr) GetSCAState(ctx context.Context, id address.SubnetID) (*sca.SCAState, blockadt.Store, error) {
+func (s *Service) GetSCAState(ctx context.Context, id address.SubnetID) (*sca.SCAState, blockadt.Store, error) {
 	sapi, err := s.GetSubnetAPI(id)
 	if err != nil {
 		return nil, nil, err
@@ -828,7 +853,7 @@ func (s *SubnetMgr) GetSCAState(ctx context.Context, id address.SubnetID) (*sca.
 	return &st, blockadt.WrapStore(ctx, pcst), nil
 }
 
-func (s *SubnetMgr) SubnetChainNotify(ctx context.Context, id address.SubnetID) (<-chan []*api.HeadChange, error) {
+func (s *Service) SubnetChainNotify(ctx context.Context, id address.SubnetID) (<-chan []*api.HeadChange, error) {
 	sapi, err := s.GetSubnetAPI(id)
 	if err != nil {
 		return nil, err
@@ -836,7 +861,7 @@ func (s *SubnetMgr) SubnetChainNotify(ctx context.Context, id address.SubnetID) 
 	return sapi.ChainNotify(ctx)
 }
 
-func (s *SubnetMgr) SubnetChainHead(ctx context.Context, id address.SubnetID) (*types.TipSet, error) {
+func (s *Service) SubnetChainHead(ctx context.Context, id address.SubnetID) (*types.TipSet, error) {
 	sapi, err := s.GetSubnetAPI(id)
 	if err != nil {
 		return nil, err
@@ -844,7 +869,7 @@ func (s *SubnetMgr) SubnetChainHead(ctx context.Context, id address.SubnetID) (*
 	return sapi.ChainHead(ctx)
 }
 
-func (s *SubnetMgr) SubnetStateGetActor(ctx context.Context, id address.SubnetID, addr address.Address, tsk types.TipSetKey) (*types.Actor, error) {
+func (s *Service) SubnetStateGetActor(ctx context.Context, id address.SubnetID, addr address.Address, tsk types.TipSetKey) (*types.Actor, error) {
 	sapi, err := s.GetSubnetAPI(id)
 	if err != nil {
 		return nil, err
@@ -852,7 +877,7 @@ func (s *SubnetMgr) SubnetStateGetActor(ctx context.Context, id address.SubnetID
 	return sapi.StateGetActor(ctx, addr, tsk)
 }
 
-func (s *SubnetMgr) SubnetStateWaitMsg(ctx context.Context, id address.SubnetID, cid cid.Cid, confidence uint64, limit abi.ChainEpoch, allowReplaced bool) (*api.MsgLookup, error) {
+func (s *Service) SubnetStateWaitMsg(ctx context.Context, id address.SubnetID, cid cid.Cid, confidence uint64, limit abi.ChainEpoch, allowReplaced bool) (*api.MsgLookup, error) {
 	sapi, err := s.GetSubnetAPI(id)
 	if err != nil {
 		return nil, err
@@ -860,7 +885,7 @@ func (s *SubnetMgr) SubnetStateWaitMsg(ctx context.Context, id address.SubnetID,
 	return sapi.StateWaitMsg(ctx, cid, confidence, limit, allowReplaced)
 }
 
-func (s *SubnetMgr) SubnetStateGetValidators(ctx context.Context, id address.SubnetID) ([]hierarchical.Validator, error) {
+func (s *Service) SubnetStateGetValidators(ctx context.Context, id address.SubnetID) ([]hierarchical.Validator, error) {
 	actor, err := id.Actor()
 	if err != nil {
 		return nil, err

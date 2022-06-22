@@ -48,7 +48,7 @@ func Weight(consensus hierarchical.ConsensusType) (store.WeightFunc, error) {
 func New(
 	ctx context.Context,
 	consensus hierarchical.ConsensusType,
-	sm *stmgr.StateManager, snMgr subnet.SubnetMgr,
+	sm *stmgr.StateManager, snMgr subnet.Manager,
 	beacon beacon.Schedule, r *resolver.Resolver,
 	verifier ffiwrapper.Verifier,
 	genesis chain.Genesis, netName dtypes.NetworkName,

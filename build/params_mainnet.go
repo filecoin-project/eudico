@@ -7,10 +7,9 @@ import (
 	"math"
 	"os"
 
-	"github.com/filecoin-project/go-state-types/network"
-
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/network"
 	builtin2 "github.com/filecoin-project/specs-actors/v2/actors/builtin"
 )
 
@@ -101,3 +100,17 @@ const BootstrapPeerThreshold = 4
 
 // we skip checks on message validity in this block to sidestep the zero-bls signature
 var WhitelistedBlock = MustParseCid("bafy2bzaceapyg2uyzk7vueh3xccxkuwbz3nxewjyguoxvhx77malc2lzn2ybi")
+
+const DelegatedPoWFinality = 5
+const PoWFinality = 5
+const TendermintFinality = 2
+const MirFinality = 2
+const DummyFinality = 1
+const FilecoinECFinality = 5
+
+const DelegatedPoWCheckPeriod = 10
+const PoWCheckPeriod = 10
+const TendermintCheckPeriod = 10
+const MirCheckPeriod = 10
+const DummyCheckPeriod = 10
+const FilecoinECCheckPeriod = 10

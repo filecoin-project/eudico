@@ -41,6 +41,19 @@ func TestEudicoSubnetTwoNodesCrossMessage(t *testing.T) {
 	t.Run("/root/mir-/subnet/pow", func(t *testing.T) {
 		runSubnetTwoNodesCrossMessage(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetTSPoW())
 	})
+
+	t.Run("/root/dummy-/subnet/mir", func(t *testing.T) {
+		runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetMir(), kit.MinValidators(1), kit.ValidatorAddress("127.0.0.1:11001"))
+	})
+
+	t.Run("/root/mir-/subnet/delegated", func(t *testing.T) {
+		runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDelegated())
+	})
+
+	t.Run("/root/delegated-/subnet/mir", func(t *testing.T) {
+		runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetMir(), kit.MinValidators(1), kit.ValidatorAddress("127.0.0.1:11002"))
+	})
+
 }
 
 func TestEudicoSubnetMir(t *testing.T) {
@@ -134,19 +147,19 @@ type eudicoSubnetSuite struct {
 func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	var wg sync.WaitGroup
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer func() {
-		t.Log("[*] defer: cancelling test context")
-		cancel()
-		wg.Wait()
-	}()
-
 	full, rootMiner, subnetMinerType, ens := kit.EudicoEnsembleTwoMiners(t, ts.opts...)
 	defer func() {
 		t.Log("[*] stopping test ensemble")
 		defer t.Log("[*] ensemble stopped")
 		err := ens.Stop()
 		require.NoError(t, err)
+	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		t.Log("[*] defer: cancelling test context")
+		cancel()
+		wg.Wait()
 	}()
 
 	n, valAddr := ens.ValidatorInfo()
@@ -189,8 +202,9 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 
 	parent := address.RootSubnet
 	subnetName := "testSubnet"
-	minerStake := abi.NewStoragePower(1e8)
+	stake := abi.NewStoragePower(1e8)
 	checkPeriod := abi.ChainEpoch(10)
+	finalityThreshold := abi.ChainEpoch(5)
 
 	err = kit.WaitForBalance(ctx, addr, 12, full)
 	require.NoError(t, err)
@@ -199,12 +213,21 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("[*] %s balance: %d", addr, balance)
 
-	cns := uint64(subnetMinerType)
-	p := &hierarchical.ConsensusParams{
-		MinValidators: n,
-		DelegMiner:    addr,
+	cns := subnetMinerType
+	subnetParams := &hierarchical.SubnetParams{
+		Addr:              addr,
+		Parent:            parent,
+		Name:              subnetName,
+		Stake:             stake,
+		CheckPeriod:       checkPeriod,
+		FinalityThreshold: finalityThreshold,
+		Consensus: hierarchical.ConsensusParams{
+			Alg:           cns,
+			MinValidators: n,
+			DelegMiner:    addr,
+		},
 	}
-	actorAddr, err := full.AddSubnet(ctx, addr, parent, subnetName, cns, minerStake, checkPeriod, p)
+	actorAddr, err := full.AddSubnet(ctx, subnetParams)
 	require.NoError(t, err)
 
 	subnetAddr := address.NewSubnetID(parent, actorAddr)
@@ -330,7 +353,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 
 	// Stop mining
 
-	t.Log("[*] stopping mining")
+	t.Log("[*] stop mining")
 	mp := hierarchical.MiningParams{}
 	err = full.MineSubnet(ctx, addr, subnetAddr, true, &mp)
 	require.NoError(t, err)
@@ -353,17 +376,11 @@ func runSubnetTestsTwoNodes(t *testing.T, opts ...interface{}) {
 	ts := eudicoSubnetSuite{opts: opts}
 
 	t.Run("testBasicSubnetFlowTwoNodes", ts.testBasicSubnetFlowTwoNodes)
+	t.Run("testTwoNodesTwoSubnetsStartStop", ts.testTwoNodesTwoSubnetsStartStop)
 }
 
 func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 	var wg sync.WaitGroup
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer func() {
-		t.Log("[*] defer: cancelling test context")
-		cancel()
-		wg.Wait()
-	}()
 
 	nodeA, nodeB, ens := kit.EudicoEnsembleTwoNodes(t, ts.opts...)
 	defer func() {
@@ -371,6 +388,13 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 		defer t.Log("[*] ensemble stopped")
 		err := ens.Stop()
 		require.NoError(t, err)
+	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		t.Log("[*] defer: cancelling test context")
+		cancel()
+		wg.Wait()
 	}()
 
 	t.Log("[*] connecting nodes")
@@ -465,8 +489,9 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 
 	parent := address.RootSubnet
 	subnetName := "testSubnet"
-	minerStake := abi.NewStoragePower(1e8)
+	stake := abi.NewStoragePower(1e8)
 	checkPeriod := abi.ChainEpoch(10)
+	finalityThreshold := abi.ChainEpoch(1)
 
 	err = kit.WaitForBalance(ctx, minerA, 20, nodeA)
 	require.NoError(t, err)
@@ -484,11 +509,20 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 
 	os.Unsetenv(mir.ValidatorsEnv) // nolint
 
-	hp := &hierarchical.ConsensusParams{
-		MinValidators: 2,
-		DelegMiner:    minerA,
+	subnetParams := &hierarchical.SubnetParams{
+		Addr:              minerA,
+		Parent:            parent,
+		Name:              subnetName,
+		Stake:             stake,
+		CheckPeriod:       checkPeriod,
+		FinalityThreshold: finalityThreshold,
+		Consensus: hierarchical.ConsensusParams{
+			Alg:           hierarchical.Mir,
+			MinValidators: 2,
+			DelegMiner:    minerA,
+		},
 	}
-	actorAddr, err := nodeA.AddSubnet(ctx, minerA, parent, subnetName, uint64(hierarchical.Mir), minerStake, checkPeriod, hp)
+	actorAddr, err := nodeA.AddSubnet(ctx, subnetParams)
 	require.NoError(t, err)
 
 	subnetAddr := address.NewSubnetID(parent, actorAddr)
@@ -543,7 +577,6 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 	}
 
 	t.Log("[*] miner B in subnet starting")
-
 	mp = hierarchical.MiningParams{}
 	err = nodeB.MineSubnet(ctx, minerB, subnetAddr, false, &mp)
 	if err != nil {
@@ -639,11 +672,228 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 	t.Logf("[*] node B %s new addr balance: %d", subnetNewAddr, b.Balance)
 	require.Equal(t, 0, big.Cmp(sentFils, b.Balance))
 
-	t.Log("[*] miner A in subnet stopping")
+	t.Log("[*] stop miner A in the subnet")
 	err = nodeA.MineSubnet(ctx, minerA, subnetAddr, true, &mp)
 	require.NoError(t, err)
 
-	t.Log("[*] miner B in subnet stopping")
+	t.Log("[*] stop miner B in the subnet")
+	err = nodeB.MineSubnet(ctx, minerB, subnetAddr, true, &mp)
+	require.NoError(t, err)
+
+	t.Logf("[*] test time: %v\n", time.Since(startTime).Seconds())
+}
+
+func (ts *eudicoSubnetSuite) testTwoNodesTwoSubnetsStartStop(t *testing.T) {
+	var wg sync.WaitGroup
+
+	nodeA, nodeB, ens := kit.EudicoEnsembleTwoNodes(t, ts.opts...)
+	defer func() {
+		t.Log("[*] stopping test ensemble")
+		defer t.Log("[*] ensemble stopped")
+		err := ens.Stop()
+		require.NoError(t, err)
+	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		t.Log("[*] defer: cancelling test context")
+		cancel()
+		wg.Wait()
+	}()
+
+	t.Log("[*] connecting nodes")
+
+	// Fail if genesis blocks are different
+
+	gen1, err := nodeA.ChainGetGenesis(ctx)
+	require.NoError(t, err)
+	gen2, err := nodeB.ChainGetGenesis(ctx)
+	require.NoError(t, err)
+	require.Equal(t, gen1.String(), gen2.String())
+
+	// Fail if no peers
+
+	p, err := nodeA.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Empty(t, p, "node A has peers")
+
+	p, err = nodeB.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Empty(t, p, "node B has peers")
+
+	ens.Connect(nodeA, nodeB)
+
+	peers, err := nodeA.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Lenf(t, peers, 1, "node A doesn't have a peer")
+
+	peers, err = nodeB.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Lenf(t, peers, 1, "node B doesn't have a peer")
+
+	l, err := nodeA.WalletList(ctx)
+	require.NoError(t, err)
+	if len(l) != 1 {
+		t.Fatal("A's wallet key list is empty")
+	}
+	minerA := l[0]
+
+	l, err = nodeB.WalletList(ctx)
+	require.NoError(t, err)
+	if len(l) != 1 {
+		t.Fatal("B's wallet key list is empty")
+	}
+	minerB := l[0]
+
+	t.Log("[*] running consensus in root net")
+
+	startTime := time.Now()
+
+	aAddr, err := kit.GetFreeLocalAddr()
+	require.NoError(t, err)
+	bAddr, err := kit.GetFreeLocalAddr()
+	require.NoError(t, err)
+
+	err = os.Setenv(mir.ValidatorsEnv, fmt.Sprintf("%s@%s,%s@%s",
+		"/root:"+minerA.String(), aAddr,
+		"/root:"+minerB.String(), bAddr))
+	require.NoError(t, err)
+
+	wg.Add(2)
+
+	go func() {
+		t.Log("[*] miner A in root net starting")
+		defer func() {
+			wg.Done()
+			t.Log("[*] miner A in root net stopped")
+		}()
+		err := mir.Mine(ctx, minerA, nodeA)
+		if err != nil {
+			t.Error("miner A error: ", err)
+			cancel()
+			return
+		}
+	}()
+
+	go func() {
+		t.Log("[*] miner B in root net starting")
+		defer func() {
+			wg.Done()
+			t.Log("[*] miner B in root net stopped")
+		}()
+		err := mir.Mine(ctx, minerB, nodeB)
+		if err != nil {
+			t.Error("miner B error: ", err)
+			cancel()
+			return
+		}
+	}()
+
+	t.Log("[*] adding and joining subnet")
+
+	parent := address.RootSubnet
+	subnetName := "testSubnet"
+	stake := abi.NewStoragePower(1e8)
+	checkPeriod := abi.ChainEpoch(10)
+	finalityThreshold := abi.ChainEpoch(2)
+
+	err = kit.WaitForBalance(ctx, minerA, 20, nodeA)
+	require.NoError(t, err)
+
+	err = kit.WaitForBalance(ctx, minerB, 20, nodeB)
+	require.NoError(t, err)
+
+	balance1, err := nodeA.WalletBalance(ctx, minerA)
+	require.NoError(t, err)
+	t.Logf("[*] node A %s balance: %d", minerA, balance1)
+
+	balance2, err := nodeB.WalletBalance(ctx, minerB)
+	require.NoError(t, err)
+	t.Logf("[*] node B %s balance: %d", minerB, balance2)
+
+	os.Unsetenv(mir.ValidatorsEnv) // nolint
+
+	subnetParams := &hierarchical.SubnetParams{
+		Addr:              minerA,
+		Parent:            parent,
+		Name:              subnetName,
+		Stake:             stake,
+		CheckPeriod:       checkPeriod,
+		FinalityThreshold: finalityThreshold,
+		Consensus: hierarchical.ConsensusParams{
+			Alg:           hierarchical.Mir,
+			MinValidators: 2,
+			DelegMiner:    minerA,
+		},
+	}
+	actorAddr, err := nodeA.AddSubnet(ctx, subnetParams)
+	require.NoError(t, err)
+
+	subnetAddr := address.NewSubnetID(parent, actorAddr)
+	t.Log("[*] subnet addr:", subnetAddr)
+
+	networkName, err := nodeA.StateNetworkName(ctx)
+	require.NoError(t, err)
+	require.Equal(t, dtypes.NetworkName("/root"), networkName)
+
+	val, err := types.ParseFIL("10")
+	require.NoError(t, err)
+
+	_, err = nodeA.StateLookupID(ctx, minerA, types.EmptyTSK)
+	require.NoError(t, err)
+
+	saAddr, err := kit.GetFreeLocalAddr()
+	require.NoError(t, err)
+	sbAddr, err := kit.GetFreeLocalAddr()
+	require.NoError(t, err)
+
+	sc, err := nodeA.JoinSubnet(ctx, minerA, big.Int(val), subnetAddr, saAddr)
+	require.NoError(t, err)
+	_, err = nodeA.StateWaitMsg(ctx, sc, 1, 100, false)
+	require.NoError(t, err)
+
+	sc, err = nodeB.JoinSubnet(ctx, minerB, big.Int(val), subnetAddr, sbAddr)
+	require.NoError(t, err)
+
+	_, err = nodeA.StateWaitMsg(ctx, sc, 1, 100, false)
+	require.NoError(t, err)
+
+	t.Log("[*] listing subnets")
+	sn1, err := nodeA.ListSubnets(ctx, address.RootSubnet)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(sn1))
+	require.NotEqual(t, 0, sn1[0].Subnet.Status)
+	require.Equal(t, hierarchical.Mir, sn1[0].Consensus)
+
+	sn2, err := nodeB.ListSubnets(ctx, address.RootSubnet)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(sn2))
+	require.NotEqual(t, 0, sn2[0].Subnet.Status)
+	require.Equal(t, hierarchical.Mir, sn2[0].Consensus)
+
+	t.Log("[*] miner A in subnet starting")
+	mp := hierarchical.MiningParams{}
+	err = nodeA.MineSubnet(ctx, minerA, subnetAddr, false, &mp)
+	if err != nil {
+		t.Error("subnet miner A error:", err)
+		cancel()
+		return
+	}
+
+	t.Log("[*] miner B in subnet starting")
+	mp = hierarchical.MiningParams{}
+	err = nodeB.MineSubnet(ctx, minerB, subnetAddr, false, &mp)
+	if err != nil {
+		t.Error("subnet miner B error:", err)
+		cancel()
+		return
+	}
+
+	t.Log("[*] stop miner A in the subnet")
+	err = nodeA.MineSubnet(ctx, minerA, subnetAddr, true, &mp)
+	require.NoError(t, err)
+
+	t.Log("[*] stop miner B in the subnet")
 	err = nodeB.MineSubnet(ctx, minerB, subnetAddr, true, &mp)
 	require.NoError(t, err)
 
@@ -654,17 +904,11 @@ func runSubnetTwoNodesCrossMessage(t *testing.T, opts ...interface{}) {
 	ts := eudicoSubnetSuite{opts: opts}
 
 	t.Run("testBasicSubnetFlowTwoNodes", ts.testSubnetTwoNodesCrossMessage)
+
 }
 
 func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 	var wg sync.WaitGroup
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer func() {
-		t.Log("[*] defer: cancelling test context")
-		cancel()
-		wg.Wait()
-	}()
 
 	nodeA, nodeB, ens := kit.EudicoEnsembleTwoNodes(t, ts.opts...)
 	defer func() {
@@ -672,6 +916,13 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 		defer t.Log("[*] ensemble stopped")
 		err := ens.Stop()
 		require.NoError(t, err)
+	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		t.Log("[*] defer: cancelling test context")
+		cancel()
+		wg.Wait()
 	}()
 
 	t.Log("[*] connecting nodes A and B")
@@ -764,8 +1015,9 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 	t.Log("[*] adding and joining subnets")
 
 	parent := address.RootSubnet
-	minerStake := abi.NewStoragePower(1e8)
+	stake := abi.NewStoragePower(1e8)
 	checkPeriod := abi.ChainEpoch(10)
+	finalityThreshold := abi.ChainEpoch(1)
 
 	err = kit.WaitForBalance(ctx, minerA, 20, nodeA)
 	require.NoError(t, err)
@@ -783,14 +1035,21 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("[*] miner %s balance: %d", minerB, balance2)
 
-	hp := &hierarchical.ConsensusParams{
-		MinValidators: 0,
-		DelegMiner:    minerA,
-	}
-
 	// First subnet created on node A.
-	subnetA := "testSubnetA"
-	subnetAActor, err := nodeA.AddSubnet(ctx, minerA, parent, subnetA, uint64(hierarchical.PoW), minerStake, checkPeriod, hp)
+	subnetParams := &hierarchical.SubnetParams{
+		Addr:              minerA,
+		Parent:            parent,
+		Name:              "subnetA",
+		Stake:             stake,
+		CheckPeriod:       checkPeriod,
+		FinalityThreshold: finalityThreshold,
+		Consensus: hierarchical.ConsensusParams{
+			Alg:           hierarchical.PoW,
+			MinValidators: 0,
+			DelegMiner:    minerA,
+		},
+	}
+	subnetAActor, err := nodeA.AddSubnet(ctx, subnetParams)
 	require.NoError(t, err)
 
 	subnetAAddr := address.NewSubnetID(parent, subnetAActor)
@@ -813,8 +1072,20 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 	require.NoError(t, err)
 
 	// Second subnet created on node B.
-	subnetBName := "testSubnetB"
-	subnetBActor, err := nodeB.AddSubnet(ctx, minerB, parent, subnetBName, uint64(hierarchical.PoW), minerStake, checkPeriod, hp)
+	subnetParams = &hierarchical.SubnetParams{
+		Addr:              minerB,
+		Parent:            parent,
+		Name:              "subnetB",
+		Stake:             stake,
+		CheckPeriod:       checkPeriod,
+		FinalityThreshold: finalityThreshold,
+		Consensus: hierarchical.ConsensusParams{
+			Alg:           hierarchical.PoW,
+			MinValidators: 0,
+			DelegMiner:    minerA,
+		},
+	}
+	subnetBActor, err := nodeB.AddSubnet(ctx, subnetParams)
 	require.NoError(t, err)
 
 	subnetBAddr := address.NewSubnetID(parent, subnetBActor)
@@ -931,11 +1202,11 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 	t.Logf("[*] subnet B %s new addr balance: %d", subnetBNewAddr, ba.Balance)
 	require.Equal(t, 0, big.Cmp(sentFils, ba.Balance))
 
-	t.Log("[*] miner A in subnet stopping")
+	t.Log("[*] stop miner A in the subnet")
 	err = nodeA.MineSubnet(ctx, minerA, subnetAAddr, true, &mp)
 	require.NoError(t, err)
 
-	t.Log("[*] miner B in subnet stopping")
+	t.Log("[*] stop miner B in subnet")
 	err = nodeB.MineSubnet(ctx, minerB, subnetBAddr, true, &mp)
 	require.NoError(t, err)
 

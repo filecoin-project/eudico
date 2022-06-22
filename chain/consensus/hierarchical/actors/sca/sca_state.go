@@ -17,12 +17,8 @@ import (
 )
 
 const (
-	// DefaultCheckpointPeriod defines 10 epochs
-	// as the default checkpoint period for a subnet.
-	// This may be too short, but at this point it comes pretty handy
-	// for testing purposes.
-	DefaultCheckpointPeriod = abi.ChainEpoch(10)
-	// MinCheckpointPeriod allowed for subnets
+	// MinCheckpointPeriod defines minimal allowed checkpoint period for a subnet.
+	// At present, it is the same for all consensus algorithms.
 	MinCheckpointPeriod = abi.ChainEpoch(10)
 
 	// CrossMsgsAMTBitwidth determines the bitwidth to use for cross-msg AMT.
@@ -56,33 +52,31 @@ const (
 
 // SCAState represents the state of the Subnet Coordinator Actor
 type SCAState struct {
-	// ID of the current network
+	// ID of the current network.
 	NetworkName address.SubnetID
 	// Total subnets below this one.
 	TotalSubnets uint64
-	// Minimum stake to create a new subnet
+	// Minimum stake to create a new subnet.
 	MinStake abi.TokenAmount
-	// List of subnets
+	// List of subnets.
 	Subnets cid.Cid // HAMT[cid.Cid]Subnet
 
-	// Checkpoint period in number of epochs
+	// CheckPeriod is a period in number of epochs.
 	CheckPeriod abi.ChainEpoch
-	// Checkpoints committed in SCA
+	// Checkpoints committed in SCA.
 	Checkpoints cid.Cid // HAMT[epoch]Checkpoint
 
-	// CheckMsgMetaRegistry
-	// Stores information about the list of messages and child msgMetas being
+	// CheckMsgMetaRegistry stores information about the list of messages and child msgMetas being
 	// propagated in checkpoints to the top of the hierarchy.
-	CheckMsgsRegistry cid.Cid // HAMT[cid]CrossMsgs
+	CheckMsgsRegistry cid.Cid // HAMT[cid]CrossMsgs.
 	Nonce             uint64  // Latest nonce of cross message sent from subnet.
-	BottomUpNonce     uint64  // BottomUpNonce of bottomup messages for msgMeta received from checkpoints (probably redundant)
+	BottomUpNonce     uint64  // BottomUpNonce of bottomup messages for msgMeta received from checkpoints (probably redundant).
 	BottomUpMsgsMeta  cid.Cid // AMT[schema.CrossMsgs] from child subnets to apply.
 
-	// AppliedNonces
-	//
-	// Keep track of the next nonce of the message to be applied.
+	// AppliedBottomUpNonce keeps track of the next nonce of the bottom-up message to be applied.
 	AppliedBottomUpNonce uint64
-	AppliedTopDownNonce  uint64
+	// AppliedTopDownNonce keeps track of the next nonce of the top-down message to be applied.
+	AppliedTopDownNonce uint64
 
 	// Atomic execution state
 	AtomicExecRegistry cid.Cid // HAMT[cid]AtomicExec
@@ -114,7 +108,7 @@ func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, e
 	// Don't allow really small checkpoint periods for now.
 	period := abi.ChainEpoch(params.CheckpointPeriod)
 	if period < MinCheckpointPeriod {
-		period = DefaultCheckpointPeriod
+		period = MinCheckpointPeriod
 	}
 
 	return &SCAState{
@@ -126,7 +120,7 @@ func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, e
 		Checkpoints:          emptyCheckpointsMapCid,
 		CheckMsgsRegistry:    emptyMsgsMetaMapCid,
 		BottomUpMsgsMeta:     emptyBottomUpMsgsAMT,
-		AppliedBottomUpNonce: MaxNonce, // We need initial nonce+1 to be 0 due to how msgs are applied.
+		AppliedBottomUpNonce: MaxNonce, // We need initial nonce+1 to be 0 due to how messages are applied.
 		AtomicExecRegistry:   emptyAtomicMapCid,
 	}, nil
 }
@@ -163,8 +157,7 @@ func (st *SCAState) flushSubnet(rt runtime.Runtime, sh *Subnet) {
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush subnets")
 }
 
-// CurrWindowCheckpoint gets the template of the checkpoint being
-// populated in the current window.
+// CurrWindowCheckpoint gets the template of the checkpoint being populated in the current window.
 //
 // If it hasn't been instantiated, a template is created. From there on,
 // the template is populated with every new x-net transaction and
@@ -188,8 +181,7 @@ func (st *SCAState) currWindowCheckpoint(rt runtime.Runtime) *schema.Checkpoint 
 	return ch
 }
 
-// RawCheckpoint gets the template of the checkpoint in
-// the signing window for an epoch
+// RawCheckpoint gets the template of the checkpoint in the signing window for an epoch.
 //
 // It returns the checkpoint that is ready to be signed
 // and already includes all the checkpoints and x-net messages
@@ -211,7 +203,7 @@ func RawCheckpoint(st *SCAState, store adt.Store, epoch abi.ChainEpoch) (*schema
 	return ch, nil
 }
 
-// GetCheckpoint gets a checkpoint from its index
+// GetCheckpoint gets a checkpoint from its index.
 func (st *SCAState) GetCheckpoint(s adt.Store, epoch abi.ChainEpoch) (*schema.Checkpoint, bool, error) {
 	checkpoints, err := adt.AsMap(s, st.Checkpoints, builtin.DefaultHamtBitwidth)
 	if err != nil {
@@ -238,7 +230,7 @@ func (st *SCAState) flushCheckpoint(rt runtime.Runtime, ch *schema.Checkpoint) {
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state for checkpoints")
 	err = checks.Put(abi.UIntKey(uint64(ch.Data.Epoch)), ch)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put checkpoint in map")
-	// Flush checkpoints
+	// Flush checkpoints.
 	st.Checkpoints, err = checks.Root()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush checkpoints")
 }
@@ -253,7 +245,7 @@ func (st *SCAState) registerSubnet(rt runtime.Runtime, shid address.SubnetID, st
 	emptyTopDownMsgsAMT, err := adt.StoreEmptyArray(adt.AsStore(rt), CrossMsgsAMTBitwidth)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create empty top-down msgs array")
 
-	// We always initialize in instantiated state
+	// We always initialize in instantiated state.
 	status := Active
 
 	sh := &Subnet{
@@ -269,7 +261,7 @@ func (st *SCAState) registerSubnet(rt runtime.Runtime, shid address.SubnetID, st
 	// Increase the number of child subnets for the current network.
 	st.TotalSubnets++
 
-	// Flush subnet into subnetMap
+	// Flush subnet into subnetMap.
 	st.flushSubnet(rt, sh)
 }
 
