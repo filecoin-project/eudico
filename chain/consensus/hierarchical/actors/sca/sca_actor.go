@@ -556,9 +556,9 @@ func (a SubnetCoordActor) SendCross(rt runtime.Runtime, params *CrossMsgParams) 
 		// Transform to hierarchical-supported addresses
 		// NOTE: There is no address translation in msg.To. We could add additional
 		// checks to see the type of address and handle it accordingly.
-		msg.To, err = address.NewHAddress(params.Destination, msg.To)
+		msg.To, err = address.NewHCAddress(params.Destination, msg.To)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
-		msg.From, err = address.NewHAddress(st.NetworkName, secp)
+		msg.From, err = address.NewHCAddress(st.NetworkName, secp)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
 
 		tp = st.sendCrossMsg(rt, msg)

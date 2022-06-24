@@ -123,9 +123,9 @@ func (st *SCAState) releaseMsg(rt runtime.Runtime, value big.Int, to address.Add
 	source := builtin.BurntFundsActorAddr
 
 	// Transform To and From to HAddresses
-	to, err := address.NewHAddress(st.NetworkName.Parent(), to)
+	to, err := address.NewHCAddress(st.NetworkName.Parent(), to)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
-	from, err := address.NewHAddress(st.NetworkName, source)
+	from, err := address.NewHCAddress(st.NetworkName, source)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
 
 	// Build message.

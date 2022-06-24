@@ -589,7 +589,7 @@ var hAddrCmd = &cli.Command{
 		if err != nil {
 			return err
 		}
-		out, err := address.NewHAddress(address.SubnetID(cctx.String("subnet")), addr)
+		out, err := address.NewHCAddress(address.SubnetID(cctx.String("subnet")), addr)
 		if err != nil {
 			return err
 		}

@@ -1,9 +1,10 @@
 package sca
 
 import (
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/ipfs/go-cid"
 	"golang.org/x/xerrors"
+
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -57,9 +58,9 @@ func (sh *Subnet) addStake(rt runtime.Runtime, st *SCAState, value abi.TokenAmou
 
 func fundMsg(rt runtime.Runtime, id address.SubnetID, secp address.Address, value big.Int) ltypes.Message {
 	// Transform To and From to HAddresses
-	to, err := address.NewHAddress(id, secp)
+	to, err := address.NewHCAddress(id, secp)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
-	from, err := address.NewHAddress(id.Parent(), secp)
+	from, err := address.NewHCAddress(id.Parent(), secp)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
 
 	// Build message.

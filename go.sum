@@ -117,8 +117,8 @@ github.com/Workiva/go-datastructures v1.0.53/go.mod h1:1yZL+zfsztete+ePzZz/Zb1/t
 github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d h1:licZJFw2RwpHMqeKTCYkitsPqHNxTmd4SNR5r94FGM8=
 github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d/go.mod h1:asat636LX7Bqt5lYEZ27JNDcqxfjdBQuJ/MM4CN/Lzo=
 github.com/adlio/schema v1.1.14/go.mod h1:hQveFEMiDlG/M9yz9RAajnH5DzT6nAfqOG9YkEQU2pg=
-github.com/adlrocha/go-address v0.0.7-0.20220201161333-9140b209222d h1:49cRLnRjRE3YO4NsdFhkVhz2Y/Zv5a/V7a9iFZW76/E=
-github.com/adlrocha/go-address v0.0.7-0.20220201161333-9140b209222d/go.mod h1:7B0/5DA13n6nHkB8bbGx1gWzG/dbTsZ0fgOJVGsM3TE=
+github.com/adlrocha/go-address v0.0.7-0.20220624112241-1f5285ff6d72 h1:kJXyK8G8bDmUZVeveNRkbwsaReYgg6MICfsdRpHZGCc=
+github.com/adlrocha/go-address v0.0.7-0.20220624112241-1f5285ff6d72/go.mod h1:7B0/5DA13n6nHkB8bbGx1gWzG/dbTsZ0fgOJVGsM3TE=
 github.com/adlrocha/specs-actors/v7 v7.0.0-rc1.0.20220215102846-08bb2fde502a h1:P3KHHAOD20pEI2MC8SYTRqrfSrBq6BSink8ROQDhjGE=
 github.com/adlrocha/specs-actors/v7 v7.0.0-rc1.0.20220215102846-08bb2fde502a/go.mod h1:QQisUhgXrjKFA1u8d3k4MDL0A04sDUQrUTJUsLRJDBk=
 github.com/aead/siphash v1.0.1/go.mod h1:Nywa3cDsYNNK3gaciGTWPwHt0wlpNV15vwmswBAUSII=
