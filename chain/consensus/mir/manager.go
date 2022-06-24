@@ -250,10 +250,10 @@ func parseTx(tx []byte) (interface{}, error) {
 	return msg, nil
 }
 
-// GetMessages extracts Filecoin messages.
-func (m *Manager) GetMessages(block []Tx) (msgs []*types.SignedMessage, crossMsgs []*types.Message) {
+// GetMessages extracts Filecoin messages from a Mir batch.
+func (m *Manager) GetMessages(batch []Tx) (msgs []*types.SignedMessage, crossMsgs []*types.Message) {
 	log.Infof("received a block with %d messages", len(msgs))
-	for _, tx := range block {
+	for _, tx := range batch {
 
 		input, err := parseTx(tx)
 		if err != nil {
@@ -263,8 +263,8 @@ func (m *Manager) GetMessages(block []Tx) (msgs []*types.SignedMessage, crossMsg
 
 		switch msg := input.(type) {
 		case *types.SignedMessage:
-			h := msg.Cid().Bytes()
-			found := m.Pool.getDel(string(h))
+			h := msg.Cid()
+			found := m.Pool.getDel(h)
 			if !found {
 				log.Errorf("unable to find a request with %v hash", h)
 				continue
@@ -272,8 +272,8 @@ func (m *Manager) GetMessages(block []Tx) (msgs []*types.SignedMessage, crossMsg
 			msgs = append(msgs, msg)
 			log.Infof("got message (%s, %d) from cache", msg.Message.To, msg.Message.Nonce)
 		case *types.UnverifiedCrossMsg:
-			h := msg.Cid().Bytes()
-			found := m.Pool.getDel(string(h))
+			h := msg.Cid()
+			found := m.Pool.getDel(h)
 			if !found {
 				log.Errorf("unable to find a request with %v hash", h)
 				continue
@@ -287,15 +287,16 @@ func (m *Manager) GetMessages(block []Tx) (msgs []*types.SignedMessage, crossMsg
 	return
 }
 
-// AddSignedMessages adds signed messages into the request pool.
-func (m *Manager) AddSignedMessages(dst []*mirRequest.Request, msgs []*types.SignedMessage) ([]*mirRequest.Request, error) {
+// BatchPushSignedMessages pushes signed messages into the request pool and sends them to Mir.
+func (m *Manager) BatchPushSignedMessages(ctx context.Context, msgs []*types.SignedMessage) {
+	var requests []*mirRequest.Request
 	for _, msg := range msgs {
 		msgBytes, err := msg.Serialize()
 		if err != nil {
 			log.Error("unable to serialize message:", err)
 			continue
 		}
-		h := msg.Cid().Bytes()
+		h := msg.Cid()
 		clientID := newMirID(m.SubnetID.String(), msg.Message.From.String())
 		nonce := msg.Message.Nonce
 		data := common.NewSignedMessageBytes(msgBytes, nil)
@@ -305,25 +306,25 @@ func (m *Manager) AddSignedMessages(dst []*mirRequest.Request, msgs []*types.Sig
 			ReqNo:    nonce,
 			Data:     data,
 		}
-		alreadyExist := m.Pool.addIfNotExist(clientID, string(h))
+		alreadyExist := m.Pool.addIfNotExist(clientID, h)
 		if !alreadyExist {
-			log.Infof("added message %s to cache", h)
-			dst = append(dst, &r)
+			requests = append(requests, &r)
+			log.Infof("added message %s to pool", h)
 		}
 	}
-
-	return dst, nil
+	m.SubmitRequests(ctx, requests)
 }
 
-// AddCrossMessages adds cross messages into the request pool.
-func (m *Manager) AddCrossMessages(dst []*mirRequest.Request, msgs []*types.UnverifiedCrossMsg) ([]*mirRequest.Request, error) {
+// BatchPushCrossMessages pushes cross messages into the request pool and sends them to Mir.
+func (m *Manager) BatchPushCrossMessages(ctx context.Context, msgs []*types.UnverifiedCrossMsg) {
+	var requests []*mirRequest.Request
 	for _, msg := range msgs {
 		msgBytes, err := msg.Serialize()
 		if err != nil {
-			log.Error("unable to serialize message:", err)
+			log.Error("unable to serialize cross-message:", err)
 			continue
 		}
-		h := msg.Cid().Bytes()
+		h := msg.Cid()
 
 		msn, err := msg.Message.From.Subnet()
 		if err != nil {
@@ -338,14 +339,13 @@ func (m *Manager) AddCrossMessages(dst []*mirRequest.Request, msgs []*types.Unve
 			ReqNo:    nonce,
 			Data:     data,
 		}
-		alreadyExist := m.Pool.addIfNotExist(clientID, string(h))
+		alreadyExist := m.Pool.addIfNotExist(clientID, h)
 		if !alreadyExist {
-			log.Infof("added cross-message %s to cache", h)
-			dst = append(dst, &r)
+			requests = append(requests, &r)
+			log.Infof("added cross-message %s to pool", h)
 		}
 	}
-
-	return dst, nil
+	m.SubmitRequests(ctx, requests)
 }
 
 // ID prints Manager ID.

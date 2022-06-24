@@ -54,14 +54,15 @@ func (app *Application) ApplyEvent(event *eventpb.Event) (*events.EventList, err
 	return &events.EventList{}, nil
 }
 
-func (app *Application) ApplyBatch(batch *requestpb.Batch) error {
-	var block []Tx
+// ApplyBatch sends a batch consisting of data only to Eudico.
+func (app *Application) ApplyBatch(in *requestpb.Batch) error {
+	var out []Tx
 
-	for _, req := range batch.Requests {
-		block = append(block, req.Req.Data)
+	for _, req := range in.Requests {
+		out = append(out, req.Req.Data)
 	}
 
-	app.ChainNotify <- block
+	app.ChainNotify <- out
 
 	return nil
 }

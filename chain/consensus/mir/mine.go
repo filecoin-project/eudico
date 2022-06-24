@@ -11,7 +11,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/platform/logging"
 	"github.com/filecoin-project/lotus/chain/types"
 	ltypes "github.com/filecoin-project/lotus/chain/types"
-	mirRequest "github.com/filecoin-project/mir/pkg/pb/requestpb"
 )
 
 // Mine handles block "mining" using Mir framework.
@@ -71,8 +70,8 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			return nil
 		case err := <-mirErrors:
 			return fmt.Errorf("miner consensus error: %w", err)
-		case block := <-mirHead:
-			msgs, crossMsgs := m.GetMessages(block)
+		case batch := <-mirHead:
+			msgs, crossMsgs := m.GetMessages(batch)
 			log.With("epoch", nextEpoch).
 				Infof("try to create a block: msgs - %d, crossMsgs - %d", len(msgs), len(crossMsgs))
 
@@ -118,32 +117,16 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 				log.With("epoch", nextEpoch).
 					Errorw("unable to select messages from mempool", "error", err)
 			}
-			log.With("epoch", nextEpoch).
-				Infof("retrieved %d msgs from mempool", len(msgs))
+			log.With("epoch", nextEpoch).Debugf("retrieved %d msgs from mempool", len(msgs))
+			m.BatchPushSignedMessages(ctx, msgs)
 
 			crossMsgs, err := api.GetUnverifiedCrossMsgsPool(ctx, m.SubnetID, base.Height()+1)
 			if err != nil {
 				log.With("epoch", nextEpoch).
 					Errorw("unable to select cross-messages from mempool", "error", err)
 			}
-			log.With("epoch", nextEpoch).
-				Infof("retrieved %d crossmsgs from mempool", len(crossMsgs))
-
-			var requests []*mirRequest.Request
-
-			requests, err = m.AddSignedMessages(requests, msgs)
-			if err != nil {
-				log.With("epoch", nextEpoch).
-					Errorw("unable to push messages", "error", err)
-			}
-
-			requests, err = m.AddCrossMessages(requests, crossMsgs)
-			if err != nil {
-				log.With("epoch", nextEpoch).
-					Errorw("unable to push cross-messages", "error", err)
-			}
-
-			m.SubmitRequests(ctx, requests)
+			log.With("epoch", nextEpoch).Debugf("retrieved %d crossmsgs from mempool", len(crossMsgs))
+			m.BatchPushCrossMessages(ctx, crossMsgs)
 		}
 	}
 }
