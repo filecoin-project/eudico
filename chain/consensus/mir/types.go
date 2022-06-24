@@ -6,15 +6,16 @@ import (
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
-type RequestType int
-
-type Request interface{}
-
-type RequestRef struct {
+type Request struct {
 	ClientID t.ClientID
 	ReqNo    t.ReqNo
-	Type     RequestType
-	Hash     []byte
+	Data     []byte
+}
+
+type RequestData struct {
+	ClientID t.ClientID
+	ReqNo    t.ReqNo
+	Data     []byte
 }
 
 func newMirID(subnet, addr string) string {

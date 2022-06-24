@@ -11,6 +11,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/platform/logging"
 	"github.com/filecoin-project/lotus/chain/types"
 	ltypes "github.com/filecoin-project/lotus/chain/types"
+	mirRequest "github.com/filecoin-project/mir/pkg/pb/requestpb"
 )
 
 // Mine handles block "mining" using Mir framework.
@@ -41,7 +42,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 	if err != nil {
 		return fmt.Errorf("unable to create a manager: %w", err)
 	}
-	log := logging.FromContext(ctx, log).With("miner", m.MirID)
+	log := logging.FromContext(ctx, log).With("miner", m.ID())
 
 	log.Infof("Miner info:\n\twallet - %s\n\tnetwork - %s\n\tsubnet - %s\n\tMir ID - %s\n\tvalidators - %v",
 		m.Addr, m.NetName, m.SubnetID, m.MirID, m.Validators)
@@ -70,8 +71,8 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			return nil
 		case err := <-mirErrors:
 			return fmt.Errorf("miner consensus error: %w", err)
-		case hashes := <-mirHead:
-			msgs, crossMsgs := m.GetMessagesByHashes(hashes)
+		case block := <-mirHead:
+			msgs, crossMsgs := m.GetMessages(block)
 			log.With("epoch", nextEpoch).
 				Infof("try to create a block: msgs - %d, crossMsgs - %d", len(msgs), len(crossMsgs))
 
@@ -128,21 +129,21 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			log.With("epoch", nextEpoch).
 				Infof("retrieved %d crossmsgs from mempool", len(crossMsgs))
 
-			var refs []*RequestRef
+			var requests []*mirRequest.Request
 
-			refs, err = m.AddSignedMessages(refs, msgs)
+			requests, err = m.AddSignedMessages(requests, msgs)
 			if err != nil {
 				log.With("epoch", nextEpoch).
 					Errorw("unable to push messages", "error", err)
 			}
 
-			refs, err = m.AddCrossMessages(refs, crossMsgs)
+			requests, err = m.AddCrossMessages(requests, crossMsgs)
 			if err != nil {
 				log.With("epoch", nextEpoch).
 					Errorw("unable to push cross-messages", "error", err)
 			}
 
-			m.SubmitRequests(ctx, refs)
+			m.SubmitRequests(ctx, requests)
 		}
 	}
 }

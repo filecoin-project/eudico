@@ -4,14 +4,6 @@ import (
 	"sync"
 )
 
-// TODO:
-// Case 1:
-// Eudico's mempool and the request pool (that is actually a proxy to the mempool) are distributed.
-// If Eudico daemon is restarted or crashes and miner was not, then the messages that Eudico has already sent
-// are not in mempool anymore, but their hashes are still in the request cache.
-// It may happen that Eudico receives a hash from the block and the corresponding message is in the cache,
-// but not not in the mempool.
-
 // Request pool is the simplest temporal pool to store mapping between request hashes and client requests.
 func newRequestPool() *requestPool {
 	return &requestPool{
@@ -21,7 +13,6 @@ func newRequestPool() *requestPool {
 }
 
 type ClientRequest struct {
-	Request  Request
 	ClientID string
 }
 
@@ -33,19 +24,19 @@ type requestPool struct {
 }
 
 // addIfNotExist adds the request if key h doesn't exist .
-func (c *requestPool) addIfNotExist(clientID, h string, r Request) (exist bool) {
+func (c *requestPool) addIfNotExist(clientID, h string) (exist bool) {
 	c.lk.Lock()
 	defer c.lk.Unlock()
 
 	if exist = c.handledClients[clientID]; !exist {
-		c.cache[h] = ClientRequest{r, clientID}
+		c.cache[h] = ClientRequest{clientID}
 		c.handledClients[clientID] = true
 	}
 	return
 }
 
 // getDel gets the target request by the key h and deletes the keys.
-func (c *requestPool) getDel(h string) (Request, bool) {
+func (c *requestPool) getDel(h string) bool {
 	c.lk.Lock()
 	defer c.lk.Unlock()
 
@@ -54,17 +45,5 @@ func (c *requestPool) getDel(h string) (Request, bool) {
 		delete(c.handledClients, r.ClientID)
 		delete(c.cache, h)
 	}
-	return r.Request, ok
-}
-
-// getRequest gets the request by the key.
-func (c *requestPool) getRequest(h string) (Request, bool) {
-	c.lk.Lock()
-	defer c.lk.Unlock()
-
-	r, ok := c.cache[h]
-	if ok {
-		return r.Request, ok
-	}
-	return r, ok
+	return ok
 }
