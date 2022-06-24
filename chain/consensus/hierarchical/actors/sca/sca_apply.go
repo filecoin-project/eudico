@@ -3,8 +3,8 @@ package sca
 import (
 	"bytes"
 
-	address "github.com/filecoin-project/go-address"
-	abi "github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	rtt "github.com/filecoin-project/go-state-types/rt"
@@ -14,15 +14,15 @@ import (
 
 	"github.com/filecoin-project/lotus/chain/consensus/actors/reward"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
-	types "github.com/filecoin-project/lotus/chain/types"
+	"github.com/filecoin-project/lotus/chain/types"
 )
 
 func fromToRawAddr(rt runtime.Runtime, from, to address.Address) (address.Address, address.Address) {
 	var err error
 	from, err = from.RawAddr()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get raw address from HAddress")
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get raw address from HCAddress")
 	to, err = to.RawAddr()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get raw address from HAddress")
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get raw address from HCAddress")
 	return from, to
 }
 
@@ -30,7 +30,7 @@ func applyTopDown(rt runtime.Runtime, msg types.Message) {
 	var st SCAState
 	_, rto := fromToRawAddr(rt, msg.From, msg.To)
 	sto, err := msg.To.Subnet()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get subnet from HAddress")
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get subnet from HCAddress")
 
 	rt.StateTransaction(&st, func() {
 		if bu, err := hierarchical.ApplyAsBottomUp(st.NetworkName, &msg); bu {
@@ -77,7 +77,7 @@ func applyBottomUp(rt runtime.Runtime, msg types.Message) {
 
 	_, rto := fromToRawAddr(rt, msg.From, msg.To)
 	sto, err := msg.To.Subnet()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get subnet from HAddress")
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get subnet from HCAddress")
 
 	rt.StateTransaction(&st, func() {
 		if bu, err := hierarchical.ApplyAsBottomUp(st.NetworkName, &msg); !bu {
@@ -173,7 +173,7 @@ func noop(rt runtime.Runtime, st *SCAState, msg types.Message, code exitcode.Exi
 	msg.Params = errorParam(rt, code)
 
 	sto, err := msg.To.Subnet()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting subnet from HAddress")
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting subnet from HCAddress")
 	if hierarchical.IsBottomUp(st.NetworkName, sto) {
 		commitBottomUpMsg(rt, st, msg)
 		return

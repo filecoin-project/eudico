@@ -122,11 +122,11 @@ func (st *SCAState) releaseMsg(rt runtime.Runtime, value big.Int, to address.Add
 	// See hierarchical/types.go
 	source := builtin.BurntFundsActorAddr
 
-	// Transform To and From to HAddresses
+	// Transform To and From to HCAddresses
 	to, err := address.NewHCAddress(st.NetworkName.Parent(), to)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HCAddress")
 	from, err := address.NewHCAddress(st.NetworkName, source)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HCAddress")
 
 	// Build message.
 	return ltypes.Message{

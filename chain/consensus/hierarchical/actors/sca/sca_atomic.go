@@ -86,7 +86,7 @@ func (ae *AtomicExecParams) translateInputAddrs(rt runtime.Runtime) {
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error parsing raw address")
 		outAddr := SecpBLSAddr(rt, raw)
 		out, err := address.NewHCAddress(sn, outAddr)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error generating HAddress")
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error generating HCAddress")
 		aux[out.String()] = ae.Inputs[k]
 	}
 	ae.Inputs = aux
@@ -285,9 +285,9 @@ func (st *SCAState) execResultMsg(rt runtime.Runtime, toSub address.SubnetID, to
 
 	// to actor address responsible for execution
 	to, err := address.NewHCAddress(toSub, toActor)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HCAddress")
 	from, err := address.NewHCAddress(st.NetworkName, source)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HCAddress")
 
 	// lock params
 	lparams, err := atomic.WrapSerializedParams(msg.Method, msg.Params)
@@ -299,13 +299,13 @@ func (st *SCAState) execResultMsg(rt runtime.Runtime, toSub address.SubnetID, to
 	if abort {
 		method = atomic.MethodAbort
 		enc, err = actors.SerializeParams(lparams)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HCAddress")
 	} else {
 		method = atomic.MethodUnlock
 		uparams, err := atomic.WrapSerializedUnlockParams(lparams, output.S)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error wrapping merge params")
 		enc, err = actors.SerializeParams(uparams)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HCAddress")
 	}
 
 	// Build message.

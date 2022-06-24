@@ -57,11 +57,11 @@ func (sh *Subnet) addStake(rt runtime.Runtime, st *SCAState, value abi.TokenAmou
 }
 
 func fundMsg(rt runtime.Runtime, id address.SubnetID, secp address.Address, value big.Int) ltypes.Message {
-	// Transform To and From to HAddresses
+	// Transform To and From to HCAddresses
 	to, err := address.NewHCAddress(id, secp)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HCAddress")
 	from, err := address.NewHCAddress(id.Parent(), secp)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HCAddress")
 
 	// Build message.
 	//
