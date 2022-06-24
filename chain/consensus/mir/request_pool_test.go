@@ -3,22 +3,27 @@ package mir
 import (
 	"testing"
 
+	"github.com/ipfs/go-cid"
+	u "github.com/ipfs/go-ipfs-util"
 	"github.com/stretchr/testify/require"
 )
 
-func TestMirRequestCache(t *testing.T) {
-	c := newRequestPool()
+func TestMirRequestPool(t *testing.T) {
+	p := newRequestPool()
 
-	c.addIfNotExist("client1", "key1", 0)
+	c1 := cid.NewCidV0(u.Hash([]byte("req1")))
+	c2 := cid.NewCidV0(u.Hash([]byte("req2")))
+	c3 := cid.NewCidV0(u.Hash([]byte("req3")))
 
-	r, ok := c.getRequest("key1")
-	require.Equal(t, true, ok)
-	require.Equal(t, 0, r)
-
-	c.getDel("key1")
-	require.Equal(t, true, ok)
-	require.Equal(t, 0, r)
-
-	_, ok = c.getRequest("key1")
+	ok := p.addIfNotExist("client1", c1)
 	require.Equal(t, false, ok)
+
+	ok = p.getDel(c1)
+	require.Equal(t, true, ok)
+
+	ok = p.addIfNotExist("client1", c2)
+	require.Equal(t, false, ok)
+	ok = p.addIfNotExist("client1", c3)
+	require.Equal(t, true, ok)
+
 }
