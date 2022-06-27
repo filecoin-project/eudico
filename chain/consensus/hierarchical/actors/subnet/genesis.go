@@ -49,10 +49,10 @@ const (
 
 func makeGenesisBlock(
 	ctx context.Context,
-	cns consensus.ConsensusType,
 	bs bstore.Blockstore,
-	t genesis.Template,
+	cns consensus.ConsensusType,
 	e abi.ChainEpoch,
+	t genesis.Template,
 ) (*genesis2.GenesisBootstrap, error) {
 	var err error
 	st, _, err := MakeInitialStateTree(ctx, bs, t, e)
@@ -93,7 +93,7 @@ func makeGenesisBlock(
 		if err != nil {
 			return nil, err
 		}
-	case consensus.Delegated:
+	case consensus.Delegated, consensus.Dummy, consensus.Tendermint, consensus.Mir:
 		// TODO: We can't use randomness in genesis block
 		// if want to make it deterministic. Consider using
 		// a seed to for the ticket generation?
@@ -146,6 +146,7 @@ func makeTemplate(
 	vreg, rem address.Address,
 	seq uint64,
 	b types.BigInt,
+	checkPeriod uint64,
 	a *genesis.Actor,
 ) (*genesis.Template, error) {
 	accounts := make([]genesis.Actor, 0)
@@ -158,6 +159,7 @@ func makeTemplate(
 		Miners:         nil,
 		NetworkName:    subnetID,
 		Timestamp:      seq,
+		CheckPeriod:    checkPeriod,
 
 		VerifregRootKey: genesis.Actor{
 			Type:    genesis.TAccount,
@@ -233,20 +235,20 @@ func WriteGenesis(
 			Balance: types.FromFil(0),
 			Meta:    json.RawMessage(`{"Owner":"` + miner.String() + `"}`),
 		}
-		t, err := makeTemplate(netName.String(), vreg, rem, seq, types.FromFil(2), &a)
+		t, err := makeTemplate(netName.String(), vreg, rem, seq, types.FromFil(2), uint64(checkPeriod), &a)
 		if err != nil {
 			return err
 		}
-		b, err = makeGenesisBlock(ctx, cns, bs, *t, checkPeriod)
+		b, err = makeGenesisBlock(ctx, bs, cns, checkPeriod, *t)
 		if err != nil {
 			return xerrors.Errorf("failed make genesis block for %s: %w", consensus.ConsensusName(cns), err)
 		}
 	case consensus.PoW, consensus.Tendermint, consensus.Mir, consensus.Dummy:
-		t, err := makeTemplate(netName.String(), vreg, rem, seq, types.FromFil(2), nil)
+		t, err := makeTemplate(netName.String(), vreg, rem, seq, types.FromFil(2), uint64(checkPeriod), nil)
 		if err != nil {
 			return err
 		}
-		b, err = makeGenesisBlock(ctx, cns, bs, *t, checkPeriod)
+		b, err = makeGenesisBlock(ctx, bs, cns, checkPeriod, *t)
 		if err != nil {
 			return xerrors.Errorf("failed make genesis block for %s: %w", consensus.ConsensusName(cns), err)
 		}
@@ -312,7 +314,13 @@ func MakeInitialStateTree(
 
 	// Create init actor
 
-	idStart, initact, keyIDs, err := genesis2.SetupInitActor(ctx, bs, template.NetworkName, template.Accounts, template.VerifregRootKey, template.RemainderAccount, av)
+	idStart, initact, keyIDs, err := genesis2.SetupInitActor(ctx,
+		bs,
+		template.NetworkName,
+		template.Accounts,
+		template.VerifregRootKey,
+		template.RemainderAccount,
+		av)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup init actor: %w", err)
 	}
@@ -325,41 +333,41 @@ func MakeInitialStateTree(
 		NetworkName:      template.NetworkName,
 		CheckpointPeriod: uint64(checkPeriod),
 	}
-	scaact, err := SetupSCAActor(ctx, bs, params)
+	scaAct, err := SetupSCAActor(ctx, bs, params)
 	if err != nil {
 		return nil, nil, err
 	}
-	err = stateTree.SetActor(consensus.SubnetCoordActorAddr, scaact)
+	err = stateTree.SetActor(consensus.SubnetCoordActorAddr, scaAct)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("set SCA actor: %w", err)
 	}
 
 	// Create empty market actor
-	marketact, err := SetupStorageMarketActor(ctx, bs, av)
+	marketAct, err := SetupStorageMarketActor(ctx, bs, av)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup storage market actor: %w", err)
 	}
-	if err := stateTree.SetActor(market.Address, marketact); err != nil {
+	if err := stateTree.SetActor(market.Address, marketAct); err != nil {
 		return nil, nil, xerrors.Errorf("set storage market actor: %w", err)
 	}
 	// Setup reward actor
 	// This is a modified reward actor to support the needs of hierarchical consensus
 	// protocol.
-	rewact, err := SetupRewardActor(ctx, bs, big.Zero(), av)
+	rewAct, err := SetupRewardActor(ctx, bs, big.Zero(), av)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup reward actor: %w", err)
 	}
 
-	err = stateTree.SetActor(reward.RewardActorAddr, rewact)
+	err = stateTree.SetActor(reward.RewardActorAddr, rewAct)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("set reward actor: %w", err)
 	}
 
-	bact, err := genesis2.MakeAccountActor(ctx, cst, av, builtin.BurntFundsActorAddr, big.Zero())
+	bAct, err := genesis2.MakeAccountActor(ctx, cst, av, builtin.BurntFundsActorAddr, big.Zero())
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup burnt funds actor state: %w", err)
 	}
-	if err := stateTree.SetActor(builtin.BurntFundsActorAddr, bact); err != nil {
+	if err := stateTree.SetActor(builtin.BurntFundsActorAddr, bAct); err != nil {
 		return nil, nil, xerrors.Errorf("set burnt funds actor: %w", err)
 	}
 

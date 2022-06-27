@@ -3,13 +3,12 @@ package genesis
 import (
 	"encoding/json"
 
-	"github.com/filecoin-project/go-state-types/network"
-
-	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/ipfs/go-cid"
 	"github.com/libp2p/go-libp2p-core/peer"
 
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/network"
 	market2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/market"
 )
 
@@ -86,4 +85,5 @@ type Template struct {
 
 	VerifregRootKey  Actor
 	RemainderAccount Actor
+	CheckPeriod      uint64
 }

@@ -122,7 +122,6 @@ Genesis: {
 
 func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template genesis.Template) (*state.StateTree, map[address.Address]address.Address, error) {
 	// Create empty state tree
-
 	cst := cbor.NewCborStore(bs)
 	_, err := cst.Put(context.TODO(), []struct{}{})
 	if err != nil {
@@ -145,17 +144,15 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 	}
 
 	// Create system actor
-
-	sysact, err := SetupSystemActor(ctx, bs, av)
+	sysAct, err := SetupSystemActor(ctx, bs, av)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup system actor: %w", err)
 	}
-	if err := state.SetActor(system.Address, sysact); err != nil {
+	if err := state.SetActor(system.Address, sysAct); err != nil {
 		return nil, nil, xerrors.Errorf("set system actor: %w", err)
 	}
 
 	// Create init actor
-
 	idStart, initact, keyIDs, err := SetupInitActor(ctx, bs, template.NetworkName, template.Accounts, template.VerifregRootKey, template.RemainderAccount, av)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup init actor: %w", err)
@@ -166,73 +163,71 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 
 	// Setup reward
 	// RewardActor's state is overwritten by SetupStorageMiners, but needs to exist for miner creation messages
-	rewact, err := SetupHierarchicalRewardActor(ctx, bs, big.Zero(), av)
+	rewAct, err := SetupHierarchicalRewardActor(ctx, bs, big.Zero(), av)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup reward actor: %w", err)
 	}
 
-	err = state.SetActor(reward.Address, rewact)
+	err = state.SetActor(reward.Address, rewAct)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("set reward actor: %w", err)
 	}
 
 	// Setup cron
-	cronact, err := SetupCronActor(ctx, bs, av)
+	cronAct, err := SetupCronActor(ctx, bs, av)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup cron actor: %w", err)
 	}
-	if err := state.SetActor(cron.Address, cronact); err != nil {
+	if err := state.SetActor(cron.Address, cronAct); err != nil {
 		return nil, nil, xerrors.Errorf("set cron actor: %w", err)
 	}
 
 	// Setup sca actor
-	// FIXME: make it configurable?
-	checkPeriod := abi.ChainEpoch(100)
 	params := &sca.ConstructorParams{
 		NetworkName:      template.NetworkName,
-		CheckpointPeriod: uint64(checkPeriod),
+		CheckpointPeriod: template.CheckPeriod,
 	}
-	scaact, err := SetupSCAActor(ctx, bs, params)
+	scaAct, err := SetupSCAActor(ctx, bs, params)
 	if err != nil {
 		return nil, nil, err
 	}
-	err = state.SetActor(hierarchical.SubnetCoordActorAddr, scaact)
+	err = state.SetActor(hierarchical.SubnetCoordActorAddr, scaAct)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("set SCA actor: %w", err)
 	}
 
 	// Create empty power actor
-	spact, err := SetupStoragePowerActor(ctx, bs, av)
+	spAct, err := SetupStoragePowerActor(ctx, bs, av)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup storage power actor: %w", err)
 	}
-	if err := state.SetActor(power.Address, spact); err != nil {
+	if err := state.SetActor(power.Address, spAct); err != nil {
 		return nil, nil, xerrors.Errorf("set storage power actor: %w", err)
 	}
 
 	// Create empty market actor
-	marketact, err := SetupStorageMarketActor(ctx, bs, av)
+	marketAct, err := SetupStorageMarketActor(ctx, bs, av)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup storage market actor: %w", err)
 	}
-	if err := state.SetActor(market.Address, marketact); err != nil {
+	if err := state.SetActor(market.Address, marketAct); err != nil {
 		return nil, nil, xerrors.Errorf("set storage market actor: %w", err)
 	}
 
 	// Create verified registry
-	verifact, err := SetupVerifiedRegistryActor(ctx, bs, av)
+	verifAct, err := SetupVerifiedRegistryActor(ctx, bs, av)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup verified registry market actor: %w", err)
 	}
-	if err := state.SetActor(verifreg.Address, verifact); err != nil {
+	if err := state.SetActor(verifreg.Address, verifAct); err != nil {
 		return nil, nil, xerrors.Errorf("set verified registry actor: %w", err)
 	}
 
-	bact, err := MakeAccountActor(ctx, cst, av, builtin.BurntFundsActorAddr, big.Zero())
+	bAct, err := MakeAccountActor(ctx, cst, av, builtin.BurntFundsActorAddr, big.Zero())
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup burnt funds actor state: %w", err)
 	}
-	if err := state.SetActor(builtin.BurntFundsActorAddr, bact); err != nil {
+	if err := state.SetActor(builtin.BurntFundsActorAddr, bAct); err != nil {
 		return nil, nil, xerrors.Errorf("set burnt funds actor: %w", err)
 	}
 

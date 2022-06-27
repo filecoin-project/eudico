@@ -382,38 +382,38 @@ func (s *Service) GetSubnetState(ctx context.Context, id address.SubnetID, actor
 	return st, nil
 }
 
-func (s *Service) AddSubnet(ctx context.Context, sbn *hierarchical.SubnetParams) (address.Address, error) {
-	if sbn == nil {
+func (s *Service) AddSubnet(ctx context.Context, params *hierarchical.SubnetParams) (address.Address, error) {
+	if params == nil {
 		return address.Undef, xerrors.New("nil subnet params")
 	}
 	// Get the api for the parent network hosting the subnet actor for the subnet.
-	parentAPI := s.getAPI(sbn.Parent)
+	parentAPI := s.getAPI(params.Parent)
 	if parentAPI == nil {
 		return address.Undef, xerrors.Errorf("not syncing with parent network")
 	}
 
 	// Basic input validation
-	if sbn.FinalityThreshold > 0 &&
-		sbn.FinalityThreshold >= sbn.CheckPeriod {
+	if params.FinalityThreshold > 0 &&
+		params.FinalityThreshold >= params.CheckPeriod {
 		return address.Undef, xerrors.Errorf("finality threshold (%v) must be less than checkpoint period (%v)",
-			sbn.FinalityThreshold, sbn.CheckPeriod)
+			params.FinalityThreshold, params.CheckPeriod)
 	}
 
-	if sbn.Consensus.Alg == hierarchical.Mir && sbn.Consensus.MinValidators == 0 {
+	if params.Consensus.Alg == hierarchical.Mir && params.Consensus.MinValidators == 0 {
 		return address.Undef, xerrors.New("minimum number of Mir validators must be more than 0")
 	}
 
 	// Populate constructor parameters for subnet actor
 	addp := &subnet.ConstructParams{
 		NetworkName:       string(s.api.NetName),
-		MinMinerStake:     sbn.Stake,
-		Name:              sbn.Name,
-		Consensus:         sbn.Consensus.Alg,
-		CheckPeriod:       sbn.CheckPeriod,
-		FinalityThreshold: sbn.FinalityThreshold,
+		MinMinerStake:     params.Stake,
+		Name:              params.Name,
+		Consensus:         params.Consensus.Alg,
+		CheckPeriod:       params.CheckPeriod,
+		FinalityThreshold: params.FinalityThreshold,
 		ConsensusParams: &hierarchical.ConsensusParams{
-			DelegMiner:    sbn.Consensus.DelegMiner,
-			MinValidators: sbn.Consensus.MinValidators,
+			DelegMiner:    params.Consensus.DelegMiner,
+			MinValidators: params.Consensus.MinValidators,
 		},
 	}
 
@@ -431,9 +431,9 @@ func (s *Service) AddSubnet(ctx context.Context, sbn *hierarchical.SubnetParams)
 		return address.Undef, xerrors.Errorf("failed serializing init actor params: %s", err)
 	}
 
-	smsg, aerr := parentAPI.MpoolPushMessage(ctx, &types.Message{
+	msg, aerr := parentAPI.MpoolPushMessage(ctx, &types.Message{
 		To:     builtin.InitActorAddr,
-		From:   sbn.Addr,
+		From:   params.Addr,
 		Value:  abi.NewTokenAmount(0),
 		Method: builtin.MethodsInit.Exec,
 		Params: serParams,
@@ -442,8 +442,8 @@ func (s *Service) AddSubnet(ctx context.Context, sbn *hierarchical.SubnetParams)
 		return address.Undef, aerr
 	}
 
-	msg := smsg.Cid()
-	mw, aerr := parentAPI.StateWaitMsg(ctx, msg, build.MessageConfidence, api.LookbackNoLimit, true)
+	msgCid := msg.Cid()
+	mw, aerr := parentAPI.StateWaitMsg(ctx, msgCid, build.MessageConfidence, api.LookbackNoLimit, true)
 	if aerr != nil {
 		return address.Undef, aerr
 	}
