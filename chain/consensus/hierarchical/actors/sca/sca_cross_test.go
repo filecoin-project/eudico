@@ -3,16 +3,17 @@ package sca_test
 import (
 	"testing"
 
-	address "github.com/filecoin-project/go-address"
-	abi "github.com/filecoin-project/go-state-types/abi"
+	"github.com/ipfs/go-cid"
+	"github.com/stretchr/testify/require"
+
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
 	"github.com/filecoin-project/specs-actors/v7/support/mock"
 	tutil "github.com/filecoin-project/specs-actors/v7/support/testing"
-	cid "github.com/ipfs/go-cid"
-	"github.com/stretchr/testify/require"
 
 	actors "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/filecoin-project/lotus/chain/consensus/actors/reward"
@@ -138,39 +139,39 @@ func TestApplyRouting(t *testing.T) {
 	to := tutil.NewSECP256K1Addr(h.t, "to")
 
 	// TopDown
-	ff, err := address.NewHAddress(address.SubnetID("/root"), from)
+	ff, err := address.NewHCAddress(address.SubnetID("/root"), from)
 	require.NoError(t, err)
-	tt, err := address.NewHAddress(sn1, to)
+	tt, err := address.NewHCAddress(sn1, to)
 	require.NoError(t, err)
 	h.applyCrossMsg(rt, ff, tt, abi.NewTokenAmount(1e17), 0, 1, false)
-	tt, err = address.NewHAddress(sn2, to)
+	tt, err = address.NewHCAddress(sn2, to)
 	require.NoError(t, err)
 	h.applyCrossMsg(rt, ff, tt, abi.NewTokenAmount(1e17), 1, 1, false)
-	ff, err = address.NewHAddress(address.SubnetID("/root/f01/f012"), from)
+	ff, err = address.NewHCAddress(address.SubnetID("/root/f01/f012"), from)
 	require.NoError(t, err)
-	tt, err = address.NewHAddress(sn1, to)
+	tt, err = address.NewHCAddress(sn1, to)
 	require.NoError(t, err)
 	h.applyCrossMsg(rt, ff, tt, abi.NewTokenAmount(1e17), 2, 2, false)
 	// Directed to current subnet
-	tt, err = address.NewHAddress(shid, to)
+	tt, err = address.NewHCAddress(shid, to)
 	require.NoError(t, err)
 	h.applyCrossMsg(rt, ff, tt, abi.NewTokenAmount(1e17), 3, 0, false)
 
 	// BottomUp
-	ff, err = address.NewHAddress(sn1, to)
+	ff, err = address.NewHCAddress(sn1, to)
 	require.NoError(t, err)
-	tt, err = address.NewHAddress(address.SubnetID("/root/"+snAddr1.String()+"/"+snAddr2.String()+"/f011"), from)
+	tt, err = address.NewHCAddress(address.SubnetID("/root/"+snAddr1.String()+"/"+snAddr2.String()+"/f011"), from)
 	require.NoError(t, err)
 	h.applyCrossMsg(rt, ff, tt, abi.NewTokenAmount(1e17), 0, 2, false)
-	ff, err = address.NewHAddress(sn2, to)
+	ff, err = address.NewHCAddress(sn2, to)
 	require.NoError(t, err)
-	tt, err = address.NewHAddress(address.SubnetID("/root/"+snAddr1.String()+"/"+snAddr1.String()+"/f011"), from)
+	tt, err = address.NewHCAddress(address.SubnetID("/root/"+snAddr1.String()+"/"+snAddr1.String()+"/f011"), from)
 	require.NoError(t, err)
 	h.applyCrossMsg(rt, ff, tt, abi.NewTokenAmount(1e17), 1, 3, false)
 	// Directed to current subnet
-	ff, err = address.NewHAddress(address.SubnetID("/root/"+snAddr1.String()+"/"+snAddr2.String()+"/f011"), from)
+	ff, err = address.NewHCAddress(address.SubnetID("/root/"+snAddr1.String()+"/"+snAddr2.String()+"/f011"), from)
 	require.NoError(t, err)
-	tt, err = address.NewHAddress(shid, to)
+	tt, err = address.NewHCAddress(shid, to)
 	require.NoError(t, err)
 	h.applyCrossMsg(rt, ff, tt, abi.NewTokenAmount(1e17), 1, 0, false)
 
@@ -199,16 +200,16 @@ func TestNoopMessageWhenError(t *testing.T) {
 	to := tutil.NewSECP256K1Addr(h.t, "to")
 
 	// TopDown
-	ff, err := address.NewHAddress(address.SubnetID("/root"), from)
+	ff, err := address.NewHCAddress(address.SubnetID("/root"), from)
 	require.NoError(t, err)
-	tt, err := address.NewHAddress(sn2, to)
+	tt, err := address.NewHCAddress(sn2, to)
 	require.NoError(t, err)
 	h.applyCrossMsg(rt, ff, tt, abi.NewTokenAmount(1e17), 0, 1, true)
 
 	// BottomUp
-	ff, err = address.NewHAddress(sn1, to)
+	ff, err = address.NewHCAddress(sn1, to)
 	require.NoError(t, err)
-	tt, err = address.NewHAddress(address.SubnetID("/root/f0101/f0102/f011"), from)
+	tt, err = address.NewHCAddress(address.SubnetID("/root/f0101/f0102/f011"), from)
 	require.NoError(t, err)
 	h.applyCrossMsg(rt, ff, tt, abi.NewTokenAmount(1e17), 0, 1, true)
 
@@ -222,7 +223,7 @@ func TestApplyMsg(t *testing.T) {
 	h.constructAndVerify(rt)
 	snAddr := tutil.NewIDAddr(t, 101)
 	h.registerSubnet(rt, address.RootSubnet, snAddr)
-	funder, err := address.NewHAddress(h.sn.Parent(), tutil.NewSECP256K1Addr(h.t, "asd"))
+	funder, err := address.NewHCAddress(h.sn.Parent(), tutil.NewSECP256K1Addr(h.t, "asd"))
 	require.NoError(h.t, err)
 	funderID := tutil.NewIDAddr(h.t, 1000)
 
@@ -245,7 +246,7 @@ func TestApplyMsg(t *testing.T) {
 	})
 
 	// Register subnet for update in circulating supply
-	releaser, err := address.NewHAddress(h.sn.Parent(), tutil.NewSECP256K1Addr(h.t, "asd"))
+	releaser, err := address.NewHCAddress(h.sn.Parent(), tutil.NewSECP256K1Addr(h.t, "asd"))
 	require.NoError(h.t, err)
 
 	t.Log("apply release messages")
@@ -323,7 +324,7 @@ func (h *shActorHarness) applyFundMsg(rt *mock.Runtime, addr address.Address, va
 func (h *shActorHarness) applyReleaseMsg(rt *mock.Runtime, addr address.Address, value big.Int, nonce uint64) {
 	rt.SetCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
 	rt.SetBalance(value)
-	from, err := address.NewHAddress(h.sn, builtin.BurntFundsActorAddr)
+	from, err := address.NewHCAddress(h.sn, builtin.BurntFundsActorAddr)
 	require.NoError(h.t, err)
 	params := &actor.CrossMsgParams{
 		Msg: ltypes.Message{
@@ -488,9 +489,9 @@ func crossmsg(h *shActorHarness, rt *mock.Runtime, shid address.SubnetID, from, 
 		require.Equal(h.t, len(meta.Msgs), int(nonce+1))
 		msg := meta.Msgs[nonce]
 
-		from, err := address.NewHAddress(h.sn, testSecp)
+		from, err := address.NewHCAddress(h.sn, testSecp)
 		require.NoError(h.t, err)
-		to, err := address.NewHAddress(params.Destination, to)
+		to, err := address.NewHCAddress(params.Destination, to)
 		require.NoError(h.t, err)
 		require.Equal(h.t, msg.From, from)
 		require.Equal(h.t, msg.To, to)
@@ -507,9 +508,9 @@ func crossmsg(h *shActorHarness, rt *mock.Runtime, shid address.SubnetID, from, 
 		require.True(h.t, found)
 		require.Equal(h.t, msg.Value, value)
 
-		from, err = address.NewHAddress(st.NetworkName, testSecp)
+		from, err = address.NewHCAddress(st.NetworkName, testSecp)
 		require.NoError(h.t, err)
-		to, err = address.NewHAddress(params.Destination, to)
+		to, err = address.NewHCAddress(params.Destination, to)
 		require.NoError(h.t, err)
 		require.Equal(h.t, msg.From, from)
 		require.Equal(h.t, msg.To, to)
@@ -542,10 +543,10 @@ func release(h *shActorHarness, rt *mock.Runtime, shid address.SubnetID, release
 	msg := meta.Msgs[nonce]
 
 	// Comes from child
-	from, err := address.NewHAddress(shid, builtin.BurntFundsActorAddr)
+	from, err := address.NewHCAddress(shid, builtin.BurntFundsActorAddr)
 	require.NoError(h.t, err)
 	// Goes to parent
-	to, err := address.NewHAddress(shid.Parent(), testSecp)
+	to, err := address.NewHCAddress(shid.Parent(), testSecp)
 	require.NoError(h.t, err)
 	require.Equal(h.t, msg.From, from)
 	// The "to" should have been updated to the secp addr
@@ -583,10 +584,10 @@ func fund(h *shActorHarness, rt *mock.Runtime, sn address.SubnetID, funder addre
 	// TODO: Add additional checks over msg?
 	require.Equal(h.t, msg.Value, value)
 	// Comes from parent network.
-	from, err := address.NewHAddress(sh.ID.Parent(), testSecp)
+	from, err := address.NewHCAddress(sh.ID.Parent(), testSecp)
 	require.NoError(h.t, err)
 	// Goes to subnet with same address
-	to, err := address.NewHAddress(sh.ID, testSecp)
+	to, err := address.NewHCAddress(sh.ID, testSecp)
 	require.NoError(h.t, err)
 	require.Equal(h.t, msg.From, from)
 	require.Equal(h.t, msg.To, to)

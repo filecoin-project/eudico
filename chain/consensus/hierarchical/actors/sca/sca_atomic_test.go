@@ -3,22 +3,23 @@ package sca_test
 import (
 	"testing"
 
-	address "github.com/filecoin-project/go-address"
-	abi "github.com/filecoin-project/go-state-types/abi"
+	"github.com/ipfs/go-cid"
+	"github.com/stretchr/testify/require"
+
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
 	"github.com/filecoin-project/specs-actors/v7/support/mock"
 	tutil "github.com/filecoin-project/specs-actors/v7/support/testing"
-	cid "github.com/ipfs/go-cid"
-	"github.com/stretchr/testify/require"
 
 	"github.com/filecoin-project/lotus/chain/actors"
 	replace "github.com/filecoin-project/lotus/chain/consensus/actors/atomic-replace"
 	actor "github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
-	atomic "github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
-	types "github.com/filecoin-project/lotus/chain/types"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
+	"github.com/filecoin-project/lotus/chain/types"
 )
 
 func TestAtomicExec(t *testing.T) {
@@ -129,10 +130,10 @@ func TestAtomicExec(t *testing.T) {
 	msg, found, err := sh.GetTopDownMsg(adt.AsStore(rt), 0)
 	require.NoError(h.t, err)
 	require.True(h.t, found)
-	exp, err := address.NewHAddress(address.RootSubnet, builtin.SystemActorAddr)
+	exp, err := address.NewHCAddress(address.RootSubnet, builtin.SystemActorAddr)
 	require.NoError(t, err)
 	require.Equal(h.t, msg.From, exp)
-	exp, err = address.NewHAddress(sn1, act1(t))
+	exp, err = address.NewHCAddress(sn1, act1(t))
 	require.NoError(t, err)
 	require.Equal(h.t, msg.To, exp)
 	require.Equal(h.t, msg.Method, atomic.MethodUnlock)
@@ -142,10 +143,10 @@ func TestAtomicExec(t *testing.T) {
 	msg, found, err = sh.GetTopDownMsg(adt.AsStore(rt), 0)
 	require.NoError(h.t, err)
 	require.True(h.t, found)
-	exp, err = address.NewHAddress(address.RootSubnet, builtin.SystemActorAddr)
+	exp, err = address.NewHCAddress(address.RootSubnet, builtin.SystemActorAddr)
 	require.NoError(t, err)
 	require.Equal(h.t, msg.From, exp)
-	exp, err = address.NewHAddress(sn2, act2(t))
+	exp, err = address.NewHCAddress(sn2, act2(t))
 	require.NoError(t, err)
 	require.Equal(h.t, msg.To, exp)
 	require.Equal(h.t, msg.Method, atomic.MethodUnlock)
@@ -249,10 +250,10 @@ func TestAbort(t *testing.T) {
 	msg, found, err := sh.GetTopDownMsg(adt.AsStore(rt), 0)
 	require.NoError(h.t, err)
 	require.True(h.t, found)
-	exp, err := address.NewHAddress(address.RootSubnet, builtin.SystemActorAddr)
+	exp, err := address.NewHCAddress(address.RootSubnet, builtin.SystemActorAddr)
 	require.NoError(t, err)
 	require.Equal(h.t, msg.From, exp)
-	exp, err = address.NewHAddress(sn1, act1(t))
+	exp, err = address.NewHCAddress(sn1, act1(t))
 	require.NoError(t, err)
 	require.Equal(h.t, msg.To, exp)
 	require.Equal(h.t, msg.Method, atomic.MethodAbort)
@@ -262,10 +263,10 @@ func TestAbort(t *testing.T) {
 	msg, found, err = sh.GetTopDownMsg(adt.AsStore(rt), 0)
 	require.NoError(h.t, err)
 	require.True(h.t, found)
-	exp, err = address.NewHAddress(address.RootSubnet, builtin.SystemActorAddr)
+	exp, err = address.NewHCAddress(address.RootSubnet, builtin.SystemActorAddr)
 	require.NoError(t, err)
 	require.Equal(h.t, msg.From, exp)
-	exp, err = address.NewHAddress(sn2, act2(t))
+	exp, err = address.NewHCAddress(sn2, act2(t))
 	require.NoError(t, err)
 
 	require.Equal(h.t, msg.To, exp)
@@ -308,9 +309,9 @@ func act2(t *testing.T) address.Address {
 func lockedStates(t *testing.T, sn1, sn2 address.SubnetID, caller, other address.Address) map[string]actor.LockedState {
 	c1, _ := abi.CidBuilder.Sum([]byte("test1"))
 	c2, _ := abi.CidBuilder.Sum([]byte("test2"))
-	addr1, err := address.NewHAddress(sn1, caller)
+	addr1, err := address.NewHCAddress(sn1, caller)
 	require.NoError(t, err)
-	addr2, err := address.NewHAddress(sn2, other)
+	addr2, err := address.NewHCAddress(sn2, other)
 	require.NoError(t, err)
 	return map[string]actor.LockedState{
 		addr1.String(): {Cid: c1.String(), Actor: act1(t)},

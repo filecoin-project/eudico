@@ -3,23 +3,24 @@ package sca
 import (
 	"context"
 
-	address "github.com/filecoin-project/go-address"
-	abi "github.com/filecoin-project/go-state-types/abi"
+	"github.com/ipfs/go-cid"
+	cbor "github.com/ipfs/go-ipld-cbor"
+	cbg "github.com/whyrusleeping/cbor-gen"
+	"golang.org/x/xerrors"
+
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
-	cid "github.com/ipfs/go-cid"
-	cbor "github.com/ipfs/go-ipld-cbor"
-	cbg "github.com/whyrusleeping/cbor-gen"
-	xerrors "golang.org/x/xerrors"
 
 	bstore "github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
-	types "github.com/filecoin-project/lotus/chain/types"
+	"github.com/filecoin-project/lotus/chain/types"
 )
 
 // ExecStatus defines the different state an execution can be in
@@ -84,8 +85,8 @@ func (ae *AtomicExecParams) translateInputAddrs(rt runtime.Runtime) {
 		raw, err := addr.RawAddr()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error parsing raw address")
 		outAddr := SecpBLSAddr(rt, raw)
-		out, err := address.NewHAddress(sn, outAddr)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error generating HAddress")
+		out, err := address.NewHCAddress(sn, outAddr)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error generating HCAddress")
 		aux[out.String()] = ae.Inputs[k]
 	}
 	ae.Inputs = aux
@@ -283,10 +284,10 @@ func (st *SCAState) execResultMsg(rt runtime.Runtime, toSub address.SubnetID, to
 	source := builtin.SystemActorAddr
 
 	// to actor address responsible for execution
-	to, err := address.NewHAddress(toSub, toActor)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
-	from, err := address.NewHAddress(st.NetworkName, source)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
+	to, err := address.NewHCAddress(toSub, toActor)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HCAddress")
+	from, err := address.NewHCAddress(st.NetworkName, source)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HCAddress")
 
 	// lock params
 	lparams, err := atomic.WrapSerializedParams(msg.Method, msg.Params)
@@ -298,13 +299,13 @@ func (st *SCAState) execResultMsg(rt runtime.Runtime, toSub address.SubnetID, to
 	if abort {
 		method = atomic.MethodAbort
 		enc, err = actors.SerializeParams(lparams)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HCAddress")
 	} else {
 		method = atomic.MethodUnlock
 		uparams, err := atomic.WrapSerializedUnlockParams(lparams, output.S)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error wrapping merge params")
 		enc, err = actors.SerializeParams(uparams)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HAddress")
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HCAddress")
 	}
 
 	// Build message.

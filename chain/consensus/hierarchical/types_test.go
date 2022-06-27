@@ -3,9 +3,10 @@ package hierarchical_test
 import (
 	"testing"
 
-	address "github.com/filecoin-project/go-address"
-	tutil "github.com/filecoin-project/specs-actors/v7/support/testing"
 	"github.com/stretchr/testify/require"
+
+	"github.com/filecoin-project/go-address"
+	tutil "github.com/filecoin-project/specs-actors/v7/support/testing"
 
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -31,8 +32,8 @@ func TestApplyAsBottomUp(t *testing.T) {
 }
 
 func testApplyAsBottomUp(t *testing.T, curr, from, to string, bottomup bool) {
-	ff, _ := address.NewHAddress(address.SubnetID(from), tutil.NewIDAddr(t, 101))
-	tt, _ := address.NewHAddress(address.SubnetID(to), tutil.NewIDAddr(t, 101))
+	ff, _ := address.NewHCAddress(address.SubnetID(from), tutil.NewIDAddr(t, 101))
+	tt, _ := address.NewHCAddress(address.SubnetID(to), tutil.NewIDAddr(t, 101))
 	bu, err := hierarchical.ApplyAsBottomUp(address.SubnetID(curr), &types.Message{From: ff, To: tt})
 	require.NoError(t, err)
 	require.Equal(t, bu, bottomup)

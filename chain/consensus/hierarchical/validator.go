@@ -24,7 +24,7 @@ func NewValidator(subnet addr.SubnetID, addr addr.Address, netAddr string) Valid
 }
 
 func (v *Validator) HAddr() (addr.Address, error) {
-	return addr.NewHAddress(v.Subnet, v.Addr)
+	return addr.NewHCAddress(v.Subnet, v.Addr)
 }
 
 func (v *Validator) ID() string {
