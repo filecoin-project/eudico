@@ -98,7 +98,7 @@ func (ts *eudicoConsensusSuite) testDummyMining(t *testing.T) {
 		}
 	}()
 
-	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 10, address.RootSubnet, full)
+	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 5, address.RootSubnet, full)
 	require.NoError(t, err)
 }
 
@@ -361,7 +361,7 @@ func (ts *eudicoConsensusSuite) testTSPoWMining(t *testing.T) {
 		}
 	}()
 
-	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 10, address.RootSubnet, full)
+	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 3, address.RootSubnet, full)
 	require.NoError(t, err)
 }
 

@@ -41,7 +41,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 	if err != nil {
 		return fmt.Errorf("unable to create a manager: %w", err)
 	}
-	log := logging.FromContext(ctx, log).With("miner", m.MirID)
+	log := logging.FromContext(ctx, log).With("miner", m.ID())
 
 	log.Infof("Miner info:\n\twallet - %s\n\tnetwork - %s\n\tsubnet - %s\n\tMir ID - %s\n\tvalidators - %v",
 		m.Addr, m.NetName, m.SubnetID, m.MirID, m.Validators)
@@ -70,8 +70,8 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			return nil
 		case err := <-mirErrors:
 			return fmt.Errorf("miner consensus error: %w", err)
-		case hashes := <-mirHead:
-			msgs, crossMsgs := m.GetMessagesByHashes(hashes)
+		case batch := <-mirHead:
+			msgs, crossMsgs := m.GetMessages(batch)
 			log.With("epoch", nextEpoch).
 				Infof("try to create a block: msgs - %d, crossMsgs - %d", len(msgs), len(crossMsgs))
 
@@ -117,32 +117,14 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 				log.With("epoch", nextEpoch).
 					Errorw("unable to select messages from mempool", "error", err)
 			}
-			log.With("epoch", nextEpoch).
-				Infof("retrieved %d msgs from mempool", len(msgs))
 
 			crossMsgs, err := api.GetUnverifiedCrossMsgsPool(ctx, m.SubnetID, base.Height()+1)
 			if err != nil {
 				log.With("epoch", nextEpoch).
 					Errorw("unable to select cross-messages from mempool", "error", err)
 			}
-			log.With("epoch", nextEpoch).
-				Infof("retrieved %d crossmsgs from mempool", len(crossMsgs))
 
-			var refs []*RequestRef
-
-			refs, err = m.AddSignedMessages(refs, msgs)
-			if err != nil {
-				log.With("epoch", nextEpoch).
-					Errorw("unable to push messages", "error", err)
-			}
-
-			refs, err = m.AddCrossMessages(refs, crossMsgs)
-			if err != nil {
-				log.With("epoch", nextEpoch).
-					Errorw("unable to push cross-messages", "error", err)
-			}
-
-			m.SubmitRequests(ctx, refs)
+			m.SubmitRequests(ctx, m.GetRequests(msgs, crossMsgs))
 		}
 	}
 }

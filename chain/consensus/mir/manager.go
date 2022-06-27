@@ -16,13 +16,13 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/mir"
-	mirCrypto "github.com/filecoin-project/mir/pkg/crypto"
+	mircrypto "github.com/filecoin-project/mir/pkg/crypto"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/grpctransport"
 	"github.com/filecoin-project/mir/pkg/iss"
-	mirLogging "github.com/filecoin-project/mir/pkg/logging"
+	mirlogging "github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
-	"github.com/filecoin-project/mir/pkg/pb/requestpb"
+	mirrequest "github.com/filecoin-project/mir/pkg/pb/requestpb"
 	"github.com/filecoin-project/mir/pkg/simplewal"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
@@ -42,15 +42,15 @@ func newMirLogger(logger *logging.ZapEventLogger) *mirLogger {
 }
 
 // Log logs a message with additional context.
-func (m *mirLogger) Log(level mirLogging.LogLevel, text string, args ...interface{}) {
+func (m *mirLogger) Log(level mirlogging.LogLevel, text string, args ...interface{}) {
 	switch level {
-	case mirLogging.LevelError:
+	case mirlogging.LevelError:
 		m.logger.Errorw(text, "error", args)
-	case mirLogging.LevelInfo:
+	case mirlogging.LevelInfo:
 		m.logger.Infow(text, "info", args)
-	case mirLogging.LevelWarn:
+	case mirlogging.LevelWarn:
 		m.logger.Warnw(text, "warn", args)
-	case mirLogging.LevelDebug:
+	case mirlogging.LevelDebug:
 		m.logger.Debugw(text, "debug", args)
 	}
 }
@@ -155,7 +155,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 			"net":    net,
 			"iss":    issProtocol,
 			"app":    app,
-			"crypto": mirCrypto.New(cryptoManager),
+			"crypto": mircrypto.New(cryptoManager),
 		},
 		nil)
 	if err != nil {
@@ -211,37 +211,76 @@ func (m *Manager) Stop() {
 	m.Net.Stop()
 }
 
-func (m *Manager) SubmitRequests(ctx context.Context, reqRefs []*RequestRef) {
-	if len(reqRefs) == 0 {
+func (m *Manager) SubmitRequests(ctx context.Context, requests []*mirrequest.Request) {
+	if len(requests) == 0 {
 		return
 	}
-	var reqs []*requestpb.Request
-	for _, ref := range reqRefs {
-		reqs = append(reqs, events.ClientRequest(ref.ClientID, ref.ReqNo, ref.Hash))
-	}
-	e := events.NewClientRequests("iss", reqs)
+	e := events.NewClientRequests("iss", requests)
 	if err := m.MirNode.InjectEvents(ctx, (&events.EventList{}).PushBack(e)); err != nil {
 		log.Errorf("failed to submit requests to Mir: %s", err)
 	}
+	log.Infof("submitted %d requests to Mir", len(requests))
 }
 
-// GetMessagesByHashes gets requests from the cache and extracts Filecoin messages.
-func (m *Manager) GetMessagesByHashes(blockRequestHashes []Tx) (msgs []*types.SignedMessage, crossMsgs []*types.Message) {
-	log.Infof("received a block with %d hashes", len(blockRequestHashes))
-	for _, h := range blockRequestHashes {
-		req, found := m.Pool.getDel(string(h))
-		if !found {
-			log.Errorf("unable to find a request with %v hash", h)
+func parseTx(tx []byte) (interface{}, error) {
+	ln := len(tx)
+	// This is very simple input validation to be protected against invalid messages.
+	if ln <= 2 {
+		return nil, fmt.Errorf("mir tx len %d is too small", ln)
+	}
+
+	var err error
+	var msg interface{}
+
+	lastByte := tx[ln-1]
+	switch lastByte {
+	case common.SignedMessageType:
+		msg, err = types.DecodeSignedMessage(tx[:ln-1])
+	case common.CrossMessageType:
+		msg, err = types.DecodeUnverifiedCrossMessage(tx[:ln-1])
+	case common.ConfigMessageType:
+		return nil, fmt.Errorf("config message is not supported")
+	default:
+		err = fmt.Errorf("unknown message type %d", lastByte)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return msg, nil
+}
+
+// GetMessages extracts Filecoin messages from a Mir batch.
+func (m *Manager) GetMessages(batch []Tx) (msgs []*types.SignedMessage, crossMsgs []*types.Message) {
+	log.Infof("received a block with %d messages", len(msgs))
+	for _, tx := range batch {
+
+		input, err := parseTx(tx)
+		if err != nil {
+			log.Error("unable to decode a message in Mir block:", err)
 			continue
 		}
 
-		switch msg := req.(type) {
+		switch msg := input.(type) {
 		case *types.SignedMessage:
+			h := msg.Cid()
+			found := m.Pool.deleteRequest(h.String())
+			if !found {
+				log.Errorf("unable to find a request with %v hash", h)
+				continue
+			}
 			msgs = append(msgs, msg)
-			log.Infof("got message (%s, %d) from cache", msg.Message.To, msg.Message.Nonce)
+			log.Infof("got message: to=%s, nonce= %d", msg.Message.To, msg.Message.Nonce)
 		case *types.UnverifiedCrossMsg:
+			h := msg.Cid()
+			found := m.Pool.deleteRequest(h.String())
+			if !found {
+				log.Errorf("unable to find a request with %v hash", h)
+				continue
+			}
 			crossMsgs = append(crossMsgs, msg.Message)
-			log.Infof("got cross-message (%s, %d) from cache", msg.Message.To, msg.Message.Nonce)
+			log.Infof("got cross-message: to=%s, nonce= %d", msg.Message.To, msg.Message.Nonce)
 		default:
 			log.Error("got unknown type request in a block")
 		}
@@ -249,33 +288,50 @@ func (m *Manager) GetMessagesByHashes(blockRequestHashes []Tx) (msgs []*types.Si
 	return
 }
 
-// AddSignedMessages adds signed messages into the request cache.
-func (m *Manager) AddSignedMessages(dst []*RequestRef, msgs []*types.SignedMessage) ([]*RequestRef, error) {
-	for _, msg := range msgs {
-		hash := msg.Cid()
-		clientID := newMirID(m.SubnetID.String(), msg.Message.From.String())
-		nonce := msg.Message.Nonce
-		r := RequestRef{
-			ClientID: t.ClientID(clientID),
-			ReqNo:    t.ReqNo(nonce),
-			Type:     common.SignedMessageType,
-			Hash:     hash.Bytes(),
-		}
-		alreadyExist := m.Pool.addIfNotExist(clientID, string(r.Hash), msg)
-		if !alreadyExist {
-			log.Infof("added message %s to cache", hash.Bytes())
-			dst = append(dst, &r)
-		}
-	}
-
-	return dst, nil
+func (m *Manager) GetRequests(msgs []*types.SignedMessage, crossMsgs []*types.UnverifiedCrossMsg) (
+	requests []*mirrequest.Request,
+) {
+	requests = append(requests, m.batchSignedMessages(msgs)...)
+	requests = append(requests, m.batchCrossMessages(crossMsgs)...)
+	return
 }
 
-// AddCrossMessages adds cross messages into the request cache.
-func (m *Manager) AddCrossMessages(dst []*RequestRef, msgs []*types.UnverifiedCrossMsg) ([]*RequestRef, error) {
+// BatchPushSignedMessages pushes signed messages into the request pool and sends them to Mir.
+func (m *Manager) batchSignedMessages(msgs []*types.SignedMessage) (
+	requests []*mirrequest.Request,
+) {
 	for _, msg := range msgs {
-		hash := msg.Cid()
+		clientID := newMirID(m.SubnetID.String(), msg.Message.From.String())
+		nonce := msg.Message.Nonce
+		if !m.Pool.isTargetRequest(clientID, nonce) {
+			continue
+		}
 
+		msgBytes, err := msg.Serialize()
+		if err != nil {
+			log.Error("unable to serialize message:", err)
+			continue
+		}
+		data := common.NewSignedMessageBytes(msgBytes, nil)
+
+		r := &mirrequest.Request{
+			ClientId: clientID,
+			ReqNo:    nonce,
+			Data:     data,
+		}
+
+		m.Pool.addRequest(msg.Cid().String(), r)
+
+		requests = append(requests, r)
+	}
+	return requests
+}
+
+// batchCrossMessages batches cross messages into the request pool and sends them to Mir.
+func (m *Manager) batchCrossMessages(crossMsgs []*types.UnverifiedCrossMsg) (
+	requests []*mirrequest.Request,
+) {
+	for _, msg := range crossMsgs {
 		msn, err := msg.Message.From.Subnet()
 		if err != nil {
 			log.Error("unable to get subnet from message:", err)
@@ -283,23 +339,30 @@ func (m *Manager) AddCrossMessages(dst []*RequestRef, msgs []*types.UnverifiedCr
 		}
 		clientID := newMirID(msn.String(), msg.Message.From.String())
 		nonce := msg.Message.Nonce
-		r := RequestRef{
-			ClientID: t.ClientID(clientID),
-			ReqNo:    t.ReqNo(nonce),
-			Type:     common.CrossMessageType,
-			Hash:     hash.Bytes(),
+		if !m.Pool.isTargetRequest(clientID, nonce) {
+			continue
 		}
-		alreadyExist := m.Pool.addIfNotExist(clientID, string(r.Hash), msg)
-		if !alreadyExist {
-			log.Infof("added cross-message %s to cache", hash.Bytes())
-			dst = append(dst, &r)
-		}
-	}
 
-	return dst, nil
+		msgBytes, err := msg.Serialize()
+		if err != nil {
+			log.Error("unable to serialize cross-message:", err)
+			continue
+		}
+
+		data := common.NewCrossMessageBytes(msgBytes, nil)
+		r := &mirrequest.Request{
+			ClientId: clientID,
+			ReqNo:    nonce,
+			Data:     data,
+		}
+		m.Pool.addRequest(msg.Cid().String(), r)
+		requests = append(requests, r)
+	}
+	return requests
 }
 
-// GetRequest gets the request from the cache by the key.
-func (m *Manager) GetRequest(h string) (Request, bool) {
-	return m.Pool.getRequest(h)
+// ID prints Manager ID.
+func (m *Manager) ID() string {
+	addr := m.Addr.String()
+	return fmt.Sprintf("%v:%v", m.SubnetID, addr[len(addr)-6:])
 }

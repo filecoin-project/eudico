@@ -2,69 +2,57 @@ package mir
 
 import (
 	"sync"
+
+	mirrequest "github.com/filecoin-project/mir/pkg/pb/requestpb"
 )
 
-// TODO:
-// Case 1:
-// Eudico's mempool and the request pool (that is actually a proxy to the mempool) are distributed.
-// If Eudico daemon is restarted or crashes and miner was not, then the messages that Eudico has already sent
-// are not in mempool anymore, but their hashes are still in the request cache.
-// It may happen that Eudico receives a hash from the block and the corresponding message is in the cache,
-// but not not in the mempool.
-
-// Request pool is the simplest temporal pool to store mapping between request hashes and client requests.
+// Request pool enforces the policy on what requests should be sent.
+// The current policy is FIFO.
 func newRequestPool() *requestPool {
 	return &requestPool{
-		cache:          make(map[string]ClientRequest),
-		handledClients: make(map[string]bool),
+		cache:            make(map[string]string),
+		processedClients: make(map[string]bool),
 	}
-}
-
-type ClientRequest struct {
-	Request  Request
-	ClientID string
 }
 
 type requestPool struct {
 	lk sync.Mutex
 
-	cache          map[string]ClientRequest
-	handledClients map[string]bool
+	cache            map[string]string
+	processedClients map[string]bool
 }
 
-// addIfNotExist adds the request if key h doesn't exist .
-func (c *requestPool) addIfNotExist(clientID, h string, r Request) (exist bool) {
-	c.lk.Lock()
-	defer c.lk.Unlock()
+// addRequest adds the request if it satisfies to the policy.
+func (p *requestPool) addRequest(h string, r *mirrequest.Request) (exist bool) {
+	p.lk.Lock()
+	defer p.lk.Unlock()
 
-	if exist = c.handledClients[clientID]; !exist {
-		c.cache[h] = ClientRequest{r, clientID}
-		c.handledClients[clientID] = true
+	_, exist = p.processedClients[r.ClientId]
+	if !exist {
+		p.cache[h] = r.ClientId
+		p.processedClients[r.ClientId] = true
 	}
 	return
 }
 
-// getDel gets the target request by the key h and deletes the keys.
-func (c *requestPool) getDel(h string) (Request, bool) {
-	c.lk.Lock()
-	defer c.lk.Unlock()
-
-	r, ok := c.cache[h]
-	if ok {
-		delete(c.handledClients, r.ClientID)
-		delete(c.cache, h)
-	}
-	return r.Request, ok
+// isTargetRequest returns whether the request with clientID and nonce should be sent.
+func (p *requestPool) isTargetRequest(clientID string, nonce uint64) bool {
+	p.lk.Lock()
+	defer p.lk.Unlock()
+	_, exist := p.processedClients[clientID]
+	return !exist
 }
 
-// getRequest gets the request by the key.
-func (c *requestPool) getRequest(h string) (Request, bool) {
-	c.lk.Lock()
-	defer c.lk.Unlock()
+// deleteRequest deletes the target request by the key h.
+func (p *requestPool) deleteRequest(h string) (ok bool) {
+	p.lk.Lock()
+	defer p.lk.Unlock()
 
-	r, ok := c.cache[h]
+	clientID, ok := p.cache[h]
 	if ok {
-		return r.Request, ok
+		delete(p.processedClients, clientID)
+		delete(p.cache, h)
+		return
 	}
-	return r, ok
+	return
 }
