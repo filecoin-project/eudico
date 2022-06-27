@@ -6,6 +6,8 @@ import (
 	"github.com/ipfs/go-cid"
 	u "github.com/ipfs/go-ipfs-util"
 	"github.com/stretchr/testify/require"
+
+	mirrequest "github.com/filecoin-project/mir/pkg/pb/requestpb"
 )
 
 func TestMirRequestPool(t *testing.T) {
@@ -13,17 +15,15 @@ func TestMirRequestPool(t *testing.T) {
 
 	c1 := cid.NewCidV0(u.Hash([]byte("req1")))
 	c2 := cid.NewCidV0(u.Hash([]byte("req2")))
-	c3 := cid.NewCidV0(u.Hash([]byte("req3")))
 
-	ok := p.addIfNotExist("client1", c1)
-	require.Equal(t, false, ok)
+	exist := p.addRequest(c1.String(), &mirrequest.Request{
+		ClientId: "client1", ReqNo: 1, Data: []byte{},
+	})
+	require.Equal(t, false, exist)
 
-	ok = p.getDel(c1)
-	require.Equal(t, true, ok)
+	exist = p.deleteRequest(c1.String())
+	require.Equal(t, true, exist)
 
-	ok = p.addIfNotExist("client1", c2)
-	require.Equal(t, false, ok)
-	ok = p.addIfNotExist("client1", c3)
-	require.Equal(t, true, ok)
-
+	exist = p.deleteRequest(c2.String())
+	require.Equal(t, false, exist)
 }
