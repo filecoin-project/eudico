@@ -117,16 +117,14 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 				log.With("epoch", nextEpoch).
 					Errorw("unable to select messages from mempool", "error", err)
 			}
-			log.With("epoch", nextEpoch).Debugf("retrieved %d msgs from mempool", len(msgs))
-			m.BatchPushSignedMessages(ctx, msgs)
 
 			crossMsgs, err := api.GetUnverifiedCrossMsgsPool(ctx, m.SubnetID, base.Height()+1)
 			if err != nil {
 				log.With("epoch", nextEpoch).
 					Errorw("unable to select cross-messages from mempool", "error", err)
 			}
-			log.With("epoch", nextEpoch).Debugf("retrieved %d crossmsgs from mempool", len(crossMsgs))
-			m.BatchPushCrossMessages(ctx, crossMsgs)
+
+			m.SubmitRequests(ctx, m.GetRequests(msgs, crossMsgs))
 		}
 	}
 }

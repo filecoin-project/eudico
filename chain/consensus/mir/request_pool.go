@@ -3,49 +3,56 @@ package mir
 import (
 	"sync"
 
-	"github.com/ipfs/go-cid"
+	mirrequest "github.com/filecoin-project/mir/pkg/pb/requestpb"
 )
 
-// Request pool is the simplest temporal pool to store mapping between request hashes and client requests.
+// Request pool enforces the policy on what requests should be sent.
+// The current policy is FIFO.
 func newRequestPool() *requestPool {
 	return &requestPool{
-		pool:           make(map[cid.Cid]ClientRequest),
-		handledClients: make(map[string]bool),
+		cache:            make(map[string]string),
+		processedClients: make(map[string]bool),
 	}
-}
-
-type ClientRequest struct {
-	ClientID string
 }
 
 type requestPool struct {
 	lk sync.Mutex
 
-	pool           map[cid.Cid]ClientRequest
-	handledClients map[string]bool
+	cache            map[string]string
+	processedClients map[string]bool
 }
 
-// addIfNotExist adds the request if key h doesn't exist .
-func (p *requestPool) addIfNotExist(clientID string, h cid.Cid) (exist bool) {
+// addRequest adds the request if it satisfies to the policy.
+func (p *requestPool) addRequest(h string, r *mirrequest.Request) (exist bool) {
 	p.lk.Lock()
 	defer p.lk.Unlock()
 
-	if exist = p.handledClients[clientID]; !exist {
-		p.pool[h] = ClientRequest{clientID}
-		p.handledClients[clientID] = true
+	_, exist = p.processedClients[r.ClientId]
+	if !exist {
+		p.cache[h] = r.ClientId
+		p.processedClients[r.ClientId] = true
 	}
 	return
 }
 
-// getDel gets the target request by the key h and deletes the keys.
-func (p *requestPool) getDel(h cid.Cid) bool {
+// isTargetRequest returns whether the request with clientID and nonce should be sent.
+func (p *requestPool) isTargetRequest(clientID string, nonce uint64) bool {
+	p.lk.Lock()
+	defer p.lk.Unlock()
+	_, exist := p.processedClients[clientID]
+	return !exist
+}
+
+// deleteRequest deletes the target request by the key h.
+func (p *requestPool) deleteRequest(h string) (ok bool) {
 	p.lk.Lock()
 	defer p.lk.Unlock()
 
-	r, ok := p.pool[h]
+	clientID, ok := p.cache[h]
 	if ok {
-		delete(p.handledClients, r.ClientID)
-		delete(p.pool, h)
+		delete(p.processedClients, clientID)
+		delete(p.cache, h)
+		return
 	}
-	return ok
+	return
 }

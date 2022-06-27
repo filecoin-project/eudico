@@ -16,13 +16,13 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/mir"
-	mirCrypto "github.com/filecoin-project/mir/pkg/crypto"
+	mircrypto "github.com/filecoin-project/mir/pkg/crypto"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/grpctransport"
 	"github.com/filecoin-project/mir/pkg/iss"
-	mirLogging "github.com/filecoin-project/mir/pkg/logging"
+	mirlogging "github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
-	mirRequest "github.com/filecoin-project/mir/pkg/pb/requestpb"
+	mirrequest "github.com/filecoin-project/mir/pkg/pb/requestpb"
 	"github.com/filecoin-project/mir/pkg/simplewal"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
@@ -42,15 +42,15 @@ func newMirLogger(logger *logging.ZapEventLogger) *mirLogger {
 }
 
 // Log logs a message with additional context.
-func (m *mirLogger) Log(level mirLogging.LogLevel, text string, args ...interface{}) {
+func (m *mirLogger) Log(level mirlogging.LogLevel, text string, args ...interface{}) {
 	switch level {
-	case mirLogging.LevelError:
+	case mirlogging.LevelError:
 		m.logger.Errorw(text, "error", args)
-	case mirLogging.LevelInfo:
+	case mirlogging.LevelInfo:
 		m.logger.Infow(text, "info", args)
-	case mirLogging.LevelWarn:
+	case mirlogging.LevelWarn:
 		m.logger.Warnw(text, "warn", args)
-	case mirLogging.LevelDebug:
+	case mirlogging.LevelDebug:
 		m.logger.Debugw(text, "debug", args)
 	}
 }
@@ -155,7 +155,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 			"net":    net,
 			"iss":    issProtocol,
 			"app":    app,
-			"crypto": mirCrypto.New(cryptoManager),
+			"crypto": mircrypto.New(cryptoManager),
 		},
 		nil)
 	if err != nil {
@@ -211,7 +211,7 @@ func (m *Manager) Stop() {
 	m.Net.Stop()
 }
 
-func (m *Manager) SubmitRequests(ctx context.Context, requests []*mirRequest.Request) {
+func (m *Manager) SubmitRequests(ctx context.Context, requests []*mirrequest.Request) {
 	if len(requests) == 0 {
 		return
 	}
@@ -219,6 +219,7 @@ func (m *Manager) SubmitRequests(ctx context.Context, requests []*mirRequest.Req
 	if err := m.MirNode.InjectEvents(ctx, (&events.EventList{}).PushBack(e)); err != nil {
 		log.Errorf("failed to submit requests to Mir: %s", err)
 	}
+	log.Infof("submitted %d requests to Mir", len(requests))
 }
 
 func parseTx(tx []byte) (interface{}, error) {
@@ -264,22 +265,22 @@ func (m *Manager) GetMessages(batch []Tx) (msgs []*types.SignedMessage, crossMsg
 		switch msg := input.(type) {
 		case *types.SignedMessage:
 			h := msg.Cid()
-			found := m.Pool.getDel(h)
+			found := m.Pool.deleteRequest(h.String())
 			if !found {
 				log.Errorf("unable to find a request with %v hash", h)
 				continue
 			}
 			msgs = append(msgs, msg)
-			log.Infof("got message (%s, %d) from cache", msg.Message.To, msg.Message.Nonce)
+			log.Infof("got message: to=%s, nonce= %d", msg.Message.To, msg.Message.Nonce)
 		case *types.UnverifiedCrossMsg:
 			h := msg.Cid()
-			found := m.Pool.getDel(h)
+			found := m.Pool.deleteRequest(h.String())
 			if !found {
 				log.Errorf("unable to find a request with %v hash", h)
 				continue
 			}
 			crossMsgs = append(crossMsgs, msg.Message)
-			log.Infof("got cross-message (%s, %d) from cache", msg.Message.To, msg.Message.Nonce)
+			log.Infof("got cross-message: to=%s, nonce= %d", msg.Message.To, msg.Message.Nonce)
 		default:
 			log.Error("got unknown type request in a block")
 		}
@@ -287,45 +288,50 @@ func (m *Manager) GetMessages(batch []Tx) (msgs []*types.SignedMessage, crossMsg
 	return
 }
 
+func (m *Manager) GetRequests(msgs []*types.SignedMessage, crossMsgs []*types.UnverifiedCrossMsg) (
+	requests []*mirrequest.Request,
+) {
+	requests = append(requests, m.batchSignedMessages(msgs)...)
+	requests = append(requests, m.batchCrossMessages(crossMsgs)...)
+	return
+}
+
 // BatchPushSignedMessages pushes signed messages into the request pool and sends them to Mir.
-func (m *Manager) BatchPushSignedMessages(ctx context.Context, msgs []*types.SignedMessage) {
-	var requests []*mirRequest.Request
+func (m *Manager) batchSignedMessages(msgs []*types.SignedMessage) (
+	requests []*mirrequest.Request,
+) {
 	for _, msg := range msgs {
+		clientID := newMirID(m.SubnetID.String(), msg.Message.From.String())
+		nonce := msg.Message.Nonce
+		if !m.Pool.isTargetRequest(clientID, nonce) {
+			continue
+		}
+
 		msgBytes, err := msg.Serialize()
 		if err != nil {
 			log.Error("unable to serialize message:", err)
 			continue
 		}
-		h := msg.Cid()
-		clientID := newMirID(m.SubnetID.String(), msg.Message.From.String())
-		nonce := msg.Message.Nonce
 		data := common.NewSignedMessageBytes(msgBytes, nil)
 
-		r := mirRequest.Request{
+		r := &mirrequest.Request{
 			ClientId: clientID,
 			ReqNo:    nonce,
 			Data:     data,
 		}
-		alreadyExist := m.Pool.addIfNotExist(clientID, h)
-		if !alreadyExist {
-			requests = append(requests, &r)
-			log.Infof("added message %s to pool", h)
-		}
+
+		m.Pool.addRequest(msg.Cid().String(), r)
+
+		requests = append(requests, r)
 	}
-	m.SubmitRequests(ctx, requests)
+	return requests
 }
 
-// BatchPushCrossMessages pushes cross messages into the request pool and sends them to Mir.
-func (m *Manager) BatchPushCrossMessages(ctx context.Context, msgs []*types.UnverifiedCrossMsg) {
-	var requests []*mirRequest.Request
-	for _, msg := range msgs {
-		msgBytes, err := msg.Serialize()
-		if err != nil {
-			log.Error("unable to serialize cross-message:", err)
-			continue
-		}
-		h := msg.Cid()
-
+// batchCrossMessages batches cross messages into the request pool and sends them to Mir.
+func (m *Manager) batchCrossMessages(crossMsgs []*types.UnverifiedCrossMsg) (
+	requests []*mirrequest.Request,
+) {
+	for _, msg := range crossMsgs {
 		msn, err := msg.Message.From.Subnet()
 		if err != nil {
 			log.Error("unable to get subnet from message:", err)
@@ -333,19 +339,26 @@ func (m *Manager) BatchPushCrossMessages(ctx context.Context, msgs []*types.Unve
 		}
 		clientID := newMirID(msn.String(), msg.Message.From.String())
 		nonce := msg.Message.Nonce
+		if !m.Pool.isTargetRequest(clientID, nonce) {
+			continue
+		}
+
+		msgBytes, err := msg.Serialize()
+		if err != nil {
+			log.Error("unable to serialize cross-message:", err)
+			continue
+		}
+
 		data := common.NewCrossMessageBytes(msgBytes, nil)
-		r := mirRequest.Request{
+		r := &mirrequest.Request{
 			ClientId: clientID,
 			ReqNo:    nonce,
 			Data:     data,
 		}
-		alreadyExist := m.Pool.addIfNotExist(clientID, h)
-		if !alreadyExist {
-			requests = append(requests, &r)
-			log.Infof("added cross-message %s to pool", h)
-		}
+		m.Pool.addRequest(msg.Cid().String(), r)
+		requests = append(requests, r)
 	}
-	m.SubmitRequests(ctx, requests)
+	return requests
 }
 
 // ID prints Manager ID.
