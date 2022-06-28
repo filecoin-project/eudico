@@ -57,7 +57,7 @@ type Subnet struct {
 	// Finality threshold.
 	finalityThreshold abi.ChainEpoch
 	// Checkpoint period.
-	checkPeriod abi.ChainEpoch
+	checkpointPeriod abi.ChainEpoch
 	// Mempool for the subnet.
 	mpool *messagepool.MessagePool
 	// Syncer for the subnet chain

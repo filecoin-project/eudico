@@ -95,7 +95,7 @@ type Service struct {
 
 type SubnetParams struct {
 	FinalityThreshold abi.ChainEpoch
-	CheckPeriod       abi.ChainEpoch
+	CheckpointPeriod  abi.ChainEpoch
 	Consensus         hierarchical.ConsensusType
 }
 
@@ -189,15 +189,15 @@ func (s *Service) startSubnet(id address.SubnetID,
 
 	log.Infow("Creating new subnet", "subnetID", id)
 	sh := &Subnet{
-		ctx:         ctx,
-		ctxCancel:   cancel,
-		ID:          id,
-		host:        s.host,
-		pubsub:      s.pubsub,
-		nodeServer:  s.nodeServer,
-		pmgr:        s.pmgr,
-		consType:    consensus,
-		checkPeriod: params.CheckPeriod,
+		ctx:              ctx,
+		ctxCancel:        cancel,
+		ID:               id,
+		host:             s.host,
+		pubsub:           s.pubsub,
+		nodeServer:       s.nodeServer,
+		pmgr:             s.pmgr,
+		consType:         consensus,
+		checkpointPeriod: params.CheckpointPeriod,
 	}
 
 	sh.checklk.Lock()
@@ -254,12 +254,11 @@ func (s *Service) startSubnet(id address.SubnetID,
 	}
 	log.Infow("Genesis and consensus for subnet created", "subnetID", id, "consensus", consensus)
 
-	// Validate input finality threshold and use default value if it failed.
-	sh.finalityThreshold = sh.cons.Finality()
-	if params.FinalityThreshold > 1 && params.FinalityThreshold < params.CheckPeriod {
-		sh.finalityThreshold = params.FinalityThreshold
+	if params.FinalityThreshold >= params.CheckpointPeriod {
+		return xerrors.Errorf("finality threshold (%v) must be less than checkpoint period (%v)",
+			params.FinalityThreshold, params.CheckpointPeriod)
 	}
-	log.Infof("Finality threshold for %s is %v", sh.ID, sh.finalityThreshold)
+	log.Infof("Finality threshold for subnet %s is %v", sh.ID, sh.finalityThreshold)
 
 	// We configure a new handler for the subnet syncing exchange protocol.
 	sh.exchangeServer()
@@ -392,8 +391,7 @@ func (s *Service) AddSubnet(ctx context.Context, params *hierarchical.SubnetPara
 		return address.Undef, xerrors.Errorf("not syncing with parent network")
 	}
 
-	// Basic input validation for threshold and checkpoint period.
-	// We check these values only here.
+	// Basic input validation for finality threshold and checkpoint period.
 
 	// Don't allow checkpoint periods less than minimal allowed value.
 	minCheckpointPeriod := hierarchical.DefaultCheckpointPeriod(params.Consensus.Alg)
@@ -402,9 +400,8 @@ func (s *Service) AddSubnet(ctx context.Context, params *hierarchical.SubnetPara
 		checkpointPeriod = minCheckpointPeriod
 	}
 
-	// Don't allow finality threshold  less than checkpointing period.
-	if params.FinalityThreshold > 0 &&
-		params.FinalityThreshold >= params.CheckpointPeriod {
+	// FinalityThreshold should always be less than the checkpoint period.
+	if params.FinalityThreshold >= checkpointPeriod {
 		return address.Undef, xerrors.Errorf("finality threshold (%v) must be less than checkpoint period (%v)",
 			params.FinalityThreshold, params.CheckpointPeriod)
 	}
@@ -419,7 +416,7 @@ func (s *Service) AddSubnet(ctx context.Context, params *hierarchical.SubnetPara
 		MinMinerStake:     params.Stake,
 		Name:              params.Name,
 		Consensus:         params.Consensus.Alg,
-		CheckpointPeriod:  params.CheckpointPeriod,
+		CheckpointPeriod:  checkpointPeriod,
 		FinalityThreshold: params.FinalityThreshold,
 		ConsensusParams: &hierarchical.ConsensusParams{
 			DelegMiner:    params.Consensus.DelegMiner,
@@ -577,7 +574,7 @@ func (s *Service) syncSubnet(ctx context.Context, id address.SubnetID, parentAPI
 	params := &SubnetParams{
 		Consensus:         st.Consensus,
 		FinalityThreshold: st.FinalityThreshold,
-		CheckPeriod:       st.CheckPeriod,
+		CheckpointPeriod:  st.CheckPeriod,
 	}
 
 	return s.startSubnet(id, parentAPI, params, st.Genesis)

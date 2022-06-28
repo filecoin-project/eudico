@@ -287,7 +287,3 @@ func decodeAndCheckBlock(msg *pubsub.Message) (*types.BlockMsg, string, error) {
 
 	return blk, "", nil
 }
-
-func (bft *Mir) Finality() abi.ChainEpoch {
-	return build.MirFinality
-}

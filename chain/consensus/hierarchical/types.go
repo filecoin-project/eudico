@@ -66,6 +66,8 @@ func Consensus(name string) ConsensusType {
 }
 
 // DefaultCheckpointPeriod returns a minimal allowed checkpoint period for the consensus in a subnet.
+//
+// Finality determines the number of epochs to wait before considering a change "final".
 func DefaultCheckpointPeriod(alg ConsensusType) abi.ChainEpoch {
 	switch alg {
 	case Delegated:
@@ -80,6 +82,26 @@ func DefaultCheckpointPeriod(alg ConsensusType) abi.ChainEpoch {
 		return build.MirCheckpointPeriod
 	case Dummy:
 		return build.DummyCheckpointPeriod
+	default:
+		panic(fmt.Sprintf("unknown consensus algorithm %v", alg))
+	}
+}
+
+// DefaultFinality returns a minimal allowed finality threshold for the consensus in a subnet.
+func DefaultFinality(alg ConsensusType) abi.ChainEpoch {
+	switch alg {
+	case Delegated:
+		return build.DelegatedPoWFinality
+	case PoW:
+		return build.PoWFinality
+	case Tendermint:
+		return build.TendermintFinality
+	case FilecoinEC:
+		return build.FilecoinFinality
+	case Mir:
+		return build.MirFinality
+	case Dummy:
+		return build.DummyFinality
 	default:
 		panic(fmt.Sprintf("unknown consensus algorithm %v", alg))
 	}

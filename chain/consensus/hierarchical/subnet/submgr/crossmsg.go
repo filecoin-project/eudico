@@ -247,7 +247,7 @@ func (s *Service) getSCAStateWithFinality(ctx context.Context, api *API, id addr
 	finTs := api.ChainAPI.Chain.GetHeaviestTipSet()
 	height := finTs.Height()
 
-	finalityThreshold := s.api.Consensus.Finality()
+	finalityThreshold := hierarchical.DefaultFinality(s.api.Consensus.Type())
 	if !s.isRoot(id) {
 		sn, err := s.getSubnet(id)
 		if err != nil {
@@ -295,7 +295,6 @@ func (s *Service) getParentSCAWithFinality(ctx context.Context, id address.Subne
 }
 
 func (s *Service) getTopDownPool(ctx context.Context, id address.SubnetID, height abi.ChainEpoch) ([]*types.Message, error) {
-
 	// Get status for SCA in subnet to determine from which nonce to fetch messages
 	subAPI := s.getAPI(id)
 	if subAPI == nil {

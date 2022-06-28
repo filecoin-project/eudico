@@ -128,6 +128,24 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to persist empty array")
 	*/
 
+	minCheckpointPeriod := hierarchical.DefaultCheckpointPeriod(params.Consensus)
+	checkpointPeriod := params.CheckpointPeriod
+	if checkpointPeriod < minCheckpointPeriod {
+		checkpointPeriod = minCheckpointPeriod
+	}
+
+	minFinality := hierarchical.DefaultFinality(params.Consensus)
+	finality := params.FinalityThreshold
+	if finality < minFinality {
+		finality = minFinality
+	}
+
+	// Finality should always be less than the checkpoint period.
+	if finality >= checkpointPeriod {
+		return nil, xerrors.Errorf("finality threshold (%v) must be less than checkpoint period (%v)",
+			finality, checkpointPeriod)
+	}
+
 	parentID := address.SubnetID(params.NetworkName)
 
 	return &SubnetState{
@@ -137,9 +155,9 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 		Miners:            make([]address.Address, 0),
 		Stake:             emptyStakeCid,
 		Status:            Instantiated,
-		CheckPeriod:       params.CheckpointPeriod,
+		CheckPeriod:       checkpointPeriod,
 		Checkpoints:       emptyCheckpointsMapCid,
-		FinalityThreshold: params.FinalityThreshold,
+		FinalityThreshold: finality,
 		WindowChecks:      emptyWindowChecks,
 		ValidatorSet:      make([]hierarchical.Validator, 0),
 		MinValidators:     params.ConsensusParams.MinValidators,

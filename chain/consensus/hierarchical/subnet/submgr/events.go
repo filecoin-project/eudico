@@ -43,7 +43,7 @@ func (s *Service) listenSubnetEvents(ctx context.Context, sh *Subnet) {
 	evs := s.events
 	id := address.RootSubnet
 	root := true
-	finalityThreshold := s.api.Consensus.Finality()
+	finalityThreshold := hierarchical.DefaultFinality(s.api.Consensus.Type())
 
 	// If subnet is nil, we are listening from the root chain.
 	// TODO: Revisit this, there is probably a more elegant way to
