@@ -11,7 +11,6 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
@@ -121,12 +120,6 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}
 
-	// Don't allow checkpoint periods less than minimal allowed value.
-	checkPeriod := params.CheckPeriod
-	if checkPeriod < sca.MinCheckpointPeriod {
-		checkPeriod = hierarchical.ConsensusCheckPeriod(params.Consensus)
-	}
-
 	// TODO: @alfonso do we need this?
 	/* Initialize AMT of miners.
 	emptyArr, err := adt.MakeEmptyArray(adt.AsStore(rt), LaneStatesAmtBitwidth)
@@ -144,7 +137,7 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 		Miners:            make([]address.Address, 0),
 		Stake:             emptyStakeCid,
 		Status:            Instantiated,
-		CheckPeriod:       checkPeriod,
+		CheckPeriod:       params.CheckpointPeriod,
 		Checkpoints:       emptyCheckpointsMapCid,
 		FinalityThreshold: params.FinalityThreshold,
 		WindowChecks:      emptyWindowChecks,

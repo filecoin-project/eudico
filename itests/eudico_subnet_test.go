@@ -203,7 +203,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	parent := address.RootSubnet
 	subnetName := "testSubnet"
 	stake := abi.NewStoragePower(1e8)
-	checkPeriod := abi.ChainEpoch(10)
+	chp := abi.ChainEpoch(10)
 	finalityThreshold := abi.ChainEpoch(5)
 
 	err = kit.WaitForBalance(ctx, addr, 12, full)
@@ -219,7 +219,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 		Parent:            parent,
 		Name:              subnetName,
 		Stake:             stake,
-		CheckPeriod:       checkPeriod,
+		CheckpointPeriod:  chp,
 		FinalityThreshold: finalityThreshold,
 		Consensus: hierarchical.ConsensusParams{
 			Alg:           cns,
@@ -490,7 +490,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 	parent := address.RootSubnet
 	subnetName := "testSubnet"
 	stake := abi.NewStoragePower(1e8)
-	checkPeriod := abi.ChainEpoch(10)
+	chp := abi.ChainEpoch(10)
 	finalityThreshold := abi.ChainEpoch(1)
 
 	err = kit.WaitForBalance(ctx, minerA, 20, nodeA)
@@ -514,7 +514,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 		Parent:            parent,
 		Name:              subnetName,
 		Stake:             stake,
-		CheckPeriod:       checkPeriod,
+		CheckpointPeriod:  chp,
 		FinalityThreshold: finalityThreshold,
 		Consensus: hierarchical.ConsensusParams{
 			Alg:           hierarchical.Mir,
@@ -794,7 +794,7 @@ func (ts *eudicoSubnetSuite) testTwoNodesTwoSubnetsStartStop(t *testing.T) {
 	parent := address.RootSubnet
 	subnetName := "testSubnet"
 	stake := abi.NewStoragePower(1e8)
-	checkPeriod := abi.ChainEpoch(10)
+	chp := abi.ChainEpoch(10)
 	finalityThreshold := abi.ChainEpoch(2)
 
 	err = kit.WaitForBalance(ctx, minerA, 20, nodeA)
@@ -818,7 +818,7 @@ func (ts *eudicoSubnetSuite) testTwoNodesTwoSubnetsStartStop(t *testing.T) {
 		Parent:            parent,
 		Name:              subnetName,
 		Stake:             stake,
-		CheckPeriod:       checkPeriod,
+		CheckpointPeriod:  chp,
 		FinalityThreshold: finalityThreshold,
 		Consensus: hierarchical.ConsensusParams{
 			Alg:           hierarchical.Mir,
@@ -1016,7 +1016,7 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 
 	parent := address.RootSubnet
 	stake := abi.NewStoragePower(1e8)
-	checkPeriod := abi.ChainEpoch(10)
+	chp := abi.ChainEpoch(10)
 	finalityThreshold := abi.ChainEpoch(1)
 
 	err = kit.WaitForBalance(ctx, minerA, 20, nodeA)
@@ -1041,7 +1041,7 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 		Parent:            parent,
 		Name:              "subnetA",
 		Stake:             stake,
-		CheckPeriod:       checkPeriod,
+		CheckpointPeriod:  chp,
 		FinalityThreshold: finalityThreshold,
 		Consensus: hierarchical.ConsensusParams{
 			Alg:           hierarchical.PoW,
@@ -1077,7 +1077,7 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 		Parent:            parent,
 		Name:              "subnetB",
 		Stake:             stake,
-		CheckPeriod:       checkPeriod,
+		CheckpointPeriod:  chp,
 		FinalityThreshold: finalityThreshold,
 		Consensus: hierarchical.ConsensusParams{
 			Alg:           hierarchical.PoW,

@@ -56,7 +56,7 @@ type Subnet struct {
 	cons consensus.Consensus
 	// Finality threshold.
 	finalityThreshold abi.ChainEpoch
-	// Check period.
+	// Checkpoint period.
 	checkPeriod abi.ChainEpoch
 	// Mempool for the subnet.
 	mpool *messagepool.MessagePool

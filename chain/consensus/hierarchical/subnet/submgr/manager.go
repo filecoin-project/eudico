@@ -392,11 +392,21 @@ func (s *Service) AddSubnet(ctx context.Context, params *hierarchical.SubnetPara
 		return address.Undef, xerrors.Errorf("not syncing with parent network")
 	}
 
-	// Basic input validation
+	// Basic input validation for threshold and checkpoint period.
+	// We check these values only here.
+
+	// Don't allow checkpoint periods less than minimal allowed value.
+	minCheckpointPeriod := hierarchical.DefaultCheckpointPeriod(params.Consensus.Alg)
+	checkpointPeriod := params.CheckpointPeriod
+	if checkpointPeriod < minCheckpointPeriod {
+		checkpointPeriod = minCheckpointPeriod
+	}
+
+	// Don't allow finality threshold  less than checkpointing period.
 	if params.FinalityThreshold > 0 &&
-		params.FinalityThreshold >= params.CheckPeriod {
+		params.FinalityThreshold >= params.CheckpointPeriod {
 		return address.Undef, xerrors.Errorf("finality threshold (%v) must be less than checkpoint period (%v)",
-			params.FinalityThreshold, params.CheckPeriod)
+			params.FinalityThreshold, params.CheckpointPeriod)
 	}
 
 	if params.Consensus.Alg == hierarchical.Mir && params.Consensus.MinValidators == 0 {
@@ -409,7 +419,7 @@ func (s *Service) AddSubnet(ctx context.Context, params *hierarchical.SubnetPara
 		MinMinerStake:     params.Stake,
 		Name:              params.Name,
 		Consensus:         params.Consensus.Alg,
-		CheckPeriod:       params.CheckPeriod,
+		CheckpointPeriod:  params.CheckpointPeriod,
 		FinalityThreshold: params.FinalityThreshold,
 		ConsensusParams: &hierarchical.ConsensusParams{
 			DelegMiner:    params.Consensus.DelegMiner,

@@ -85,5 +85,4 @@ type Template struct {
 
 	VerifregRootKey  Actor
 	RemainderAccount Actor
-	CheckPeriod      uint64
 }

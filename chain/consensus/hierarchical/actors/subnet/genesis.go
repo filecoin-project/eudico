@@ -51,11 +51,11 @@ func makeGenesisBlock(
 	ctx context.Context,
 	bs bstore.Blockstore,
 	cns consensus.ConsensusType,
-	e abi.ChainEpoch,
+	chp abi.ChainEpoch,
 	t genesis.Template,
 ) (*genesis2.GenesisBootstrap, error) {
 	var err error
-	st, _, err := MakeInitialStateTree(ctx, bs, t, e)
+	st, _, err := MakeInitialStateTree(ctx, bs, cns, chp, t)
 	if err != nil {
 		return nil, xerrors.Errorf("make initial state tree failed: %w", err)
 	}
@@ -146,7 +146,6 @@ func makeTemplate(
 	vreg, rem address.Address,
 	seq uint64,
 	b types.BigInt,
-	checkPeriod uint64,
 	a *genesis.Actor,
 ) (*genesis.Template, error) {
 	accounts := make([]genesis.Actor, 0)
@@ -159,7 +158,6 @@ func makeTemplate(
 		Miners:         nil,
 		NetworkName:    subnetID,
 		Timestamp:      seq,
-		CheckPeriod:    checkPeriod,
 
 		VerifregRootKey: genesis.Actor{
 			Type:    genesis.TAccount,
@@ -176,7 +174,7 @@ func makeTemplate(
 func CreateGenesisFile(
 	ctx context.Context,
 	fileName string,
-	cns consensus.ConsensusType,
+	alg consensus.ConsensusType,
 	addr address.Address,
 ) error {
 	memks := wallet.NewMemKeyStore()
@@ -201,9 +199,9 @@ func CreateGenesisFile(
 
 	t := uint64(time.Now().Unix())
 
-	checkPeriod := consensus.ConsensusCheckPeriod(cns)
+	chp := consensus.DefaultCheckpointPeriod(alg)
 
-	if err := WriteGenesis(address.RootSubnet, cns, addr, vreg, rem, checkPeriod, t, f); err != nil {
+	if err := WriteGenesis(address.RootSubnet, alg, addr, vreg, rem, chp, t, f); err != nil {
 		return xerrors.Errorf("write genesis car: %w", err)
 	}
 
@@ -216,16 +214,16 @@ func CreateGenesisFile(
 
 func WriteGenesis(
 	netName address.SubnetID,
-	cns consensus.ConsensusType,
+	alg consensus.ConsensusType,
 	miner, vreg, rem address.Address,
-	checkPeriod abi.ChainEpoch,
+	chp abi.ChainEpoch,
 	seq uint64, w io.Writer,
 ) error {
 	bs := bstore.WrapIDStore(bstore.NewMemorySync())
 
 	var b *genesis2.GenesisBootstrap
 	ctx := context.TODO()
-	switch cns {
+	switch alg {
 	case consensus.Delegated:
 		if miner == address.Undef {
 			return xerrors.Errorf("no miner specified for delegated consensus")
@@ -235,22 +233,22 @@ func WriteGenesis(
 			Balance: types.FromFil(0),
 			Meta:    json.RawMessage(`{"Owner":"` + miner.String() + `"}`),
 		}
-		t, err := makeTemplate(netName.String(), vreg, rem, seq, types.FromFil(2), uint64(checkPeriod), &a)
+		t, err := makeTemplate(netName.String(), vreg, rem, seq, types.FromFil(2), &a)
 		if err != nil {
 			return err
 		}
-		b, err = makeGenesisBlock(ctx, bs, cns, checkPeriod, *t)
+		b, err = makeGenesisBlock(ctx, bs, alg, chp, *t)
 		if err != nil {
-			return xerrors.Errorf("failed make genesis block for %s: %w", consensus.ConsensusName(cns), err)
+			return xerrors.Errorf("failed make genesis block for %s: %w", consensus.ConsensusName(alg), err)
 		}
 	case consensus.PoW, consensus.Tendermint, consensus.Mir, consensus.Dummy:
-		t, err := makeTemplate(netName.String(), vreg, rem, seq, types.FromFil(2), uint64(checkPeriod), nil)
+		t, err := makeTemplate(netName.String(), vreg, rem, seq, types.FromFil(2), nil)
 		if err != nil {
 			return err
 		}
-		b, err = makeGenesisBlock(ctx, bs, cns, checkPeriod, *t)
+		b, err = makeGenesisBlock(ctx, bs, alg, chp, *t)
 		if err != nil {
-			return xerrors.Errorf("failed make genesis block for %s: %w", consensus.ConsensusName(cns), err)
+			return xerrors.Errorf("failed make genesis block for %s: %w", consensus.ConsensusName(alg), err)
 		}
 	default:
 		return xerrors.Errorf("consensus not supported")
@@ -268,8 +266,9 @@ func WriteGenesis(
 func MakeInitialStateTree(
 	ctx context.Context,
 	bs bstore.Blockstore,
+	cns consensus.ConsensusType,
+	chp abi.ChainEpoch,
 	template genesis.Template,
-	checkPeriod abi.ChainEpoch,
 ) (*state.StateTree, map[address.Address]address.Address, error) {
 	// Create empty state tree
 	cst := cbor.NewCborStore(bs)
@@ -331,7 +330,8 @@ func MakeInitialStateTree(
 	// Setup sca actor
 	params := &sca.ConstructorParams{
 		NetworkName:      template.NetworkName,
-		CheckpointPeriod: uint64(checkPeriod),
+		Consensus:        cns,
+		CheckpointPeriod: uint64(chp),
 	}
 	scaAct, err := SetupSCAActor(ctx, bs, params)
 	if err != nil {

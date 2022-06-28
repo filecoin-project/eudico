@@ -496,13 +496,13 @@ func (t *ConstructParams) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.CheckPeriod (abi.ChainEpoch) (int64)
-	if t.CheckPeriod >= 0 {
-		if err := cw.WriteMajorTypeHeader(cbg.MajUnsignedInt, uint64(t.CheckPeriod)); err != nil {
+	// t.CheckpointPeriod (abi.ChainEpoch) (int64)
+	if t.CheckpointPeriod >= 0 {
+		if err := cw.WriteMajorTypeHeader(cbg.MajUnsignedInt, uint64(t.CheckpointPeriod)); err != nil {
 			return err
 		}
 	} else {
-		if err := cw.WriteMajorTypeHeader(cbg.MajNegativeInt, uint64(-t.CheckPeriod-1)); err != nil {
+		if err := cw.WriteMajorTypeHeader(cbg.MajNegativeInt, uint64(-t.CheckpointPeriod-1)); err != nil {
 			return err
 		}
 	}
@@ -605,7 +605,7 @@ func (t *ConstructParams) UnmarshalCBOR(r io.Reader) (err error) {
 		}
 
 	}
-	// t.CheckPeriod (abi.ChainEpoch) (int64)
+	// t.CheckpointPeriod (abi.ChainEpoch) (int64)
 	{
 		maj, extra, err := cr.ReadHeader()
 		var extraI int64
@@ -628,7 +628,7 @@ func (t *ConstructParams) UnmarshalCBOR(r io.Reader) (err error) {
 			return fmt.Errorf("wrong type for int64 field: %d", maj)
 		}
 
-		t.CheckPeriod = abi.ChainEpoch(extraI)
+		t.CheckpointPeriod = abi.ChainEpoch(extraI)
 	}
 	// t.FinalityThreshold (abi.ChainEpoch) (int64)
 	{

@@ -153,11 +153,11 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 	}
 
 	// Create init actor
-	idStart, initact, keyIDs, err := SetupInitActor(ctx, bs, template.NetworkName, template.Accounts, template.VerifregRootKey, template.RemainderAccount, av)
+	idStart, initAct, keyIDs, err := SetupInitActor(ctx, bs, template.NetworkName, template.Accounts, template.VerifregRootKey, template.RemainderAccount, av)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup init actor: %w", err)
 	}
-	if err := state.SetActor(init_.Address, initact); err != nil {
+	if err := state.SetActor(init_.Address, initAct); err != nil {
 		return nil, nil, xerrors.Errorf("set init actor: %w", err)
 	}
 
@@ -185,7 +185,8 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 	// Setup sca actor
 	params := &sca.ConstructorParams{
 		NetworkName:      template.NetworkName,
-		CheckpointPeriod: template.CheckPeriod,
+		CheckpointPeriod: uint64(hierarchical.DefaultCheckpointPeriod(hierarchical.FilecoinEC)),
+		Consensus:        hierarchical.FilecoinEC,
 	}
 	scaAct, err := SetupSCAActor(ctx, bs, params)
 	if err != nil {

@@ -430,11 +430,11 @@ func (h *shActorHarness) constructAndVerify(t *testing.T, rt *mock.Runtime) {
 	rt.ExpectValidateCallerType(builtin.InitActorCodeID)
 	ret := rt.Call(h.SubnetActor.Constructor,
 		&actor.ConstructParams{
-			NetworkName:   address.RootSubnet.String(),
-			Name:          "myTestSubnet",
-			Consensus:     hierarchical.PoW,
-			MinMinerStake: actor.MinMinerStake,
-			CheckPeriod:   abi.ChainEpoch(100),
+			NetworkName:      address.RootSubnet.String(),
+			Name:             "myTestSubnet",
+			Consensus:        hierarchical.PoW,
+			MinMinerStake:    actor.MinMinerStake,
+			CheckpointPeriod: abi.ChainEpoch(100),
 			ConsensusParams: &hierarchical.ConsensusParams{
 				DelegMiner: tutil.NewIDAddr(t, 101),
 			},
@@ -480,7 +480,7 @@ func (h *shActorHarness) constructAndVerifyZeroCheck(t *testing.T, rt *mock.Runt
 	var st actor.SubnetState
 
 	rt.GetState(&st)
-	assert.Equal(h.t, st.CheckPeriod, hierarchical.ConsensusCheckPeriod(hierarchical.PoW))
+	assert.Equal(h.t, st.CheckPeriod, hierarchical.DefaultCheckpointPeriod(hierarchical.PoW))
 }
 
 func verifyEmptyMap(t testing.TB, rt *mock.Runtime, cid cid.Cid) {
