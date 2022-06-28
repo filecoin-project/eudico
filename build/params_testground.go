@@ -132,7 +132,7 @@ const PoWFinality = 3
 const TendermintFinality = 2
 const MirFinality = 2
 const DummyFinality = 1
-const FilecoinECFinality = 5
+const FilecoinFinality = 5
 
 const DelegatedPoWCheckpointPeriod = 10
 const PoWCheckpointPeriod = 10
