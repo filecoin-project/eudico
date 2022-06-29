@@ -95,7 +95,7 @@ type Service struct {
 
 type SubnetParams struct {
 	FinalityThreshold abi.ChainEpoch
-	CheckPeriod       abi.ChainEpoch
+	CheckpointPeriod  abi.ChainEpoch
 	Consensus         hierarchical.ConsensusType
 }
 
@@ -189,15 +189,15 @@ func (s *Service) startSubnet(id address.SubnetID,
 
 	log.Infow("Creating new subnet", "subnetID", id)
 	sh := &Subnet{
-		ctx:         ctx,
-		ctxCancel:   cancel,
-		ID:          id,
-		host:        s.host,
-		pubsub:      s.pubsub,
-		nodeServer:  s.nodeServer,
-		pmgr:        s.pmgr,
-		consType:    consensus,
-		checkPeriod: params.CheckPeriod,
+		ctx:              ctx,
+		ctxCancel:        cancel,
+		ID:               id,
+		host:             s.host,
+		pubsub:           s.pubsub,
+		nodeServer:       s.nodeServer,
+		pmgr:             s.pmgr,
+		consType:         consensus,
+		checkpointPeriod: params.CheckpointPeriod,
 	}
 
 	sh.checklk.Lock()
@@ -254,12 +254,11 @@ func (s *Service) startSubnet(id address.SubnetID,
 	}
 	log.Infow("Genesis and consensus for subnet created", "subnetID", id, "consensus", consensus)
 
-	// Validate input finality threshold and use default value if it failed.
-	sh.finalityThreshold = sh.cons.Finality()
-	if params.FinalityThreshold > 1 && params.FinalityThreshold < params.CheckPeriod {
-		sh.finalityThreshold = params.FinalityThreshold
+	if params.FinalityThreshold >= params.CheckpointPeriod {
+		return xerrors.Errorf("finality threshold (%v) must be less than checkpoint period (%v)",
+			params.FinalityThreshold, params.CheckpointPeriod)
 	}
-	log.Infof("Finality threshold for %s is %v", sh.ID, sh.finalityThreshold)
+	log.Infof("Finality threshold for subnet %s is %v", sh.ID, sh.finalityThreshold)
 
 	// We configure a new handler for the subnet syncing exchange protocol.
 	sh.exchangeServer()
@@ -382,38 +381,46 @@ func (s *Service) GetSubnetState(ctx context.Context, id address.SubnetID, actor
 	return st, nil
 }
 
-func (s *Service) AddSubnet(ctx context.Context, sbn *hierarchical.SubnetParams) (address.Address, error) {
-	if sbn == nil {
+func (s *Service) AddSubnet(ctx context.Context, params *hierarchical.SubnetParams) (address.Address, error) {
+	if params == nil {
 		return address.Undef, xerrors.New("nil subnet params")
 	}
 	// Get the api for the parent network hosting the subnet actor for the subnet.
-	parentAPI := s.getAPI(sbn.Parent)
+	parentAPI := s.getAPI(params.Parent)
 	if parentAPI == nil {
 		return address.Undef, xerrors.Errorf("not syncing with parent network")
 	}
 
-	// Basic input validation
-	if sbn.FinalityThreshold > 0 &&
-		sbn.FinalityThreshold >= sbn.CheckPeriod {
-		return address.Undef, xerrors.Errorf("finality threshold (%v) must be less than checkpoint period (%v)",
-			sbn.FinalityThreshold, sbn.CheckPeriod)
+	// Basic input validation for finality threshold and checkpoint period.
+
+	// Don't allow checkpoint periods less than minimal allowed value.
+	minCheckpointPeriod := hierarchical.MinCheckpointPeriod(params.Consensus.Alg)
+	checkpointPeriod := params.CheckpointPeriod
+	if checkpointPeriod < minCheckpointPeriod {
+		checkpointPeriod = minCheckpointPeriod
 	}
 
-	if sbn.Consensus.Alg == hierarchical.Mir && sbn.Consensus.MinValidators == 0 {
+	// FinalityThreshold should always be less than the checkpoint period.
+	if params.FinalityThreshold >= checkpointPeriod {
+		return address.Undef, xerrors.Errorf("finality threshold (%v) must be less than checkpoint period (%v)",
+			params.FinalityThreshold, params.CheckpointPeriod)
+	}
+
+	if params.Consensus.Alg == hierarchical.Mir && params.Consensus.MinValidators == 0 {
 		return address.Undef, xerrors.New("minimum number of Mir validators must be more than 0")
 	}
 
 	// Populate constructor parameters for subnet actor
 	addp := &subnet.ConstructParams{
 		NetworkName:       string(s.api.NetName),
-		MinMinerStake:     sbn.Stake,
-		Name:              sbn.Name,
-		Consensus:         sbn.Consensus.Alg,
-		CheckPeriod:       sbn.CheckPeriod,
-		FinalityThreshold: sbn.FinalityThreshold,
+		MinMinerStake:     params.Stake,
+		Name:              params.Name,
+		Consensus:         params.Consensus.Alg,
+		CheckpointPeriod:  checkpointPeriod,
+		FinalityThreshold: params.FinalityThreshold,
 		ConsensusParams: &hierarchical.ConsensusParams{
-			DelegMiner:    sbn.Consensus.DelegMiner,
-			MinValidators: sbn.Consensus.MinValidators,
+			DelegMiner:    params.Consensus.DelegMiner,
+			MinValidators: params.Consensus.MinValidators,
 		},
 	}
 
@@ -431,9 +438,9 @@ func (s *Service) AddSubnet(ctx context.Context, sbn *hierarchical.SubnetParams)
 		return address.Undef, xerrors.Errorf("failed serializing init actor params: %s", err)
 	}
 
-	smsg, aerr := parentAPI.MpoolPushMessage(ctx, &types.Message{
+	msg, aerr := parentAPI.MpoolPushMessage(ctx, &types.Message{
 		To:     builtin.InitActorAddr,
-		From:   sbn.Addr,
+		From:   params.Addr,
 		Value:  abi.NewTokenAmount(0),
 		Method: builtin.MethodsInit.Exec,
 		Params: serParams,
@@ -442,8 +449,8 @@ func (s *Service) AddSubnet(ctx context.Context, sbn *hierarchical.SubnetParams)
 		return address.Undef, aerr
 	}
 
-	msg := smsg.Cid()
-	mw, aerr := parentAPI.StateWaitMsg(ctx, msg, build.MessageConfidence, api.LookbackNoLimit, true)
+	msgCid := msg.Cid()
+	mw, aerr := parentAPI.StateWaitMsg(ctx, msgCid, build.MessageConfidence, api.LookbackNoLimit, true)
 	if aerr != nil {
 		return address.Undef, aerr
 	}
@@ -567,7 +574,7 @@ func (s *Service) syncSubnet(ctx context.Context, id address.SubnetID, parentAPI
 	params := &SubnetParams{
 		Consensus:         st.Consensus,
 		FinalityThreshold: st.FinalityThreshold,
-		CheckPeriod:       st.CheckPeriod,
+		CheckpointPeriod:  st.CheckPeriod,
 	}
 
 	return s.startSubnet(id, parentAPI, params, st.Genesis)

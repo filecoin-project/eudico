@@ -77,6 +77,7 @@ func (a SubnetCoordActor) State() cbor.Er {
 type ConstructorParams struct {
 	NetworkName      string
 	CheckpointPeriod uint64
+	Consensus        hierarchical.ConsensusType
 }
 
 func (a SubnetCoordActor) Constructor(rt runtime.Runtime, params *ConstructorParams) *abi.EmptyValue {

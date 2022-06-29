@@ -16,10 +16,6 @@ type Consensus interface {
 	ValidateBlock(ctx context.Context, b *types.FullBlock) (err error)
 	ValidateBlockPubsub(ctx context.Context, self bool, msg *pubsub.Message) (pubsub.ValidationResult, string)
 	IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool
-
 	CreateBlock(ctx context.Context, w api.Wallet, bt *api.BlockTemplate) (*types.FullBlock, error)
 	Type() hierarchical.ConsensusType
-
-	// Finality determines the number of epochs to wait before considering a change "final".
-	Finality() abi.ChainEpoch
 }

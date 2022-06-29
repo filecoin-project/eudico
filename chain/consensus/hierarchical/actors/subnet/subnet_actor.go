@@ -69,15 +69,17 @@ type ConstructParams struct {
 	Consensus         hierarchical.ConsensusType    // Consensus for subnet.
 	ConsensusParams   *hierarchical.ConsensusParams // Used parameters for the consensus protocol.
 	MinMinerStake     abi.TokenAmount               // MinStake to give miner rights.
-	CheckPeriod       abi.ChainEpoch                // Checkpointing period.
+	CheckpointPeriod  abi.ChainEpoch                // Checkpointing period.
 	FinalityThreshold abi.ChainEpoch                // Finality threshold.
 }
 
 func (a SubnetActor) Constructor(rt runtime.Runtime, params *ConstructParams) *abi.EmptyValue {
 	// Subnet actors need to be deployed through the init actor.
 	rt.ValidateImmediateCallerType(builtin.InitActorCodeID)
+	// Params value are validated and can be changed before constructing a subnet state.
 	st, err := ConstructSubnetState(adt.AsStore(rt), params)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
+	// params can be updated during input validation in `ConstructSubnetState`.
 	st.initGenesis(rt, params)
 	rt.StateCreate(st)
 	return nil
@@ -101,7 +103,7 @@ func (st *SubnetState) initGenesis(rt runtime.Runtime, params *ConstructParams) 
 	// Getting actor ID from receiver.
 	netName := address.NewSubnetID(address.SubnetID(params.NetworkName), rt.Receiver())
 	err = WriteGenesis(netName, st.Consensus, params.ConsensusParams.DelegMiner, vreg, rem,
-		params.CheckPeriod, rt.ValueReceived().Uint64(), buf)
+		params.CheckpointPeriod, rt.ValueReceived().Uint64(), buf)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed genesis")
 	st.Genesis = buf.Bytes()
 }

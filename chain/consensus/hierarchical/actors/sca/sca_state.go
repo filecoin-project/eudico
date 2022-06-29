@@ -17,10 +17,6 @@ import (
 )
 
 const (
-	// MinCheckpointPeriod defines minimal allowed checkpoint period for a subnet.
-	// At present, it is the same for all consensus algorithms.
-	MinCheckpointPeriod = abi.ChainEpoch(10)
-
 	// CrossMsgsAMTBitwidth determines the bitwidth to use for cross-msg AMT.
 	// TODO: We probably need some empirical experiments to determine the best values
 	// for these constants.
@@ -47,7 +43,6 @@ const (
 	Active   Status = iota // Active and operating. Has permission to interact with other chains in the hierarchy
 	Inactive               // Waiting for the stake to be top-up over the MinStake threshold
 	Killed                 // Not active anymore.
-
 )
 
 // SCAState represents the state of the Subnet Coordinator Actor
@@ -104,19 +99,18 @@ func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, e
 		return nil, xerrors.Errorf("failed to create empty AMT: %w", err)
 	}
 
-	nn := address.SubnetID(params.NetworkName)
-	// Don't allow really small checkpoint periods for now.
-	period := abi.ChainEpoch(params.CheckpointPeriod)
-	if period < MinCheckpointPeriod {
-		period = MinCheckpointPeriod
+	minCheckpointPeriod := hierarchical.MinCheckpointPeriod(params.Consensus)
+	checkpointPeriod := abi.ChainEpoch(params.CheckpointPeriod)
+	if checkpointPeriod < minCheckpointPeriod {
+		checkpointPeriod = minCheckpointPeriod
 	}
 
 	return &SCAState{
-		NetworkName:          nn,
+		NetworkName:          address.SubnetID(params.NetworkName),
 		TotalSubnets:         0,
 		MinStake:             MinSubnetStake,
 		Subnets:              emptySubnetsMapCid,
-		CheckPeriod:          period,
+		CheckPeriod:          checkpointPeriod,
 		Checkpoints:          emptyCheckpointsMapCid,
 		CheckMsgsRegistry:    emptyMsgsMetaMapCid,
 		BottomUpMsgsMeta:     emptyBottomUpMsgsAMT,

@@ -239,7 +239,3 @@ func Weight(ctx context.Context, stateBs bstore.Blockstore, ts *types.TipSet) (t
 
 	return big.NewInt(int64(ts.Height() + 1)), nil
 }
-
-func (bft *Dummy) Finality() abi.ChainEpoch {
-	return build.DummyFinality
-}

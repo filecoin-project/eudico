@@ -414,6 +414,24 @@ func TestZeroCheckPeriod(t *testing.T) {
 	h.constructAndVerifyZeroCheck(t, rt)
 }
 
+func TestBigFinality(t *testing.T) {
+	h := newHarness(t)
+	rt := getRuntime(t)
+	h.constructWithBigFinality(t, rt)
+}
+
+func TestLowFinality(t *testing.T) {
+	h := newHarness(t)
+	rt := getRuntime(t)
+	h.constructWithLowFinality(t, rt)
+}
+
+func TestLowCheckperiod(t *testing.T) {
+	h := newHarness(t)
+	rt := getRuntime(t)
+	h.constructWithLowCheckperiod(t, rt)
+}
+
 type shActorHarness struct {
 	actor.SubnetActor
 	t *testing.T
@@ -430,11 +448,12 @@ func (h *shActorHarness) constructAndVerify(t *testing.T, rt *mock.Runtime) {
 	rt.ExpectValidateCallerType(builtin.InitActorCodeID)
 	ret := rt.Call(h.SubnetActor.Constructor,
 		&actor.ConstructParams{
-			NetworkName:   address.RootSubnet.String(),
-			Name:          "myTestSubnet",
-			Consensus:     hierarchical.PoW,
-			MinMinerStake: actor.MinMinerStake,
-			CheckPeriod:   abi.ChainEpoch(100),
+			NetworkName:       address.RootSubnet.String(),
+			Name:              "myTestSubnet",
+			Consensus:         hierarchical.PoW,
+			MinMinerStake:     actor.MinMinerStake,
+			CheckpointPeriod:  abi.ChainEpoch(100),
+			FinalityThreshold: abi.ChainEpoch(50),
 			ConsensusParams: &hierarchical.ConsensusParams{
 				DelegMiner: tutil.NewIDAddr(t, 101),
 			},
@@ -450,6 +469,7 @@ func (h *shActorHarness) constructAndVerify(t *testing.T, rt *mock.Runtime) {
 	assert.Equal(h.t, st.MinMinerStake, actor.MinMinerStake)
 	assert.Equal(h.t, st.Status, actor.Instantiated)
 	assert.Equal(h.t, st.CheckPeriod, abi.ChainEpoch(100))
+	assert.Equal(h.t, st.FinalityThreshold, abi.ChainEpoch(50))
 	assert.Equal(h.t, st.MinValidators, uint64(0))
 	assert.Equal(h.t, len(st.ValidatorSet), 0)
 	// Verify that the genesis for the subnet has been generated.
@@ -460,7 +480,76 @@ func (h *shActorHarness) constructAndVerify(t *testing.T, rt *mock.Runtime) {
 	verifyEmptyMap(h.t, rt, st.WindowChecks)
 }
 
-// Check what happens if we set a check period equal to zero.
+// Check what happens if we set a finality threshold more than checkpoint period.
+func (h *shActorHarness) constructWithBigFinality(t *testing.T, rt *mock.Runtime) {
+	defer func() {
+		if r := recover(); r == nil {
+			h.t.Errorf("constructWithBigFinality did not fail")
+		}
+	}()
+	rt.ExpectValidateCallerType(builtin.InitActorCodeID)
+	rt.Call(h.SubnetActor.Constructor,
+		&actor.ConstructParams{
+			NetworkName:       address.RootSubnet.String(),
+			Name:              "myTestSubnet",
+			Consensus:         hierarchical.Delegated,
+			FinalityThreshold: 30,
+			CheckpointPeriod:  20,
+			MinMinerStake:     actor.MinMinerStake,
+			ConsensusParams: &hierarchical.ConsensusParams{
+				DelegMiner: tutil.NewIDAddr(t, 101),
+			},
+		})
+	rt.Verify()
+}
+
+// Check what happens if we set a finality threshold less then min value we get an error.
+func (h *shActorHarness) constructWithLowFinality(t *testing.T, rt *mock.Runtime) {
+	defer func() {
+		if r := recover(); r == nil {
+			h.t.Errorf("constructWithLowFinality did not fail")
+		}
+	}()
+	rt.ExpectValidateCallerType(builtin.InitActorCodeID)
+	rt.Call(h.SubnetActor.Constructor,
+		&actor.ConstructParams{
+			NetworkName:       address.RootSubnet.String(),
+			Name:              "myTestSubnet",
+			Consensus:         hierarchical.Delegated,
+			FinalityThreshold: -1,
+			CheckpointPeriod:  hierarchical.MinCheckpointPeriod(hierarchical.Delegated),
+			MinMinerStake:     actor.MinMinerStake,
+			ConsensusParams: &hierarchical.ConsensusParams{
+				DelegMiner: tutil.NewIDAddr(t, 101),
+			},
+		})
+	rt.Verify()
+}
+
+// Check what happens if we set a finality threshold less then min value we get an error.
+func (h *shActorHarness) constructWithLowCheckperiod(t *testing.T, rt *mock.Runtime) {
+	defer func() {
+		if r := recover(); r == nil {
+			h.t.Errorf("constructWithLowCheckperiod did not fail")
+		}
+	}()
+	rt.ExpectValidateCallerType(builtin.InitActorCodeID)
+	rt.Call(h.SubnetActor.Constructor,
+		&actor.ConstructParams{
+			NetworkName:       address.RootSubnet.String(),
+			Name:              "myTestSubnet",
+			Consensus:         hierarchical.Delegated,
+			FinalityThreshold: hierarchical.MinFinality(hierarchical.Delegated),
+			CheckpointPeriod:  -1,
+			MinMinerStake:     actor.MinMinerStake,
+			ConsensusParams: &hierarchical.ConsensusParams{
+				DelegMiner: tutil.NewIDAddr(t, 101),
+			},
+		})
+	rt.Verify()
+}
+
+// Check what happens if we set a checkpoint period equal to zero.
 // We should be assigning the default period.
 func (h *shActorHarness) constructAndVerifyZeroCheck(t *testing.T, rt *mock.Runtime) {
 	rt.ExpectValidateCallerType(builtin.InitActorCodeID)
@@ -480,7 +569,7 @@ func (h *shActorHarness) constructAndVerifyZeroCheck(t *testing.T, rt *mock.Runt
 	var st actor.SubnetState
 
 	rt.GetState(&st)
-	assert.Equal(h.t, st.CheckPeriod, hierarchical.ConsensusCheckPeriod(hierarchical.PoW))
+	assert.Equal(h.t, hierarchical.MinCheckpointPeriod(hierarchical.PoW), st.CheckPeriod)
 }
 
 func verifyEmptyMap(t testing.TB, rt *mock.Runtime, cid cid.Cid) {

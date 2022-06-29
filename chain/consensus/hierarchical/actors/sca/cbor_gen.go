@@ -10,6 +10,7 @@ import (
 
 	address "github.com/filecoin-project/go-address"
 	abi "github.com/filecoin-project/go-state-types/abi"
+	hierarchical "github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	schema "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	types "github.com/filecoin-project/lotus/chain/types"
 	cid "github.com/ipfs/go-cid"
@@ -22,7 +23,7 @@ var _ = cid.Undef
 var _ = math.E
 var _ = sort.Sort
 
-var lengthBufConstructorParams = []byte{130}
+var lengthBufConstructorParams = []byte{131}
 
 func (t *ConstructorParams) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -54,6 +55,12 @@ func (t *ConstructorParams) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
+	// t.Consensus (hierarchical.ConsensusType) (uint64)
+
+	if err := cw.WriteMajorTypeHeader(cbg.MajUnsignedInt, uint64(t.Consensus)); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -76,7 +83,7 @@ func (t *ConstructorParams) UnmarshalCBOR(r io.Reader) (err error) {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 2 {
+	if extra != 3 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -102,6 +109,20 @@ func (t *ConstructorParams) UnmarshalCBOR(r io.Reader) (err error) {
 			return fmt.Errorf("wrong type for uint64 field")
 		}
 		t.CheckpointPeriod = uint64(extra)
+
+	}
+	// t.Consensus (hierarchical.ConsensusType) (uint64)
+
+	{
+
+		maj, extra, err = cr.ReadHeader()
+		if err != nil {
+			return err
+		}
+		if maj != cbg.MajUnsignedInt {
+			return fmt.Errorf("wrong type for uint64 field")
+		}
+		t.Consensus = hierarchical.ConsensusType(extra)
 
 	}
 	return nil

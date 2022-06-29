@@ -940,7 +940,3 @@ func (filec *FilecoinEC) isChainNearSynced() bool {
 func (filec *FilecoinEC) Type() hierarchical.ConsensusType {
 	return hierarchical.FilecoinEC
 }
-
-func (filec *FilecoinEC) Finality() abi.ChainEpoch {
-	return build.FilecoinECFinality
-}

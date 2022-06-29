@@ -11,7 +11,6 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
@@ -121,19 +120,33 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}
 
-	// Don't allow checkpoint periods less than minimal allowed value.
-	checkPeriod := params.CheckPeriod
-	if checkPeriod < sca.MinCheckpointPeriod {
-		checkPeriod = hierarchical.ConsensusCheckPeriod(params.Consensus)
-	}
-
-	// TODO: @alfonso do we need this?
 	/* Initialize AMT of miners.
 	emptyArr, err := adt.MakeEmptyArray(adt.AsStore(rt), LaneStatesAmtBitwidth)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create empty array")
 	emptyArrCid, err := emptyArr.Root()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to persist empty array")
 	*/
+
+	if params.CheckpointPeriod == 0 {
+		params.CheckpointPeriod = hierarchical.MinCheckpointPeriod(params.Consensus)
+	}
+
+	if params.FinalityThreshold == 0 {
+		params.FinalityThreshold = hierarchical.MinFinality(params.Consensus)
+	}
+
+	if params.CheckpointPeriod < hierarchical.MinCheckpointPeriod(params.Consensus) {
+		return nil, xerrors.Errorf("checkpoint value (%v) is too low", params.CheckpointPeriod)
+	}
+	if params.FinalityThreshold < hierarchical.MinFinality(params.Consensus) {
+		return nil, xerrors.Errorf("finality value (%v) is too low", params.FinalityThreshold)
+	}
+
+	// Finality should always be less than the checkpoint period.
+	if params.FinalityThreshold >= params.CheckpointPeriod {
+		return nil, xerrors.Errorf("finality (%v) must be less than checkpoint period (%v)",
+			params.FinalityThreshold, params.CheckpointPeriod)
+	}
 
 	parentID := address.SubnetID(params.NetworkName)
 
@@ -144,7 +157,7 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 		Miners:            make([]address.Address, 0),
 		Stake:             emptyStakeCid,
 		Status:            Instantiated,
-		CheckPeriod:       checkPeriod,
+		CheckPeriod:       params.CheckpointPeriod,
 		Checkpoints:       emptyCheckpointsMapCid,
 		FinalityThreshold: params.FinalityThreshold,
 		WindowChecks:      emptyWindowChecks,

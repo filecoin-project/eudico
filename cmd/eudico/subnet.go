@@ -102,11 +102,11 @@ var addCmd = &cli.Command{
 		},
 		&cli.StringFlag{
 			Name:  "consensus",
-			Usage: "specify consensus for the subnet (Delegated, PoW, Tendermint, Mir)",
+			Usage: "specify consensus algorithm for the subnet (Delegated, PoW, Tendermint, Mir)",
 		},
 		&cli.IntFlag{
-			Name:  "check-period",
-			Usage: "optionally specify checkpointing period for subnet (default = 10 epochs)",
+			Name:  "checkpoint-period",
+			Usage: "optionally specify checkpointing period for subnet",
 		},
 		&cli.StringFlag{
 			Name:  "name",
@@ -150,9 +150,9 @@ var addCmd = &cli.Command{
 		}
 
 		if !cctx.IsSet("consensus") {
-			return lcli.ShowHelp(cctx, fmt.Errorf("consensus is not specified"))
+			return lcli.ShowHelp(cctx, fmt.Errorf("consensus algorithm is not specified"))
 		}
-		cns := hierarchical.Consensus(cctx.String("consensus"))
+		alg := hierarchical.Consensus(cctx.String("consensus"))
 
 		if !cctx.IsSet("name") {
 			return lcli.ShowHelp(cctx, fmt.Errorf("no name for subnet specified"))
@@ -176,11 +176,11 @@ var addCmd = &cli.Command{
 			if err != nil {
 				return xerrors.Errorf("failed parsing delegated miner address: %s", err)
 			}
-		} else if cns == 0 {
+		} else if alg == 0 {
 			return lcli.ShowHelp(cctx, fmt.Errorf("no delegated miner for delegated consensus specified"))
 		}
 		stake := abi.NewStoragePower(1e8) // TODO: Make this value configurable in a flag/argument
-		checkPeriod := abi.ChainEpoch(cctx.Int("check-period"))
+		chp := abi.ChainEpoch(cctx.Int("checkpoint-period"))
 		finalityThreshold := abi.ChainEpoch(cctx.Int("finality-threshold"))
 
 		params := &hierarchical.SubnetParams{
@@ -188,12 +188,12 @@ var addCmd = &cli.Command{
 			Parent:            parent,
 			Name:              subnetName,
 			Stake:             stake,
-			CheckPeriod:       checkPeriod,
+			CheckpointPeriod:  chp,
 			FinalityThreshold: finalityThreshold,
 			Consensus: hierarchical.ConsensusParams{
 				DelegMiner:    delegMiner,
 				MinValidators: minVals,
-				Alg:           cns,
+				Alg:           alg,
 			},
 		}
 		actorAddr, err := api.AddSubnet(ctx, params)

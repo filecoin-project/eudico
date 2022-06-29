@@ -49,13 +49,13 @@ const (
 
 func makeGenesisBlock(
 	ctx context.Context,
-	cns consensus.ConsensusType,
 	bs bstore.Blockstore,
+	cns consensus.ConsensusType,
+	chp abi.ChainEpoch,
 	t genesis.Template,
-	e abi.ChainEpoch,
 ) (*genesis2.GenesisBootstrap, error) {
 	var err error
-	st, _, err := MakeInitialStateTree(ctx, bs, t, e)
+	st, _, err := MakeInitialStateTree(ctx, bs, cns, chp, t)
 	if err != nil {
 		return nil, xerrors.Errorf("make initial state tree failed: %w", err)
 	}
@@ -93,7 +93,7 @@ func makeGenesisBlock(
 		if err != nil {
 			return nil, err
 		}
-	case consensus.Delegated:
+	case consensus.Delegated, consensus.Dummy, consensus.Tendermint, consensus.Mir:
 		// TODO: We can't use randomness in genesis block
 		// if want to make it deterministic. Consider using
 		// a seed to for the ticket generation?
@@ -174,7 +174,7 @@ func makeTemplate(
 func CreateGenesisFile(
 	ctx context.Context,
 	fileName string,
-	cns consensus.ConsensusType,
+	alg consensus.ConsensusType,
 	addr address.Address,
 ) error {
 	memks := wallet.NewMemKeyStore()
@@ -199,9 +199,9 @@ func CreateGenesisFile(
 
 	t := uint64(time.Now().Unix())
 
-	checkPeriod := consensus.ConsensusCheckPeriod(cns)
+	chp := consensus.MinCheckpointPeriod(alg)
 
-	if err := WriteGenesis(address.RootSubnet, cns, addr, vreg, rem, checkPeriod, t, f); err != nil {
+	if err := WriteGenesis(address.RootSubnet, alg, addr, vreg, rem, chp, t, f); err != nil {
 		return xerrors.Errorf("write genesis car: %w", err)
 	}
 
@@ -214,16 +214,16 @@ func CreateGenesisFile(
 
 func WriteGenesis(
 	netName address.SubnetID,
-	cns consensus.ConsensusType,
+	alg consensus.ConsensusType,
 	miner, vreg, rem address.Address,
-	checkPeriod abi.ChainEpoch,
+	chp abi.ChainEpoch,
 	seq uint64, w io.Writer,
 ) error {
 	bs := bstore.WrapIDStore(bstore.NewMemorySync())
 
 	var b *genesis2.GenesisBootstrap
 	ctx := context.TODO()
-	switch cns {
+	switch alg {
 	case consensus.Delegated:
 		if miner == address.Undef {
 			return xerrors.Errorf("no miner specified for delegated consensus")
@@ -237,18 +237,18 @@ func WriteGenesis(
 		if err != nil {
 			return err
 		}
-		b, err = makeGenesisBlock(ctx, cns, bs, *t, checkPeriod)
+		b, err = makeGenesisBlock(ctx, bs, alg, chp, *t)
 		if err != nil {
-			return xerrors.Errorf("failed make genesis block for %s: %w", consensus.ConsensusName(cns), err)
+			return xerrors.Errorf("failed make genesis block for %s: %w", consensus.ConsensusName(alg), err)
 		}
 	case consensus.PoW, consensus.Tendermint, consensus.Mir, consensus.Dummy:
 		t, err := makeTemplate(netName.String(), vreg, rem, seq, types.FromFil(2), nil)
 		if err != nil {
 			return err
 		}
-		b, err = makeGenesisBlock(ctx, cns, bs, *t, checkPeriod)
+		b, err = makeGenesisBlock(ctx, bs, alg, chp, *t)
 		if err != nil {
-			return xerrors.Errorf("failed make genesis block for %s: %w", consensus.ConsensusName(cns), err)
+			return xerrors.Errorf("failed make genesis block for %s: %w", consensus.ConsensusName(alg), err)
 		}
 	default:
 		return xerrors.Errorf("consensus not supported")
@@ -266,8 +266,9 @@ func WriteGenesis(
 func MakeInitialStateTree(
 	ctx context.Context,
 	bs bstore.Blockstore,
+	cns consensus.ConsensusType,
+	chp abi.ChainEpoch,
 	template genesis.Template,
-	checkPeriod abi.ChainEpoch,
 ) (*state.StateTree, map[address.Address]address.Address, error) {
 	// Create empty state tree
 	cst := cbor.NewCborStore(bs)
@@ -312,7 +313,13 @@ func MakeInitialStateTree(
 
 	// Create init actor
 
-	idStart, initact, keyIDs, err := genesis2.SetupInitActor(ctx, bs, template.NetworkName, template.Accounts, template.VerifregRootKey, template.RemainderAccount, av)
+	idStart, initact, keyIDs, err := genesis2.SetupInitActor(ctx,
+		bs,
+		template.NetworkName,
+		template.Accounts,
+		template.VerifregRootKey,
+		template.RemainderAccount,
+		av)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup init actor: %w", err)
 	}
@@ -323,43 +330,44 @@ func MakeInitialStateTree(
 	// Setup sca actor
 	params := &sca.ConstructorParams{
 		NetworkName:      template.NetworkName,
-		CheckpointPeriod: uint64(checkPeriod),
+		Consensus:        cns,
+		CheckpointPeriod: uint64(chp),
 	}
-	scaact, err := SetupSCAActor(ctx, bs, params)
+	scaAct, err := SetupSCAActor(ctx, bs, params)
 	if err != nil {
 		return nil, nil, err
 	}
-	err = stateTree.SetActor(consensus.SubnetCoordActorAddr, scaact)
+	err = stateTree.SetActor(consensus.SubnetCoordActorAddr, scaAct)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("set SCA actor: %w", err)
 	}
 
 	// Create empty market actor
-	marketact, err := SetupStorageMarketActor(ctx, bs, av)
+	marketAct, err := SetupStorageMarketActor(ctx, bs, av)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup storage market actor: %w", err)
 	}
-	if err := stateTree.SetActor(market.Address, marketact); err != nil {
+	if err := stateTree.SetActor(market.Address, marketAct); err != nil {
 		return nil, nil, xerrors.Errorf("set storage market actor: %w", err)
 	}
 	// Setup reward actor
 	// This is a modified reward actor to support the needs of hierarchical consensus
 	// protocol.
-	rewact, err := SetupRewardActor(ctx, bs, big.Zero(), av)
+	rewAct, err := SetupRewardActor(ctx, bs, big.Zero(), av)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup reward actor: %w", err)
 	}
 
-	err = stateTree.SetActor(reward.RewardActorAddr, rewact)
+	err = stateTree.SetActor(reward.RewardActorAddr, rewAct)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("set reward actor: %w", err)
 	}
 
-	bact, err := genesis2.MakeAccountActor(ctx, cst, av, builtin.BurntFundsActorAddr, big.Zero())
+	bAct, err := genesis2.MakeAccountActor(ctx, cst, av, builtin.BurntFundsActorAddr, big.Zero())
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup burnt funds actor state: %w", err)
 	}
-	if err := stateTree.SetActor(builtin.BurntFundsActorAddr, bact); err != nil {
+	if err := stateTree.SetActor(builtin.BurntFundsActorAddr, bAct); err != nil {
 		return nil, nil, xerrors.Errorf("set burnt funds actor: %w", err)
 	}
 

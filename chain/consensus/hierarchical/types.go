@@ -61,24 +61,47 @@ func Consensus(name string) ConsensusType {
 	case strings.EqualFold(name, "dummy"):
 		return Dummy
 	default:
-		panic(fmt.Sprintf("unknown consensus name %s", name))
+		panic(fmt.Sprintf("unknown or unspecified consensus algorithm %s", name))
 	}
 }
 
-func ConsensusCheckPeriod(alg ConsensusType) abi.ChainEpoch {
+// MinCheckpointPeriod returns a minimal allowed checkpoint period for the consensus in a subnet.
+//
+// Finality determines the number of epochs to wait before considering a change "final".
+func MinCheckpointPeriod(alg ConsensusType) abi.ChainEpoch {
 	switch alg {
 	case Delegated:
-		return build.DelegatedPoWCheckPeriod
+		return build.DelegatedPoWCheckpointPeriod
 	case PoW:
-		return build.PoWCheckPeriod
+		return build.PoWCheckpointPeriod
 	case Tendermint:
-		return build.TendermintCheckPeriod
+		return build.TendermintCheckpointPeriod
 	case FilecoinEC:
-		return build.FilecoinECCheckPeriod
+		return build.FilecoinCheckpointPeriod
 	case Mir:
-		return build.MirCheckPeriod
+		return build.MirCheckpointPeriod
 	case Dummy:
-		return build.DummyCheckPeriod
+		return build.DummyCheckpointPeriod
+	default:
+		panic(fmt.Sprintf("unknown consensus algorithm %v", alg))
+	}
+}
+
+// MinFinality returns a minimal allowed finality threshold for the consensus in a subnet.
+func MinFinality(alg ConsensusType) abi.ChainEpoch {
+	switch alg {
+	case Delegated:
+		return build.DelegatedPoWFinality
+	case PoW:
+		return build.PoWFinality
+	case Tendermint:
+		return build.TendermintFinality
+	case FilecoinEC:
+		return build.FilecoinFinality
+	case Mir:
+		return build.MirFinality
+	case Dummy:
+		return build.DummyFinality
 	default:
 		panic(fmt.Sprintf("unknown consensus algorithm %v", alg))
 	}
@@ -125,7 +148,7 @@ type SubnetParams struct {
 	Addr              address.Address  // Subnet address.
 	Parent            address.SubnetID // Parent subnet ID.
 	Stake             abi.TokenAmount  // Initial stake.
-	CheckPeriod       abi.ChainEpoch   // Checkpointing period for a subnet.
+	CheckpointPeriod  abi.ChainEpoch   // Checkpointing period for a subnet.
 	FinalityThreshold abi.ChainEpoch   // Finality threshold for a subnet.
 	Consensus         ConsensusParams  // Consensus params.
 }
