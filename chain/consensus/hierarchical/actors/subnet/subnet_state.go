@@ -120,7 +120,6 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}
 
-	// TODO: @alfonso do we need this?
 	/* Initialize AMT of miners.
 	emptyArr, err := adt.MakeEmptyArray(adt.AsStore(rt), LaneStatesAmtBitwidth)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create empty array")
@@ -128,22 +127,25 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to persist empty array")
 	*/
 
-	minCheckpointPeriod := hierarchical.DefaultCheckpointPeriod(params.Consensus)
-	checkpointPeriod := params.CheckpointPeriod
-	if checkpointPeriod < minCheckpointPeriod {
-		checkpointPeriod = minCheckpointPeriod
+	if params.CheckpointPeriod == 0 {
+		params.CheckpointPeriod = hierarchical.MinCheckpointPeriod(params.Consensus)
 	}
 
-	minFinality := hierarchical.DefaultFinality(params.Consensus)
-	finality := params.FinalityThreshold
-	if finality < minFinality {
-		finality = minFinality
+	if params.FinalityThreshold == 0 {
+		params.FinalityThreshold = hierarchical.MinFinality(params.Consensus)
+	}
+
+	if params.CheckpointPeriod < hierarchical.MinCheckpointPeriod(params.Consensus) {
+		return nil, xerrors.Errorf("checkpoint value (%v) is too low", params.CheckpointPeriod)
+	}
+	if params.FinalityThreshold < hierarchical.MinFinality(params.Consensus) {
+		return nil, xerrors.Errorf("finality value (%v) is too low", params.FinalityThreshold)
 	}
 
 	// Finality should always be less than the checkpoint period.
-	if finality >= checkpointPeriod {
-		return nil, xerrors.Errorf("finality threshold (%v) must be less than checkpoint period (%v)",
-			finality, checkpointPeriod)
+	if params.FinalityThreshold >= params.CheckpointPeriod {
+		return nil, xerrors.Errorf("finality (%v) must be less than checkpoint period (%v)",
+			params.FinalityThreshold, params.CheckpointPeriod)
 	}
 
 	parentID := address.SubnetID(params.NetworkName)
@@ -155,9 +157,9 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 		Miners:            make([]address.Address, 0),
 		Stake:             emptyStakeCid,
 		Status:            Instantiated,
-		CheckPeriod:       checkpointPeriod,
+		CheckPeriod:       params.CheckpointPeriod,
 		Checkpoints:       emptyCheckpointsMapCid,
-		FinalityThreshold: finality,
+		FinalityThreshold: params.FinalityThreshold,
 		WindowChecks:      emptyWindowChecks,
 		ValidatorSet:      make([]hierarchical.Validator, 0),
 		MinValidators:     params.ConsensusParams.MinValidators,

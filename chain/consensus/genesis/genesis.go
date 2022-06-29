@@ -185,7 +185,7 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 	// Setup sca actor
 	params := &sca.ConstructorParams{
 		NetworkName:      template.NetworkName,
-		CheckpointPeriod: uint64(hierarchical.DefaultCheckpointPeriod(hierarchical.FilecoinEC)),
+		CheckpointPeriod: uint64(hierarchical.MinCheckpointPeriod(hierarchical.FilecoinEC)),
 		Consensus:        hierarchical.FilecoinEC,
 	}
 	scaAct, err := SetupSCAActor(ctx, bs, params)

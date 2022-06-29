@@ -76,8 +76,10 @@ type ConstructParams struct {
 func (a SubnetActor) Constructor(rt runtime.Runtime, params *ConstructParams) *abi.EmptyValue {
 	// Subnet actors need to be deployed through the init actor.
 	rt.ValidateImmediateCallerType(builtin.InitActorCodeID)
+	// Params value are validated and can be changed before constructing a subnet state.
 	st, err := ConstructSubnetState(adt.AsStore(rt), params)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
+	// params can be updated during input validation in `ConstructSubnetState`.
 	st.initGenesis(rt, params)
 	rt.StateCreate(st)
 	return nil

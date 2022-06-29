@@ -99,7 +99,7 @@ func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, e
 		return nil, xerrors.Errorf("failed to create empty AMT: %w", err)
 	}
 
-	minCheckpointPeriod := hierarchical.DefaultCheckpointPeriod(params.Consensus)
+	minCheckpointPeriod := hierarchical.MinCheckpointPeriod(params.Consensus)
 	checkpointPeriod := abi.ChainEpoch(params.CheckpointPeriod)
 	if checkpointPeriod < minCheckpointPeriod {
 		checkpointPeriod = minCheckpointPeriod

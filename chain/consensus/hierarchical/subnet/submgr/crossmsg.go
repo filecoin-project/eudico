@@ -247,7 +247,7 @@ func (s *Service) getSCAStateWithFinality(ctx context.Context, api *API, id addr
 	finTs := api.ChainAPI.Chain.GetHeaviestTipSet()
 	height := finTs.Height()
 
-	finalityThreshold := hierarchical.DefaultFinality(s.api.Consensus.Type())
+	finalityThreshold := hierarchical.MinFinality(s.api.Consensus.Type())
 	if !s.isRoot(id) {
 		sn, err := s.getSubnet(id)
 		if err != nil {

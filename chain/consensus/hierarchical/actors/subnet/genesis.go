@@ -199,7 +199,7 @@ func CreateGenesisFile(
 
 	t := uint64(time.Now().Unix())
 
-	chp := consensus.DefaultCheckpointPeriod(alg)
+	chp := consensus.MinCheckpointPeriod(alg)
 
 	if err := WriteGenesis(address.RootSubnet, alg, addr, vreg, rem, chp, t, f); err != nil {
 		return xerrors.Errorf("write genesis car: %w", err)

@@ -394,7 +394,7 @@ func (s *Service) AddSubnet(ctx context.Context, params *hierarchical.SubnetPara
 	// Basic input validation for finality threshold and checkpoint period.
 
 	// Don't allow checkpoint periods less than minimal allowed value.
-	minCheckpointPeriod := hierarchical.DefaultCheckpointPeriod(params.Consensus.Alg)
+	minCheckpointPeriod := hierarchical.MinCheckpointPeriod(params.Consensus.Alg)
 	checkpointPeriod := params.CheckpointPeriod
 	if checkpointPeriod < minCheckpointPeriod {
 		checkpointPeriod = minCheckpointPeriod

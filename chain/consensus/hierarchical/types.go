@@ -65,10 +65,10 @@ func Consensus(name string) ConsensusType {
 	}
 }
 
-// DefaultCheckpointPeriod returns a minimal allowed checkpoint period for the consensus in a subnet.
+// MinCheckpointPeriod returns a minimal allowed checkpoint period for the consensus in a subnet.
 //
 // Finality determines the number of epochs to wait before considering a change "final".
-func DefaultCheckpointPeriod(alg ConsensusType) abi.ChainEpoch {
+func MinCheckpointPeriod(alg ConsensusType) abi.ChainEpoch {
 	switch alg {
 	case Delegated:
 		return build.DelegatedPoWCheckpointPeriod
@@ -87,8 +87,8 @@ func DefaultCheckpointPeriod(alg ConsensusType) abi.ChainEpoch {
 	}
 }
 
-// DefaultFinality returns a minimal allowed finality threshold for the consensus in a subnet.
-func DefaultFinality(alg ConsensusType) abi.ChainEpoch {
+// MinFinality returns a minimal allowed finality threshold for the consensus in a subnet.
+func MinFinality(alg ConsensusType) abi.ChainEpoch {
 	switch alg {
 	case Delegated:
 		return build.DelegatedPoWFinality
