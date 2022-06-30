@@ -1,3 +1,5 @@
+// +build exclude
+
 package checkpointing
 import (
 	"context"

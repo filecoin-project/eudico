@@ -182,77 +182,77 @@ func (t *MsgData) UnmarshalCBOR(r io.Reader) error {
 
 // /// signing message cbor
 
-// var lengthBufSigningMsg = []byte{130}
+var lengthBufSigningMsg = []byte{130}
 
-// func (t *SigningMsg) MarshalCBOR(w io.Writer) error {
-// 	if t == nil {
-// 		_, err := w.Write(cbg.CborNull)
-// 		return err
-// 	}
-// 	if _, err := w.Write(lengthBufSigningMsg); err != nil {
-// 		return err
-// 	}
+func (t *SigningMsg) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufSigningMsg); err != nil {
+		return err
+	}
 
-// 	scratch := make([]byte, 9)
+	scratch := make([]byte, 9)
 
 
-// 	// t.Cid (string) (string)
-// 	if len(t.Cid) > cbg.MaxLength {
-// 		return xerrors.Errorf("Value in field t.Cid was too long")
-// 	}
+	// t.Cid (string) (string)
+	if len(t.Cid) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.Cid was too long")
+	}
 
-// 	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Cid))); err != nil {
-// 		return err
-// 	}
-// 	if _, err := io.WriteString(w, string(t.Cid)); err != nil {
-// 		return err
-// 	}
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Cid))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.Cid)); err != nil {
+		return err
+	}
 
-// 	// t.Content (checkpointing.MsgData) (struct)
-// 	if err := t.Content.MarshalCBOR(w); err != nil {
-// 		return err
-// 	}
-// 	return nil
-// }
+	// t.Content (checkpointing.MsgData) (struct)
+	if err := t.Content.MarshalCBOR(w); err != nil {
+		return err
+	}
+	return nil
+}
 
-// func (t *SigningMsg) UnmarshalCBOR(r io.Reader) error {
-// 	*t = SigningMsg{}
+func (t *SigningMsg) UnmarshalCBOR(r io.Reader) error {
+	*t = SigningMsg{}
 
-// 	br := cbg.GetPeeker(r)
-// 	scratch := make([]byte, 8)
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
 
-// 	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	if maj != cbg.MajArray {
-// 		return fmt.Errorf("cbor input should be of type array")
-// 	}
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
 
-// 	if extra != 2 {
-// 		return fmt.Errorf("cbor input had wrong number of fields")
-// 	}
+	if extra != 2 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
 
 	
-// 	// t.Cid (string) (string)
+	// t.Cid (string) (string)
 
-// 	{
-// 		sval, err := cbg.ReadStringBuf(br, scratch)
-// 		if err != nil {
-// 			return err
-// 		}
+	{
+		sval, err := cbg.ReadStringBuf(br, scratch)
+		if err != nil {
+			return err
+		}
 
-// 		t.Cid = string(sval)
-// 	}
-// 	// t.Content (checkpointing.MsgData) (struct)
+		t.Cid = string(sval)
+	}
+	// t.Content (checkpointing.MsgData) (struct)
 
-// 	{
+	{
 
-// 		if err := t.Content.UnmarshalCBOR(br); err != nil {
-// 			return xerrors.Errorf("unmarshaling t.Content: %w", err)
-// 		}
+		if err := t.Content.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Content: %w", err)
+		}
 
-// 	}
-// 	return nil
-// }
+	}
+	return nil
+}
 

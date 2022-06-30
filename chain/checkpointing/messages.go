@@ -1,5 +1,3 @@
-// +build exclude
-
 package checkpointing
 
 //go:generate go run ./gen/gen.go
@@ -178,7 +176,7 @@ func (r *MessageValidator) processSigningMsg(ctx context.Context, smsg *SigningM
 	// this part is very important
 	err := pmessage.UnmarshalBinary(smsg.Content.Content)
 	if err != nil {
-		panic(err)
+		return pubsub.ValidationIgnore, nil
 	}
 	//fmt.Println("processing pmessage: ", pmessage)
 	if r.h.CanAccept(&pmessage){
@@ -187,7 +185,7 @@ func (r *MessageValidator) processSigningMsg(ctx context.Context, smsg *SigningM
 		return pubsub.ValidationAccept, nil
 	}
 
-	return pubsub.ValidationAccept, nil
+	return pubsub.ValidationIgnore, nil
 
 }
 func (r *MessageValidator) HandleIncomingSigningMsg(ctx context.Context, sub *pubsub.Subscription) {
