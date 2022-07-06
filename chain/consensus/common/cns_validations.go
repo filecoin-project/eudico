@@ -286,33 +286,6 @@ func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.St
 	}
 
 	smArr := blockadt.MakeEmptyArray(tmpstore)
-	for i, m := range b.SecpkMessages {
-		if err := checkMsg(m); err != nil {
-			return xerrors.Errorf("block had invalid secpk message at index %d: %w", i, err)
-		}
-
-		// `From` being an account actor is only validated inside the `vm.ResolveToKeyAddr` call
-		// in `StateManager.ResolveToKeyAddress` here (and not in `checkMsg`).
-		kaddr, err := sm.ResolveToKeyAddress(ctx, m.Message.From, baseTs)
-		if err != nil {
-			return xerrors.Errorf("failed to resolve key addr: %w", err)
-		}
-
-		if err := sigs.Verify(&m.Signature, kaddr, m.Message.Cid().Bytes()); err != nil {
-			return xerrors.Errorf("secpk message %s has invalid signature: %w", m.Cid(), err)
-		}
-
-		c, err := store.PutMessage(ctx, tmpbs, m)
-		if err != nil {
-			return xerrors.Errorf("failed to store message %s: %w", m.Cid(), err)
-		}
-		k := cbg.CborCid(c)
-		if err := smArr.Set(uint64(i), &k); err != nil {
-			return xerrors.Errorf("failed to put secpk message at index %d: %w", i, err)
-		}
-	}
-
-	crossArr := blockadt.MakeEmptyArray(tmpstore)
 	// Preamble to get states required for cross-msg checks.
 	var (
 		parentSCA *sca.SCAState
@@ -333,31 +306,47 @@ func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.St
 	if err != nil {
 		return err
 	}
-	// Check cross messages
-	for i, m := range b.CrossMessages {
-		if err := crossmsg.CheckCrossMsg(ctx, r, pstore, snstore, parentSCA, snSCA, m); err != nil {
-			return xerrors.Errorf("failed to check message %s: %w", m.Cid(), err)
-		}
+	for i, m := range b.SecpkMessages {
+		// Check secp messages that are not cross-messages
+		if !hierarchical.IsCrossMsg(&m.Message) {
+			if err := checkMsg(m); err != nil {
+				return xerrors.Errorf("block had invalid secpk message at index %d: %w", i, err)
+			}
 
-		// FIXME: Should we try to apply the message before accepting the block?
-		// Check if the message can be applied before accepting it for proposal.
-		// if err := canApplyMsg(ctx, submgr, sm, netName, m); err != nil {
-		//         return xerrors.Errorf("failed testing the application of cross-msg %s: %w", m.Cid(), err)
-		// }
-		// // NOTE: We don't check mesage against VM for cross shard messages. They are
-		// // checked in some other way.
-		// if err := checkMsg(m); err != nil {
-		//         return xerrors.Errorf("block had invalid bls message at index %d: %w", i, err)
-		// }
+			// `From` being an account actor is only validated inside the `vm.ResolveToKeyAddr` call
+			// in `StateManager.ResolveToKeyAddress` here (and not in `checkMsg`).
+			kaddr, err := sm.ResolveToKeyAddress(ctx, m.Message.From, baseTs)
+			if err != nil {
+				return xerrors.Errorf("failed to resolve key addr: %w", err)
+			}
+
+			if err := sigs.Verify(&m.Signature, kaddr, m.Message.Cid().Bytes()); err != nil {
+				return xerrors.Errorf("secpk message %s has invalid signature: %w", m.Cid(), err)
+			}
+		} else {
+			if err := crossmsg.CheckCrossMsg(ctx, r, pstore, snstore, parentSCA, snSCA, &m.Message); err != nil {
+				return xerrors.Errorf("failed to check message %s: %w", m.Cid(), err)
+			}
+
+			// FIXME: Should we try to apply the message before accepting the block?
+			// Check if the message can be applied before accepting it for proposal.
+			// if err := canApplyMsg(ctx, submgr, sm, netName, m); err != nil {
+			//         return xerrors.Errorf("failed testing the application of cross-msg %s: %w", m.Cid(), err)
+			// }
+			// // NOTE: We don't check mesage against VM for cross shard messages. They are
+			// // checked in some other way.
+			// if err := checkMsg(m); err != nil {
+			//         return xerrors.Errorf("block had invalid bls message at index %d: %w", i, err)
+			// }
+		}
 
 		c, err := store.PutMessage(ctx, tmpbs, m)
 		if err != nil {
 			return xerrors.Errorf("failed to store message %s: %w", m.Cid(), err)
 		}
-
 		k := cbg.CborCid(c)
-		if err := crossArr.Set(uint64(i), &k); err != nil {
-			return xerrors.Errorf("failed to put cross message at index %d: %w", i, err)
+		if err := smArr.Set(uint64(i), &k); err != nil {
+			return xerrors.Errorf("failed to put secpk message at index %d: %w", i, err)
 		}
 	}
 
@@ -371,15 +360,9 @@ func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.St
 		return err
 	}
 
-	crossroot, err := crossArr.Root()
-	if err != nil {
-		return err
-	}
-
 	mrcid, err := tmpstore.Put(ctx, &types.MsgMeta{
 		BlsMessages:   bmroot,
 		SecpkMessages: smroot,
-		CrossMessages: crossroot,
 	})
 	if err != nil {
 		return err
@@ -396,7 +379,6 @@ func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.St
 type ValidatedMessages struct {
 	BLSMessages   []*types.Message
 	SecpkMessages []*types.SignedMessage
-	CrossMsgs     []*types.Message
 }
 
 func FilterBlockMessages(
@@ -502,39 +484,6 @@ func FilterBlockMessages(
 	}
 
 	smArr := blockadt.MakeEmptyArray(tmpstore)
-	for i, m := range b.SecpkMessages {
-		if err := checkMsg(m); err != nil {
-			log.Infof("block had invalid secpk message at index %d: %w", i, err)
-			continue
-		}
-
-		// `From` being an account actor is only validated inside the `vm.ResolveToKeyAddr` call
-		// in `StateManager.ResolveToKeyAddress` here (and not in `checkMsg`).
-		kaddr, err := sm.ResolveToKeyAddress(ctx, m.Message.From, baseTs)
-		if err != nil {
-			log.Infof("failed to resolve key addr: %w", err)
-			continue
-		}
-
-		if err := sigs.Verify(&m.Signature, kaddr, m.Message.Cid().Bytes()); err != nil {
-			log.Infof("secpk message %s has invalid signature: %w", m.Cid(), err)
-			continue
-		}
-
-		c, err := store.PutMessage(ctx, tmpbs, m)
-		if err != nil {
-			log.Infof("failed to store message %s: %w", m.Cid(), err)
-			continue
-		}
-		k := cbg.CborCid(c)
-		if err := smArr.Set(uint64(i), &k); err != nil {
-			log.Infof("failed to put secpk message at index %d: %w", i, err)
-			continue
-		}
-		validSecpkMessages = append(validSecpkMessages, m)
-	}
-
-	crossArr := blockadt.MakeEmptyArray(tmpstore)
 	// Preamble to get states required for cross-msg checks.
 	var (
 		parentSCA *sca.SCAState
@@ -547,46 +496,57 @@ func FilterBlockMessages(
 	if submgr != nil {
 		parentSCA, pstore, err = crossmsg.GetSCAState(ctx, sm, submgr, netName.Parent(), baseTs)
 		if err != nil {
-			return nil, err
+			log.Infof("Failed to get parent SCA state: %s", err)
 		}
 	}
 	// Get SCA state in subnet.
 	snSCA, snstore, err = crossmsg.GetSCAState(ctx, sm, submgr, netName, baseTs)
 	if err != nil {
-		return nil, err
+		log.Infof("Failed to get SCA state: %s", err)
 	}
+	for i, m := range b.SecpkMessages {
+		// Check secp messages that are not cross-messages
+		if !hierarchical.IsCrossMsg(&m.Message) {
+			if err := checkMsg(m); err != nil {
+				log.Infof("block had invalid secpk message at index %d: %s", i, err)
+			}
 
-	var validCrossMsgs []*types.Message
-	// Check cross messages
-	for i, m := range b.CrossMessages {
-		if err := crossmsg.CheckCrossMsg(ctx, r, pstore, snstore, parentSCA, snSCA, m); err != nil {
-			log.Infof("failed to check message %s: %w", m.Cid(), err)
-			continue
+			// `From` being an account actor is only validated inside the `vm.ResolveToKeyAddr` call
+			// in `StateManager.ResolveToKeyAddress` here (and not in `checkMsg`).
+			kaddr, err := sm.ResolveToKeyAddress(ctx, m.Message.From, baseTs)
+			if err != nil {
+				log.Infof("failed to resolve key addr: %w", err)
+			}
+
+			if err := sigs.Verify(&m.Signature, kaddr, m.Message.Cid().Bytes()); err != nil {
+				log.Infof("secpk message %s has invalid signature: %w", m.Cid(), err)
+			}
+		} else {
+			if err := crossmsg.CheckCrossMsg(ctx, r, pstore, snstore, parentSCA, snSCA, &m.Message); err != nil {
+				log.Infof("failed to check message %s: %w", m.Cid(), err)
+			}
+
+			// FIXME: Should we try to apply the message before accepting the block?
+			// Check if the message can be applied before accepting it for proposal.
+			// if err := canApplyMsg(ctx, submgr, sm, netName, m); err != nil {
+			//         log.Infof("failed testing the application of cross-msg %s: %w", m.Cid(), err)
+			// }
+			// // NOTE: We don't check mesage against VM for cross shard messages. They are
+			// // checked in some other way.
+			// if err := checkMsg(m); err != nil {
+			//         log.Infof("block had invalid bls message at index %d: %w", i, err)
+			// }
 		}
-
-		// FIXME: Should we try to apply the message before accepting the block?
-		// Check if the message can be applied before accepting it for proposal.
-		// if err := canApplyMsg(ctx, submgr, sm, netName, m); err != nil {
-		//         return xerrors.Errorf("failed testing the application of cross-msg %s: %w", m.Cid(), err)
-		// }
-		// // NOTE: We don't check mesage against VM for cross shard messages. They are
-		// // checked in some other way.
-		// if err := checkMsg(m); err != nil {
-		//         return xerrors.Errorf("block had invalid bls message at index %d: %w", i, err)
-		// }
 
 		c, err := store.PutMessage(ctx, tmpbs, m)
 		if err != nil {
 			log.Infof("failed to store message %s: %w", m.Cid(), err)
-			continue
 		}
-
 		k := cbg.CborCid(c)
-		if err := crossArr.Set(uint64(i), &k); err != nil {
-			log.Infof("failed to put cross message at index %d: %w", i, err)
-			continue
+		if err := smArr.Set(uint64(i), &k); err != nil {
+			log.Infof("failed to put secpk message at index %d: %w", i, err)
 		}
-		validCrossMsgs = append(validCrossMsgs, m)
+		validSecpkMessages = append(validSecpkMessages, m)
 	}
 
 	bmroot, err := bmArr.Root()
@@ -599,15 +559,9 @@ func FilterBlockMessages(
 		return nil, err
 	}
 
-	crossroot, err := crossArr.Root()
-	if err != nil {
-		return nil, err
-	}
-
 	mrcid, err := tmpstore.Put(ctx, &types.MsgMeta{
 		BlsMessages:   bmroot,
 		SecpkMessages: smroot,
-		CrossMessages: crossroot,
 	})
 	if err != nil {
 		return nil, err
@@ -626,7 +580,6 @@ func FilterBlockMessages(
 	return &ValidatedMessages{
 		BLSMessages:   validBlsMessages,
 		SecpkMessages: validSecpkMessages,
-		CrossMsgs:     validCrossMsgs,
 	}, nil
 }
 
@@ -673,7 +626,6 @@ func ValidateMsgMeta(ctx context.Context, msg *types.BlockMsg) error {
 	store := blockadt.WrapStore(ctx, cbor.NewCborStore(bstore.NewMemory()))
 	bmArr := blockadt.MakeEmptyArray(store)
 	smArr := blockadt.MakeEmptyArray(store)
-	crossArr := blockadt.MakeEmptyArray(store)
 
 	for i, m := range msg.BlsMessages {
 		c := cbg.CborCid(m)
@@ -689,13 +641,6 @@ func ValidateMsgMeta(ctx context.Context, msg *types.BlockMsg) error {
 		}
 	}
 
-	for i, m := range msg.CrossMessages {
-		c := cbg.CborCid(m)
-		if err := crossArr.Set(uint64(i), &c); err != nil {
-			return err
-		}
-	}
-
 	bmroot, err := bmArr.Root()
 	if err != nil {
 		return err
@@ -706,15 +651,9 @@ func ValidateMsgMeta(ctx context.Context, msg *types.BlockMsg) error {
 		return err
 	}
 
-	crossroot, err := crossArr.Root()
-	if err != nil {
-		return err
-	}
-
 	mrcid, err := store.Put(store.Context(), &types.MsgMeta{
 		BlsMessages:   bmroot,
 		SecpkMessages: smroot,
-		CrossMessages: crossroot,
 	})
 
 	if err != nil {

@@ -359,42 +359,6 @@ func (t *CompactedMessages) MarshalCBOR(w io.Writer) error {
 		}
 	}
 
-	// t.Cross ([]*types.Message) (slice)
-	if len(t.Cross) > cbg.MaxLength {
-		return xerrors.Errorf("Slice value in field t.Cross was too long")
-	}
-
-	if err := cw.WriteMajorTypeHeader(cbg.MajArray, uint64(len(t.Cross))); err != nil {
-		return err
-	}
-	for _, v := range t.Cross {
-		if err := v.MarshalCBOR(cw); err != nil {
-			return err
-		}
-	}
-
-	// t.CrossIncludes ([][]uint64) (slice)
-	if len(t.CrossIncludes) > cbg.MaxLength {
-		return xerrors.Errorf("Slice value in field t.CrossIncludes was too long")
-	}
-
-	if err := cw.WriteMajorTypeHeader(cbg.MajArray, uint64(len(t.CrossIncludes))); err != nil {
-		return err
-	}
-	for _, v := range t.CrossIncludes {
-		if len(v) > cbg.MaxLength {
-			return xerrors.Errorf("Slice value in field v was too long")
-		}
-
-		if err := cw.WriteMajorTypeHeader(cbg.MajArray, uint64(len(v))); err != nil {
-			return err
-		}
-		for _, v := range v {
-			if err := cw.CborWriteHeader(cbg.MajUnsignedInt, uint64(v)); err != nil {
-				return err
-			}
-		}
-	}
 	return nil
 }
 
@@ -592,94 +556,6 @@ func (t *CompactedMessages) UnmarshalCBOR(r io.Reader) (err error) {
 				}
 
 				t.SecpkIncludes[i][j] = uint64(val)
-			}
-
-		}
-	}
-
-	// t.Cross ([]*types.Message) (slice)
-
-	maj, extra, err = cr.ReadHeader()
-	if err != nil {
-		return err
-	}
-
-	if extra > cbg.MaxLength {
-		return fmt.Errorf("t.Cross: array too large (%d)", extra)
-	}
-
-	if maj != cbg.MajArray {
-		return fmt.Errorf("expected cbor array")
-	}
-
-	if extra > 0 {
-		t.Cross = make([]*types.Message, extra)
-	}
-
-	for i := 0; i < int(extra); i++ {
-
-		var v types.Message
-		if err := v.UnmarshalCBOR(cr); err != nil {
-			return err
-		}
-
-		t.Cross[i] = &v
-	}
-
-	// t.CrossIncludes ([][]uint64) (slice)
-
-	maj, extra, err = cr.ReadHeader()
-	if err != nil {
-		return err
-	}
-
-	if extra > cbg.MaxLength {
-		return fmt.Errorf("t.CrossIncludes: array too large (%d)", extra)
-	}
-
-	if maj != cbg.MajArray {
-		return fmt.Errorf("expected cbor array")
-	}
-
-	if extra > 0 {
-		t.CrossIncludes = make([][]uint64, extra)
-	}
-
-	for i := 0; i < int(extra); i++ {
-		{
-			var maj byte
-			var extra uint64
-			var err error
-
-			maj, extra, err = cr.ReadHeader()
-			if err != nil {
-				return err
-			}
-
-			if extra > cbg.MaxLength {
-				return fmt.Errorf("t.CrossIncludes[i]: array too large (%d)", extra)
-			}
-
-			if maj != cbg.MajArray {
-				return fmt.Errorf("expected cbor array")
-			}
-
-			if extra > 0 {
-				t.CrossIncludes[i] = make([]uint64, extra)
-			}
-
-			for j := 0; j < int(extra); j++ {
-
-				maj, val, err := cr.ReadHeader()
-				if err != nil {
-					return xerrors.Errorf("failed to read uint64 for t.CrossIncludes[i] slice: %w", err)
-				}
-
-				if maj != cbg.MajUnsignedInt {
-					return xerrors.Errorf("value read for array t.CrossIncludes[i] was not a uint, instead got %d", maj)
-				}
-
-				t.CrossIncludes[i][j] = uint64(val)
 			}
 
 		}

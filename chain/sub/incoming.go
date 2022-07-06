@@ -88,12 +88,6 @@ func HandleIncomingBlocks(ctx context.Context, bsub *pubsub.Subscription, s *cha
 				return
 			}
 
-			crossmsgs, err := FetchCrossMessagesByCids(ctx, ses, blk.CrossMessages)
-			if err != nil {
-				log.Errorf("failed to fetch all cross messages for block received over pubsub: %s; source: %s", err, src)
-				return
-			}
-
 			took := build.Clock.Since(start)
 			log.Debugw("new block over pubsub", "cid", blk.Header.Cid(), "source", msg.GetFrom(), "msgfetch", took)
 			if took > 3*time.Second {
@@ -111,7 +105,6 @@ func HandleIncomingBlocks(ctx context.Context, bsub *pubsub.Subscription, s *cha
 				Header:        blk.Header,
 				BlsMessages:   bmsgs,
 				SecpkMessages: smsgs,
-				CrossMessages: crossmsgs,
 			}) {
 				cmgr.TagPeer(msg.ReceivedFrom, "blkprop", 5)
 			}
@@ -142,6 +135,12 @@ func FetchMessagesByCids(
 }
 
 // FIXME: Duplicate of above.
+// CrossMessages allow duplicate messages as there may be messages with the
+// the same parameter inside the same CrossMsgMetas. The original messages
+// will have different nonce and this is the way we discern betweeen them.
+// See how CrossMsgs are executed or `sca_apply.go` for more information.
+// FIXME: Are we introducing any vulnerability by allowing also duplicates
+// for Secp messages?
 func FetchSignedMessagesByCids(
 	ctx context.Context,
 	bserv bserv.BlockGetter,
@@ -156,33 +155,6 @@ func FetchSignedMessagesByCids(
 		}
 
 		out[i] = smsg
-		return nil
-	}, false)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-// CrossMessages allow duplicate messages as there may be messages with the
-// the same parameter inside the same CrossMsgMetas. The original messages
-// will have different nonce and this is the way we discern betweeen them.
-// See how CrossMsgs are executed or `sca_apply.go` for more information.
-// FIXME: Duplicate of above.
-func FetchCrossMessagesByCids(
-	ctx context.Context,
-	bserv bserv.BlockGetter,
-	cids []cid.Cid,
-) ([]*types.Message, error) {
-	out := make([]*types.Message, len(cids))
-
-	err := fetchCids(ctx, bserv, cids, func(i int, b blocks.Block) error {
-		msg, err := types.DecodeMessage(b.RawData())
-		if err != nil {
-			return err
-		}
-
-		out[i] = msg
 		return nil
 	}, true)
 	if err != nil {

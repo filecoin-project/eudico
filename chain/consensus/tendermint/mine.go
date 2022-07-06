@@ -263,9 +263,6 @@ func (tm *Tendermint) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.B
 	if validMsgs.SecpkMessages != nil {
 		b.SecpkMessages = validMsgs.SecpkMessages
 	}
-	if validMsgs.CrossMsgs != nil {
-		b.CrossMessages = validMsgs.CrossMsgs
-	}
 
 	log.Infof("%s mined a block", b.Header.Miner)
 

@@ -96,15 +96,10 @@ func (filec *FilecoinEC) CreateBlock(ctx context.Context, w api.Wallet, bt *api.
 	if err != nil {
 		return nil, xerrors.Errorf("building secpk amt: %w", err)
 	}
-	crossmsgroot, err := consensus.ToMessagesArray(store, crossMsgCids)
-	if err != nil {
-		return nil, xerrors.Errorf("building cross amt: %w", err)
-	}
 
 	mmcid, err := store.Put(store.Context(), &types.MsgMeta{
 		BlsMessages:   blsmsgroot,
 		SecpkMessages: secpkmsgroot,
-		CrossMessages: crossmsgroot,
 	})
 	if err != nil {
 		return nil, err
@@ -147,7 +142,6 @@ func (filec *FilecoinEC) CreateBlock(ctx context.Context, w api.Wallet, bt *api.
 		Header:        next,
 		BlsMessages:   blsMessages,
 		SecpkMessages: secpkMessages,
-		CrossMessages: bt.CrossMessages,
 	}
 
 	return fullBlock, nil

@@ -9,6 +9,7 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/messagesigner"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
@@ -104,9 +105,15 @@ func (mpp *mpoolProvider) StateAccountKeyAtFinality(ctx context.Context, addr ad
 }
 
 func (mpp *mpoolProvider) MessagesForBlock(ctx context.Context, h *types.BlockHeader) ([]*types.Message, []*types.SignedMessage, error) {
+	b, s, err := mpp.sm.ChainStore().MessagesForBlock(ctx, h)
 	// Mpool only handles non-cross messages. Disregard cross-messages in block.
-	b, s, _, err := mpp.sm.ChainStore().MessagesForBlock(ctx, h)
-	return b, s, err
+	var os []*types.SignedMessage
+	for _, m := range s {
+		if !hierarchical.IsCrossMsg(&m.Message) {
+			os = append(os, m)
+		}
+	}
+	return b, os, err
 }
 
 func (mpp *mpoolProvider) MessagesForTipset(ctx context.Context, ts *types.TipSet) ([]types.ChainMsg, error) {

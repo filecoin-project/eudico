@@ -41,7 +41,7 @@ func PrepareBlockForSignature(ctx context.Context, sm *stmgr.StateManager, bt *l
 	var blsMessages []*types.Message
 	var secpkMessages []*types.SignedMessage
 
-	var blsMsgCids, secpkMsgCids, crossMsgCids []cid.Cid
+	var blsMsgCids, secpkMsgCids []cid.Cid
 	var blsSigs []crypto.Signature
 	for _, msg := range bt.Messages {
 		if msg.Signature.Type == crypto.SigTypeBLS {
@@ -66,12 +66,13 @@ func PrepareBlockForSignature(ctx context.Context, sm *stmgr.StateManager, bt *l
 	}
 
 	for _, msg := range bt.CrossMessages {
+		m := &types.SignedMessage{Message: *msg, Signature: crypto.Signature{Type: crypto.SigTypeUnknown}}
 		c, err := sm.ChainStore().PutMessage(ctx, msg)
 		if err != nil {
 			return nil, err
 		}
-
-		crossMsgCids = append(crossMsgCids, c)
+		secpkMsgCids = append(secpkMsgCids, c)
+		secpkMessages = append(secpkMessages, m)
 	}
 
 	store := sm.ChainStore().ActorStore(ctx)
@@ -83,15 +84,10 @@ func PrepareBlockForSignature(ctx context.Context, sm *stmgr.StateManager, bt *l
 	if err != nil {
 		return nil, xerrors.Errorf("building secpk amt: %w", err)
 	}
-	crossmsgroot, err := consensus.ToMessagesArray(store, crossMsgCids)
-	if err != nil {
-		return nil, xerrors.Errorf("building cross amt: %w", err)
-	}
 
 	mmcid, err := store.Put(store.Context(), &types.MsgMeta{
 		BlsMessages:   blsmsgroot,
 		SecpkMessages: secpkmsgroot,
-		CrossMessages: crossmsgroot,
 	})
 	if err != nil {
 		return nil, err
@@ -119,7 +115,6 @@ func PrepareBlockForSignature(ctx context.Context, sm *stmgr.StateManager, bt *l
 		Header:        next,
 		BlsMessages:   blsMessages,
 		SecpkMessages: secpkMessages,
-		CrossMessages: bt.CrossMessages,
 	}, nil
 
 }

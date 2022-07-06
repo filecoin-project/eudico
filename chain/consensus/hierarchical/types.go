@@ -134,6 +134,23 @@ func GetMsgType(msg *types.Message) MsgType {
 	return TopDown
 }
 
+func IsCrossMsg(msg *types.Message) bool {
+	_, errf := msg.From.Subnet()
+	_, errt := msg.To.Subnet()
+	return errf == address.ErrNotHierarchical && errt == address.ErrNotHierarchical
+}
+
+func UnbundleCrossAndSecpMsgs(msgs []types.ChainMsg) (secp []types.ChainMsg, cross []types.ChainMsg) {
+	for _, cm := range msgs {
+		if IsCrossMsg(cm.VMMessage()) {
+			cross = append(cross, cm)
+		} else {
+			secp = append(secp, cm)
+		}
+	}
+	return
+}
+
 // SubnetCoordActorAddr is the address of the SCA actor in a subnet. It is initialized in genesis with the address t064.
 var SubnetCoordActorAddr = func() address.Address {
 	a, err := address.NewIDAddress(64)

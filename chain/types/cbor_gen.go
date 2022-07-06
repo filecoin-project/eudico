@@ -1072,12 +1072,6 @@ func (t *MsgMeta) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("failed to write cid field t.SecpkMessages: %w", err)
 	}
 
-	// t.CrossMessages (cid.Cid) (struct)
-
-	if err := cbg.WriteCid(cw, t.CrossMessages); err != nil {
-		return xerrors.Errorf("failed to write cid field t.CrossMessages: %w", err)
-	}
-
 	return nil
 }
 
@@ -1126,18 +1120,6 @@ func (t *MsgMeta) UnmarshalCBOR(r io.Reader) (err error) {
 		}
 
 		t.SecpkMessages = c
-
-	}
-	// t.CrossMessages (cid.Cid) (struct)
-
-	{
-
-		c, err := cbg.ReadCid(cr)
-		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.CrossMessages: %w", err)
-		}
-
-		t.CrossMessages = c
 
 	}
 	return nil
@@ -1450,19 +1432,6 @@ func (t *BlockMsg) MarshalCBOR(w io.Writer) error {
 		}
 	}
 
-	// t.CrossMessages ([]cid.Cid) (slice)
-	if len(t.CrossMessages) > cbg.MaxLength {
-		return xerrors.Errorf("Slice value in field t.CrossMessages was too long")
-	}
-
-	if err := cw.WriteMajorTypeHeader(cbg.MajArray, uint64(len(t.CrossMessages))); err != nil {
-		return err
-	}
-	for _, v := range t.CrossMessages {
-		if err := cbg.WriteCid(w, v); err != nil {
-			return xerrors.Errorf("failed writing cid field t.CrossMessages: %w", err)
-		}
-	}
 	return nil
 }
 
@@ -1562,34 +1531,6 @@ func (t *BlockMsg) UnmarshalCBOR(r io.Reader) (err error) {
 			return xerrors.Errorf("reading cid field t.SecpkMessages failed: %w", err)
 		}
 		t.SecpkMessages[i] = c
-	}
-
-	// t.CrossMessages ([]cid.Cid) (slice)
-
-	maj, extra, err = cr.ReadHeader()
-	if err != nil {
-		return err
-	}
-
-	if extra > cbg.MaxLength {
-		return fmt.Errorf("t.CrossMessages: array too large (%d)", extra)
-	}
-
-	if maj != cbg.MajArray {
-		return fmt.Errorf("expected cbor array")
-	}
-
-	if extra > 0 {
-		t.CrossMessages = make([]cid.Cid, extra)
-	}
-
-	for i := 0; i < int(extra); i++ {
-
-		c, err := cbg.ReadCid(cr)
-		if err != nil {
-			return xerrors.Errorf("reading cid field t.CrossMessages failed: %w", err)
-		}
-		t.CrossMessages[i] = c
 	}
 
 	return nil

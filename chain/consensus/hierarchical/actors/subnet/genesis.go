@@ -74,7 +74,6 @@ func makeGenesisBlock(
 	mm := &types.MsgMeta{
 		BlsMessages:   emptyRoot,
 		SecpkMessages: emptyRoot,
-		CrossMessages: emptyRoot,
 	}
 	mmb, err := mm.ToStorageBlock()
 	if err != nil {

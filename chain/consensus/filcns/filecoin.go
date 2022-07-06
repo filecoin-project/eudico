@@ -554,41 +554,7 @@ func (filec *FilecoinEC) checkBlockMessages(ctx context.Context, b *types.FullBl
 			return xerrors.Errorf("failed to put bls message at index %d: %w", i, err)
 		}
 	}
-
 	smArr := blockadt.MakeEmptyArray(tmpstore)
-	for i, m := range b.SecpkMessages {
-		if filec.sm.GetNetworkVersion(ctx, b.Header.Height) >= network.Version14 {
-			if m.Signature.Type != crypto.SigTypeSecp256k1 {
-				return xerrors.Errorf("block had invalid secpk message at index %d: %w", i, err)
-			}
-		}
-
-		if err := checkMsg(m); err != nil {
-			return xerrors.Errorf("block had invalid secpk message at index %d: %w", i, err)
-		}
-
-		// `From` being an account actor is only validated inside the `vm.ResolveToKeyAddr` call
-		// in `StateManager.ResolveToKeyAddress` here (and not in `checkMsg`).
-		kaddr, err := filec.sm.ResolveToKeyAddress(ctx, m.Message.From, baseTs)
-		if err != nil {
-			return xerrors.Errorf("failed to resolve key addr: %w", err)
-		}
-
-		if err := sigs.Verify(&m.Signature, kaddr, m.Message.Cid().Bytes()); err != nil {
-			return xerrors.Errorf("secpk message %s has invalid signature: %w", m.Cid(), err)
-		}
-
-		c, err := store.PutMessage(ctx, tmpbs, m)
-		if err != nil {
-			return xerrors.Errorf("failed to store message %s: %w", m.Cid(), err)
-		}
-		k := cbg.CborCid(c)
-		if err := smArr.Set(uint64(i), &k); err != nil {
-			return xerrors.Errorf("failed to put secpk message at index %d: %w", i, err)
-		}
-	}
-
-	crossArr := blockadt.MakeEmptyArray(tmpstore)
 	// Preamble to get states required for cross-msg checks.
 	var (
 		parentSCA *sca.SCAState
@@ -602,24 +568,49 @@ func (filec *FilecoinEC) checkBlockMessages(ctx context.Context, b *types.FullBl
 	if err != nil {
 		return err
 	}
-
-	// Check cross messages
-	for i, m := range b.CrossMessages {
-		if err := crossmsg.CheckCrossMsg(ctx, filec.r, pstore, snstore, parentSCA, snSCA, m); err != nil {
-			log.Infof("failed to check message %s: %w", m.Cid(), err)
-			continue
+	for i, m := range b.SecpkMessages {
+		valid := false
+		if filec.sm.GetNetworkVersion(ctx, b.Header.Height) >= network.Version14 {
+			if m.Signature.Type != crypto.SigTypeSecp256k1 {
+				return xerrors.Errorf("block had invalid secpk message at index %d: %w", i, err)
+			}
 		}
 
-		c, err := store.PutMessage(ctx, tmpbs, m)
-		if err != nil {
-			log.Infof("failed to store message %s: %w", m.Cid(), err)
-			continue
+		// Check secp messages that are not cross-messages
+		if !hierarchical.IsCrossMsg(&m.Message) {
+			if err := checkMsg(m); err != nil {
+				return xerrors.Errorf("block had invalid secpk message at index %d: %w", i, err)
+			}
+
+			// `From` being an account actor is only validated inside the `vm.ResolveToKeyAddr` call
+			// in `StateManager.ResolveToKeyAddress` here (and not in `checkMsg`).
+			kaddr, err := filec.sm.ResolveToKeyAddress(ctx, m.Message.From, baseTs)
+			if err != nil {
+				return xerrors.Errorf("failed to resolve key addr: %w", err)
+			}
+
+			if err := sigs.Verify(&m.Signature, kaddr, m.Message.Cid().Bytes()); err != nil {
+				return xerrors.Errorf("secpk message %s has invalid signature: %w", m.Cid(), err)
+			}
+			valid = true
+		} else {
+			if err := crossmsg.CheckCrossMsg(ctx, filec.r, pstore, snstore, parentSCA, snSCA, &m.Message); err != nil {
+				log.Infof("failed to check message %s: %w", m.Cid(), err)
+				continue
+			}
+			valid = true
 		}
 
-		k := cbg.CborCid(c)
-		if err := crossArr.Set(uint64(i), &k); err != nil {
-			log.Infof("failed to put cross message at index %d: %w", i, err)
-			continue
+		// Put all messages for Cid computation
+		if valid {
+			c, err := store.PutMessage(ctx, tmpbs, m)
+			if err != nil {
+				return xerrors.Errorf("failed to store message %s: %w", m.Cid(), err)
+			}
+			k := cbg.CborCid(c)
+			if err := smArr.Set(uint64(i), &k); err != nil {
+				return xerrors.Errorf("failed to put secpk message at index %d: %w", i, err)
+			}
 		}
 	}
 
@@ -634,15 +625,9 @@ func (filec *FilecoinEC) checkBlockMessages(ctx context.Context, b *types.FullBl
 		return xerrors.Errorf("failed to root secp msgs: %w", err)
 	}
 
-	crossroot, err := crossArr.Root()
-	if err != nil {
-		return xerrors.Errorf("failed to root cross msgs: %w", err)
-	}
-
 	mrcid, err := tmpstore.Put(ctx, &types.MsgMeta{
 		BlsMessages:   bmroot,
 		SecpkMessages: smroot,
-		CrossMessages: crossroot,
 	})
 	if err != nil {
 		return xerrors.Errorf("failed to put msg meta: %w", err)
@@ -808,7 +793,6 @@ func (filec *FilecoinEC) validateMsgMeta(ctx context.Context, msg *types.BlockMs
 	store := blockadt.WrapStore(ctx, cbor.NewCborStore(bstore.NewMemory()))
 	bmArr := blockadt.MakeEmptyArray(store)
 	smArr := blockadt.MakeEmptyArray(store)
-	crossArr := blockadt.MakeEmptyArray(store)
 
 	for i, m := range msg.BlsMessages {
 		c := cbg.CborCid(m)
@@ -824,12 +808,6 @@ func (filec *FilecoinEC) validateMsgMeta(ctx context.Context, msg *types.BlockMs
 		}
 	}
 
-	for i, m := range msg.CrossMessages {
-		c := cbg.CborCid(m)
-		if err := crossArr.Set(uint64(i), &c); err != nil {
-			return err
-		}
-	}
 	bmroot, err := bmArr.Root()
 	if err != nil {
 		return err
@@ -840,17 +818,10 @@ func (filec *FilecoinEC) validateMsgMeta(ctx context.Context, msg *types.BlockMs
 		return err
 	}
 
-	crossroot, err := crossArr.Root()
-	if err != nil {
-		return err
-	}
-
 	mrcid, err := store.Put(store.Context(), &types.MsgMeta{
 		BlsMessages:   bmroot,
 		SecpkMessages: smroot,
-		CrossMessages: crossroot,
 	})
-
 	if err != nil {
 		return err
 	}
