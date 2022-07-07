@@ -271,7 +271,7 @@ func (t *Response) UnmarshalCBOR(r io.Reader) (err error) {
 	return nil
 }
 
-var lengthBufCompactedMessages = []byte{134}
+var lengthBufCompactedMessages = []byte{132}
 
 func (t *CompactedMessages) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -358,7 +358,6 @@ func (t *CompactedMessages) MarshalCBOR(w io.Writer) error {
 			}
 		}
 	}
-
 	return nil
 }
 
@@ -381,7 +380,7 @@ func (t *CompactedMessages) UnmarshalCBOR(r io.Reader) (err error) {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 6 {
+	if extra != 4 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 

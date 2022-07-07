@@ -66,8 +66,8 @@ func PrepareBlockForSignature(ctx context.Context, sm *stmgr.StateManager, bt *l
 	}
 
 	for _, msg := range bt.CrossMessages {
-		m := &types.SignedMessage{Message: *msg, Signature: crypto.Signature{Type: crypto.SigTypeUnknown}}
-		c, err := sm.ChainStore().PutMessage(ctx, msg)
+		m := &types.SignedMessage{Message: *msg, Signature: crypto.Signature{Type: crypto.SigTypeSecp256k1}}
+		c, err := sm.ChainStore().PutMessage(ctx, m)
 		if err != nil {
 			return nil, err
 		}

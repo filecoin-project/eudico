@@ -50,9 +50,8 @@ func sanitizeMessagesAndPrepareBlockForSignature(ctx context.Context, sm *stmgr.
 
 	var blsMessages []*types.Message
 	var secpkMessages []*types.SignedMessage
-	var crossMessages []*types.Message
 
-	var blsMsgCids, secpkMsgCids, crossMsgCids []cid.Cid
+	var blsMsgCids, secpkMsgCids []cid.Cid
 	var blsSigs []crypto.Signature
 	for _, msg := range bt.Messages {
 		err := sigs.Verify(&msg.Signature, msg.Message.From, msg.Message.Cid().Bytes())
@@ -82,16 +81,6 @@ func sanitizeMessagesAndPrepareBlockForSignature(ctx context.Context, sm *stmgr.
 		}
 	}
 
-	for _, msg := range bt.CrossMessages {
-		c, err := sm.ChainStore().PutMessage(ctx, msg)
-		if err != nil {
-			return nil, err
-		}
-
-		crossMessages = append(crossMessages, msg)
-		crossMsgCids = append(crossMsgCids, c)
-	}
-
 	store := sm.ChainStore().ActorStore(ctx)
 	blsMsgRoot, err := consensus.ToMessagesArray(store, blsMsgCids)
 	if err != nil {
@@ -101,15 +90,9 @@ func sanitizeMessagesAndPrepareBlockForSignature(ctx context.Context, sm *stmgr.
 	if err != nil {
 		return nil, xerrors.Errorf("building secpk amt: %w", err)
 	}
-	crossMsgRoot, err := consensus.ToMessagesArray(store, crossMsgCids)
-	if err != nil {
-		return nil, xerrors.Errorf("building cross amt: %w", err)
-	}
-
 	mmcid, err := store.Put(store.Context(), &types.MsgMeta{
 		BlsMessages:   blsMsgRoot,
 		SecpkMessages: secpkMsgRoot,
-		CrossMessages: crossMsgRoot,
 	})
 	if err != nil {
 		return nil, err
@@ -137,7 +120,6 @@ func sanitizeMessagesAndPrepareBlockForSignature(ctx context.Context, sm *stmgr.
 		Header:        next,
 		BlsMessages:   blsMessages,
 		SecpkMessages: secpkMessages,
-		CrossMessages: crossMessages,
 	}, nil
 }
 
@@ -161,13 +143,6 @@ func isBlockSealed(fb *types.FullBlock, tb *tenderminttypes.Block) error {
 		_, found := tendermintMessagesHashes[msg.Cid()]
 		if !found {
 			return xerrors.New("secpk messages are not sealed")
-		}
-	}
-
-	for _, msg := range fb.CrossMessages {
-		_, found := tendermintMessagesHashes[msg.Cid()]
-		if !found {
-			return xerrors.New("cross msgs messages are not sealed")
 		}
 	}
 

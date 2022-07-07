@@ -137,7 +137,7 @@ func GetMsgType(msg *types.Message) MsgType {
 func IsCrossMsg(msg *types.Message) bool {
 	_, errf := msg.From.Subnet()
 	_, errt := msg.To.Subnet()
-	return errf == address.ErrNotHierarchical && errt == address.ErrNotHierarchical
+	return errf == nil && errt == nil
 }
 
 func UnbundleCrossAndSecpMsgs(msgs []types.ChainMsg) (secp []types.ChainMsg, cross []types.ChainMsg) {
