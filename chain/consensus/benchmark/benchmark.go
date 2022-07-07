@@ -30,9 +30,9 @@ func RunSimpleBenchmark(ctx context.Context, api lapi.FullNode, benchmarkLength 
 				blsMsgsNum += len(msgs.BlsMessages)
 				for _, m := range msgs.SecpkMessages {
 					if hierarchical.IsCrossMsg(&m.Message) {
-						crossMsgsNum += 1
+						crossMsgsNum++
 					} else {
-						secpkMsgsNum += 1
+						secpkMsgsNum++
 					}
 				}
 			}
