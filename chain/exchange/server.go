@@ -172,7 +172,7 @@ func collectChainSegment(ctx context.Context, cs *store.ChainStore, req *validat
 		}
 
 		if req.options.IncludeMessages {
-			bmsgs, bmincl, smsgs, smincl, crossmsg, crossincl, err := gatherMessages(ctx, cs, ts)
+			bmsgs, bmincl, smsgs, smincl, err := gatherMessages(ctx, cs, ts)
 			if err != nil {
 				return nil, xerrors.Errorf("gather messages failed: %w", err)
 			}
@@ -183,8 +183,6 @@ func collectChainSegment(ctx context.Context, cs *store.ChainStore, req *validat
 			bst.Messages.BlsIncludes = bmincl
 			bst.Messages.Secpk = smsgs
 			bst.Messages.SecpkIncludes = smincl
-			bst.Messages.Cross = crossmsg
-			bst.Messages.CrossIncludes = crossincl
 		}
 
 		bstips = append(bstips, &bst)
@@ -201,18 +199,16 @@ func collectChainSegment(ctx context.Context, cs *store.ChainStore, req *validat
 
 func gatherMessages(ctx context.Context, cs *store.ChainStore, ts *types.TipSet) ([]*types.Message, [][]uint64,
 	[]*types.SignedMessage, [][]uint64,
-	[]*types.Message, [][]uint64,
 	error) {
 	blsmsgmap := make(map[cid.Cid]uint64)
 	secpkmsgmap := make(map[cid.Cid]uint64)
-	crossmsgmap := make(map[cid.Cid]uint64)
-	var secpkincl, blsincl, crossincl [][]uint64
+	var secpkincl, blsincl [][]uint64
 
-	var blscids, secpkcids, crosscids []cid.Cid
+	var blscids, secpkcids []cid.Cid
 	for _, block := range ts.Blocks() {
-		bc, sc, crossc, err := cs.ReadMsgMetaCids(ctx, block.Messages)
+		bc, sc, err := cs.ReadMsgMetaCids(ctx, block.Messages)
 		if err != nil {
-			return nil, nil, nil, nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 
 		// FIXME: DRY. Use `chain.Message` interface.
@@ -241,35 +237,17 @@ func gatherMessages(ctx context.Context, cs *store.ChainStore, ts *types.TipSet)
 			smi = append(smi, i)
 		}
 		secpkincl = append(secpkincl, smi)
-
-		crossmi := make([]uint64, 0, len(crossc))
-		for _, m := range crossc {
-			i, ok := crossmsgmap[m]
-			if !ok {
-				i = uint64(len(crosscids))
-				crosscids = append(crosscids, m)
-				crossmsgmap[m] = i
-			}
-
-			crossmi = append(crossmi, i)
-		}
-		crossincl = append(crossincl, crossmi)
 	}
 
 	blsmsgs, err := cs.LoadMessagesFromCids(ctx, blscids)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	secpkmsgs, err := cs.LoadSignedMessagesFromCids(ctx, secpkcids)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
-	crossmsgs, err := cs.LoadMessagesFromCids(ctx, crosscids)
-	if err != nil {
-		return nil, nil, nil, nil, nil, nil, err
-	}
-
-	return blsmsgs, blsincl, secpkmsgs, secpkincl, crossmsgs, crossincl, nil
+	return blsmsgs, blsincl, secpkmsgs, secpkincl, nil
 }

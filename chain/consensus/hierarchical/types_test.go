@@ -38,3 +38,19 @@ func testApplyAsBottomUp(t *testing.T, curr, from, to string, bottomup bool) {
 	require.NoError(t, err)
 	require.Equal(t, bu, bottomup)
 }
+
+func TestIsCrossMsg(t *testing.T) {
+	ff, _ := address.NewHCAddress(address.SubnetID("/root/a"), tutil.NewIDAddr(t, 101))
+	tt, _ := address.NewHCAddress(address.SubnetID("/root/b"), tutil.NewIDAddr(t, 101))
+	msg := types.Message{From: ff, To: tt}
+	require.Equal(t, hierarchical.IsCrossMsg(&msg), true)
+
+	ff = tutil.NewIDAddr(t, 101)
+	msg = types.Message{From: ff, To: tt}
+	require.Equal(t, hierarchical.IsCrossMsg(&msg), false)
+
+	ff = tutil.NewIDAddr(t, 101)
+	tt = tutil.NewIDAddr(t, 102)
+	msg = types.Message{From: ff, To: tt}
+	require.Equal(t, hierarchical.IsCrossMsg(&msg), false)
+}

@@ -1046,7 +1046,7 @@ func (t *SignedMessage) UnmarshalCBOR(r io.Reader) (err error) {
 	return nil
 }
 
-var lengthBufMsgMeta = []byte{131}
+var lengthBufMsgMeta = []byte{130}
 
 func (t *MsgMeta) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -1072,12 +1072,6 @@ func (t *MsgMeta) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("failed to write cid field t.SecpkMessages: %w", err)
 	}
 
-	// t.CrossMessages (cid.Cid) (struct)
-
-	if err := cbg.WriteCid(cw, t.CrossMessages); err != nil {
-		return xerrors.Errorf("failed to write cid field t.CrossMessages: %w", err)
-	}
-
 	return nil
 }
 
@@ -1100,7 +1094,7 @@ func (t *MsgMeta) UnmarshalCBOR(r io.Reader) (err error) {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 3 {
+	if extra != 2 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -1126,18 +1120,6 @@ func (t *MsgMeta) UnmarshalCBOR(r io.Reader) (err error) {
 		}
 
 		t.SecpkMessages = c
-
-	}
-	// t.CrossMessages (cid.Cid) (struct)
-
-	{
-
-		c, err := cbg.ReadCid(cr)
-		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.CrossMessages: %w", err)
-		}
-
-		t.CrossMessages = c
 
 	}
 	return nil

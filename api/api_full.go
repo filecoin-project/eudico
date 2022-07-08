@@ -831,7 +831,6 @@ type MsgGasCost struct {
 type BlockMessages struct {
 	BlsMessages   []*types.Message
 	SecpkMessages []*types.SignedMessage
-	CrossMessages []*types.Message
 
 	Cids []cid.Cid
 }

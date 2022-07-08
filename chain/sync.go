@@ -301,7 +301,7 @@ func (syncer *Syncer) ValidateMsgMeta(fblk *types.FullBlock) error {
 	blockstore := bstore.NewMemory()
 	cst := cbor.NewCborStore(blockstore)
 
-	var bcids, scids, crosscids []cid.Cid
+	var bcids, scids []cid.Cid
 
 	for _, m := range fblk.BlsMessages {
 		c, err := store.PutMessage(ctx, blockstore, m)
@@ -319,16 +319,8 @@ func (syncer *Syncer) ValidateMsgMeta(fblk *types.FullBlock) error {
 		scids = append(scids, c)
 	}
 
-	for _, m := range fblk.CrossMessages {
-		c, err := store.PutMessage(ctx, blockstore, m)
-		if err != nil {
-			return xerrors.Errorf("putting cross message to blockstore after msgmeta computation: %w", err)
-		}
-		crosscids = append(crosscids, c)
-	}
-
 	// Compute the root CID of the combined message trie.
-	smroot, err := computeMsgMeta(cst, bcids, scids, crosscids)
+	smroot, err := computeMsgMeta(cst, bcids, scids)
 	if err != nil {
 		return xerrors.Errorf("validating msgmeta, compute failed: %w", err)
 	}
@@ -389,12 +381,12 @@ func copyBlockstore(ctx context.Context, from, to bstore.Blockstore) error {
 // either validate it here, or ensure that its validated elsewhere (maybe make
 // sure the blocksync code checks it?)
 // maybe this code should actually live in blocksync??
-func zipTipSetAndMessages(bs cbor.IpldStore, ts *types.TipSet, allbmsgs []*types.Message, allsmsgs []*types.SignedMessage, allcross []*types.Message, bmi, smi, crossmi [][]uint64) (*store.FullTipSet, error) {
-	if len(ts.Blocks()) != len(smi) || len(ts.Blocks()) != len(bmi) || len(ts.Blocks()) != len(crossmi) {
+func zipTipSetAndMessages(bs cbor.IpldStore, ts *types.TipSet, allbmsgs []*types.Message, allsmsgs []*types.SignedMessage, bmi, smi [][]uint64) (*store.FullTipSet, error) {
+	if len(ts.Blocks()) != len(smi) || len(ts.Blocks()) != len(bmi) {
 		return nil, fmt.Errorf("msgincl length didnt match tipset size")
 	}
 
-	if err := checkMsgMeta(ts, allbmsgs, allsmsgs, allcross, bmi, smi, crossmi); err != nil {
+	if err := checkMsgMeta(ts, allbmsgs, allsmsgs, bmi, smi); err != nil {
 		return nil, err
 	}
 
@@ -411,16 +403,10 @@ func zipTipSetAndMessages(bs cbor.IpldStore, ts *types.TipSet, allbmsgs []*types
 			bmsgs = append(bmsgs, allbmsgs[m])
 		}
 
-		var crossmsgs []*types.Message
-		for _, m := range crossmi[bi] {
-			crossmsgs = append(crossmsgs, allcross[m])
-		}
-
 		fb := &types.FullBlock{
 			Header:        b,
 			BlsMessages:   bmsgs,
 			SecpkMessages: smsgs,
-			CrossMessages: crossmsgs,
 		}
 
 		fts.Blocks = append(fts.Blocks, fb)
@@ -431,12 +417,11 @@ func zipTipSetAndMessages(bs cbor.IpldStore, ts *types.TipSet, allbmsgs []*types
 
 // computeMsgMeta computes the root CID of the combined arrays of message CIDs
 // of both types (BLS and Secpk).
-func computeMsgMeta(bs cbor.IpldStore, bmsgCids, smsgCids, crossCids []cid.Cid) (cid.Cid, error) {
+func computeMsgMeta(bs cbor.IpldStore, bmsgCids, smsgCids []cid.Cid) (cid.Cid, error) {
 	// block headers use adt0
 	store := blockadt.WrapStore(context.TODO(), bs)
 	bmArr := blockadt.MakeEmptyArray(store)
 	smArr := blockadt.MakeEmptyArray(store)
-	crossArr := blockadt.MakeEmptyArray(store)
 
 	for i, m := range bmsgCids {
 		c := cbg.CborCid(m)
@@ -452,13 +437,6 @@ func computeMsgMeta(bs cbor.IpldStore, bmsgCids, smsgCids, crossCids []cid.Cid) 
 		}
 	}
 
-	for i, m := range crossCids {
-		c := cbg.CborCid(m)
-		if err := crossArr.Set(uint64(i), &c); err != nil {
-			return cid.Undef, err
-		}
-	}
-
 	bmroot, err := bmArr.Root()
 	if err != nil {
 		return cid.Undef, err
@@ -469,17 +447,9 @@ func computeMsgMeta(bs cbor.IpldStore, bmsgCids, smsgCids, crossCids []cid.Cid) 
 		return cid.Undef, err
 	}
 
-	crossroot, err := crossArr.Root()
-	if err != nil {
-		return cid.Undef, err
-	}
-
-	// FIXME: This needs to change if we want the chain to be backward-compatible,
-	// as the chain currently has blocks that don't have msgMeta.
 	mrcid, err := store.Put(store.Context(), &types.MsgMeta{
 		BlsMessages:   bmroot,
 		SecpkMessages: smroot,
-		CrossMessages: crossroot,
 	})
 	return mrcid, err
 }
@@ -510,7 +480,7 @@ func (syncer *Syncer) tryLoadFullTipSet(ctx context.Context, tsk types.TipSetKey
 
 	fts := &store.FullTipSet{}
 	for _, b := range ts.Blocks() {
-		bmsgs, smsgs, crossmsg, err := syncer.store.MessagesForBlock(ctx, b)
+		bmsgs, smsgs, err := syncer.store.MessagesForBlock(ctx, b)
 		if err != nil {
 			return nil, err
 		}
@@ -519,7 +489,6 @@ func (syncer *Syncer) tryLoadFullTipSet(ctx context.Context, tsk types.TipSetKey
 			Header:        b,
 			BlsMessages:   bmsgs,
 			SecpkMessages: smsgs,
-			CrossMessages: crossmsg,
 		}
 		fts.Blocks = append(fts.Blocks, fb)
 	}
@@ -1033,7 +1002,7 @@ func (syncer *Syncer) iterFullTipsets(ctx context.Context, headers []*types.TipS
 
 			this := headers[i-bsi]
 			bstip := bstout[len(bstout)-(bsi+1)]
-			fts, err := zipTipSetAndMessages(blks, this, bstip.Bls, bstip.Secpk, bstip.Cross, bstip.BlsIncludes, bstip.SecpkIncludes, bstip.CrossIncludes)
+			fts, err := zipTipSetAndMessages(blks, this, bstip.Bls, bstip.Secpk, bstip.BlsIncludes, bstip.SecpkIncludes)
 			if err != nil {
 				log.Warnw("zipping failed", "error", err, "bsi", bsi, "i", i,
 					"height", this.Height(),
@@ -1060,9 +1029,9 @@ func (syncer *Syncer) iterFullTipsets(ctx context.Context, headers []*types.TipS
 	return nil
 }
 
-func checkMsgMeta(ts *types.TipSet, allbmsgs []*types.Message, allsmsgs []*types.SignedMessage, allcross []*types.Message, bmi, smi, crossmi [][]uint64) error {
+func checkMsgMeta(ts *types.TipSet, allbmsgs []*types.Message, allsmsgs []*types.SignedMessage, bmi, smi [][]uint64) error {
 	for bi, b := range ts.Blocks() {
-		// TODO XXX: Should we account cross-messages for the blockMessageLimt??
+		// XXX: Cross-message account for the block message limit
 		if msgc := len(bmi[bi]) + len(smi[bi]); msgc > build.BlockMessageLimit {
 			return fmt.Errorf("block %q has too many messages (%d)", b.Cid(), msgc)
 		}
@@ -1077,12 +1046,7 @@ func checkMsgMeta(ts *types.TipSet, allbmsgs []*types.Message, allsmsgs []*types
 			bmsgCids = append(bmsgCids, allbmsgs[m].Cid())
 		}
 
-		var crossCids []cid.Cid
-		for _, m := range crossmi[bi] {
-			crossCids = append(crossCids, allcross[m].Cid())
-		}
-
-		mrcid, err := computeMsgMeta(cbor.NewCborStore(bstore.NewMemory()), bmsgCids, smsgCids, crossCids)
+		mrcid, err := computeMsgMeta(cbor.NewCborStore(bstore.NewMemory()), bmsgCids, smsgCids)
 		if err != nil {
 			return err
 		}
@@ -1136,7 +1100,7 @@ func (syncer *Syncer) fetchMessages(ctx context.Context, headers []*types.TipSet
 						isGood := true
 						for index, ts := range headers[nextI:lastI] {
 							cm := result[index]
-							if err := checkMsgMeta(ts, cm.Bls, cm.Secpk, cm.Cross, cm.BlsIncludes, cm.SecpkIncludes, cm.CrossIncludes); err != nil {
+							if err := checkMsgMeta(ts, cm.Bls, cm.Secpk, cm.BlsIncludes, cm.SecpkIncludes); err != nil {
 								log.Errorf("fetched messages not as expected: %s", err)
 								isGood = false
 								break
@@ -1194,15 +1158,6 @@ func persistMessages(ctx context.Context, bs bstore.Blockstore, bst *exchange.Co
 			return xerrors.Errorf("secp256k1 message processing failed: %w", err)
 		}
 	}
-	for _, m := range bst.Cross {
-		// log.Infof("putting Cross message: %s", m.Cid())
-		if _, err := store.PutMessage(ctx, bs, m); err != nil {
-			log.Errorf("failed to persist messages: %+v", err)
-			return xerrors.Errorf("Cross message processing failed: %w", err)
-		}
-	}
-
-	// TODO: Persist cross-messages, or as they are stored in SCA we don't need to?
 
 	return nil
 }

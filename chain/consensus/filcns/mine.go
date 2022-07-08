@@ -51,7 +51,7 @@ func (filec *FilecoinEC) CreateBlock(ctx context.Context, w api.Wallet, bt *api.
 	var blsMessages []*types.Message
 	var secpkMessages []*types.SignedMessage
 
-	var blsMsgCids, secpkMsgCids, crossMsgCids []cid.Cid
+	var blsMsgCids, secpkMsgCids []cid.Cid
 	var blsSigs []crypto.Signature
 	for _, msg := range bt.Messages {
 		if msg.Signature.Type == crypto.SigTypeBLS {
@@ -79,12 +79,13 @@ func (filec *FilecoinEC) CreateBlock(ctx context.Context, w api.Wallet, bt *api.
 	}
 
 	for _, msg := range bt.CrossMessages {
-		c, err := filec.sm.ChainStore().PutMessage(ctx, msg)
+		m := &types.SignedMessage{Message: *msg, Signature: crypto.Signature{Type: crypto.SigTypeSecp256k1}}
+		c, err := filec.sm.ChainStore().PutMessage(ctx, m)
 		if err != nil {
 			return nil, err
 		}
-
-		crossMsgCids = append(crossMsgCids, c)
+		secpkMsgCids = append(secpkMsgCids, c)
+		secpkMessages = append(secpkMessages, m)
 	}
 
 	store := filec.sm.ChainStore().ActorStore(ctx)
@@ -96,15 +97,10 @@ func (filec *FilecoinEC) CreateBlock(ctx context.Context, w api.Wallet, bt *api.
 	if err != nil {
 		return nil, xerrors.Errorf("building secpk amt: %w", err)
 	}
-	crossmsgroot, err := consensus.ToMessagesArray(store, crossMsgCids)
-	if err != nil {
-		return nil, xerrors.Errorf("building cross amt: %w", err)
-	}
 
 	mmcid, err := store.Put(store.Context(), &types.MsgMeta{
 		BlsMessages:   blsmsgroot,
 		SecpkMessages: secpkmsgroot,
-		CrossMessages: crossmsgroot,
 	})
 	if err != nil {
 		return nil, err
@@ -147,7 +143,6 @@ func (filec *FilecoinEC) CreateBlock(ctx context.Context, w api.Wallet, bt *api.
 		Header:        next,
 		BlsMessages:   blsMessages,
 		SecpkMessages: secpkMessages,
-		CrossMessages: bt.CrossMessages,
 	}
 
 	return fullBlock, nil

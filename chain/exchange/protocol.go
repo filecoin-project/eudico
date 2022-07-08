@@ -163,9 +163,6 @@ type CompactedMessages struct {
 
 	Secpk         []*types.SignedMessage
 	SecpkIncludes [][]uint64
-
-	Cross         []*types.Message
-	CrossIncludes [][]uint64
 }
 
 // Response that has been validated according to the protocol
@@ -200,9 +197,6 @@ func (res *validatedResponse) toFullTipSets() []*store.FullTipSet {
 			}
 			for _, mi := range msgs.SecpkIncludes[blockIdx] {
 				fb.SecpkMessages = append(fb.SecpkMessages, msgs.Secpk[mi])
-			}
-			for _, mi := range msgs.CrossIncludes[blockIdx] {
-				fb.CrossMessages = append(fb.CrossMessages, msgs.Cross[mi])
 			}
 
 			fts.Blocks = append(fts.Blocks, fb)

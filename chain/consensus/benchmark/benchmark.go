@@ -7,6 +7,7 @@ import (
 	"time"
 
 	lapi "github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 )
 
 func RunSimpleBenchmark(ctx context.Context, api lapi.FullNode, benchmarkLength int) (TestnetStats, error) {
@@ -26,9 +27,14 @@ func RunSimpleBenchmark(ctx context.Context, api lapi.FullNode, benchmarkLength 
 				if err != nil {
 					return err
 				}
-				crossMsgsNum += len(msgs.CrossMessages)
 				blsMsgsNum += len(msgs.BlsMessages)
-				secpkMsgsNum += len(msgs.SecpkMessages)
+				for _, m := range msgs.SecpkMessages {
+					if hierarchical.IsCrossMsg(&m.Message) {
+						crossMsgsNum++
+					} else {
+						secpkMsgsNum++
+					}
+				}
 			}
 		}
 		return nil

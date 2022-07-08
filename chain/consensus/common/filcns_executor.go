@@ -6,6 +6,7 @@ import (
 
 	"github.com/filecoin-project/lotus/chain/consensus/actors/registry"
 	"github.com/filecoin-project/lotus/chain/consensus/common/crossmsg"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/rand"
 
@@ -140,10 +141,11 @@ func (t *FilCnsTipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateM
 	var receipts []cbg.CBORMarshaler
 	processedMsgs := make(map[cid.Cid]struct{})
 	for _, b := range bms {
+		secp, cross := hierarchical.UnbundleCrossAndSecpMsgs(b.SecpkMessages)
 		penalty := types.NewInt(0)
 		gasReward := big.Zero()
 
-		for _, cm := range append(b.BlsMessages, b.SecpkMessages...) {
+		for _, cm := range append(b.BlsMessages, secp...) {
 			m := cm.VMMessage()
 			if _, found := processedMsgs[m.Cid()]; found {
 				continue
@@ -201,7 +203,7 @@ func (t *FilCnsTipSetExecutor) ApplyBlocks(ctx context.Context, sm *stmgr.StateM
 		}
 
 		// Sort cross-messages deterministically before applying them
-		crossm, aerr := crossmsg.SortCrossMsgs(ctx, sm, cr, b.CrossMessages, ts)
+		crossm, aerr := crossmsg.SortCrossMsgs(ctx, sm, cr, cross, ts)
 		if aerr != nil {
 			return cid.Undef, cid.Undef, xerrors.Errorf("error sorting cross-msgs: %w", aerr)
 		}
