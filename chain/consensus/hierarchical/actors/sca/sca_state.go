@@ -104,7 +104,11 @@ func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, e
 	if checkpointPeriod < minCheckpointPeriod {
 		checkpointPeriod = minCheckpointPeriod
 	}
-	sn, _ := address.SubnetIDFromString(params.NetworkName)
+	sn, err := address.SubnetIDFromString(params.NetworkName)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to get subnet from string: %w", err)
+
+	}
 	return &SCAState{
 		NetworkName:          sn,
 		TotalSubnets:         0,

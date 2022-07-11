@@ -856,7 +856,7 @@ var sendCmd = &cli.Command{
 		}
 		serparams, err := actors.SerializeParams(crossParams)
 		if err != nil {
-			return xerrors.Errorf("failed serializing init actor params: %s", err)
+			return xerrors.Errorf("failed serializing cross-msg params: %s", err)
 		}
 		smsg, aerr := api.MpoolPushMessage(ctx, &types.Message{
 			To:     hierarchical.SubnetCoordActorAddr,
@@ -1012,7 +1012,7 @@ var deployActorCmd = &cli.Command{
 		}
 		serparams, err := actors.SerializeParams(initParams)
 		if err != nil {
-			return xerrors.Errorf("failed serializing init actor params: %s", err)
+			return xerrors.Errorf("failed serializing init exec params: %s", err)
 		}
 
 		// Init actor is responsible for the deployment of new actors.

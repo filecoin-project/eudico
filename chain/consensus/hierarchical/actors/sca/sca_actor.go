@@ -429,7 +429,8 @@ func (a SubnetCoordActor) Fund(rt runtime.Runtime, params *SubnetIDParam) *abi.E
 	// Increment stake locked for subnet.
 	var st SCAState
 	rt.StateTransaction(&st, func() {
-		sn, _ := address.SubnetIDFromString(params.ID)
+		sn, err := address.SubnetIDFromString(params.ID)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "error getting subnet from string")
 		msg := fundMsg(rt, sn, secpAddr, value)
 		commitTopDownMsg(rt, &st, msg)
 

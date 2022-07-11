@@ -1,5 +1,7 @@
 package hierarchical
 
+//go:generate go run ./gen/gen.go
+
 import (
 	"fmt"
 	"strings"

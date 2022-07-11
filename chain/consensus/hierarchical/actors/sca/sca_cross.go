@@ -236,7 +236,8 @@ func incrementNonce(rt runtime.Runtime, nonceCounter *uint64) {
 func (st *SCAState) aggChildMsgMeta(rt runtime.Runtime, ch *schema.Checkpoint, aux map[string][]schema.CrossMsgMeta) {
 	for to, mm := range aux {
 		// Get the cid of MsgMeta from this subnet (if any)
-		sto, _ := address.SubnetIDFromString(to)
+		sto, err := address.SubnetIDFromString(to)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "error getting subnet from string")
 		metaIndex, msgMeta := ch.CrossMsgMeta(st.NetworkName, sto)
 		if msgMeta == nil {
 			msgMeta = schema.NewCrossMsgMeta(st.NetworkName, sto)

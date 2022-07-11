@@ -500,11 +500,11 @@ func FilterBlockMessages(
 	if submgr != nil {
 		p, err := netName.GetParent()
 		if err != nil {
-			log.Infof("Failed to get parent: %s", err)
+			log.Errorf("Failed to get parent: %s", err)
 		}
 		parentSCA, pstore, err = crossmsg.GetSCAState(ctx, sm, submgr, p, baseTs)
 		if err != nil {
-			log.Infof("Failed to get parent SCA state: %s", err)
+			log.Errorf("Failed to get parent SCA state: %s", err)
 		}
 	}
 	// Get SCA state in subnet.

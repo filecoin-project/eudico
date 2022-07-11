@@ -165,12 +165,17 @@ func ApplyCrossMsg(ctx context.Context, vmi vm.Interface, submgr subnet.Manager,
 func applyMsg(ctx context.Context, vmi vm.Interface, em stmgr.ExecMonitor,
 	msg *types.Message, ts *types.TipSet) error {
 	// Serialize params
+	f0, _ := address.NewIDAddress(0)
 	params := &sca.CrossMsgParams{
 		Msg: *msg,
+		// FIXME: Destination is not used in this method. Consider
+		// not reusing the params data structure.
+		// Used to prevent undefined address from failing in SubnetID.
+		Destination: address.SubnetID{Parent: "/", Actor: f0},
 	}
 	serparams, aerr := actors.SerializeParams(params)
 	if aerr != nil {
-		return xerrors.Errorf("failed serializing init actor params: %s", aerr)
+		return xerrors.Errorf("failed serializing apply-message params: %s", aerr)
 	}
 	apply := &types.Message{
 		From:       builtin.SystemActorAddr,

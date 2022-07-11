@@ -435,7 +435,7 @@ func (s *Service) AddSubnet(ctx context.Context, params *hierarchical.SubnetPara
 	}
 	serParams, err = actors.SerializeParams(execParams)
 	if err != nil {
-		return address.Undef, xerrors.Errorf("failed serializing init actor params: %s", err)
+		return address.Undef, xerrors.Errorf("failed serializing init actor constructor params: %s", err)
 	}
 
 	msg, aerr := parentAPI.MpoolPushMessage(ctx, &types.Message{

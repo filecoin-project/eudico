@@ -192,7 +192,7 @@ func (s *Service) FundSubnet(
 	params := &sca.SubnetIDParam{ID: id.String()}
 	serParams, err := actors.SerializeParams(params)
 	if err != nil {
-		return cid.Undef, xerrors.Errorf("failed serializing init actor params: %s", err)
+		return cid.Undef, xerrors.Errorf("failed serializing fund subnet params: %s", err)
 	}
 
 	// Get the parent and the actor to know where to send the message.
