@@ -164,7 +164,9 @@ func TestAddStake(t *testing.T) {
 	// Only subnet actors can call.
 	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
 	rt.Call(h.SubnetCoordActor.AddStake, nil)
-	sh, found := h.getSubnet(rt, address.SubnetID(res.ID))
+	s, err := address.SubnetIDFromString(res.ID)
+	require.NoError(t, err)
+	sh, found := h.getSubnet(rt, s)
 	require.True(h.t, found)
 	require.Equal(t, sh.Stake, big.Add(value, value))
 	require.Equal(t, sh.Status, actor.Active)
@@ -221,7 +223,9 @@ func TestReleaseStake(t *testing.T) {
 	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
 	rt.ExpectSend(SubnetActorAddr, builtin.MethodSend, nil, releaseVal, nil, exitcode.Ok)
 	rt.Call(h.SubnetCoordActor.ReleaseStake, params)
-	sh, found := h.getSubnet(rt, address.SubnetID(res.ID))
+	s, err := address.SubnetIDFromString(res.ID)
+	require.NoError(t, err)
+	sh, found := h.getSubnet(rt, s)
 	require.True(h.t, found)
 	require.Equal(t, sh.Stake, big.Sub(value, releaseVal))
 	require.Equal(t, sh.Status, actor.Active)
@@ -236,7 +240,9 @@ func TestReleaseStake(t *testing.T) {
 	rt.ExpectValidateCallerType(actors.SubnetActorCodeID)
 	rt.ExpectSend(SubnetActorAddr, builtin.MethodSend, nil, releaseVal, nil, exitcode.Ok)
 	rt.Call(h.SubnetCoordActor.ReleaseStake, params)
-	sh, found = h.getSubnet(rt, address.SubnetID(res.ID))
+	s, err = address.SubnetIDFromString(res.ID)
+	require.NoError(t, err)
+	sh, found = h.getSubnet(rt, s)
 	require.True(h.t, found)
 	require.Equal(t, sh.Stake, big.Sub(currStake, releaseVal))
 	require.Equal(t, sh.Status, actor.Inactive)
@@ -304,7 +310,9 @@ func TestKill(t *testing.T) {
 	rt.Call(h.SubnetCoordActor.Kill, nil)
 	rt.Verify()
 	// The subnet has been removed.
-	_, found := h.getSubnet(rt, address.SubnetID(res.ID))
+	s, err := address.SubnetIDFromString(res.ID)
+	require.NoError(t, err)
+	_, found := h.getSubnet(rt, s)
 	require.False(h.t, found)
 }
 
@@ -385,7 +393,7 @@ func (h *shActorHarness) getSubnet(rt *mock.Runtime, id address.SubnetID) (*acto
 	subnets, err := adt.AsMap(adt.AsStore(rt), st.Subnets, builtin.DefaultHamtBitwidth)
 	require.NoError(h.t, err)
 	var out actor.Subnet
-	found, err := subnets.Get(hierarchical.SubnetKey(id), &out)
+	found, err := subnets.Get(abi.SubnetKey(id), &out)
 	require.NoError(h.t, err)
 
 	return &out, found

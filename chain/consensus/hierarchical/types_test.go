@@ -13,35 +13,48 @@ import (
 )
 
 func TestBottomUp(t *testing.T) {
-	testBottomUp(t, "/root/a", "/root/a/b", false)
-	testBottomUp(t, "/root/c/a", "/root/a/b", true)
-	testBottomUp(t, "/root/c/a/d", "/root/c/a/e", true)
-	testBottomUp(t, "/root/c/a", "/root/c/b", true)
+	testBottomUp(t, "/root/f01", "/root/f01/f02", false)
+	testBottomUp(t, "/root/f03/f01", "/root/f01/f02", true)
+	testBottomUp(t, "/root/f03/f01/f04", "/root/f03/f01/f05", true)
+	testBottomUp(t, "/root/f03/f01", "/root/f03/f02", true)
 }
 
 func testBottomUp(t *testing.T, from, to string, bottomup bool) {
-	require.Equal(t, hierarchical.IsBottomUp(
-		address.SubnetID(from), address.SubnetID(to)), bottomup)
+	sfrom, err := address.SubnetIDFromString(from)
+	require.NoError(t, err)
+	sto, err := address.SubnetIDFromString(to)
+	require.NoError(t, err)
+	require.Equal(t, hierarchical.IsBottomUp(sfrom, sto), bottomup)
 }
 
 func TestApplyAsBottomUp(t *testing.T) {
-	testApplyAsBottomUp(t, "/root/a", "/root", "/root/a/b", false)
-	testApplyAsBottomUp(t, "/root/a", "/root/a/b/c", "/root/a", true)
-	testApplyAsBottomUp(t, "/root/a", "/root/a/b/c", "/root/b/a", true)
-	testApplyAsBottomUp(t, "/root/a", "/root/b/a/c", "/root/a/b", false)
+	testApplyAsBottomUp(t, "/root/f01", "/root", "/root/f01/f02", false)
+	testApplyAsBottomUp(t, "/root/f01", "/root/f01/f02/f03", "/root/f01", true)
+	testApplyAsBottomUp(t, "/root/f01", "/root/f01/f02/f03", "/root/f02/f01", true)
+	testApplyAsBottomUp(t, "/root/f01", "/root/f02/f01/f03", "/root/f01/f02", false)
 }
 
 func testApplyAsBottomUp(t *testing.T, curr, from, to string, bottomup bool) {
-	ff, _ := address.NewHCAddress(address.SubnetID(from), tutil.NewIDAddr(t, 101))
-	tt, _ := address.NewHCAddress(address.SubnetID(to), tutil.NewIDAddr(t, 101))
-	bu, err := hierarchical.ApplyAsBottomUp(address.SubnetID(curr), &types.Message{From: ff, To: tt})
+	sfrom, err := address.SubnetIDFromString(from)
+	require.NoError(t, err)
+	sto, err := address.SubnetIDFromString(to)
+	require.NoError(t, err)
+	ff, _ := address.NewHCAddress(sfrom, tutil.NewIDAddr(t, 101))
+	tt, _ := address.NewHCAddress(sto, tutil.NewIDAddr(t, 101))
+	scurr, err := address.SubnetIDFromString(curr)
+	require.NoError(t, err)
+	bu, err := hierarchical.ApplyAsBottomUp(scurr, &types.Message{From: ff, To: tt})
 	require.NoError(t, err)
 	require.Equal(t, bu, bottomup)
 }
 
 func TestIsCrossMsg(t *testing.T) {
-	ff, _ := address.NewHCAddress(address.SubnetID("/root/a"), tutil.NewIDAddr(t, 101))
-	tt, _ := address.NewHCAddress(address.SubnetID("/root/b"), tutil.NewIDAddr(t, 101))
+	sfrom, err := address.SubnetIDFromString("/root/f01")
+	require.NoError(t, err)
+	sto, err := address.SubnetIDFromString("/root/f02")
+	require.NoError(t, err)
+	ff, _ := address.NewHCAddress(sfrom, tutil.NewIDAddr(t, 101))
+	tt, _ := address.NewHCAddress(sto, tutil.NewIDAddr(t, 101))
 	msg := types.Message{From: ff, To: tt}
 	require.Equal(t, hierarchical.IsCrossMsg(&msg), true)
 

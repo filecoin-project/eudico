@@ -148,10 +148,7 @@ func (s *Service) SubmitSignedCheckpoint(
 	defer s.lk.RUnlock()
 
 	// Get actor from subnet ID
-	SubnetActor, err := id.Actor()
-	if err != nil {
-		return cid.Undef, err
-	}
+	SubnetActor := id.GetActor()
 
 	// Get the api for the parent network hosting the subnet actor
 	// for the subnet.
@@ -199,10 +196,7 @@ func (s *Service) ListCheckpoints(
 	defer s.lk.RUnlock()
 
 	// Get actor from subnet ID
-	subnetActAddr, err := id.Actor()
-	if err != nil {
-		return nil, err
-	}
+	subnetActAddr := id.GetActor()
 
 	// Get the api for the parent network hosting the subnet actor
 	// for the subnet.
@@ -256,10 +250,7 @@ func (s *Service) ValidateCheckpoint(
 	defer s.lk.RUnlock()
 
 	// Get actor from subnet ID
-	subnetActAddr, err := id.Actor()
-	if err != nil {
-		return nil, err
-	}
+	subnetActAddr := id.GetActor()
 
 	// Get the api for the parent network hosting the subnet actor
 	// for the subnet.

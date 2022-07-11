@@ -217,8 +217,9 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 	h := newHarness(t)
 	builder := mock.NewBuilder(builtin.StoragePowerActorAddr).WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
 	rt := builder.Build(t)
-	netName := "/root/f01"
-	h.constructAndVerifyWithNetworkName(rt, address.SubnetID(netName))
+	netName, err := address.SubnetIDFromString("/root/f01")
+	require.NoError(t, err)
+	h.constructAndVerifyWithNetworkName(rt, netName)
 	SubnetActorAddr := tutil.NewIDAddr(t, 101)
 
 	t.Log("register new subnet successfully")
@@ -233,7 +234,7 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 	ret := rt.Call(h.SubnetCoordActor.Register, nil)
 	res, ok := ret.(*actor.SubnetIDParam)
 	require.True(t, ok)
-	shid := address.NewSubnetID(address.SubnetID(netName), tutil.NewIDAddr(h.t, 101))
+	shid := address.NewSubnetID(netName, tutil.NewIDAddr(h.t, 101))
 	// Verify the return value is correct.
 	require.Equal(t, res.ID, shid.String())
 	rt.Verify()
@@ -243,7 +244,7 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 	require.True(h.t, found)
 	require.Equal(t, sh.Stake, value)
 	require.Equal(t, sh.ID, shid)
-	require.Equal(t, sh.ParentID.String(), netName)
+	require.Equal(t, sh.ParentID, netName)
 	require.Equal(t, sh.Status, actor.Active)
 
 	t.Log("commit checkpoint with cross msgs")
@@ -254,17 +255,25 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 	rt.SetEpoch(epoch)
 	ch := newCheckpoint(sh.ID, epoch+9)
 	// Add msgMeta directed to other subnets
-	addMsgMeta(t, ch, sh.ID, address.SubnetID("/root/f0102/child1"), "rand1", big.Zero())
+	n, err := address.SubnetIDFromString("/root/f0102/f0101")
+	require.NoError(t, err)
+	addMsgMeta(t, ch, sh.ID, n, "rand1", big.Zero())
 	// By not adding a random string we are checking that nothing fails when to MsgMeta
 	// for different subnets are propagating the same CID. This will probably never be the
 	// case for honest peers, but it is an attack vector.
-	addMsgMeta(t, ch, sh.ID, address.SubnetID("/root/f0102/child2"), "", big.Zero())
-	addMsgMeta(t, ch, sh.ID, address.SubnetID("/root/f0102/child3"), "", big.Zero())
+	n, err = address.SubnetIDFromString("/root/f0102/f0102")
+	require.NoError(t, err)
+	addMsgMeta(t, ch, sh.ID, n, "", big.Zero())
+	n, err = address.SubnetIDFromString("/root/f0102/f0103")
+	require.NoError(t, err)
+	addMsgMeta(t, ch, sh.ID, n, "", big.Zero())
 	// And to this subnet
 	addMsgMeta(t, ch, sh.ID, address.SubnetID(netName), "", big.Zero())
 	addMsgMeta(t, ch, sh.ID, address.SubnetID(netName), "rand", big.Zero())
 	// And to a child from other branch (with cross-net messages)
-	addMsgMeta(t, ch, sh.ID, address.SubnetID(netName+"/f02"), "rand", big.Zero())
+	n, err = address.SubnetIDFromString(netName.String() + "/f02")
+	require.NoError(t, err)
+	addMsgMeta(t, ch, sh.ID, n, "rand", big.Zero())
 	prevcid, _ := ch.Cid()
 
 	b, err := ch.MarshalBinary()
@@ -292,12 +301,18 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 
 	// Check msgMeta to other subnets are aggregated
 	m := windowCh.CrossMsgs()
-	subs := []address.SubnetID{"/root/f0102/child1", "/root/f0102/child2", "/root/f0102/child3"}
+	n1, err := address.SubnetIDFromString("/root/f0102/f0101")
+	require.NoError(t, err)
+	n2, err := address.SubnetIDFromString("/root/f0102/f0102")
+	require.NoError(t, err)
+	n3, err := address.SubnetIDFromString("/root/f0102/f0103")
+	require.NoError(t, err)
+	subs := []address.SubnetID{n1, n2, n3}
 	require.Equal(t, len(m), 3)
 	prevs := make(map[string]schema.CrossMsgMeta)
 	for i, mm := range m {
 		// Check that from has been renamed
-		require.Equal(t, mm.From, netName)
+		require.Equal(t, mm.From, netName.String())
 		// Check the to is kept
 		require.Equal(t, len(windowCh.CrossMsgsTo(subs[i])), 1)
 		// Append for the future
@@ -344,10 +359,12 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 	ch = newCheckpoint(sh.ID, epoch+9)
 	ch.SetPrevious(prevcid)
 	// Add msgMeta directed to other subnets
-	addMsgMeta(t, ch, sh.ID, address.SubnetID("/root/f0102/child1"), "", big.Zero())
-	addMsgMeta(t, ch, sh.ID, address.SubnetID("/root/f0102/child2"), "", big.Zero())
-	addMsgMeta(t, ch, sh.ID, address.SubnetID("/root/f0102/child3"), "", abi.NewTokenAmount(100))
-	addMsgMeta(t, ch, sh.ID, address.SubnetID("/root/f0102/child4"), "", abi.NewTokenAmount(100))
+	n4, err := address.SubnetIDFromString("/root/f0102/f0104")
+	require.NoError(t, err)
+	addMsgMeta(t, ch, sh.ID, n1, "", big.Zero())
+	addMsgMeta(t, ch, sh.ID, n2, "", big.Zero())
+	addMsgMeta(t, ch, sh.ID, n3, "", abi.NewTokenAmount(100))
+	addMsgMeta(t, ch, sh.ID, n4, "", abi.NewTokenAmount(100))
 
 	b, err = ch.MarshalBinary()
 	require.NoError(t, err)
@@ -368,11 +385,11 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 
 	// Check msgMeta to other subnets are aggregated
 	m = windowCh.CrossMsgs()
-	subs = []address.SubnetID{"/root/f0102/child1", "/root/f0102/child2", "/root/f0102/child3", "/root/f0102/child4"}
+	subs = []address.SubnetID{n1, n2, n3, n4}
 	require.Equal(t, len(m), 4)
 	for i, mm := range m {
 		// Check that from has been renamed
-		require.Equal(t, mm.From, netName)
+		require.Equal(t, mm.From, netName.String())
 		// Check the to is kept
 		require.Equal(t, len(windowCh.CrossMsgsTo(subs[i])), 1)
 		// Get current msgMetas

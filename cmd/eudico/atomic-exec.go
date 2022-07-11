@@ -55,7 +55,10 @@ var listAtomicExec = &cli.Command{
 		// If subnet not set use root. Otherwise, use flag value
 		subnet := address.RootSubnet
 		if cctx.String("subnet") != address.RootSubnet.String() {
-			subnet = address.SubnetID(cctx.String("subnet"))
+			subnet, err = address.SubnetIDFromString(cctx.String("subnet"))
+			if err != nil {
+				return err
+			}
 		}
 		addr, err := address.NewFromString(cctx.Args().Get(0))
 		if err != nil {
@@ -127,7 +130,10 @@ var lockStateCmd = &cli.Command{
 			cctx.String("subnet") == "" {
 			return xerrors.Errorf("only subnets with an ancestor can perform atomic executions")
 		}
-		subnet = address.SubnetID(cctx.String("subnet"))
+		subnet, err = address.SubnetIDFromString(cctx.String("subnet"))
+		if err != nil {
+			return err
+		}
 		actorAddr, err := address.NewFromString(cctx.Args().Get(0))
 		if err != nil {
 			return lcli.ShowHelp(cctx, fmt.Errorf("failed to parse actor address: %w", err))
@@ -195,7 +201,10 @@ var unlockStateCmd = &cli.Command{
 			cctx.String("subnet") == "" {
 			return xerrors.Errorf("only subnets with an ancestor can perform atomic executions")
 		}
-		subnet = address.SubnetID(cctx.String("subnet"))
+		subnet, err = address.SubnetIDFromString(cctx.String("subnet"))
+		if err != nil {
+			return err
+		}
 		actorAddr, err := address.NewFromString(cctx.Args().Get(0))
 		if err != nil {
 			return lcli.ShowHelp(cctx, fmt.Errorf("failed to parse actor address: %w", err))
@@ -252,7 +261,10 @@ var abortCmd = &cli.Command{
 
 		subnet := address.RootSubnet
 		if cctx.String("subnet") != address.RootSubnet.String() {
-			subnet = address.SubnetID(cctx.String("subnet"))
+			subnet, err = address.SubnetIDFromString(cctx.String("subnet"))
+			if err != nil {
+				return err
+			}
 		}
 		idExec, err := cid.Parse(cctx.Args().Get(0))
 		if err != nil {
@@ -306,7 +318,10 @@ var submitExecCmd = &cli.Command{
 
 		subnet := address.RootSubnet
 		if cctx.String("subnet") != address.RootSubnet.String() {
-			subnet = address.SubnetID(cctx.String("subnet"))
+			subnet, err = address.SubnetIDFromString(cctx.String("subnet"))
+			if err != nil {
+				return err
+			}
 		}
 		idExec, err := cid.Parse(cctx.Args().Get(0))
 		if err != nil {

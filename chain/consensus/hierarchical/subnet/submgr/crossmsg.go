@@ -387,7 +387,11 @@ func (s *Service) getBottomUpPool(ctx context.Context, id address.SubnetID, heig
 		if err != nil {
 			return nil, err
 		}
-		cross, found, err := r.ResolveCrossMsgs(ctx, c, address.SubnetID(mt.From))
+		sfrom, err := address.SubnetIDFromString(mt.From)
+		if err != nil {
+			return nil, err
+		}
+		cross, found, err := r.ResolveCrossMsgs(ctx, c, sfrom)
 		if err != nil {
 			return nil, err
 		}

@@ -104,9 +104,9 @@ func ConstructSCAState(store adt.Store, params *ConstructorParams) (*SCAState, e
 	if checkpointPeriod < minCheckpointPeriod {
 		checkpointPeriod = minCheckpointPeriod
 	}
-
+	sn, _ := address.SubnetIDFromString(params.NetworkName)
 	return &SCAState{
-		NetworkName:          address.SubnetID(params.NetworkName),
+		NetworkName:          sn,
 		TotalSubnets:         0,
 		MinStake:             MinSubnetStake,
 		Subnets:              emptySubnetsMapCid,
@@ -130,7 +130,7 @@ func (st *SCAState) GetSubnet(s adt.Store, id address.SubnetID) (*Subnet, bool, 
 
 func getSubnet(subnets *adt.Map, id address.SubnetID) (*Subnet, bool, error) {
 	var out Subnet
-	found, err := subnets.Get(hierarchical.SubnetKey(id), &out)
+	found, err := subnets.Get(abi.SubnetKey(id), &out)
 	if err != nil {
 		return nil, false, xerrors.Errorf("failed to get subnet with id %v: %w", id, err)
 	}
@@ -144,7 +144,7 @@ func (st *SCAState) flushSubnet(rt runtime.Runtime, sh *Subnet) {
 	// Update subnet in the list of subnets.
 	subnets, err := adt.AsMap(adt.AsStore(rt), st.Subnets, builtin.DefaultHamtBitwidth)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state for subnets")
-	err = subnets.Put(hierarchical.SubnetKey(sh.ID), sh)
+	err = subnets.Put(abi.SubnetKey(sh.ID), sh)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put new subnet in subnet map")
 	// Flush subnets
 	st.Subnets, err = subnets.Root()

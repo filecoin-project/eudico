@@ -8,7 +8,6 @@ import (
 	"math"
 	"sort"
 
-	address "github.com/filecoin-project/go-address"
 	cid "github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	xerrors "golang.org/x/xerrors"
@@ -33,15 +32,8 @@ func (t *ResolveMsg) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.From (address.SubnetID) (string)
-	if len(t.From) > cbg.MaxLength {
-		return xerrors.Errorf("Value in field t.From was too long")
-	}
-
-	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len(t.From))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string(t.From)); err != nil {
+	// t.From (address.SubnetID) (struct)
+	if err := t.From.MarshalCBOR(cw); err != nil {
 		return err
 	}
 
@@ -104,15 +96,14 @@ func (t *ResolveMsg) UnmarshalCBOR(r io.Reader) (err error) {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.From (address.SubnetID) (string)
+	// t.From (address.SubnetID) (struct)
 
 	{
-		sval, err := cbg.ReadString(cr)
-		if err != nil {
-			return err
+
+		if err := t.From.UnmarshalCBOR(cr); err != nil {
+			return xerrors.Errorf("unmarshaling t.From: %w", err)
 		}
 
-		t.From = address.SubnetID(sval)
 	}
 	// t.Type (resolver.MsgType) (uint64)
 

@@ -77,7 +77,11 @@ func checkBottomUpMsg(ctx context.Context, r *resolver.Resolver, snstore blockad
 	// to check.
 	ctx, cancel := context.WithTimeout(ctx, crossMsgResolutionTimeout)
 	defer cancel()
-	out := r.WaitCrossMsgsResolved(ctx, c, address.SubnetID(comMeta.From))
+	sfrom, err := address.SubnetIDFromString(comMeta.From)
+	if err != nil {
+		return err
+	}
+	out := r.WaitCrossMsgsResolved(ctx, c, sfrom)
 	select {
 	case <-ctx.Done():
 		return xerrors.Errorf("context timeout")
@@ -88,7 +92,7 @@ func checkBottomUpMsg(ctx context.Context, r *resolver.Resolver, snstore blockad
 	}
 
 	// Get cross-messages
-	cross, found, err := r.ResolveCrossMsgs(ctx, c, address.SubnetID(comMeta.From))
+	cross, found, err := r.ResolveCrossMsgs(ctx, c, sfrom)
 	if err != nil {
 		return xerrors.Errorf("Error resolving messages: %v", err)
 	}
@@ -254,7 +258,11 @@ func SortCrossMsgs(ctx context.Context, sm *stmgr.StateManager, r *resolver.Reso
 		if err != nil {
 			return []*types.Message{}, xerrors.Errorf("error getting network name: %w", err)
 		}
-		isBu, err := hierarchical.ApplyAsBottomUp(address.SubnetID(netName), m)
+		nn, err := address.SubnetIDFromString(string(netName))
+		if err != nil {
+			return []*types.Message{}, xerrors.Errorf("error getting network name ID: %w", err)
+		}
+		isBu, err := hierarchical.ApplyAsBottomUp(nn, m)
 		if err != nil {
 			return []*types.Message{}, xerrors.Errorf("error processing type to apply: %w", err)
 		}

@@ -87,7 +87,10 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	if err != nil {
 		return nil, err
 	}
-	subnetID := address.SubnetID(netName)
+	subnetID, err := address.SubnetIDFromString(string(netName))
+	if err != nil {
+		return nil, err
+	}
 
 	var validators []hierarchical.Validator
 

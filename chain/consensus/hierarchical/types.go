@@ -181,15 +181,6 @@ type MiningParams struct {
 	LogFileName string
 }
 
-// SubnetKey implements Keyer interface, so it can be used as a key for maps.
-type SubnetKey address.SubnetID
-
-var _ abi.Keyer = SubnetKey("")
-
-func (id SubnetKey) Key() string {
-	return string(id)
-}
-
 func IsBottomUp(from, to address.SubnetID) bool {
 	_, l := from.CommonParent(to)
 	sfrom := strings.Split(from.String(), "/")

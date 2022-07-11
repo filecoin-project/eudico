@@ -8,7 +8,6 @@ import (
 	"math"
 	"sort"
 
-	address "github.com/filecoin-project/go-address"
 	cid "github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	xerrors "golang.org/x/xerrors"
@@ -93,44 +92,6 @@ func (t *ConsensusParams) UnmarshalCBOR(r io.Reader) error {
 var lengthBufValidator = []byte{131}
 
 func (t *Validator) MarshalCBOR(w io.Writer) error {
-	if t == nil {
-		_, err := w.Write(cbg.CborNull)
-		return err
-	}
-	if _, err := w.Write(lengthBufValidator); err != nil {
-		return err
-	}
-
-	scratch := make([]byte, 9)
-
-	// t.Subnet (address.SubnetID) (string)
-	if len(t.Subnet) > cbg.MaxLength {
-		return xerrors.Errorf("Value in field t.Subnet was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Subnet))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string(t.Subnet)); err != nil {
-		return err
-	}
-
-	// t.Addr (address.Address) (struct)
-	if err := t.Addr.MarshalCBOR(w); err != nil {
-		return err
-	}
-
-	// t.NetAddr (string) (string)
-	if len(t.NetAddr) > cbg.MaxLength {
-		return xerrors.Errorf("Value in field t.NetAddr was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.NetAddr))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string(t.NetAddr)); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -154,14 +115,6 @@ func (t *Validator) UnmarshalCBOR(r io.Reader) error {
 
 	// t.Subnet (address.SubnetID) (string)
 
-	{
-		sval, err := cbg.ReadStringBuf(br, scratch)
-		if err != nil {
-			return err
-		}
-
-		t.Subnet = address.SubnetID(sval)
-	}
 	// t.Addr (address.Address) (struct)
 
 	{

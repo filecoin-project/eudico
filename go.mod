@@ -376,7 +376,9 @@ require (
 replace github.com/filecoin-project/specs-actors/v7 => github.com/adlrocha/specs-actors/v7 v7.0.0-rc1.0.20220215102846-08bb2fde502a
 
 // FIXME: Replacing with a fork that includes support to hierarchical consensus addresses.
-replace github.com/filecoin-project/go-address => github.com/adlrocha/go-address v0.0.7-0.20220624112241-1f5285ff6d72
+replace github.com/filecoin-project/go-address => github.com/adlrocha/go-address v1.0.1-0.20220711063536-0d8f688c2c4f
+
+replace github.com/filecoin-project/go-state-types => github.com/adlrocha/go-state-types v0.1.11-0.20220711063816-cc162b0318f4
 
 replace github.com/filecoin-project/filecoin-ffi => ./extern/filecoin-ffi
 

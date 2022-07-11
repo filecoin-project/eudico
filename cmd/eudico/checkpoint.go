@@ -47,7 +47,11 @@ var listCheckpoints = &cli.Command{
 			subnet = cctx.String("subnet")
 		}
 
-		chs, err := api.ListCheckpoints(ctx, address.SubnetID(subnet), cctx.Int("num"))
+		snID, err := address.SubnetIDFromString(subnet)
+		if err != nil {
+			return err
+		}
+		chs, err := api.ListCheckpoints(ctx, snID, cctx.Int("num"))
 		if err != nil {
 			return err
 		}
@@ -89,8 +93,11 @@ var validateCheckpoints = &cli.Command{
 		if cctx.String("subnet") != address.RootSubnet.String() {
 			subnet = cctx.String("subnet")
 		}
-
-		ch, err := api.ValidateCheckpoint(ctx, address.SubnetID(subnet), abi.ChainEpoch(cctx.Int("epoch")))
+		snID, err := address.SubnetIDFromString(subnet)
+		if err != nil {
+			return err
+		}
+		ch, err := api.ValidateCheckpoint(ctx, snID, abi.ChainEpoch(cctx.Int("epoch")))
 		if err != nil {
 			fmt.Println("Verified KO!")
 			return err
