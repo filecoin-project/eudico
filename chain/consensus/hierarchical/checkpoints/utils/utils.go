@@ -12,7 +12,7 @@ func GenRandChecks(num int) []*schema.Checkpoint {
 		a, _ := address.NewIDAddress(uint64(i))
 		s := address.NewSubnetID(address.RootSubnet, a)
 		c, _ := schema.Linkproto.Sum([]byte(s.String()))
-		ch := schema.NewRawCheckpoint(address.SubnetID(s), abi.ChainEpoch(i))
+		ch := schema.NewRawCheckpoint(s, abi.ChainEpoch(i))
 		ch.SetPrevious(c)
 		l = append(l, ch)
 
