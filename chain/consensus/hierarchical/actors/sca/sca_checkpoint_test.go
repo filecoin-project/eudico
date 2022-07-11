@@ -3,19 +3,20 @@ package sca_test
 import (
 	"testing"
 
-	address "github.com/filecoin-project/go-address"
-	abi "github.com/filecoin-project/go-state-types/abi"
+	"github.com/stretchr/testify/require"
+
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
 	"github.com/filecoin-project/specs-actors/v7/support/mock"
 	tutil "github.com/filecoin-project/specs-actors/v7/support/testing"
-	"github.com/stretchr/testify/require"
 
 	actors "github.com/filecoin-project/lotus/chain/consensus/actors"
 	actor "github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
-	schema "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/types"
 )
 
@@ -86,7 +87,7 @@ func TestCheckpoints(t *testing.T) {
 	ch := newCheckpoint(nn1, epoch+9)
 	b, err := ch.MarshalBinary()
 	require.NoError(t, err)
-	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{Checkpoint: b})
 	rt.Verify()
 	windowCh := currWindowCheckpoint(rt, epoch)
 	require.Equal(t, windowCh.Data.Epoch, 100)
@@ -107,7 +108,7 @@ func TestCheckpoints(t *testing.T) {
 	rt.SetEpoch(epoch)
 	require.NoError(t, err)
 	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
-		rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+		rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{Checkpoint: b})
 	})
 
 	t.Log("appending child checkpoint for same source")
@@ -122,7 +123,7 @@ func TestCheckpoints(t *testing.T) {
 	ch.SetPrevious(prevcid)
 	b, err = ch.MarshalBinary()
 	require.NoError(t, err)
-	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{Checkpoint: b})
 	rt.Verify()
 	windowCh = currWindowCheckpoint(rt, epoch)
 	require.Equal(t, windowCh.Data.Epoch, 100)
@@ -146,7 +147,7 @@ func TestCheckpoints(t *testing.T) {
 	b, err = ch.MarshalBinary()
 	require.NoError(t, err)
 	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
-		rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+		rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{Checkpoint: b})
 	})
 
 	t.Log("trying to commit a checkpoint from the past")
@@ -159,7 +160,7 @@ func TestCheckpoints(t *testing.T) {
 	b, err = ch.MarshalBinary()
 	require.NoError(t, err)
 	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
-		rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+		rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{Checkpoint: b})
 	})
 
 	t.Log("raw checkpoint on first window is empty")
@@ -183,7 +184,7 @@ func TestCheckpoints(t *testing.T) {
 	ch = newCheckpoint(nn2, epoch+10)
 	b, err = ch.MarshalBinary()
 	require.NoError(t, err)
-	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{Checkpoint: b})
 	windowCh = currWindowCheckpoint(rt, epoch)
 	// Check that child was added.
 	require.GreaterOrEqual(t, windowCh.HasChildSource(nn2), 0)
@@ -210,7 +211,6 @@ func TestCheckpoints(t *testing.T) {
 
 	t.Log("trying to commit wrong checkpoint (wrong subnet/wrong epoch/wrong prev")
 	// TODO: We need to populate this with more tests for different conditions.
-
 }
 
 func TestCheckpointCrossMsgs(t *testing.T) {
@@ -268,8 +268,8 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 	require.NoError(t, err)
 	addMsgMeta(t, ch, sh.ID, n, "", big.Zero())
 	// And to this subnet
-	addMsgMeta(t, ch, sh.ID, address.SubnetID(netName), "", big.Zero())
-	addMsgMeta(t, ch, sh.ID, address.SubnetID(netName), "rand", big.Zero())
+	addMsgMeta(t, ch, sh.ID, netName, "", big.Zero())
+	addMsgMeta(t, ch, sh.ID, netName, "rand", big.Zero())
 	// And to a child from other branch (with cross-net messages)
 	n, err = address.SubnetIDFromString(netName.String() + "/f02")
 	require.NoError(t, err)
@@ -278,7 +278,7 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 
 	b, err := ch.MarshalBinary()
 	require.NoError(t, err)
-	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{Checkpoint: b})
 	rt.Verify()
 	windowCh := currWindowCheckpoint(rt, epoch)
 	require.Equal(t, windowCh.Data.Epoch, 100)
@@ -327,14 +327,14 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 	rt.SetEpoch(epoch)
 	ch = newCheckpoint(sh.ID, epoch+6)
 	// Msgs to this subnet
-	addMsgMeta(t, ch, sh.ID, address.SubnetID(netName), "r2", big.Zero())
-	addMsgMeta(t, ch, sh.ID, address.SubnetID(netName), "r3", big.Zero())
+	addMsgMeta(t, ch, sh.ID, netName, "r2", big.Zero())
+	addMsgMeta(t, ch, sh.ID, netName, "r3", big.Zero())
 	ch.SetPrevious(prevcid)
 	prevcid, _ = ch.Cid()
 
 	b, err = ch.MarshalBinary()
 	require.NoError(t, err)
-	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{Checkpoint: b})
 	rt.Verify()
 
 	// Check that the BottomUpMsgs to be applied are added with the right nonce.
@@ -370,7 +370,7 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 	require.NoError(t, err)
 	// Expect burning some funds
 	rt.ExpectSend(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, abi.NewTokenAmount(200), nil, exitcode.Ok)
-	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{Checkpoint: b})
 	rt.Verify()
 	windowCh = currWindowCheckpoint(rt, epoch)
 	require.Equal(t, windowCh.Data.Epoch, 100)
@@ -475,6 +475,6 @@ func TestCheckpointInactive(t *testing.T) {
 	b, err := ch.MarshalBinary()
 	require.NoError(t, err)
 	rt.ExpectAbort(exitcode.ErrIllegalState, func() {
-		rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+		rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{Checkpoint: b})
 	})
 }
