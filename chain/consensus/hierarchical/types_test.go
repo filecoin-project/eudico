@@ -13,6 +13,7 @@ import (
 )
 
 func TestBottomUp(t *testing.T) {
+	address.CurrentNetwork = address.Mainnet
 	testBottomUp(t, "/root/f01", "/root/f01/f02", false)
 	testBottomUp(t, "/root/f03/f01", "/root/f01/f02", true)
 	testBottomUp(t, "/root/f03/f01/f04", "/root/f03/f01/f05", true)
@@ -28,6 +29,7 @@ func testBottomUp(t *testing.T, from, to string, bottomup bool) {
 }
 
 func TestApplyAsBottomUp(t *testing.T) {
+	address.CurrentNetwork = address.Mainnet
 	testApplyAsBottomUp(t, "/root/f01", "/root", "/root/f01/f02", false)
 	testApplyAsBottomUp(t, "/root/f01", "/root/f01/f02/f03", "/root/f01", true)
 	testApplyAsBottomUp(t, "/root/f01", "/root/f01/f02/f03", "/root/f02/f01", true)
