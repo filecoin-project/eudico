@@ -13,7 +13,6 @@ import (
 )
 
 func TestBottomUp(t *testing.T) {
-	address.CurrentNetwork = address.Mainnet
 	testBottomUp(t, "/root/f01", "/root/f01/f02", false)
 	testBottomUp(t, "/root/f03/f01", "/root/f01/f02", true)
 	testBottomUp(t, "/root/f03/f01/f04", "/root/f03/f01/f05", true)
@@ -21,6 +20,7 @@ func TestBottomUp(t *testing.T) {
 }
 
 func testBottomUp(t *testing.T, from, to string, bottomup bool) {
+	address.CurrentNetwork = address.Mainnet
 	sfrom, err := address.SubnetIDFromString(from)
 	require.NoError(t, err)
 	sto, err := address.SubnetIDFromString(to)
@@ -40,6 +40,7 @@ func TestApplyAsBottomUp(t *testing.T) {
 }
 
 func testApplyAsBottomUp(t *testing.T, curr, from, to string, bottomup bool) {
+	address.CurrentNetwork = address.Mainnet
 	sfrom, err := address.SubnetIDFromString(from)
 	require.NoError(t, err)
 	sto, err := address.SubnetIDFromString(to)
