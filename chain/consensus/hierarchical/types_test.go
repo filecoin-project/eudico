@@ -24,6 +24,9 @@ func testBottomUp(t *testing.T, from, to string, bottomup bool) {
 	require.NoError(t, err)
 	sto, err := address.SubnetIDFromString(to)
 	require.NoError(t, err)
+	t.Log("===")
+	t.Log("sfrom=", sfrom)
+	t.Log("sto=", sto)
 	require.Equal(t, hierarchical.IsBottomUp(sfrom, sto), bottomup)
 }
 
