@@ -101,7 +101,8 @@ func (st *SubnetState) initGenesis(rt runtime.Runtime, params *ConstructParams) 
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed parsing rem addr")
 
 	// Getting actor ID from receiver.
-	netName := address.NewSubnetID(address.SubnetID(params.NetworkName), rt.Receiver())
+	sn, _ := address.SubnetIDFromString(params.NetworkName)
+	netName := address.NewSubnetID(sn, rt.Receiver())
 	err = WriteGenesis(netName, st.Consensus, params.ConsensusParams.DelegMiner, vreg, rem,
 		params.CheckpointPeriod, rt.ValueReceived().Uint64(), buf)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed genesis")

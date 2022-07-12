@@ -83,6 +83,7 @@ func NewDelegatedConsensus(
 	genesis chain.Genesis,
 	netName dtypes.NetworkName,
 ) consensus.Consensus {
+	sn, _ := address.SubnetIDFromString(string(netName))
 	return &Delegated{
 		store:    sm.ChainStore(),
 		beacon:   beacon,
@@ -91,7 +92,7 @@ func NewDelegatedConsensus(
 		verifier: verifier,
 		genesis:  genesis,
 		subMgr:   submgr,
-		netName:  address.SubnetID(netName),
+		netName:  sn,
 	}
 }
 

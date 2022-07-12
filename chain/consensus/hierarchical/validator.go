@@ -54,7 +54,10 @@ func ValidatorsFromString(input string) ([]Validator, error) {
 		if len(sss) != 2 {
 			return nil, xerrors.New("failed to parse addr")
 		}
-		subnet := sss[0]
+		subnet, err := addr.SubnetIDFromString(sss[0])
+		if err != nil {
+			return nil, err
+		}
 		ID := sss[1]
 
 		a, err := addr.NewFromString(ID)
@@ -63,7 +66,7 @@ func ValidatorsFromString(input string) ([]Validator, error) {
 		}
 
 		v := Validator{
-			addr.SubnetID(subnet),
+			subnet,
 			a,
 			netAddr,
 		}

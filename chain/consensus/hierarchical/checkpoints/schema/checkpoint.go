@@ -244,7 +244,8 @@ func (c *Checkpoint) PreviousCheck() (cid.Cid, error) {
 }
 
 func (c *Checkpoint) Source() address.SubnetID {
-	return address.SubnetID(c.Data.Source)
+	id, _ := address.SubnetIDFromString(c.Data.Source)
+	return id
 }
 
 func (c *Checkpoint) MarshalBinary() ([]byte, error) {
@@ -309,11 +310,13 @@ func (cm *CrossMsgMeta) Cid() (cid.Cid, error) {
 }
 
 func (cm *CrossMsgMeta) GetFrom() address.SubnetID {
-	return address.SubnetID(cm.From)
+	id, _ := address.SubnetIDFromString(cm.From)
+	return id
 }
 
 func (cm *CrossMsgMeta) GetTo() address.SubnetID {
-	return address.SubnetID(cm.To)
+	id, _ := address.SubnetIDFromString(cm.To)
+	return id
 }
 
 func (cm *CrossMsgMeta) SetCid(c cid.Cid) {

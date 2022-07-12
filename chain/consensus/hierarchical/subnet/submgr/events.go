@@ -106,10 +106,7 @@ func (s *Service) matchCheckpointSignature(ctx context.Context, sh *Subnet, newT
 	// Get the epoch for the current tipset in subnet.
 	subnetEpoch := newTs.Height()
 
-	subnetActAddr, err := sh.ID.Actor()
-	if err != nil {
-		return false, err
-	}
+	subnetActAddr := sh.ID.GetActor()
 	// Get the api for the parent network hosting the subnet actor
 	// for the subnet.
 	parentAPI, err := s.getParentAPI(sh.ID)

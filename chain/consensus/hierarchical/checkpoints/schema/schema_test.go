@@ -183,8 +183,12 @@ func TestEncodeDecodeSignature(t *testing.T) {
 }
 
 func TestCrossMsgMetaValue(t *testing.T) {
-	mt := schema.NewCrossMsgMeta(address.SubnetID("from"), address.SubnetID("to"))
-	err := mt.AddValue(abi.NewTokenAmount(30))
+	sf, err := address.SubnetIDFromString("/root/f01")
+	require.NoError(t, err)
+	st, err := address.SubnetIDFromString("/root/f02")
+	require.NoError(t, err)
+	mt := schema.NewCrossMsgMeta(sf, st)
+	err = mt.AddValue(abi.NewTokenAmount(30))
 	require.NoError(t, err)
 	v, err := mt.GetValue()
 	require.NoError(t, err)

@@ -1,5 +1,7 @@
 package hierarchical
 
+//go:generate go run ./gen/gen.go
+
 import (
 	"fmt"
 	"strings"
@@ -179,15 +181,6 @@ type ConsensusParams struct {
 type MiningParams struct {
 	LogLevel    string
 	LogFileName string
-}
-
-// SubnetKey implements Keyer interface, so it can be used as a key for maps.
-type SubnetKey address.SubnetID
-
-var _ abi.Keyer = SubnetKey("")
-
-func (id SubnetKey) Key() string {
-	return string(id)
 }
 
 func IsBottomUp(from, to address.SubnetID) bool {

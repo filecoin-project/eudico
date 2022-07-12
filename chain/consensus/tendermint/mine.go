@@ -36,7 +36,10 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	if err != nil {
 		return err
 	}
-	subnetID := address.SubnetID(nn)
+	subnetID, err := address.SubnetIDFromString(string(nn))
+	if err != nil {
+		log.Fatalf("unable to get SubnetID: %s", err)
+	}
 	minerID := fmt.Sprintf("%s:%s", subnetID, miner)
 
 	log.Infof("Tendermint miner %s started", minerID)

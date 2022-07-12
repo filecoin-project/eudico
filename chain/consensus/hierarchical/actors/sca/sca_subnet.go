@@ -60,7 +60,8 @@ func fundMsg(rt runtime.Runtime, id address.SubnetID, secp address.Address, valu
 	// Transform To and From to HCAddresses
 	to, err := address.NewHCAddress(id, secp)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HCAddress")
-	from, err := address.NewHCAddress(id.Parent(), secp)
+	p, _ := id.GetParent()
+	from, err := address.NewHCAddress(p, secp)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HCAddress")
 
 	// Build message.

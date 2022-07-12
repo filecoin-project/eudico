@@ -62,8 +62,11 @@ var listSubnetsCmd = &cli.Command{
 
 		ctx := lcli.ReqContext(cctx)
 
-		subnet := cctx.String("subnet")
-		subnets, err := api.ListSubnets(ctx, address.SubnetID(subnet))
+		subnet, err := address.SubnetIDFromString(cctx.String("subnet"))
+		if err != nil {
+			return err
+		}
+		subnets, err := api.ListSubnets(ctx, subnet)
 		if err != nil {
 			return xerrors.Errorf("error getting list of subnets: %w", err)
 		}
@@ -161,7 +164,10 @@ var addCmd = &cli.Command{
 
 		parent := address.RootSubnet
 		if cctx.IsSet("parent") {
-			parent = address.SubnetID(cctx.String("parent"))
+			parent, err = address.SubnetIDFromString(cctx.String("parent"))
+			if err != nil {
+				return err
+			}
 		}
 
 		minVals := cctx.Uint64("min-validators")
@@ -261,7 +267,11 @@ var joinCmd = &cli.Command{
 			return lcli.ShowHelp(cctx, fmt.Errorf("failed to parse amount: %w", err))
 		}
 
-		c, err := api.JoinSubnet(ctx, addr, big.Int(val), address.SubnetID(subnet), cctx.String("val-addr"))
+		snID, err := address.SubnetIDFromString(subnet)
+		if err != nil {
+			return err
+		}
+		c, err := api.JoinSubnet(ctx, addr, big.Int(val), snID, cctx.String("val-addr"))
 		if err != nil {
 			return err
 		}
@@ -305,7 +315,11 @@ var syncCmd = &cli.Command{
 		if cctx.String("subnet") == address.RootSubnet.String() {
 			return xerrors.Errorf("no valid subnet so sync with specified")
 		}
-		err = api.SyncSubnet(ctx, address.SubnetID(subnet), cctx.Bool("stop"))
+		snID, err := address.SubnetIDFromString(subnet)
+		if err != nil {
+			return err
+		}
+		err = api.SyncSubnet(ctx, snID, cctx.Bool("stop"))
 		if err != nil {
 			return err
 		}
@@ -378,7 +392,11 @@ var mineCmd = &cli.Command{
 			LogLevel:    cctx.String("log-level"),
 		}
 
-		err = api.MineSubnet(ctx, addr, address.SubnetID(subnet), cctx.Bool("stop"), params)
+		snID, err := address.SubnetIDFromString(subnet)
+		if err != nil {
+			return err
+		}
+		err = api.MineSubnet(ctx, addr, snID, cctx.Bool("stop"), params)
 		if err != nil {
 			return err
 		}
@@ -437,8 +455,11 @@ var leaveCmd = &cli.Command{
 		if cctx.String("subnet") != address.RootSubnet.String() {
 			subnet = cctx.String("subnet")
 		}
-
-		c, err := api.LeaveSubnet(ctx, addr, address.SubnetID(subnet))
+		snID, err := address.SubnetIDFromString(subnet)
+		if err != nil {
+			return err
+		}
+		c, err := api.LeaveSubnet(ctx, addr, snID)
 		if err != nil {
 			return err
 		}
@@ -492,7 +513,11 @@ var killCmd = &cli.Command{
 			subnet = cctx.String("subnet")
 		}
 
-		c, err := api.KillSubnet(ctx, addr, address.SubnetID(subnet))
+		snID, err := address.SubnetIDFromString(subnet)
+		if err != nil {
+			return err
+		}
+		c, err := api.KillSubnet(ctx, addr, snID)
 		if err != nil {
 			return err
 		}
@@ -552,16 +577,22 @@ var releaseCmd = &cli.Command{
 		if err != nil {
 			return lcli.ShowHelp(cctx, fmt.Errorf("failed to parse amount: %w", err))
 		}
-
-		c, err := api.ReleaseFunds(ctx, addr, address.SubnetID(subnet), big.Int(val))
+		snID, err := address.SubnetIDFromString(subnet)
+		if err != nil {
+			return err
+		}
+		c, err := api.ReleaseFunds(ctx, addr, snID, big.Int(val))
 		if err != nil {
 			return err
 		}
 		if _, err := fmt.Fprintf(cctx.App.Writer, "Successfully sent release message: %s\n", c); err != nil {
 			return err
 		}
-		_, err = fmt.Fprintf(cctx.App.Writer, "Cross-message should be propagated in the next checkpoint to: %s\n",
-			address.SubnetID(subnet).Parent())
+		p, err := snID.GetParent()
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintf(cctx.App.Writer, "Cross-message should be propagated in the next checkpoint to: %s\n", p)
 		if err != nil {
 			return err
 		}
@@ -589,7 +620,11 @@ var hAddrCmd = &cli.Command{
 		if err != nil {
 			return err
 		}
-		out, err := address.NewHCAddress(address.SubnetID(cctx.String("subnet")), addr)
+		snID, err := address.SubnetIDFromString(cctx.String("subnet"))
+		if err != nil {
+			return err
+		}
+		out, err := address.NewHCAddress(snID, addr)
 		if err != nil {
 			return err
 		}
@@ -649,7 +684,11 @@ var fundCmd = &cli.Command{
 			return lcli.ShowHelp(cctx, fmt.Errorf("failed to parse amount: %w", err))
 		}
 
-		c, err := api.FundSubnet(ctx, addr, address.SubnetID(subnet), big.Int(val))
+		snID, err := address.SubnetIDFromString(subnet)
+		if err != nil {
+			return err
+		}
+		c, err := api.FundSubnet(ctx, addr, snID, big.Int(val))
 		if err != nil {
 			return err
 		}
@@ -807,14 +846,17 @@ var sendCmd = &cli.Command{
 			return xerrors.Errorf("no destination subnet specified")
 		}
 
-		subnet := address.SubnetID(cctx.String("subnet"))
+		subnet, err := address.SubnetIDFromString(cctx.String("subnet"))
+		if err != nil {
+			return err
+		}
 		crossParams := &sca.CrossMsgParams{
 			Destination: subnet,
 			Msg:         proto.Message,
 		}
 		serparams, err := actors.SerializeParams(crossParams)
 		if err != nil {
-			return xerrors.Errorf("failed serializing init actor params: %s", err)
+			return xerrors.Errorf("failed serializing cross-msg params: %s", err)
 		}
 		smsg, aerr := api.MpoolPushMessage(ctx, &types.Message{
 			To:     hierarchical.SubnetCoordActorAddr,
@@ -970,7 +1012,7 @@ var deployActorCmd = &cli.Command{
 		}
 		serparams, err := actors.SerializeParams(initParams)
 		if err != nil {
-			return xerrors.Errorf("failed serializing init actor params: %s", err)
+			return xerrors.Errorf("failed serializing init exec params: %s", err)
 		}
 
 		// Init actor is responsible for the deployment of new actors.

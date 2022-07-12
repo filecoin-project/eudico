@@ -113,6 +113,7 @@ func NewTSPoWConsensus(
 	genesis chain.Genesis,
 	netName dtypes.NetworkName,
 ) consensus.Consensus {
+	sn, _ := address.SubnetIDFromString(string(netName))
 	return &TSPoW{
 		store:    sm.ChainStore(),
 		beacon:   beacon,
@@ -121,7 +122,7 @@ func NewTSPoWConsensus(
 		verifier: verifier,
 		genesis:  genesis,
 		subMgr:   submgr,
-		netName:  address.SubnetID(netName),
+		netName:  sn,
 	}
 }
 

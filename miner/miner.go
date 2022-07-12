@@ -560,7 +560,11 @@ func (m *Miner) mineOne(ctx context.Context, base *MiningBase) (minedBlock *type
 	if err != nil {
 		return nil, err
 	}
-	crossmsgs, err := m.api.GetCrossMsgsPool(ctx, address.SubnetID(nn), base.TipSet.Height()+1)
+	snn, err := address.SubnetIDFromString(string(nn))
+	if err != nil {
+		return nil, err
+	}
+	crossmsgs, err := m.api.GetCrossMsgsPool(ctx, snn, base.TipSet.Height()+1)
 	if err != nil {
 		log.Errorw("selecting cross-messages failed", "error", err)
 	}

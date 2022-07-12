@@ -207,7 +207,7 @@ func registerNetworkViaTxSync(
 				return nil, xerrors.New(resultBroadcast.Log)
 			}
 
-			resultQuery, err = c.ABCIQuery(ctx, "/reg", []byte(subnetID))
+			resultQuery, err = c.ABCIQuery(ctx, "/reg", []byte(subnetID.String()))
 			if err != nil {
 				return nil, xerrors.Errorf("unable to query Tendermint %s", err)
 			}

@@ -11,7 +11,8 @@ import (
 
 func TestPoolTopDown(t *testing.T) {
 	cm := newCrossMsgPool()
-	id := address.SubnetID("test")
+	id, err := address.SubnetIDFromString("/root/f01")
+	require.NoError(t, err)
 	var nonce uint64 = 3
 	height := abi.ChainEpoch(5)
 	cm.applyTopDown(nonce, id, height)
@@ -39,7 +40,8 @@ func TestPoolTopDown(t *testing.T) {
 
 func TestPoolBottomUp(t *testing.T) {
 	cm := newCrossMsgPool()
-	id := address.SubnetID("test")
+	id, err := address.SubnetIDFromString("/root/f01")
+	require.NoError(t, err)
 	var nonce uint64 = 3
 	height := abi.ChainEpoch(5)
 	cm.applyBottomUp(nonce, id, height)
