@@ -22,6 +22,10 @@ import (
 	ltypes "github.com/filecoin-project/lotus/chain/types"
 )
 
+func init() {
+	address.CurrentNetwork = address.Mainnet
+}
+
 func TestFund(t *testing.T) {
 	h := newHarness(t)
 	builder := mock.NewBuilder(builtin.StoragePowerActorAddr).WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
