@@ -79,7 +79,6 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 				Header:        bh.Header,
 				BlsMessages:   bh.BlsMessages,
 				SecpkMessages: bh.SecpkMessages,
-				CrossMessages: bh.CrossMessages,
 			})
 			if err != nil {
 				log.Errorw("unable to sync a block", "error", err)
