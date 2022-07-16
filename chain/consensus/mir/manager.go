@@ -8,6 +8,8 @@ import (
 	"path"
 
 	logging "github.com/ipfs/go-log/v2"
+	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p-core/crypto"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/api/v1api"
@@ -18,16 +20,17 @@ import (
 	"github.com/filecoin-project/mir"
 	mircrypto "github.com/filecoin-project/mir/pkg/crypto"
 	"github.com/filecoin-project/mir/pkg/events"
-	"github.com/filecoin-project/mir/pkg/grpctransport"
 	"github.com/filecoin-project/mir/pkg/iss"
 	mirlogging "github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
+	"github.com/filecoin-project/mir/pkg/net"
+	libp2ptransport "github.com/filecoin-project/mir/pkg/net/libp2p"
 	mirrequest "github.com/filecoin-project/mir/pkg/pb/requestpb"
 	"github.com/filecoin-project/mir/pkg/simplewal"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
-// managerLog is a Eudico logger used by a Mir node.
+// managerLog is an Eudico logger used by a Mir node.
 var managerLog = logging.Logger("mir-manager")
 
 // mirLogger implements Mir's Log interface.
@@ -78,7 +81,7 @@ type Manager struct {
 	Pool       *requestPool
 	MirNode    *mir.Node
 	Wal        *simplewal.WAL
-	Net        *grpctransport.GrpcTransport
+	Net        net.Transport
 	App        *Application
 }
 
@@ -87,9 +90,20 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	if err != nil {
 		return nil, err
 	}
+
 	subnetID, err := address.SubnetIDFromString(string(netName))
 	if err != nil {
 		return nil, err
+	}
+
+	privBytes, err := api.PrivKey(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get private key: %w", err)
+	}
+
+	priv, err := crypto.UnmarshalPrivateKey(privBytes)
+	if err != nil {
+		panic(err)
 	}
 
 	var validators []hierarchical.Validator
@@ -115,25 +129,38 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 
 	mirID := newMirID(subnetID.String(), addr.String())
 
-	nodeIds, nodeAddrs, err := hierarchical.ValidatorMembership(validators)
+	nodeIds, nodeAddrs, err := hierarchical.Libp2pValidatorMembership(validators)
 	if err != nil {
 		return nil, err
 	}
 	log.Debugf("Mir node config:\n%v\n%v", nodeIds, nodeAddrs)
 
-	wal, err := NewWAL(mirID, "eudico-wal")
+	mirAddr := nodeAddrs[t.NodeID(mirID)]
+
+	h, err := libp2p.New(
+		// Use the keypair we generated
+		libp2p.Identity(priv),
+		// Multiple listen addresses
+		libp2p.DefaultTransports,
+		libp2p.ListenAddrs(mirAddr),
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	net := grpctransport.NewGrpcTransport(nodeAddrs, t.NodeID(mirID), newMirLogger(managerLog))
-	if err := net.Start(); err != nil {
+	netTransport := libp2ptransport.NewTransport(h, nodeAddrs, t.NodeID(mirID), newMirLogger(managerLog))
+	if err := netTransport.Start(); err != nil {
 		return nil, err
 	}
 
 	// GrpcTransport is a rather dummy one and this call blocks until all connections are established,
 	// which makes it, at this point, not fault-tolerant.
-	net.Connect(ctx)
+	netTransport.Connect(ctx)
+
+	wal, err := NewWAL(mirID, "eudico-wal")
+	if err != nil {
+		return nil, err
+	}
 
 	// Instantiate the ISS protocol module with default configuration.
 	issConfig := iss.DefaultConfig(nodeIds)
@@ -155,12 +182,12 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 			Logger: newMirLogger(managerLog),
 		},
 		map[t.ModuleID]modules.Module{
-			"net":    net,
+			"net":    netTransport,
 			"iss":    issProtocol,
 			"app":    app,
 			"crypto": mircrypto.New(cryptoManager),
 		},
-		nil)
+		wal, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +202,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		MirID:      mirID,
 		MirNode:    node,
 		Wal:        wal,
-		Net:        net,
+		Net:        netTransport,
 		App:        app,
 	}
 

@@ -682,6 +682,8 @@ type NetStruct struct {
 		NetSetLimit func(p0 context.Context, p1 string, p2 NetLimit) error `perm:"admin"`
 
 		NetStat func(p0 context.Context, p1 string) (NetStat, error) `perm:"read"`
+
+		PrivKey func(p0 context.Context) ([]byte, error) `perm:"read"`
 	}
 }
 
@@ -4190,6 +4192,17 @@ func (s *NetStruct) NetStat(p0 context.Context, p1 string) (NetStat, error) {
 
 func (s *NetStub) NetStat(p0 context.Context, p1 string) (NetStat, error) {
 	return *new(NetStat), ErrNotSupported
+}
+
+func (s *NetStruct) PrivKey(p0 context.Context) ([]byte, error) {
+	if s.Internal.PrivKey == nil {
+		return *new([]byte), ErrNotSupported
+	}
+	return s.Internal.PrivKey(p0)
+}
+
+func (s *NetStub) PrivKey(p0 context.Context) ([]byte, error) {
+	return *new([]byte), ErrNotSupported
 }
 
 func (s *SignableStruct) Sign(p0 context.Context, p1 SignFunc) error {

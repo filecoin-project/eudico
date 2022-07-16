@@ -64,6 +64,9 @@ type Net interface {
 
 	// ID returns peerID of libp2p node backing this API
 	ID(context.Context) (peer.ID, error) //perm:read
+	// PrivKey returns libp2p host's private key.
+	// This is temporal experimental function that must be removed in the future.
+	PrivKey(context.Context) ([]byte, error) //perm:read
 }
 
 type CommonNet interface {

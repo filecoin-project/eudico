@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/libp2p/go-libp2p-core/crypto"
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
 
@@ -39,6 +40,12 @@ type NetAPI struct {
 
 func (a *NetAPI) ID(context.Context) (peer.ID, error) {
 	return a.Host.ID(), nil
+}
+
+func (a *NetAPI) PrivKey(context.Context) ([]byte, error) {
+	ownID := a.Host.ID()
+	key := a.Host.Peerstore().PrivKey(ownID)
+	return crypto.MarshalPrivateKey(key)
 }
 
 func (a *NetAPI) NetConnectedness(ctx context.Context, pid peer.ID) (network.Connectedness, error) {

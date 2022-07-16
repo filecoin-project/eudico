@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/multiformats/go-multiaddr"
 	"golang.org/x/xerrors"
 
 	addr "github.com/filecoin-project/go-address"
@@ -54,10 +55,7 @@ func ValidatorsFromString(input string) ([]Validator, error) {
 		if len(sss) != 2 {
 			return nil, xerrors.New("failed to parse addr")
 		}
-		subnet, err := addr.SubnetIDFromString(sss[0])
-		if err != nil {
-			return nil, err
-		}
+		subnetStr := sss[0]
 		ID := sss[1]
 
 		a, err := addr.NewFromString(ID)
@@ -65,8 +63,13 @@ func ValidatorsFromString(input string) ([]Validator, error) {
 			return nil, err
 		}
 
+		subnet, err := addr.SubnetIDFromString(subnetStr)
+		if err != nil {
+			return nil, err
+		}
+
 		v := Validator{
-			subnet,
+			addr.SubnetID(subnet),
 			a,
 			netAddr,
 		}
@@ -107,6 +110,23 @@ func ValidatorMembership(validators []Validator) ([]t.NodeID, map[t.NodeID]strin
 		netAddr := v.NetAddr
 		nodeIds = append(nodeIds, id)
 		nodeAddrs[id] = netAddr
+	}
+	return nodeIds, nodeAddrs, nil
+}
+
+func Libp2pValidatorMembership(validators []Validator) ([]t.NodeID, map[t.NodeID]multiaddr.Multiaddr, error) {
+	var nodeIds []t.NodeID
+	nodeAddrs := make(map[t.NodeID]multiaddr.Multiaddr)
+
+	for _, v := range validators {
+		id := t.NodeID(v.ID())
+		netAddr := v.NetAddr
+		info, err := multiaddr.NewMultiaddr(netAddr)
+		if err != nil {
+			return nil, nil, err
+		}
+		nodeIds = append(nodeIds, id)
+		nodeAddrs[id] = info
 	}
 	return nodeIds, nodeAddrs, nil
 }
