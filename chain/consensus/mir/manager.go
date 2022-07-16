@@ -128,14 +128,17 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	}
 
 	mirID := newMirID(subnetID.String(), addr.String())
+	log.Debug("Mir own ID: ", mirID)
 
 	nodeIds, nodeAddrs, err := hierarchical.Libp2pValidatorMembership(validators)
 	if err != nil {
 		return nil, err
 	}
-	log.Debugf("Mir node config:\n%v\n%v", nodeIds, nodeAddrs)
+	log.Debug("Mir node IDs: ", nodeIds)
+	log.Debug("Mir node addrs: ", nodeAddrs)
 
 	mirAddr := nodeAddrs[t.NodeID(mirID)]
+	log.Debug("Mir node addr: ", mirAddr)
 
 	h, err := libp2p.New(
 		// Use the keypair we generated
@@ -145,12 +148,12 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		libp2p.ListenAddrs(mirAddr),
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create libp2p host: %w", err)
 	}
 
 	netTransport := libp2ptransport.NewTransport(h, nodeAddrs, t.NodeID(mirID), newMirLogger(managerLog))
 	if err := netTransport.Start(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create libp2p transport: %w", err)
 	}
 
 	// GrpcTransport is a rather dummy one and this call blocks until all connections are established,
@@ -159,7 +162,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 
 	wal, err := NewWAL(mirID, "eudico-wal")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create WAL: %w", err)
 	}
 
 	// Instantiate the ISS protocol module with default configuration.
@@ -189,7 +192,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		},
 		wal, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create Mir node: %w", err)
 	}
 
 	m := Manager{
