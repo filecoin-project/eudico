@@ -90,67 +90,51 @@ tmux new-session -d -s "mir" \; \
   split-window -t "mir:1.2" -h \; \
   \
   send-keys -t "mir:0.0" "
-        export GOLOG_LOG_LEVEL=$LOG_LEVEL
-        export EUDICO_PATH=$NODE_0_PATH
-        export LOTUS_PATH=$NODE_0_PATH
-        mkdir -p $NODE_0_PATH/keystore && chmod 0700 $NODE_0_PATH/keystore
-        ./lotus-shed keyinfo import $NODE_0_KEY 2>&1 | tee $SHED_0_LOG
+        export GOLOG_LOG_LEVEL=$LOG_LEVEL EUDICO_PATH=$NODE_0_PATH LOTUS_PATH=$NODE_0_PATH
+        mkdir -p $NODE_0_PATH/keystore && chmod 0700 $NODE_0_PATH/keystore;
+        ./lotus-shed keyinfo import $NODE_0_KEY;
         ./eudico mir daemon --genesis=$BLOCK0 --api=$NODE_0_API 2>&1 | tee $NODE_0_DAEMON_LOG" Enter \; \
   send-keys -t "mir:0.1" "
-        export EUDICO_MIR_VALIDATORS=$NODES
-        export EUDICO_PATH=$NODE_0_PATH
-        export GOLOG_LOG_LEVEL=$LOG_LEVEL
+        export EUDICO_MIR_VALIDATORS=$NODES EUDICO_PATH=$NODE_0_PATH GOLOG_LOG_LEVEL=$LOG_LEVEL
         ./eudico wait-api;
-        ./eudico net listen | grep '/ip6/::1/' > $NODE_0_NETADDR; sleep 3;
-        ./eudico wallet import --as-default $WALLET_0_KEY
+        ./eudico net listen | grep '/ip6/::1/' > $NODE_0_NETADDR; sleep 6;
+        ./eudico wallet import --as-default $WALLET_0_KEY;
         ./eudico mir miner --default-key 2>&1 | tee $NODE_0_MINER_LOG" Enter \; \
   send-keys -t "mir:0.2" "
-        export GOLOG_LOG_LEVEL=$LOG_LEVEL
-        export EUDICO_PATH=$NODE_1_PATH
-        export LOTUS_PATH=$NODE_1_PATH
-        mkdir -p $NODE_1_PATH/keystore && chmod 0700 $NODE_1_PATH/keystore
-        ./lotus-shed keyinfo import $NODE_1_KEY 2>&1 | tee $SHED_1_LOG
+        export GOLOG_LOG_LEVEL=$LOG_LEVEL EUDICO_PATH=$NODE_1_PATH LOTUS_PATH=$NODE_1_PATH
+        mkdir -p $NODE_1_PATH/keystore && chmod 0700 $NODE_1_PATH/keystore;
+        ./lotus-shed keyinfo import $NODE_1_KEY;
         ./eudico mir daemon --genesis=$BLOCK0 --api=$NODE_1_API 2>&1 | tee $NODE_1_DAEMON_LOG" Enter \; \
   send-keys -t "mir:0.3" "
-        export GOLOG_LOG_LEVEL=$LOG_LEVEL
-        export EUDICO_MIR_VALIDATORS=$NODES
-        export EUDICO_PATH=$NODE_1_PATH
+        export GOLOG_LOG_LEVEL=$LOG_LEVEL EUDICO_MIR_VALIDATORS=$NODES EUDICO_PATH=$NODE_1_PATH
         ./eudico wait-api;
-        ./eudico net listen | grep '/ip6/::1/' > $NODE_1_NETADDR; sleep 3; \
+        ./eudico net listen | grep '/ip6/::1/' > $NODE_1_NETADDR; sleep 6; \
         ./eudico net connect \$(cat $NODE_0_NETADDR);
-        ./eudico wallet import --as-default $WALLET_1_KEY
+        ./eudico wallet import --as-default $WALLET_1_KEY;
         ./eudico mir miner --default-key 2>&1 | tee $NODE_1_MINER_LOG" Enter \; \
   \
   send-keys -t "mir:1.0" "
-        export GOLOG_LOG_LEVEL=$LOG_LEVEL
-        export EUDICO_PATH=$NODE_2_PATH
-        export LOTUS_PATH=$NODE_2_PATH
-        mkdir -p $NODE_2_PATH/keystore && chmod 0700 $NODE_2_PATH/keystore
-        ./lotus-shed keyinfo import $NODE_2_KEY 2>&1 | tee $SHED_2_LOG
+        export GOLOG_LOG_LEVEL=$LOG_LEVEL EUDICO_PATH=$NODE_2_PATH LOTUS_PATH=$NODE_2_PATH
+        mkdir -p $NODE_2_PATH/keystore && chmod 0700 $NODE_2_PATH/keystore;
+        ./lotus-shed keyinfo import $NODE_2_KEY;
         ./eudico mir daemon --genesis=$BLOCK0 --api=$NODE_2_API 2>&1 | tee $NODE_2_DAEMON_LOG" Enter \; \
     send-keys -t "mir:1.1" "
-        export GOLOG_LOG_LEVEL=$LOG_LEVEL
-        export EUDICO_MIR_VALIDATORS=$NODES
-        export EUDICO_PATH=$NODE_2_PATH
+        export GOLOG_LOG_LEVEL=$LOG_LEVEL EUDICO_MIR_VALIDATORS=$NODES EUDICO_PATH=$NODE_2_PATH
         ./eudico wait-api;
-        ./eudico net listen | grep '/ip6/::1/' > $NODE_2_NETADDR; sleep 3;
+        ./eudico net listen | grep '/ip6/::1/' > $NODE_2_NETADDR; sleep 6;
         ./eudico net connect \$(cat $NODE_0_NETADDR);
         ./eudico net connect \$(cat $NODE_1_NETADDR);
-        ./eudico wallet import --as-default $WALLET_2_KEY
+        ./eudico wallet import --as-default $WALLET_2_KEY;
         ./eudico mir miner --default-key 2>&1 | tee $NODE_2_MINER_LOG" Enter \; \
     send-keys -t "mir:1.2" "
-        export GOLOG_LOG_LEVEL=$LOG_LEVEL
-        export EUDICO_PATH=$NODE_3_PATH
-        export LOTUS_PATH=$NODE_3_PATH
-        mkdir -p $NODE_3_PATH/keystore && chmod 0700 $NODE_3_PATH/keystore
-        ./lotus-shed keyinfo import $NODE_3_KEY 2>&1 | tee $SHED_3_LOG
+        export GOLOG_LOG_LEVEL=$LOG_LEVEL EUDICO_PATH=$NODE_3_PATH LOTUS_PATH=$NODE_3_PATH
+        mkdir -p $NODE_3_PATH/keystore && chmod 0700 $NODE_3_PATH/keystore;
+        ./lotus-shed keyinfo import $NODE_3_KEY;
         ./eudico mir daemon --genesis=$BLOCK0 --api=$NODE_3_API 2>&1 | tee $NODE_3_DAEMON_LOG" Enter \; \
     send-keys -t "mir:1.3" "
-       export GOLOG_LOG_LEVEL=$LOG_LEVEL
-       export EUDICO_MIR_VALIDATORS=$NODES
-       export EUDICO_PATH=$NODE_3_PATH
+       export GOLOG_LOG_LEVEL=$LOG_LEVEL EUDICO_MIR_VALIDATORS=$NODES EUDICO_PATH=$NODE_3_PATH
        ./eudico wait-api;
-       ./eudico net listen | grep '/ip6/::1/' > $NODE_3_NETADDR; sleep 3;
+       ./eudico net listen | grep '/ip6/::1/' > $NODE_3_NETADDR; sleep 6;
        ./eudico net connect \$(cat $NODE_0_NETADDR);
        ./eudico net connect \$(cat $NODE_1_NETADDR);
        ./eudico net connect \$(cat $NODE_2_NETADDR);
