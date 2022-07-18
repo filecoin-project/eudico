@@ -123,7 +123,6 @@ func NewStateManager(ctx context.Context, addr address.Address, api v1api.FullNo
 	if err != nil {
 		return nil, fmt.Errorf("failed to create crypto manager: %w", err)
 	}
-	_ = cryptoManager
 
 	app := NewApplication()
 
@@ -134,7 +133,7 @@ func NewStateManager(ctx context.Context, addr address.Address, api v1api.FullNo
 		"net":    netTransport,
 		"iss":    issProtocol,
 		"app":    app,
-		"crypto": mircrypto.New(&mircrypto.DummyCrypto{DummySig: []byte{0}}),
+		"crypto": mircrypto.New(cryptoManager),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize Mir modules: %w", err)
