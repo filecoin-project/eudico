@@ -29,6 +29,8 @@ func (app *Application) ApplyEvents(eventsIn *events.EventList) (*events.EventLi
 
 func (app *Application) ApplyEvent(event *eventpb.Event) (*events.EventList, error) {
 	switch e := event.Type.(type) {
+	case *eventpb.Event_Init:
+		// no actions on init
 	case *eventpb.Event_Deliver:
 		if err := app.ApplyBatch(e.Deliver.Batch); err != nil {
 			return nil, fmt.Errorf("app batch delivery error: %w", err)

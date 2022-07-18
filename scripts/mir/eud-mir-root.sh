@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # Mir IDs
 NODE_0=/root:t1wpixt5mihkj75lfhrnaa6v56n27epvlgwparujy
 NODE_1=/root:t1k7t2zufxvtgamk7ogoifa5mvdagb4cafu6pdzga
@@ -78,7 +80,7 @@ tmux new-session -d -s "mir" \; \
         export EUDICO_PATH=$NODE_0_PATH
         export GOLOG_LOG_LEVEL=$LOG_LEVEL
         ./eudico wait-api;
-        ./eudico net listen | grep '/ip6/::1/' > $NODE_0_NETADDR; sleep 3;
+       source ./scripts/mir/connect.sh 0;
         ./eudico wallet import --as-default $NODE_0_KEY
         ./eudico mir miner --default-key 2>&1 | tee $NODE_0_MINER_LOG" Enter \; \
   send-keys -t "mir:0.2" "
@@ -90,8 +92,7 @@ tmux new-session -d -s "mir" \; \
         export EUDICO_MIR_VALIDATORS=$NODES
         export EUDICO_PATH=$NODE_1_PATH
         ./eudico wait-api;
-        ./eudico net listen | grep '/ip6/::1/' > $NODE_1_NETADDR; sleep 3; \
-        ./eudico net connect \$(cat $NODE_0_NETADDR);
+        source ./scripts/mir/connect.sh 1;
         ./eudico wallet import --as-default $NODE_1_KEY
         ./eudico mir miner --default-key 2>&1 | tee $NODE_1_MINER_LOG" Enter \; \
   \
@@ -104,9 +105,7 @@ tmux new-session -d -s "mir" \; \
         export EUDICO_MIR_VALIDATORS=$NODES
         export EUDICO_PATH=$NODE_2_PATH
         ./eudico wait-api;
-        ./eudico net listen | grep '/ip6/::1/' > $NODE_2_NETADDR; sleep 3;
-        ./eudico net connect \$(cat $NODE_0_NETADDR);
-        ./eudico net connect \$(cat $NODE_1_NETADDR);
+       source ./scripts/mir/connect.sh 2;
         ./eudico wallet import --as-default $NODE_2_KEY
         ./eudico mir miner --default-key 2>&1 | tee $NODE_2_MINER_LOG" Enter \; \
     send-keys -t "mir:1.2" "
@@ -118,10 +117,7 @@ tmux new-session -d -s "mir" \; \
        export EUDICO_MIR_VALIDATORS=$NODES
        export EUDICO_PATH=$NODE_3_PATH
        ./eudico wait-api;
-       ./eudico net listen | grep '/ip6/::1/' > $NODE_3_NETADDR; sleep 3;
-       ./eudico net connect \$(cat $NODE_0_NETADDR);
-       ./eudico net connect \$(cat $NODE_1_NETADDR);
-       ./eudico net connect \$(cat $NODE_2_NETADDR);
+       source ./scripts/mir/connect.sh 3;
        ./eudico wallet import --as-default $NODE_3_KEY
        ./eudico mir miner --default-key 2>&1  | tee $NODE_3_MINER_LOG" Enter \; \
   attach-session -t "mir:1.0"

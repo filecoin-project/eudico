@@ -41,22 +41,27 @@ func EncodeValidatorInfo(vilidators []Validator) string {
 	return strings.TrimSuffix(s, ",")
 }
 
-func ValidatorsFromString(input string) ([]Validator, error) {
+// ParseValidatorsString parses comma-delimited subnet:ID@OpaqueNetAddr validators string.
+//
+// Examples of the validators:
+// 	- /root:t1wpixt5mihkj75lfhrnaa6v56n27epvlgwparujy@/ip4/127.0.0.1/tcp/10000/p2p/12D3KooWJhKBXvytYgPCAaiRtiNLJNSFG5jreKDu2jiVpJetzvVJ
+// 	- /root:t1wpixt5mihkj75lfhrnaa6v56n27epvlgwparujy@127.0.0.1:1000
+func ParseValidatorsString(input string) ([]Validator, error) {
 	var validators []Validator
 	for _, idAddr := range splitAndTrimEmpty(input, ",", " ") {
-		ss := strings.Split(idAddr, "@")
-		if len(ss) != 2 {
-			return nil, xerrors.New("failed to parse string")
+		parts := strings.Split(idAddr, "@")
+		if len(parts) != 2 {
+			return nil, xerrors.New("failed to parse validators string")
 		}
+		subnetAndID := parts[0]
+		opaqueNetAddr := parts[1]
 
-		subnetAndID := ss[0]
-		netAddr := ss[1]
-		sss := strings.Split(subnetAndID, ":")
-		if len(sss) != 2 {
-			return nil, xerrors.New("failed to parse addr")
+		subnetAndIDParts := strings.Split(subnetAndID, ":")
+		if len(subnetAndIDParts) != 2 {
+			return nil, xerrors.New("failed to parse subnet and ID")
 		}
-		subnetStr := sss[0]
-		ID := sss[1]
+		subnetStr := subnetAndIDParts[0]
+		ID := subnetAndIDParts[1]
 
 		a, err := addr.NewFromString(ID)
 		if err != nil {
@@ -71,9 +76,8 @@ func ValidatorsFromString(input string) ([]Validator, error) {
 		v := Validator{
 			addr.SubnetID(subnet),
 			a,
-			netAddr,
+			opaqueNetAddr,
 		}
-
 		validators = append(validators, v)
 	}
 	return validators, nil
@@ -101,7 +105,7 @@ func ParseValidatorInfo(input string) ([]t.NodeID, map[t.NodeID]string, error) {
 	return nodeIds, nodeAddrs, nil
 }
 
-func ValidatorMembership(validators []Validator) ([]t.NodeID, map[t.NodeID]string, error) {
+func BuildValidatorsMembership(validators []Validator) ([]t.NodeID, map[t.NodeID]string, error) {
 	var nodeIds []t.NodeID
 	nodeAddrs := make(map[t.NodeID]string)
 
@@ -114,21 +118,22 @@ func ValidatorMembership(validators []Validator) ([]t.NodeID, map[t.NodeID]strin
 	return nodeIds, nodeAddrs, nil
 }
 
-func Libp2pValidatorMembership(validators []Validator) ([]t.NodeID, map[t.NodeID]multiaddr.Multiaddr, error) {
-	var nodeIds []t.NodeID
+// Libp2pValidatorsMembership validates that validators addresses are valid multi addresses and
+// returns all validators IDs and map between IDs and multi addresses.
+func Libp2pValidatorsMembership(validators []Validator) ([]t.NodeID, map[t.NodeID]multiaddr.Multiaddr, error) {
+	var nodeIDs []t.NodeID
 	nodeAddrs := make(map[t.NodeID]multiaddr.Multiaddr)
 
 	for _, v := range validators {
 		id := t.NodeID(v.ID())
-		netAddr := v.NetAddr
-		info, err := multiaddr.NewMultiaddr(netAddr)
+		info, err := multiaddr.NewMultiaddr(v.NetAddr)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("failed to parse multi address: %w", err)
 		}
-		nodeIds = append(nodeIds, id)
+		nodeIDs = append(nodeIDs, id)
 		nodeAddrs[id] = info
 	}
-	return nodeIds, nodeAddrs, nil
+	return nodeIDs, nodeAddrs, nil
 }
 
 func splitAndTrimEmpty(s, sep, cutset string) []string {

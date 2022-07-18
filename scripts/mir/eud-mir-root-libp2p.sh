@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # Mir IDs
 NODE_0=/root:t1wpixt5mihkj75lfhrnaa6v56n27epvlgwparujy
 NODE_1=/root:t1k7t2zufxvtgamk7ogoifa5mvdagb4cafu6pdzga
@@ -77,7 +79,7 @@ rm -rf ./eudico_daemon_*.log
 rm -rf ./eudico_miner_*.log
 rm -rf ./eudico_shed_*.log
 
-LOG_LEVEL="info,mir-consensus=debug,mir-manager=debug"
+LOG_LEVEL="info,mir-consensus=info,mir-manager=info"
 
 tmux new-session -d -s "mir" \; \
   new-window   -t "mir" \; \
@@ -97,7 +99,7 @@ tmux new-session -d -s "mir" \; \
   send-keys -t "mir:0.1" "
         export EUDICO_MIR_VALIDATORS=$NODES EUDICO_PATH=$NODE_0_PATH GOLOG_LOG_LEVEL=$LOG_LEVEL
         ./eudico wait-api;
-        ./eudico net listen | grep '/ip6/::1/' > $NODE_0_NETADDR; sleep 6;
+        source ./scripts/mir/connect.sh 0;
         ./eudico wallet import --as-default $WALLET_0_KEY;
         ./eudico mir miner --default-key 2>&1 | tee $NODE_0_MINER_LOG" Enter \; \
   send-keys -t "mir:0.2" "
@@ -108,8 +110,7 @@ tmux new-session -d -s "mir" \; \
   send-keys -t "mir:0.3" "
         export GOLOG_LOG_LEVEL=$LOG_LEVEL EUDICO_MIR_VALIDATORS=$NODES EUDICO_PATH=$NODE_1_PATH
         ./eudico wait-api;
-        ./eudico net listen | grep '/ip6/::1/' > $NODE_1_NETADDR; sleep 6; \
-        ./eudico net connect \$(cat $NODE_0_NETADDR);
+        source ./scripts/mir/connect.sh 1;
         ./eudico wallet import --as-default $WALLET_1_KEY;
         ./eudico mir miner --default-key 2>&1 | tee $NODE_1_MINER_LOG" Enter \; \
   \
@@ -121,9 +122,7 @@ tmux new-session -d -s "mir" \; \
     send-keys -t "mir:1.1" "
         export GOLOG_LOG_LEVEL=$LOG_LEVEL EUDICO_MIR_VALIDATORS=$NODES EUDICO_PATH=$NODE_2_PATH
         ./eudico wait-api;
-        ./eudico net listen | grep '/ip6/::1/' > $NODE_2_NETADDR; sleep 6;
-        ./eudico net connect \$(cat $NODE_0_NETADDR);
-        ./eudico net connect \$(cat $NODE_1_NETADDR);
+        source ./scripts/mir/connect.sh 2;
         ./eudico wallet import --as-default $WALLET_2_KEY;
         ./eudico mir miner --default-key 2>&1 | tee $NODE_2_MINER_LOG" Enter \; \
     send-keys -t "mir:1.2" "
@@ -134,10 +133,7 @@ tmux new-session -d -s "mir" \; \
     send-keys -t "mir:1.3" "
        export GOLOG_LOG_LEVEL=$LOG_LEVEL EUDICO_MIR_VALIDATORS=$NODES EUDICO_PATH=$NODE_3_PATH
        ./eudico wait-api;
-       ./eudico net listen | grep '/ip6/::1/' > $NODE_3_NETADDR; sleep 6;
-       ./eudico net connect \$(cat $NODE_0_NETADDR);
-       ./eudico net connect \$(cat $NODE_1_NETADDR);
-       ./eudico net connect \$(cat $NODE_2_NETADDR);
+       source ./scripts/mir/connect.sh 3;
        ./eudico wallet import --as-default $WALLET_3_KEY
        ./eudico mir miner --default-key 2>&1  | tee $NODE_3_MINER_LOG" Enter \; \
   attach-session -t "mir:1.0"
