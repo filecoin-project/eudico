@@ -27,13 +27,6 @@ import (
 	mapi "github.com/filecoin-project/mir"
 )
 
-func TestMir(t *testing.T) {
-
-	t.Run("mir", func(t *testing.T) {
-		runMirConsensusTests(t, kit.ThroughRPC(), kit.RootMir())
-	})
-}
-
 func TestEudicoConsensus(t *testing.T) {
 	t.Run("dummy", func(t *testing.T) {
 		runDummyConsensusTests(t, kit.ThroughRPC(), kit.RootDummy())
@@ -114,7 +107,7 @@ func runMirConsensusTests(t *testing.T, opts ...interface{}) {
 
 	// t.Run("testMirMining", ts.testMirMining)
 	t.Run("testMirLibp2pMining", ts.testMirLibp2pMining)
-	// t.Run("testMirTwoNodes", ts.testMirTwoNodes)
+	t.Run("testMirTwoNodes", ts.testMirTwoNodes)
 }
 
 func (ts *eudicoConsensusSuite) testMirTwoNodes(t *testing.T) {
@@ -187,9 +180,9 @@ func (ts *eudicoConsensusSuite) testMirTwoNodes(t *testing.T) {
 		Value: big.Zero(),
 	}
 
-	mirNodeOneAddr, err := kit.GetFreeLocalAddr()
+	mirNodeOneAddr, err := kit.NodeLibp2pAddr(one)
 	require.NoError(t, err)
-	mirNodeTwoAddr, err := kit.GetFreeLocalAddr()
+	mirNodeTwoAddr, err := kit.NodeLibp2pAddr(two)
 	require.NoError(t, err)
 
 	mirNodeOne := fmt.Sprintf("%s:%s", address.RootSubnet, l1[0].String())

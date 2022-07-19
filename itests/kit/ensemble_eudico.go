@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
@@ -1053,8 +1054,15 @@ func (n *EudicoEnsemble) removeTendermintFiles() error {
 }
 
 func (n *EudicoEnsemble) removeMirFiles() error {
-	if err := os.RemoveAll("./eudico-wal"); err != nil {
+	files, err := filepath.Glob("./eudico-wal*")
+	if err != nil {
 		return err
+	}
+	for _, f := range files {
+		err = os.RemoveAll("./" + f)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

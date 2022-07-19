@@ -373,7 +373,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 func runSubnetTestsTwoNodes(t *testing.T, opts ...interface{}) {
 	ts := eudicoSubnetSuite{opts: opts}
 
-	// t.Run("testBasicSubnetFlowTwoNodes", ts.testBasicSubnetFlowTwoNodes)
+	t.Run("testBasicSubnetFlowTwoNodes", ts.testBasicSubnetFlowTwoNodes)
 	t.Run("testTwoNodesTwoSubnetsStartStop", ts.testTwoNodesTwoSubnetsStartStop)
 }
 
@@ -891,6 +891,7 @@ func (ts *eudicoSubnetSuite) testTwoNodesTwoSubnetsStartStop(t *testing.T) {
 	err = nodeB.MineSubnet(ctx, minerB, subnetAddr, true, &mp)
 	require.NoError(t, err)
 
+	time.Sleep(10 * time.Second)
 	t.Logf("[*] test time: %v\n", time.Since(startTime).Seconds())
 }
 
@@ -962,9 +963,9 @@ func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
 	}
 	minerB := lb[0]
 
-	aAddr, err := kit.GetFreeLocalAddr()
+	aAddr, err := kit.NodeLibp2pAddr(nodeA)
 	require.NoError(t, err)
-	bAddr, err := kit.GetFreeLocalAddr()
+	bAddr, err := kit.NodeLibp2pAddr(nodeB)
 	require.NoError(t, err)
 
 	err = os.Setenv(mir.ValidatorsEnv, fmt.Sprintf("%s@%s,%s@%s",

@@ -106,7 +106,7 @@ func NewStateManager(ctx context.Context, addr address.Address, api v1api.FullNo
 	}
 	netTransport.Connect(ctx)
 
-	wal, err := NewWAL(mirID, "eudico-wal")
+	wal, err := NewWAL(mirID, fmt.Sprintf("eudico-wal-%s", addr))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create WAL: %w", err)
 	}
@@ -189,6 +189,8 @@ func (sm *StateManager) Stop() {
 	if err := sm.Wal.Close(); err != nil {
 		log.Errorf("Could not close write-ahead log: %s", err)
 	}
+	log.Info("WAL closed")
+
 	sm.Net.Stop()
 }
 
