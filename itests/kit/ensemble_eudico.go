@@ -169,7 +169,7 @@ func NewEudicoEnsemble(t *testing.T, opts ...EnsembleOpt) *EudicoEnsemble {
 	return n
 }
 
-// ValidatorInfo returns information validator information.
+// ValidatorInfo returns validators information.
 func (n *EudicoEnsemble) ValidatorInfo(opts ...NodeOpt) (uint64, string) {
 	return n.options.minValidators, n.options.validatorAddress
 }
@@ -855,7 +855,6 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 
 		n.active.miners = append(n.active.miners, m)
 	}
-
 	// If we are here, we have processed all inactive miners and moved them
 	// to active, so clear the slice.
 	n.inactive.miners = n.inactive.miners[:0]
@@ -1108,7 +1107,7 @@ func EudicoEnsembleMinimal(t *testing.T, opts ...interface{}) (*TestFullNode, *T
 type EudicoRootMiner func(ctx context.Context, addr address.Address, api v1api.FullNode) error
 
 // EudicoEnsembleTwoMiners creates types for root miner and subnet miner that can be used to spawn real miners.
-// The main reason why this hask is used is that the Filecon consensus and Eudico consensus protocol have different implementations.
+// The main reason why this hack is used is that the Filecoin consensus and Eudico consensus protocol have different implementations.
 // For example, the Filecoin consensus doesn't have a single Mine() function that implements mining.
 func EudicoEnsembleTwoMiners(t *testing.T, opts ...interface{}) (*TestFullNode, interface{}, hierarchical.ConsensusType, *EudicoEnsemble) {
 	opts = append(opts, WithAllSubsystems())

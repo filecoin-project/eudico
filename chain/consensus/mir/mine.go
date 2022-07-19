@@ -13,24 +13,20 @@ import (
 	ltypes "github.com/filecoin-project/lotus/chain/types"
 )
 
-// Mine handles block "mining" using Mir framework.
+// Mine implements "block mining" using Mir framework.
 //
 // Mine implements the following algorithm:
-// 1. Retrieve messages and cross-messages from the mempool and create Mir requests from them.
+// 1. Retrieve messages and cross-messages from the mempool.
 //    Note, that messages can be added into mempool via the libp2p mechanism and the CLI.
-// 2. Store the requests in the pool, that is, at present, a key-value storage in memory.
-//    Each key is the request hash.
-// 3. Send those hashes to the Mir node in FIFO mode for each client.
-// 4. Receive ordered hashes from the Mir node and retrieve the corresponding requests from the storage.
-// 5. Create the next Filecoin block.
-//    Note, only a leader Eudico node, chosen by round-robin election, creates a block.
-// 6. Sync this block without sending it over the libp2p network.
+// 2. Send messages and cross messages to the Mir node through the request pool implementing FIFO.
+// 3. Receive ordered messages from the Mir node and parse them.
+// 4. Create the next Filecoin block. Note, only a leader Eudico node, chosen by round-robin election, creates a block.
+// 5. Sync this block without sending it over the libp2p network.
 //
 // There are two ways how mining with Mir can be started:
-// 1) Environment variables: validators ID and their network addresses are passed
-//    via EUDICO_MIR_VALIDATORS variable.
+// 1) Environment variables: validators ID and network address are passed via EUDICO_MIR_VALIDATORS variable.
 //    This approach can be used to run Mir in the root network and for simple demos.
-// 2) Hierarchical consensus framework: validators IDs and their network addresses
+// 2) Hierarchical consensus framework: validators ID and network address
 //    are received via state, after each validator joins the subnet.
 //    This is used to run Mir in a subnet.
 func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {

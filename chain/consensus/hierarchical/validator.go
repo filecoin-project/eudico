@@ -74,7 +74,7 @@ func ParseValidatorsString(input string) ([]Validator, error) {
 		}
 
 		v := Validator{
-			addr.SubnetID(subnet),
+			subnet,
 			a,
 			opaqueNetAddr,
 		}

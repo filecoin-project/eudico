@@ -305,7 +305,7 @@ func (sm *StateManager) GetRequests(msgs []*types.SignedMessage, crossMsgs []*ty
 	return
 }
 
-// BatchPushSignedMessages pushes signed messages into the request pool and sends them to Mir.
+// batchPushSignedMessages pushes signed messages into the request pool and sends them to Mir.
 func (sm *StateManager) batchSignedMessages(msgs []*types.SignedMessage) (
 	requests []*mirproto.Request,
 ) {

@@ -7,6 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/multiformats/go-multiaddr"
 	"golang.org/x/xerrors"
 
 	addr "github.com/filecoin-project/go-address"
@@ -214,4 +217,43 @@ func GetFreeLocalAddr() (addr string, err error) {
 		}
 	}
 	return
+}
+
+func GetFreeLibp2pLocalAddr() (m multiaddr.Multiaddr, err error) {
+	var a *net.TCPAddr
+	if a, err = net.ResolveTCPAddr("tcp", "localhost:0"); err == nil {
+		var l *net.TCPListener
+		if l, err = net.ListenTCP("tcp", a); err == nil {
+			defer l.Close() // nolint
+			return multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", l.Addr().(*net.TCPAddr).Port))
+		}
+	}
+	return
+}
+
+func GetLibp2pAddr(privKey []byte) (m multiaddr.Multiaddr, err error) {
+	saddr, err := GetFreeLibp2pLocalAddr()
+	if err != nil {
+		return nil, err
+	}
+
+	priv, err := crypto.UnmarshalPrivateKey(privKey)
+	if err != nil {
+		return nil, err
+	}
+
+	peerID, err := peer.IDFromPrivateKey(priv)
+	if err != nil {
+		panic(err)
+	}
+
+	peerInfo := peer.AddrInfo{
+		ID:    peerID,
+		Addrs: []multiaddr.Multiaddr{saddr},
+	}
+	addrs, err := peer.AddrInfoToP2pAddrs(&peerInfo)
+	if err != nil {
+		return nil, err
+	}
+	return addrs[0], nil
 }

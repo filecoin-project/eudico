@@ -27,6 +27,13 @@ import (
 	mapi "github.com/filecoin-project/mir"
 )
 
+func TestMir(t *testing.T) {
+
+	t.Run("mir", func(t *testing.T) {
+		runMirConsensusTests(t, kit.ThroughRPC(), kit.RootMir())
+	})
+}
+
 func TestEudicoConsensus(t *testing.T) {
 	t.Run("dummy", func(t *testing.T) {
 		runDummyConsensusTests(t, kit.ThroughRPC(), kit.RootDummy())
@@ -105,8 +112,9 @@ func (ts *eudicoConsensusSuite) testDummyMining(t *testing.T) {
 func runMirConsensusTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoConsensusSuite{opts: opts}
 
-	t.Run("testMirMining", ts.testMirMining)
-	t.Run("testMirTwoNodes", ts.testMirTwoNodes)
+	// t.Run("testMirMining", ts.testMirMining)
+	t.Run("testMirLibp2pMining", ts.testMirLibp2pMining)
+	// t.Run("testMirTwoNodes", ts.testMirTwoNodes)
 }
 
 func (ts *eudicoConsensusSuite) testMirTwoNodes(t *testing.T) {
@@ -264,6 +272,65 @@ func (ts *eudicoConsensusSuite) testMirTwoNodes(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, exitcode.Ok, res.Receipt.ExitCode, "msg2 not successful")
+}
+
+func (ts *eudicoConsensusSuite) testMirLibp2pMining(t *testing.T) {
+	var wg sync.WaitGroup
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		t.Log("[*] defer: cancelling test context")
+		cancel()
+		wg.Wait()
+	}()
+
+	full, ens := kit.EudicoEnsembleFullNodeOnly(t, ts.opts...)
+	defer func() {
+		err := ens.Stop()
+		require.NoError(t, err)
+	}()
+
+	l, err := full.WalletList(ctx)
+	require.NoError(t, err)
+	if len(l) != 1 {
+		t.Fatal("wallet key list is empty")
+	}
+
+	privKey, err := full.PrivKey(ctx)
+	require.NoError(t, err)
+
+	mirNodeID := fmt.Sprintf("%s:%s", address.RootSubnet, l[0].String())
+
+	addr, err := kit.GetLibp2pAddr(privKey)
+	require.NoError(t, err)
+
+	err = os.Setenv(mir.ValidatorsEnv, fmt.Sprintf("%s@%s", mirNodeID, addr))
+	require.NoError(t, err)
+	defer os.Unsetenv(mir.ValidatorsEnv) // nolint
+
+	wg.Add(1)
+	go func() {
+		t.Log("[*] miner started")
+		defer func() {
+			t.Log("[*] miner stopped")
+			wg.Done()
+		}()
+		err := mir.Mine(ctx, l[0], full)
+		if xerrors.Is(mapi.ErrStopped, err) {
+			return
+		}
+		if err != nil {
+			t.Error(err)
+			cancel()
+			return
+		}
+	}()
+
+	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 10, address.RootSubnet, full)
+	if xerrors.Is(mapi.ErrStopped, err) {
+		return
+	}
+	require.NoError(t, err)
 }
 
 func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
