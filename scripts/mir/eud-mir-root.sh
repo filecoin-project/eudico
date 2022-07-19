@@ -10,20 +10,20 @@ NODE_3=/root:t1sqbkluz5elnekdu62ute5zjammslkplgdcpa2zi
 NODES=/root:t1wpixt5mihkj75lfhrnaa6v56n27epvlgwparujy@127.0.0.1:10000,/root:t1k7t2zufxvtgamk7ogoifa5mvdagb4cafu6pdzga@127.0.0.1:10001,/root:t1rlhubezzmetmmpxyze22tc2uxuiiqv3iy6rvpra@127.0.0.1:10002,/root:t1sqbkluz5elnekdu62ute5zjammslkplgdcpa2zi@127.0.0.1:10003
 
 # Eudico paths
-NODE_0_PATH="$HOME/.eudico-node0"
-NODE_1_PATH="$HOME/.eudico-node1"
-NODE_2_PATH="$HOME/.eudico-node2"
-NODE_3_PATH="$HOME/.eudico-node3"
+export NODE_0_PATH="$HOME/.eudico-node0"
+export NODE_1_PATH="$HOME/.eudico-node1"
+export NODE_2_PATH="$HOME/.eudico-node2"
+export NODE_3_PATH="$HOME/.eudico-node3"
 
 NODE_0_KEY="./testdata/wallet/node0.key"
 NODE_1_KEY="./testdata/wallet/node1.key"
 NODE_2_KEY="./testdata/wallet/node2.key"
 NODE_3_KEY="./testdata/wallet/node3.key"
 
-NODE_0_NETADDR="$NODE_0_PATH/.netaddr"
-NODE_1_NETADDR="$NODE_1_PATH/.netaddr"
-NODE_2_NETADDR="$NODE_2_PATH/.netaddr"
-NODE_3_NETADDR="$NODE_3_PATH/.netaddr"
+export NODE_0_NETADDR="$NODE_0_PATH/.netaddr"
+export NODE_1_NETADDR="$NODE_1_PATH/.netaddr"
+export NODE_2_NETADDR="$NODE_2_PATH/.netaddr"
+export NODE_3_NETADDR="$NODE_3_PATH/.netaddr"
 
 # Eudico API ports
 NODE_0_API="1234"

@@ -138,6 +138,8 @@ type EudicoEnsemble struct {
 
 	tendermintContainerID string
 	tendermintAppServer   service.Service
+
+	valNetAddr string
 }
 
 // NewEudicoEnsemble instantiates a new blank EudicoEnsemble.
@@ -171,7 +173,7 @@ func NewEudicoEnsemble(t *testing.T, opts ...EnsembleOpt) *EudicoEnsemble {
 
 // ValidatorInfo returns validators information.
 func (n *EudicoEnsemble) ValidatorInfo(opts ...NodeOpt) (uint64, string) {
-	return n.options.minValidators, n.options.validatorAddress
+	return n.options.minValidators, n.valNetAddr
 }
 
 // FullNode enrolls a new full node.
@@ -1169,12 +1171,33 @@ func EudicoEnsembleTwoMiners(t *testing.T, opts ...interface{}) (*TestFullNode, 
 		return &full, &miner, subnetMinerType, ens
 	}
 	ens = NewEudicoEnsemble(t, eopts...).FullNode(&full, nopts...).Start()
+
 	if options.rootConsensus == hierarchical.Mir {
 		addr, err := full.WalletDefaultAddress(context.Background())
 		require.NoError(t, err)
-		err = os.Setenv(mir.ValidatorsEnv, "/root:"+addr.String()+"@127.0.0.1:10000")
+
+		libp2pPrivKeyBytes, err := full.PrivKey(context.Background())
+		require.NoError(t, err)
+
+		mirNodeID := fmt.Sprintf("%s:%s", address.RootSubnet, addr.String())
+
+		a, err := GetLibp2pAddr(libp2pPrivKeyBytes)
+		require.NoError(t, err)
+
+		err = os.Setenv(mir.ValidatorsEnv, fmt.Sprintf("%s@%s", mirNodeID, a))
 		require.NoError(t, err)
 	}
+
+	if options.subnetConsensus == hierarchical.Mir {
+		libp2pPrivKeyBytes, err := full.PrivKey(context.Background())
+		require.NoError(t, err)
+
+		a, err := GetLibp2pAddr(libp2pPrivKeyBytes)
+		require.NoError(t, err)
+
+		ens.valNetAddr = a.String()
+	}
+
 	return &full, rootMiner, subnetMinerType, ens
 }
 

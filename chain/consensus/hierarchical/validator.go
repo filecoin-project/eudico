@@ -4,14 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/multiformats/go-multiaddr"
-	"golang.org/x/xerrors"
-
 	addr "github.com/filecoin-project/go-address"
-	t "github.com/filecoin-project/mir/pkg/types"
 )
 
-// Validator encapsulated string to be compatible with CBOR implementation.
 type Validator struct {
 	Subnet  addr.SubnetID
 	Addr    addr.Address
@@ -32,33 +27,25 @@ func (v *Validator) ID() string {
 	return fmt.Sprintf("%s:%s", v.Subnet, v.Addr)
 }
 
-// EncodeValidatorInfo adds a validator subnet, address and network address into a string.
-func EncodeValidatorInfo(vilidators []Validator) string {
-	var s string
-	for _, v := range vilidators {
-		s += fmt.Sprintf("%s:%s@%s,", v.Subnet.String(), v.Addr.String(), v.NetAddr)
-	}
-	return strings.TrimSuffix(s, ",")
-}
-
-// ParseValidatorsString parses comma-delimited subnet:ID@OpaqueNetAddr validators string.
+// ValidatorsFromString parses comma-separated subnet:ID@OpaqueNetAddr validators string.
+// OpaqueNetAddr can contain GRPC or Libp2p addresses.
 //
 // Examples of the validators:
 // 	- /root:t1wpixt5mihkj75lfhrnaa6v56n27epvlgwparujy@/ip4/127.0.0.1/tcp/10000/p2p/12D3KooWJhKBXvytYgPCAaiRtiNLJNSFG5jreKDu2jiVpJetzvVJ
 // 	- /root:t1wpixt5mihkj75lfhrnaa6v56n27epvlgwparujy@127.0.0.1:1000
-func ParseValidatorsString(input string) ([]Validator, error) {
+func ValidatorsFromString(input string) ([]Validator, error) {
 	var validators []Validator
 	for _, idAddr := range splitAndTrimEmpty(input, ",", " ") {
 		parts := strings.Split(idAddr, "@")
 		if len(parts) != 2 {
-			return nil, xerrors.New("failed to parse validators string")
+			return nil, fmt.Errorf("failed to parse validators string")
 		}
 		subnetAndID := parts[0]
 		opaqueNetAddr := parts[1]
 
 		subnetAndIDParts := strings.Split(subnetAndID, ":")
 		if len(subnetAndIDParts) != 2 {
-			return nil, xerrors.New("failed to parse subnet and ID")
+			return nil, fmt.Errorf("failed to parse subnet and ID")
 		}
 		subnetStr := subnetAndIDParts[0]
 		ID := subnetAndIDParts[1]
@@ -74,66 +61,22 @@ func ParseValidatorsString(input string) ([]Validator, error) {
 		}
 
 		v := Validator{
-			subnet,
-			a,
-			opaqueNetAddr,
+			Subnet:  subnet,
+			Addr:    a,
+			NetAddr: opaqueNetAddr,
 		}
 		validators = append(validators, v)
 	}
 	return validators, nil
 }
 
-// ParseValidatorInfo parses comma-delimited ID@host:port persistent validator string.
-// Example of the peers sting: "ID1@IP1:26656,ID2@IP2:26656,ID3@IP3:26656,ID4@IP4:26656".
-// At present, we suppose that input is trusted.
-// TODO: add input validation.
-func ParseValidatorInfo(input string) ([]t.NodeID, map[t.NodeID]string, error) {
-	var nodeIds []t.NodeID
-	nodeAddrs := make(map[t.NodeID]string)
-
-	for _, idAddr := range splitAndTrimEmpty(input, ",", " ") {
-		ss := strings.Split(idAddr, "@")
-		if len(ss) != 2 {
-			return nil, nil, xerrors.New("failed to parse persistent nodes")
-		}
-
-		id := t.NodeID(ss[0])
-		netAddr := ss[1]
-		nodeIds = append(nodeIds, id)
-		nodeAddrs[id] = netAddr
-	}
-	return nodeIds, nodeAddrs, nil
-}
-
-func BuildValidatorsMembership(validators []Validator) ([]t.NodeID, map[t.NodeID]string, error) {
-	var nodeIds []t.NodeID
-	nodeAddrs := make(map[t.NodeID]string)
-
+// ValidatorsToString adds a validator subnet, address and network address into a string.
+func ValidatorsToString(validators []Validator) string {
+	var s string
 	for _, v := range validators {
-		id := t.NodeID(v.ID())
-		netAddr := v.NetAddr
-		nodeIds = append(nodeIds, id)
-		nodeAddrs[id] = netAddr
+		s += fmt.Sprintf("%s:%s@%s,", v.Subnet.String(), v.Addr.String(), v.NetAddr)
 	}
-	return nodeIds, nodeAddrs, nil
-}
-
-// Libp2pValidatorsMembership validates that validators addresses are valid multi addresses and
-// returns all validators IDs and map between IDs and multi addresses.
-func Libp2pValidatorsMembership(validators []Validator) ([]t.NodeID, map[t.NodeID]multiaddr.Multiaddr, error) {
-	var nodeIDs []t.NodeID
-	nodeAddrs := make(map[t.NodeID]multiaddr.Multiaddr)
-
-	for _, v := range validators {
-		id := t.NodeID(v.ID())
-		info, err := multiaddr.NewMultiaddr(v.NetAddr)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to parse multi address: %w", err)
-		}
-		nodeIDs = append(nodeIDs, id)
-		nodeAddrs[id] = info
-	}
-	return nodeIDs, nodeAddrs, nil
+	return strings.TrimSuffix(s, ",")
 }
 
 func splitAndTrimEmpty(s, sep, cutset string) []string {

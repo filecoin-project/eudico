@@ -35,7 +35,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 
 	sm, err := NewStateManager(ctx, addr, api)
 	if err != nil {
-		return fmt.Errorf("unable to create a manager: %w", err)
+		return fmt.Errorf("unable to create a state manager: %w", err)
 	}
 	log := logging.FromContext(ctx, log).With("miner", sm.ID())
 

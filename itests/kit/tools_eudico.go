@@ -251,9 +251,25 @@ func GetLibp2pAddr(privKey []byte) (m multiaddr.Multiaddr, err error) {
 		ID:    peerID,
 		Addrs: []multiaddr.Multiaddr{saddr},
 	}
+
 	addrs, err := peer.AddrInfoToP2pAddrs(&peerInfo)
 	if err != nil {
 		return nil, err
 	}
+
 	return addrs[0], nil
+}
+
+func NodeLibp2pAddr(node *TestFullNode) (m multiaddr.Multiaddr, err error) {
+	privKey, err := node.PrivKey(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	a, err := GetLibp2pAddr(privKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return a, nil
 }

@@ -1,16 +1,5 @@
 # This script is a helper connecting Eudico nodes with each other.
 # The script is called from other main scripts.
-
-NODE_0_PATH="$HOME/.eudico-node0"
-NODE_1_PATH="$HOME/.eudico-node1"
-NODE_2_PATH="$HOME/.eudico-node2"
-NODE_3_PATH="$HOME/.eudico-node3"
-
-NODE_0_NETADDR="$NODE_0_PATH/.netaddr"
-NODE_1_NETADDR="$NODE_1_PATH/.netaddr"
-NODE_2_NETADDR="$NODE_2_PATH/.netaddr"
-NODE_3_NETADDR="$NODE_3_PATH/.netaddr"
-
 T=6
 
 if [[ $1 -eq 0 ]];

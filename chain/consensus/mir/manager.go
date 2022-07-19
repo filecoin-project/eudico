@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
@@ -73,7 +72,7 @@ func NewStateManager(ctx context.Context, addr address.Address, api v1api.FullNo
 		return nil, fmt.Errorf("empty validator set")
 	}
 
-	nodeIDs, nodeAddrs, err := hierarchical.Libp2pValidatorsMembership(validators)
+	nodeIDs, nodeAddrs, err := Libp2pValidatorsMembership(validators)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build node membership: %w", err)
 	}
@@ -159,33 +158,6 @@ func NewStateManager(ctx context.Context, addr address.Address, api v1api.FullNo
 	}
 
 	return &m, nil
-}
-
-// getSubnetValidators retrieves subnet validators from the environment variable or from the state.
-func getSubnetValidators(
-	ctx context.Context,
-	subnetID address.SubnetID,
-	api v1api.FullNode,
-) (
-	[]hierarchical.Validator, error) {
-	var err error
-	var validators []hierarchical.Validator
-	validatorsEnv := os.Getenv(ValidatorsEnv)
-	if validatorsEnv != "" {
-		validators, err = hierarchical.ParseValidatorsString(validatorsEnv)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get validators from string: %w", err)
-		}
-	} else {
-		if subnetID == address.RootSubnet {
-			return nil, fmt.Errorf("can't be run in rootnet without validators")
-		}
-		validators, err = api.SubnetStateGetValidators(ctx, subnetID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get validators from state")
-		}
-	}
-	return validators, nil
 }
 
 // Start starts the manager.
