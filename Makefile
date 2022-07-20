@@ -113,15 +113,15 @@ eudico-hc-test:
 # Run integration tests for Eudico
 eudico-subnet-test: GOFLAGS+=-tags=2k
 eudico-subnet-test:
-	go test $(GOFLAGS) -count=1 -timeout=0 -run TestEudicoSubnet ./itests
+	go test $(GOFLAGS) -v -count=1 -timeout=0 ./itests/eudico_hc_test.go
 .PHONY: eudico-subnet-test
 
 eudico-consensus-test: GOFLAGS+=-tags=2k
 eudico-consensus-test:
-	go test $(GOFLAGS) -v -count=1 -run TestEudicoConsensus ./itests
+	go test $(GOFLAGS) -v -count=1 ./itests/eudico_consensus_test.go
 .PHONY: eudico-consensus-test
 
-eudico-test: eudico-subnet-test eudico-consensus-test
+eudico-test: eudico-subnet-test eudico-consensus-test eudico-hc-test
 .PHONY: eudico-test
 
 # Run a 4-node tendermint-testnet locally

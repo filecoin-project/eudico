@@ -31,9 +31,15 @@ func TestHC_SmokeTestWithDummyConsensus(t *testing.T) {
 	})
 }
 
-func TestHC_TwoNodesTests(t *testing.T) {
+func TestHC_TwoNodesTestsWithMirConsensus(t *testing.T) {
 	t.Run("/root/mir-/subnet/mir", func(t *testing.T) {
-		runTwoNodesTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetMir())
+		runTwoNodesTestsWithMir(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetMir())
+	})
+}
+
+func TestHC_TwoNodesCrossMessage(t *testing.T) {
+	t.Run("/root/mir-/subnet/mir", func(t *testing.T) {
+		runTwoNodesCrossMessage(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetTSPoW())
 	})
 }
 
@@ -354,12 +360,11 @@ func (ts *eudicoSubnetSuite) testBasicFlow(t *testing.T) {
 	t.Logf("[*] test time: %v\n", time.Since(startTime).Seconds())
 }
 
-func runTwoNodesTests(t *testing.T, opts ...interface{}) {
+func runTwoNodesTestsWithMir(t *testing.T, opts ...interface{}) {
 	ts := eudicoSubnetSuite{opts: opts}
 
 	t.Run("testBasicFlowOnTwoNodes", ts.testBasicFlowOnTwoNodes)
 	t.Run("testStartStopOnTwoNodes", ts.testStartStopOnTwoNodes)
-	t.Run("testCrossMessagesOnTwoNodes", ts.testCrossMessageOnTwoNodes)
 }
 
 func (ts *eudicoSubnetSuite) testBasicFlowOnTwoNodes(t *testing.T) {
@@ -878,7 +883,13 @@ func (ts *eudicoSubnetSuite) testStartStopOnTwoNodes(t *testing.T) {
 	t.Logf("[*] test time: %v\n", time.Since(startTime).Seconds())
 }
 
-func (ts *eudicoSubnetSuite) testCrossMessageOnTwoNodes(t *testing.T) {
+func runTwoNodesCrossMessage(t *testing.T, opts ...interface{}) {
+	ts := eudicoSubnetSuite{opts: opts}
+
+	t.Run("testCrossMessagesOnTwoNodesMirPow", ts.testCrossMessageOnTwoNodesMirPow)
+}
+
+func (ts *eudicoSubnetSuite) testCrossMessageOnTwoNodesMirPow(t *testing.T) {
 	var wg sync.WaitGroup
 
 	nodeA, nodeB, ens := kit.EudicoEnsembleTwoNodes(t, ts.opts...)
