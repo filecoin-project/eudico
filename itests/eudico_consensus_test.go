@@ -27,13 +27,15 @@ import (
 	mapi "github.com/filecoin-project/mir"
 )
 
-func TestEudicoConsensus(t *testing.T) {
-	t.Run("dummy", func(t *testing.T) {
-		runDummyConsensusTests(t, kit.ThroughRPC(), kit.RootDummy())
-	})
-
+func TestMirConsensus(t *testing.T) {
 	t.Run("mir", func(t *testing.T) {
 		runMirConsensusTests(t, kit.ThroughRPC(), kit.RootMir())
+	})
+}
+
+func TestLegacyConsensus(t *testing.T) {
+	t.Run("dummy", func(t *testing.T) {
+		runDummyConsensusTests(t, kit.ThroughRPC(), kit.RootDummy())
 	})
 
 	t.Run("tspow", func(t *testing.T) {
@@ -105,7 +107,6 @@ func (ts *eudicoConsensusSuite) testDummyMining(t *testing.T) {
 func runMirConsensusTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoConsensusSuite{opts: opts}
 
-	// t.Run("testMirMining", ts.testMirMining)
 	t.Run("testMirLibp2pMining", ts.testMirLibp2pMining)
 	t.Run("testMirTwoNodes", ts.testMirTwoNodes)
 }

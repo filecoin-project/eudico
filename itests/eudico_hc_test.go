@@ -25,68 +25,52 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
-func TestEudicoSubnetSmoke(t *testing.T) {
+func TestHC_SmokeTestWithDummyConsensus(t *testing.T) {
 	t.Run("/root/dummy-/subnet/dummy", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetDummy())
+		runBasicFlowTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetDummy())
 	})
 }
 
-func TestEudicoSubnetTwoNodesBasic(t *testing.T) {
+func TestHC_TwoNodesTests(t *testing.T) {
 	t.Run("/root/mir-/subnet/mir", func(t *testing.T) {
-		runSubnetTestsTwoNodes(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetMir())
+		runTwoNodesTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetMir())
 	})
 }
 
-func TestEudicoSubnetTwoNodesCrossMessage(t *testing.T) {
-	t.Run("/root/mir-/subnet/pow", func(t *testing.T) {
-		runSubnetTwoNodesCrossMessage(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetTSPoW())
-	})
-}
-
-func TestSubnetMir(t *testing.T) {
-	t.Run("/root/dummy-/subnet/mir", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetMir(), kit.MinValidators(1))
-	})
-}
-
-func TestEudicoSubnetMir(t *testing.T) {
-	a, err := kit.GetFreeLibp2pLocalAddr()
-	require.NoError(t, err)
-
-	t.Run("/root/dummy-/subnet/mir", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetMir(), kit.MinValidators(1), kit.ValidatorAddress(a.String()))
-	})
-
+func TestHC_BasicFlowWithMirInRootnet(t *testing.T) {
 	t.Run("/root/mir-/subnet/delegated", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDelegated())
+		runBasicFlowTests(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetDelegated())
 	})
+}
 
-	a, err = kit.GetFreeLibp2pLocalAddr()
-	require.NoError(t, err)
+func TestHC_BasicFlowWithMirInSubnet(t *testing.T) {
+	t.Run("/root/dummy-/subnet/mir", func(t *testing.T) {
+		runBasicFlowTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetMir(), kit.MinValidators(1))
+	})
 
 	t.Run("/root/delegated-/subnet/mir", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetMir(), kit.MinValidators(1), kit.ValidatorAddress(a.String()))
+		runBasicFlowTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetMir(), kit.MinValidators(1))
 	})
 }
 
-func TestEudicoSubnetOneNodeBasic(t *testing.T) {
+func TestHC_BasicFlowWithLegacyConsensus(t *testing.T) {
 	// Filecoin consensus in root
 
 	t.Run("/root/filcns-/subnet/delegated", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootFilcns(), kit.SubnetDelegated())
+		runBasicFlowTests(t, kit.ThroughRPC(), kit.RootFilcns(), kit.SubnetDelegated())
 	})
 
 	t.Run("/root/filcns-/subnet/pow", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootFilcns(), kit.SubnetTSPoW())
+		runBasicFlowTests(t, kit.ThroughRPC(), kit.RootFilcns(), kit.SubnetTSPoW())
 	})
 
 	t.Run("/root/delegated-/subnet/pow", func(t *testing.T) {
-		runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetTSPoW())
+		runBasicFlowTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetTSPoW())
 	})
 
 	if os.Getenv("TENDERMINT_ITESTS") != "" {
 		t.Run("/root/filcns-/subnet/tendermint", func(t *testing.T) {
-			runSubnetTests(t, kit.ThroughRPC(), kit.RootFilcns(), kit.SubnetTendermint())
+			runBasicFlowTests(t, kit.ThroughRPC(), kit.RootFilcns(), kit.SubnetTendermint())
 		})
 	}
 
@@ -95,28 +79,28 @@ func TestEudicoSubnetOneNodeBasic(t *testing.T) {
 		// PoW in Root
 
 		t.Run("/root/pow-/subnet/pow", func(t *testing.T) {
-			runSubnetTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTSPoW())
+			runBasicFlowTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTSPoW())
 		})
 
 		if os.Getenv("TENDERMINT_ITESTS") != "" {
 			t.Run("/root/pow-/subnet/tendermint", func(t *testing.T) {
-				runSubnetTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTendermint())
+				runBasicFlowTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTendermint())
 			})
 		}
 
 		t.Run("/root/pow-/subnet/delegated", func(t *testing.T) {
-			runSubnetTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetDelegated())
+			runBasicFlowTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetDelegated())
 		})
 
 		// Delegated consensus in root
 
 		t.Run("/root/delegated-/subnet/delegated", func(t *testing.T) {
-			runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetDelegated())
+			runBasicFlowTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetDelegated())
 		})
 
 		if os.Getenv("TENDERMINT_ITESTS") != "" {
 			t.Run("/root/delegated-/subnet/tendermint", func(t *testing.T) {
-				runSubnetTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetTendermint())
+				runBasicFlowTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetTendermint())
 			})
 		}
 
@@ -124,27 +108,27 @@ func TestEudicoSubnetOneNodeBasic(t *testing.T) {
 
 		if os.Getenv("TENDERMINT_ITESTS") != "" {
 			t.Run("/root/tendermint-/subnet/delegated", func(t *testing.T) {
-				runSubnetTests(t, kit.ThroughRPC(), kit.RootTendermint(), kit.SubnetDelegated())
+				runBasicFlowTests(t, kit.ThroughRPC(), kit.RootTendermint(), kit.SubnetDelegated())
 			})
 
 			t.Run("/root/tendermint-/subnet/pow", func(t *testing.T) {
-				runSubnetTests(t, kit.ThroughRPC(), kit.RootTendermint(), kit.SubnetTSPoW())
+				runBasicFlowTests(t, kit.ThroughRPC(), kit.RootTendermint(), kit.SubnetTSPoW())
 			})
 		}
 	}
 }
 
-func runSubnetTests(t *testing.T, opts ...interface{}) {
+func runBasicFlowTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoSubnetSuite{opts: opts}
 
-	t.Run("testBasicSubnetFlow", ts.testBasicSubnetFlow)
+	t.Run("testBasicSubnetFlow", ts.testBasicFlow)
 }
 
 type eudicoSubnetSuite struct {
 	opts []interface{}
 }
 
-func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
+func (ts *eudicoSubnetSuite) testBasicFlow(t *testing.T) {
 	var wg sync.WaitGroup
 
 	full, rootMiner, subnetMinerType, ens := kit.EudicoEnsembleTwoMiners(t, ts.opts...)
@@ -370,14 +354,15 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlow(t *testing.T) {
 	t.Logf("[*] test time: %v\n", time.Since(startTime).Seconds())
 }
 
-func runSubnetTestsTwoNodes(t *testing.T, opts ...interface{}) {
+func runTwoNodesTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoSubnetSuite{opts: opts}
 
-	t.Run("testBasicSubnetFlowTwoNodes", ts.testBasicSubnetFlowTwoNodes)
-	t.Run("testTwoNodesTwoSubnetsStartStop", ts.testTwoNodesTwoSubnetsStartStop)
+	t.Run("testBasicFlowOnTwoNodes", ts.testBasicFlowOnTwoNodes)
+	t.Run("testStartStopOnTwoNodes", ts.testStartStopOnTwoNodes)
+	t.Run("testCrossMessagesOnTwoNodes", ts.testCrossMessageOnTwoNodes)
 }
 
-func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
+func (ts *eudicoSubnetSuite) testBasicFlowOnTwoNodes(t *testing.T) {
 	var wg sync.WaitGroup
 
 	nodeA, nodeB, ens := kit.EudicoEnsembleTwoNodes(t, ts.opts...)
@@ -679,7 +664,7 @@ func (ts *eudicoSubnetSuite) testBasicSubnetFlowTwoNodes(t *testing.T) {
 	t.Logf("[*] test time: %v\n", time.Since(startTime).Seconds())
 }
 
-func (ts *eudicoSubnetSuite) testTwoNodesTwoSubnetsStartStop(t *testing.T) {
+func (ts *eudicoSubnetSuite) testStartStopOnTwoNodes(t *testing.T) {
 	var wg sync.WaitGroup
 
 	nodeA, nodeB, ens := kit.EudicoEnsembleTwoNodes(t, ts.opts...)
@@ -895,14 +880,7 @@ func (ts *eudicoSubnetSuite) testTwoNodesTwoSubnetsStartStop(t *testing.T) {
 	t.Logf("[*] test time: %v\n", time.Since(startTime).Seconds())
 }
 
-func runSubnetTwoNodesCrossMessage(t *testing.T, opts ...interface{}) {
-	ts := eudicoSubnetSuite{opts: opts}
-
-	t.Run("testBasicSubnetFlowTwoNodes", ts.testSubnetTwoNodesCrossMessage)
-
-}
-
-func (ts *eudicoSubnetSuite) testSubnetTwoNodesCrossMessage(t *testing.T) {
+func (ts *eudicoSubnetSuite) testCrossMessageOnTwoNodes(t *testing.T) {
 	var wg sync.WaitGroup
 
 	nodeA, nodeB, ens := kit.EudicoEnsembleTwoNodes(t, ts.opts...)
