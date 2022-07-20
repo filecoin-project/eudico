@@ -791,7 +791,7 @@ workflows:
       - mod-tidy-check
       - gofmt
       - gen-check
-      - test-hc-unit:
+      - test-subnet-unit:
           name: hc-unit-tests
           suite: hc
           target: "./chain/consensus/..."
@@ -809,7 +809,7 @@ workflows:
           target: "./itests/eudico_hc_test.go"
           requires:
             - hc-test-consensus
-      - test-hc-races:
+      - test-subnet-races:
           name: hc-test-with-race-detector
           suite: hc
           go-test-flags: "-race -tags=2k -timeout 40m"
