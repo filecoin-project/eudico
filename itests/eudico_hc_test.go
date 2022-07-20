@@ -531,8 +531,7 @@ func (ts *eudicoSubnetSuite) testBasicFlowOnTwoNodes(t *testing.T) {
 
 	sc, err = nodeB.JoinSubnet(ctx, minerB, big.Int(val), subnetAddr, sbAddr.String())
 	require.NoError(t, err)
-
-	_, err = nodeA.StateWaitMsg(ctx, sc, 1, 100, false)
+	_, err = nodeB.StateWaitMsg(ctx, sc, 1, 100, false)
 	require.NoError(t, err)
 
 	t.Log("[*] listing subnets")
@@ -833,8 +832,7 @@ func (ts *eudicoSubnetSuite) testStartStopOnTwoNodes(t *testing.T) {
 
 	sc, err = nodeB.JoinSubnet(ctx, minerB, big.Int(val), subnetAddr, sbAddr.String())
 	require.NoError(t, err)
-
-	_, err = nodeA.StateWaitMsg(ctx, sc, 1, 100, false)
+	_, err = nodeB.StateWaitMsg(ctx, sc, 1, 100, false)
 	require.NoError(t, err)
 
 	t.Log("[*] listing subnets")
@@ -1071,7 +1069,7 @@ func (ts *eudicoSubnetSuite) testCrossMessageOnTwoNodes(t *testing.T) {
 	sc2, err := nodeB.JoinSubnet(ctx, minerB, big.Int(val), subnetBAddr, "")
 	require.NoError(t, err)
 
-	_, err = nodeA.StateWaitMsg(ctx, sc2, 1, 100, false)
+	_, err = nodeB.StateWaitMsg(ctx, sc2, 1, 100, false)
 	require.NoError(t, err)
 
 	t.Log("[*] listing subnets")
