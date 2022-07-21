@@ -42,8 +42,11 @@ func (a *NetAPI) ID(context.Context) (peer.ID, error) {
 	return a.Host.ID(), nil
 }
 
-// FIXME: We should find a better way to pass the libp2p host to Mir
-// without exposing the private key. 
+// PrivKey returns the private key of the libp2p's host.
+//
+// FIXME: We should find a better way to pass the libp2p host to Mir without exposing the private key.
+// For example, we could add a passphrase to encrypt the key.
+// Kind of how Ethereum uses unlockAccount to unlock the private keys for signing.
 func (a *NetAPI) PrivKey(context.Context) ([]byte, error) {
 	ownID := a.Host.ID()
 	key := a.Host.Peerstore().PrivKey(ownID)
