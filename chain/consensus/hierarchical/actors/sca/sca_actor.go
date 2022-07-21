@@ -715,7 +715,7 @@ func (a SubnetCoordActor) SubmitAtomicExec(rt runtime.Runtime, params *SubmitExe
 		st   SCAState
 		exec *AtomicExec
 	)
-	caller := SecpBLSAddr(rt, rt.Caller())
+	caller := rt.Caller()
 	rt.StateTransaction(&st, func() {
 		execMap, err := adt.AsMap(adt.AsStore(rt), st.AtomicExecRegistry, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting exec map")
