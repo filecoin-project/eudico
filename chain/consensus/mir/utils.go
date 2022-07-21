@@ -44,23 +44,9 @@ func getSubnetValidators(
 	return validators, nil
 }
 
-func GRPCValidatorsMembership(validators []hierarchical.Validator) ([]t.NodeID, map[t.NodeID]string, error) {
-	var nodeIDs []t.NodeID
-	nodeAddrs := make(map[t.NodeID]string)
-
-	for _, v := range validators {
-		id := t.NodeID(v.ID())
-		netAddr := v.NetAddr
-		nodeIDs = append(nodeIDs, id)
-		nodeAddrs[id] = netAddr
-	}
-
-	return nodeIDs, nodeAddrs, nil
-}
-
-// Libp2pValidatorsMembership validates that validators addresses are valid multi addresses and
-// returns all validators IDs and map between IDs and multi addresses.
-func Libp2pValidatorsMembership(validators []hierarchical.Validator) ([]t.NodeID, map[t.NodeID]multiaddr.Multiaddr, error) {
+// ValidatorsMembership validates that validators addresses are valid multi-addresses and
+// returns all validators IDs and map between IDs and multi-addresses.
+func ValidatorsMembership(validators []hierarchical.Validator) ([]t.NodeID, map[t.NodeID]multiaddr.Multiaddr, error) {
 	var nodeIDs []t.NodeID
 	nodeAddrs := make(map[t.NodeID]multiaddr.Multiaddr)
 

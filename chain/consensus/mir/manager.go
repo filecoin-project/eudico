@@ -72,7 +72,7 @@ func NewStateManager(ctx context.Context, addr address.Address, api v1api.FullNo
 		return nil, fmt.Errorf("empty validator set")
 	}
 
-	nodeIDs, nodeAddrs, err := Libp2pValidatorsMembership(validators)
+	nodeIDs, nodeAddrs, err := ValidatorsMembership(validators)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build node membership: %w", err)
 	}
