@@ -84,7 +84,10 @@ func (ae *AtomicExecParams) translateInputAddrs(rt runtime.Runtime) {
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error parsing subnet")
 		raw, err := addr.RawAddr()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error parsing raw address")
-		outAddr := SecpBLSAddr(rt, raw)
+		outAddr, ok := rt.ResolveAddress(raw)
+		if !ok {
+			rt.Abortf(exitcode.ErrIllegalArgument, "unable to resolve address %v", raw)
+		}
 		out, err := address.NewHCAddress(sn, outAddr)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error generating HCAddress")
 		aux[out.String()] = ae.Inputs[k]
