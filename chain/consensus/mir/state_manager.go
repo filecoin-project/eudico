@@ -1,6 +1,7 @@
 package mir
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/filecoin-project/mir/pkg/events"
@@ -75,7 +76,8 @@ func (sm *StateManager) ApplyBatch(in *requestpb.Batch) error {
 	sm.BatchCounter++
 
 	if sm.BatchCounter%ReconfigurationBatchNumber == 0 {
-		err := sm.Api.CreateMirNode()
+		fmt.Println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+		err := sm.Api.CreateMirNode(context.TODO())
 		if err != nil {
 			return err
 		}

@@ -37,6 +37,7 @@ type Manager struct {
 	Addr       address.Address
 	Pool       *requestPool
 	Validators []hierarchical.Validator
+	libp2pKey  crypto.PrivKey
 
 	// Mir types
 	MirNode *mir.Node
@@ -73,64 +74,23 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	if err != nil {
 		return nil, fmt.Errorf("failed to get validators: %w", err)
 	}
-	if len(validators) == 0 {
-		return nil, fmt.Errorf("empty validator set")
-	}
-
-	nodeIDs, nodeAddrs, err := ValidatorsMembership(validators)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build node membership: %w", err)
-	}
-	mirID := newMirID(subnetID.String(), addr.String())
-	mirAddr := nodeAddrs[t.NodeID(mirID)]
-
-	log.Info("Eudico node's Mir ID: ", mirID)
-	log.Info("Eudico node's address in Mir: ", mirAddr)
-	log.Info("Mir nodes IDs: ", nodeIDs)
-	log.Info("Mir nodes addresses: ", nodeAddrs)
-
-	peerID, err := peer.AddrInfoFromP2pAddr(mirAddr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get addr info: %w", err)
-	}
-
-	h, err := libp2p.New(
-		libp2p.Identity(hostPrivKey),
-		libp2p.DefaultTransports,
-		libp2p.ListenAddrs(peerID.Addrs[0]),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to construct libp2p host: %w", err)
-	}
-
-	// Create Mir modules.
-
-	netTransport := mirlibp2p.NewTransport(h, nodeAddrs, t.NodeID(mirID), newMirLogger(managerLog))
-	if err := netTransport.Start(); err != nil {
-		return nil, fmt.Errorf("failed to create libp2p transport: %w", err)
-	}
-	netTransport.Connect(ctx)
-
-	wal, err := NewWAL(mirID, fmt.Sprintf("eudico-wal-%s", addr))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create WAL: %w", err)
-	}
-
-	// Instantiate the ISS protocol module with default configuration.
-	issConfig := iss.DefaultConfig(nodeIDs)
-	issProtocol, err := iss.New(t.NodeID(mirID), issConfig, newMirLogger(managerLog))
-	if err != nil {
-		return nil, fmt.Errorf("could not instantiate ISS protocol module: %w", err)
-	}
 
 	cryptoManager, err := NewCryptoManager(addr, api)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create crypto manager: %w", err)
 	}
 
+	mirID := newMirID(subnetID.String(), addr.String())
+
+	wal, err := NewWAL(mirID, fmt.Sprintf("eudico-wal-%s", addr))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create WAL: %w", err)
+	}
+
 	pool := newRequestPool()
 
 	m := Manager{
+		libp2pKey:  hostPrivKey,
 		Addr:       addr,
 		SubnetID:   subnetID,
 		NetName:    netName,
@@ -139,15 +99,13 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		Pool:       pool,
 		MirID:      mirID,
 		Wal:        wal,
-		Net:        netTransport,
 		Crypto:     cryptoManager,
-		ISS:        issProtocol,
 	}
 
 	sm := NewStateManager(&m)
 	m.App = sm
 
-	err = m.CreateMirNode()
+	err = m.CreateMirNode(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Mir node: %w", err)
 	}
@@ -162,7 +120,6 @@ func (m *Manager) Start(ctx context.Context) chan error {
 	errChan := make(chan error, 1)
 
 	go func() {
-
 		// Run Mir node until it stops.
 		if err := m.MirNode.Run(ctx); err != nil && !errors.Is(err, mir.ErrStopped) {
 			log.Infof("Mir manager %s: Mir node stopped with error: %v", m.MirID, err)
@@ -190,13 +147,59 @@ func (m *Manager) Stop() {
 }
 
 // CreateMirNode creates a new Mir node.
-func (m *Manager) CreateMirNode() error {
-	log.With("miner", m.MirID).Infof("Creating new Mir nide")
-	defer log.With("miner", m.MirID).Info("Creates new Mir node")
+func (m *Manager) CreateMirNode(ctx context.Context) error {
+	log.With("miner", m.MirID).Infof("Creating new Mir node")
+	defer log.With("miner", m.MirID).Info("Created new Mir node")
 
-	modulesWithDefaults, err := iss.DefaultModules(map[t.ModuleID]modules.Module{
-		"net":    m.Net,
-		"iss":    m.ISS,
+	if m.Net != nil {
+		m.Net.Stop()
+	}
+
+	if len(m.Validators) == 0 {
+		return fmt.Errorf("empty validator set")
+	}
+	nodeIDs, nodeAddrs, err := ValidatorsMembership(m.Validators)
+	if err != nil {
+		return fmt.Errorf("failed to build node membership: %w", err)
+	}
+	mirAddr := nodeAddrs[t.NodeID(m.MirID)]
+
+	log.Info("Eudico node's Mir ID: ", m.MirID)
+	log.Info("Eudico node's address in Mir: ", mirAddr)
+	log.Info("Mir nodes IDs: ", nodeIDs)
+	log.Info("Mir nodes addresses: ", nodeAddrs)
+
+	peerID, err := peer.AddrInfoFromP2pAddr(mirAddr)
+	if err != nil {
+		return fmt.Errorf("failed to get addr info: %w", err)
+	}
+
+	h, err := libp2p.New(
+		libp2p.Identity(m.libp2pKey),
+		libp2p.DefaultTransports,
+		libp2p.ListenAddrs(peerID.Addrs[0]),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to construct libp2p host: %w", err)
+	}
+
+	issConfig := iss.DefaultConfig(nodeIDs)
+	issProtocol, err := iss.New(t.NodeID(m.MirID), issConfig, newMirLogger(managerLog))
+	if err != nil {
+		return fmt.Errorf("could not instantiate ISS protocol module: %w", err)
+	}
+
+	// Create Mir modules.
+
+	netTransport := mirlibp2p.NewTransport(h, nodeAddrs, t.NodeID(m.MirID), newMirLogger(managerLog))
+	if err := netTransport.Start(); err != nil {
+		return fmt.Errorf("failed to create libp2p transport: %w", err)
+	}
+	netTransport.Connect(ctx)
+
+	mirModules, err := iss.DefaultModules(map[t.ModuleID]modules.Module{
+		"net":    netTransport,
+		"iss":    issProtocol,
 		"app":    m.App,
 		"crypto": mircrypto.New(m.Crypto),
 	})
@@ -206,12 +209,15 @@ func (m *Manager) CreateMirNode() error {
 
 	cfg := mir.NodeConfig{Logger: newMirLogger(managerLog)}
 
-	newMirNode, err := mir.NewNode(t.NodeID(m.MirID), &cfg, modulesWithDefaults, m.Wal, nil)
+	newMirNode, err := mir.NewNode(t.NodeID(m.MirID), &cfg, mirModules, m.Wal, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create Mir node: %w", err)
 	}
 
 	m.MirNode = newMirNode
+	m.Net = netTransport
+	m.ISS = issProtocol
+
 	return nil
 }
 
