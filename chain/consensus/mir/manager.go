@@ -30,17 +30,22 @@ import (
 
 // Manager manages the Eudico and Mir nodes participating in ISS consensus protocol.
 type Manager struct {
+	// Eudico types
+	EudicoNode v1api.FullNode
 	NetName    dtypes.NetworkName
 	SubnetID   address.SubnetID
 	Addr       address.Address
-	MirID      string
-	Validators []hierarchical.Validator
-	EudicoNode v1api.FullNode
 	Pool       *requestPool
-	MirNode    *mir.Node
-	Wal        *simplewal.WAL
-	Net        net.Transport
-	App        *StateManager
+	Validators []hierarchical.Validator
+
+	// Mir types
+	MirNode *mir.Node
+	MirID   string
+	Wal     *simplewal.WAL
+	Net     net.Transport
+	ISS     *iss.ISS
+	Crypto  *CryptoManager
+	App     *StateManager
 }
 
 func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (*Manager, error) {
@@ -123,25 +128,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		return nil, fmt.Errorf("failed to create crypto manager: %w", err)
 	}
 
-	sm := NewStateManager()
-
 	pool := newRequestPool()
-
-	// Create a Mir node, using the default configuration and passing the modules initialized just above.
-	modulesWithDefaults, err := iss.DefaultModules(map[t.ModuleID]modules.Module{
-		"net":    netTransport,
-		"iss":    issProtocol,
-		"app":    sm,
-		"crypto": mircrypto.New(cryptoManager),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize Mir modules: %w", err)
-	}
-
-	mirNode, err := mir.NewNode(t.NodeID(mirID), &mir.NodeConfig{Logger: newMirLogger(managerLog)}, modulesWithDefaults, wal, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Mir node: %w", err)
-	}
 
 	m := Manager{
 		Addr:       addr,
@@ -151,10 +138,18 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		EudicoNode: api,
 		Pool:       pool,
 		MirID:      mirID,
-		MirNode:    mirNode,
 		Wal:        wal,
 		Net:        netTransport,
-		App:        sm,
+		Crypto:     cryptoManager,
+		ISS:        issProtocol,
+	}
+
+	sm := NewStateManager(&m)
+	m.App = sm
+
+	err = m.CreateMirNode()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Mir node: %w", err)
 	}
 
 	return &m, nil
@@ -192,6 +187,32 @@ func (m *Manager) Stop() {
 	log.Info("WAL closed")
 
 	m.Net.Stop()
+}
+
+// CreateMirNode creates a new Mir node.
+func (m *Manager) CreateMirNode() error {
+	log.With("miner", m.MirID).Infof("Creating new Mir nide")
+	defer log.With("miner", m.MirID).Info("Creates new Mir node")
+
+	modulesWithDefaults, err := iss.DefaultModules(map[t.ModuleID]modules.Module{
+		"net":    m.Net,
+		"iss":    m.ISS,
+		"app":    m.App,
+		"crypto": mircrypto.New(m.Crypto),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to initialize Mir modules: %w", err)
+	}
+
+	cfg := mir.NodeConfig{Logger: newMirLogger(managerLog)}
+
+	newMirNode, err := mir.NewNode(t.NodeID(m.MirID), &cfg, modulesWithDefaults, m.Wal, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create Mir node: %w", err)
+	}
+
+	m.MirNode = newMirNode
+	return nil
 }
 
 func (m *Manager) SubmitRequests(ctx context.Context, requests []*mirproto.Request) {

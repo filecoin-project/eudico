@@ -54,3 +54,4 @@ scratchpad
 gen.gen
 
 **/*-wal/
+**/eudico-wal*

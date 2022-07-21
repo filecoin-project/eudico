@@ -10,15 +10,22 @@ import (
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
+const (
+	ReconfigurationBatchNumber = 32
+)
+
 type Tx []byte
 
 type StateManager struct {
-	ChainNotify chan []Tx
+	ChainNotify  chan []Tx
+	BatchCounter uint
+	Api          *Manager
 }
 
-func NewStateManager() *StateManager {
+func NewStateManager(m *Manager) *StateManager {
 	sm := StateManager{
 		ChainNotify: make(chan []Tx),
+		Api:         m,
 	}
 	return &sm
 }
@@ -30,7 +37,7 @@ func (sm *StateManager) ApplyEvents(eventsIn *events.EventList) (*events.EventLi
 func (sm *StateManager) ApplyEvent(event *eventpb.Event) (*events.EventList, error) {
 	switch e := event.Type.(type) {
 	case *eventpb.Event_Init:
-		// no actions on init
+	// no actions on init
 	case *eventpb.Event_Deliver:
 		if err := sm.ApplyBatch(e.Deliver.Batch); err != nil {
 			return nil, fmt.Errorf("sm batch delivery error: %w", err)
@@ -65,6 +72,14 @@ func (sm *StateManager) ApplyBatch(in *requestpb.Batch) error {
 	}
 
 	sm.ChainNotify <- out
+	sm.BatchCounter++
+
+	if sm.BatchCounter%ReconfigurationBatchNumber == 0 {
+		err := sm.Api.CreateMirNode()
+		if err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
