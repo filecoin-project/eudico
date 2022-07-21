@@ -792,31 +792,31 @@ workflows:
       - gofmt
       - gen-check
       - test-subnet-unit:
-          name: hierarchical-unit-tests
-          suite: hierarchical-consensus
+          name: hc-unit-tests
+          suite: hc
           target: "./chain/consensus/..."
           requires:
             - lint-all
       - test-consensus:
-          name: hierarchical-test-consensus
-          suite: hierarchical-consensus
+          name: hc-test-consensus
+          suite: hc
           target: "./itests/eudico_consensus_test.go"
           requires:
             - lint-all
       - test-subnet:
-          name: hierarchical-test-subnet
-          suite: hierarchical-consensus
-          target: "./itests/eudico_subnet_test.go"
+          name: hc-test-subnet
+          suite: hc
+          target: "./itests/eudico_hc_test.go"
           requires:
-            - hierarchical-test-consensus
+            - hc-test-consensus
       - test-subnet-races:
-          name: hierarchical-test-subnet-with-race-detector
-          suite: hierarchical-consensus
+          name: hc-test-with-race-detector
+          suite: hc
           go-test-flags: "-race -tags=2k -timeout 40m"
-          target: "./itests/eudico_subnet_test.go"
+          target: "./itests/eudico_hc_test.go"
           requires:
-            - hierarchical-test-subnet
-            - hierarchical-test-consensus
+            - hc-test-subnet
+            - hc-test-consensus
       # FIXME: Uncomment when Eudico is stable and ready for production.
       # - docs-check
       

@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
@@ -138,6 +139,8 @@ type EudicoEnsemble struct {
 
 	tendermintContainerID string
 	tendermintAppServer   service.Service
+
+	valNetAddr string
 }
 
 // NewEudicoEnsemble instantiates a new blank EudicoEnsemble.
@@ -169,9 +172,9 @@ func NewEudicoEnsemble(t *testing.T, opts ...EnsembleOpt) *EudicoEnsemble {
 	return n
 }
 
-// ValidatorInfo returns information validator information.
+// ValidatorInfo returns validators information.
 func (n *EudicoEnsemble) ValidatorInfo(opts ...NodeOpt) (uint64, string) {
-	return n.options.minValidators, n.options.validatorAddress
+	return n.options.minValidators, n.valNetAddr
 }
 
 // FullNode enrolls a new full node.
@@ -855,7 +858,6 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 
 		n.active.miners = append(n.active.miners, m)
 	}
-
 	// If we are here, we have processed all inactive miners and moved them
 	// to active, so clear the slice.
 	n.inactive.miners = n.inactive.miners[:0]
@@ -1052,8 +1054,15 @@ func (n *EudicoEnsemble) removeTendermintFiles() error {
 }
 
 func (n *EudicoEnsemble) removeMirFiles() error {
-	if err := os.RemoveAll("./eudico-wal"); err != nil {
+	files, err := filepath.Glob("./eudico-wal*")
+	if err != nil {
 		return err
+	}
+	for _, f := range files {
+		err = os.RemoveAll("./" + f)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -1108,7 +1117,7 @@ func EudicoEnsembleMinimal(t *testing.T, opts ...interface{}) (*TestFullNode, *T
 type EudicoRootMiner func(ctx context.Context, addr address.Address, api v1api.FullNode) error
 
 // EudicoEnsembleTwoMiners creates types for root miner and subnet miner that can be used to spawn real miners.
-// The main reason why this hask is used is that the Filecon consensus and Eudico consensus protocol have different implementations.
+// The main reason why this hack is used is that the Filecoin consensus and Eudico consensus protocol have different implementations.
 // For example, the Filecoin consensus doesn't have a single Mine() function that implements mining.
 func EudicoEnsembleTwoMiners(t *testing.T, opts ...interface{}) (*TestFullNode, interface{}, hierarchical.ConsensusType, *EudicoEnsemble) {
 	opts = append(opts, WithAllSubsystems())
@@ -1170,12 +1179,33 @@ func EudicoEnsembleTwoMiners(t *testing.T, opts ...interface{}) (*TestFullNode, 
 		return &full, &miner, subnetMinerType, ens
 	}
 	ens = NewEudicoEnsemble(t, eopts...).FullNode(&full, nopts...).Start()
+
 	if options.rootConsensus == hierarchical.Mir {
 		addr, err := full.WalletDefaultAddress(context.Background())
 		require.NoError(t, err)
-		err = os.Setenv(mir.ValidatorsEnv, "/root:"+addr.String()+"@127.0.0.1:10000")
+
+		libp2pPrivKeyBytes, err := full.PrivKey(context.Background())
+		require.NoError(t, err)
+
+		mirNodeID := fmt.Sprintf("%s:%s", address.RootSubnet, addr.String())
+
+		a, err := GetLibp2pAddr(libp2pPrivKeyBytes)
+		require.NoError(t, err)
+
+		err = os.Setenv(mir.ValidatorsEnv, fmt.Sprintf("%s@%s", mirNodeID, a))
 		require.NoError(t, err)
 	}
+
+	if options.subnetConsensus == hierarchical.Mir {
+		libp2pPrivKeyBytes, err := full.PrivKey(context.Background())
+		require.NoError(t, err)
+
+		a, err := GetLibp2pAddr(libp2pPrivKeyBytes)
+		require.NoError(t, err)
+
+		ens.valNetAddr = a.String()
+	}
+
 	return &full, rootMiner, subnetMinerType, ens
 }
 

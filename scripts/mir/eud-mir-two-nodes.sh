@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # Mir IDs
 NODE_0=/root:t1wpixt5mihkj75lfhrnaa6v56n27epvlgwparujy
 NODE_1=/root:t1k7t2zufxvtgamk7ogoifa5mvdagb4cafu6pdzga

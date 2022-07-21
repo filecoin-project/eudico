@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/libp2p/go-libp2p-core/crypto"
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
 
@@ -39,6 +40,17 @@ type NetAPI struct {
 
 func (a *NetAPI) ID(context.Context) (peer.ID, error) {
 	return a.Host.ID(), nil
+}
+
+// PrivKey returns the private key of the libp2p's host.
+//
+// FIXME: We should find a better way to pass the libp2p host to Mir without exposing the private key.
+// For example, we could add a passphrase to encrypt the key.
+// Kind of how Ethereum uses unlockAccount to unlock the private keys for signing.
+func (a *NetAPI) PrivKey(context.Context) ([]byte, error) {
+	ownID := a.Host.ID()
+	key := a.Host.Peerstore().PrivKey(ownID)
+	return crypto.MarshalPrivateKey(key)
 }
 
 func (a *NetAPI) NetConnectedness(ctx context.Context, pid peer.ID) (network.Connectedness, error) {

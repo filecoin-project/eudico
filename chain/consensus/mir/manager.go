@@ -1,13 +1,14 @@
+// Package mir implements ISS consensus protocol using the Mir protocol framework.
 package mir
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"path"
 
-	logging "github.com/ipfs/go-log/v2"
+	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p-core/peer"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/api/v1api"
@@ -18,56 +19,16 @@ import (
 	"github.com/filecoin-project/mir"
 	mircrypto "github.com/filecoin-project/mir/pkg/crypto"
 	"github.com/filecoin-project/mir/pkg/events"
-	"github.com/filecoin-project/mir/pkg/grpctransport"
 	"github.com/filecoin-project/mir/pkg/iss"
-	mirlogging "github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/modules"
-	mirrequest "github.com/filecoin-project/mir/pkg/pb/requestpb"
+	"github.com/filecoin-project/mir/pkg/net"
+	mirlibp2p "github.com/filecoin-project/mir/pkg/net/libp2p"
+	mirproto "github.com/filecoin-project/mir/pkg/pb/requestpb"
 	"github.com/filecoin-project/mir/pkg/simplewal"
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
-// managerLog is a Eudico logger used by a Mir node.
-var managerLog = logging.Logger("mir-manager")
-
-// mirLogger implements Mir's Log interface.
-type mirLogger struct {
-	logger *logging.ZapEventLogger
-}
-
-func newMirLogger(logger *logging.ZapEventLogger) *mirLogger {
-	return &mirLogger{
-		logger: logger,
-	}
-}
-
-// Log logs a message with additional context.
-func (m *mirLogger) Log(level mirlogging.LogLevel, text string, args ...interface{}) {
-	switch level {
-	case mirlogging.LevelError:
-		m.logger.Errorw(text, "error", args)
-	case mirlogging.LevelInfo:
-		m.logger.Infow(text, "info", args)
-	case mirlogging.LevelWarn:
-		m.logger.Warnw(text, "warn", args)
-	case mirlogging.LevelDebug:
-		m.logger.Debugw(text, "debug", args)
-	}
-}
-
-func NewWAL(ownID, walDir string) (*simplewal.WAL, error) {
-	walPath := path.Join(walDir, fmt.Sprintf("%v", ownID))
-	wal, err := simplewal.Open(walPath)
-	if err != nil {
-		return nil, err
-	}
-	if err := os.MkdirAll(walPath, 0700); err != nil {
-		return nil, err
-	}
-	return wal, nil
-}
-
-// Manager manages Mir and Eudico nodes participating in consensus.
+// Manager manages the Eudico and Mir nodes participating in ISS consensus protocol.
 type Manager struct {
 	NetName    dtypes.NetworkName
 	SubnetID   address.SubnetID
@@ -78,8 +39,8 @@ type Manager struct {
 	Pool       *requestPool
 	MirNode    *mir.Node
 	Wal        *simplewal.WAL
-	Net        *grpctransport.GrpcTransport
-	App        *Application
+	Net        net.Transport
+	App        *StateManager
 }
 
 func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (*Manager, error) {
@@ -87,82 +48,99 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	if err != nil {
 		return nil, err
 	}
+
 	subnetID, err := address.SubnetIDFromString(string(netName))
 	if err != nil {
 		return nil, err
 	}
 
-	var validators []hierarchical.Validator
+	hostKeyBytes, err := api.PrivKey(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get private key: %w", err)
+	}
 
-	validatorsEnv := os.Getenv(ValidatorsEnv)
-	if validatorsEnv != "" {
-		validators, err = hierarchical.ValidatorsFromString(validatorsEnv)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get validators from string: %w", err)
-		}
-	} else {
-		if subnetID == address.RootSubnet {
-			return nil, fmt.Errorf("can't be run in rootnet without validators")
-		}
-		validators, err = api.SubnetStateGetValidators(ctx, subnetID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get validators from state")
-		}
+	hostPrivKey, err := crypto.UnmarshalPrivateKey(hostKeyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal private key: %w", err)
+	}
+
+	validators, err := getSubnetValidators(ctx, subnetID, api)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get validators: %w", err)
 	}
 	if len(validators) == 0 {
 		return nil, fmt.Errorf("empty validator set")
 	}
 
+	nodeIDs, nodeAddrs, err := ValidatorsMembership(validators)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build node membership: %w", err)
+	}
 	mirID := newMirID(subnetID.String(), addr.String())
+	mirAddr := nodeAddrs[t.NodeID(mirID)]
 
-	nodeIds, nodeAddrs, err := hierarchical.ValidatorMembership(validators)
+	log.Info("Eudico node's Mir ID: ", mirID)
+	log.Info("Eudico node's address in Mir: ", mirAddr)
+	log.Info("Mir nodes IDs: ", nodeIDs)
+	log.Info("Mir nodes addresses: ", nodeAddrs)
+
+	peerID, err := peer.AddrInfoFromP2pAddr(mirAddr)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get addr info: %w", err)
 	}
-	log.Debugf("Mir node config:\n%v\n%v", nodeIds, nodeAddrs)
 
-	wal, err := NewWAL(mirID, "eudico-wal")
+	h, err := libp2p.New(
+		libp2p.Identity(hostPrivKey),
+		libp2p.DefaultTransports,
+		libp2p.ListenAddrs(peerID.Addrs[0]),
+	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to construct libp2p host: %w", err)
 	}
 
-	net := grpctransport.NewGrpcTransport(nodeAddrs, t.NodeID(mirID), newMirLogger(managerLog))
-	if err := net.Start(); err != nil {
-		return nil, err
-	}
+	// Create Mir modules.
 
-	// GrpcTransport is a rather dummy one and this call blocks until all connections are established,
-	// which makes it, at this point, not fault-tolerant.
-	net.Connect(ctx)
+	netTransport := mirlibp2p.NewTransport(h, nodeAddrs, t.NodeID(mirID), newMirLogger(managerLog))
+	if err := netTransport.Start(); err != nil {
+		return nil, fmt.Errorf("failed to create libp2p transport: %w", err)
+	}
+	netTransport.Connect(ctx)
+
+	wal, err := NewWAL(mirID, fmt.Sprintf("eudico-wal-%s", addr))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create WAL: %w", err)
+	}
 
 	// Instantiate the ISS protocol module with default configuration.
-	issConfig := iss.DefaultConfig(nodeIds)
+	issConfig := iss.DefaultConfig(nodeIDs)
 	issProtocol, err := iss.New(t.NodeID(mirID), issConfig, newMirLogger(managerLog))
 	if err != nil {
 		return nil, fmt.Errorf("could not instantiate ISS protocol module: %w", err)
 	}
 
-	app := NewApplication()
-	pool := newRequestPool()
 	cryptoManager, err := NewCryptoManager(addr, api)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create crypto manager: %w", err)
 	}
 
-	node, err := mir.NewNode(
-		t.NodeID(mirID),
-		&mir.NodeConfig{
-			Logger: newMirLogger(managerLog),
-		},
-		map[t.ModuleID]modules.Module{
-			"net":    net,
-			"iss":    issProtocol,
-			"app":    app,
-			"crypto": mircrypto.New(cryptoManager),
-		},
-		nil)
+	sm := NewStateManager()
+
+	pool := newRequestPool()
+
+	// Create a Mir node, using the default configuration and passing the modules initialized just above.
+	modulesWithDefaults, err := iss.DefaultModules(map[t.ModuleID]modules.Module{
+		"net":    netTransport,
+		"iss":    issProtocol,
+		"app":    sm,
+		"crypto": mircrypto.New(cryptoManager),
+	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to initialize Mir modules: %w", err)
+	}
+
+	mirNode, err := mir.NewNode(t.NodeID(mirID), &mir.NodeConfig{Logger: newMirLogger(managerLog)}, modulesWithDefaults, wal, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Mir node: %w", err)
 	}
 
 	m := Manager{
@@ -173,10 +151,10 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		EudicoNode: api,
 		Pool:       pool,
 		MirID:      mirID,
-		MirNode:    node,
+		MirNode:    mirNode,
 		Wal:        wal,
-		Net:        net,
-		App:        app,
+		Net:        netTransport,
+		App:        sm,
 	}
 
 	return &m, nil
@@ -211,10 +189,12 @@ func (m *Manager) Stop() {
 	if err := m.Wal.Close(); err != nil {
 		log.Errorf("Could not close write-ahead log: %s", err)
 	}
+	log.Info("WAL closed")
+
 	m.Net.Stop()
 }
 
-func (m *Manager) SubmitRequests(ctx context.Context, requests []*mirrequest.Request) {
+func (m *Manager) SubmitRequests(ctx context.Context, requests []*mirproto.Request) {
 	if len(requests) == 0 {
 		return
 	}
@@ -292,16 +272,16 @@ func (m *Manager) GetMessages(batch []Tx) (msgs []*types.SignedMessage, crossMsg
 }
 
 func (m *Manager) GetRequests(msgs []*types.SignedMessage, crossMsgs []*types.UnverifiedCrossMsg) (
-	requests []*mirrequest.Request,
+	requests []*mirproto.Request,
 ) {
 	requests = append(requests, m.batchSignedMessages(msgs)...)
 	requests = append(requests, m.batchCrossMessages(crossMsgs)...)
 	return
 }
 
-// BatchPushSignedMessages pushes signed messages into the request pool and sends them to Mir.
+// batchPushSignedMessages pushes signed messages into the request pool and sends them to Mir.
 func (m *Manager) batchSignedMessages(msgs []*types.SignedMessage) (
-	requests []*mirrequest.Request,
+	requests []*mirproto.Request,
 ) {
 	for _, msg := range msgs {
 		clientID := newMirID(m.SubnetID.String(), msg.Message.From.String())
@@ -317,7 +297,7 @@ func (m *Manager) batchSignedMessages(msgs []*types.SignedMessage) (
 		}
 		data := common.NewSignedMessageBytes(msgBytes, nil)
 
-		r := &mirrequest.Request{
+		r := &mirproto.Request{
 			ClientId: clientID,
 			ReqNo:    nonce,
 			Data:     data,
@@ -332,7 +312,7 @@ func (m *Manager) batchSignedMessages(msgs []*types.SignedMessage) (
 
 // batchCrossMessages batches cross messages into the request pool and sends them to Mir.
 func (m *Manager) batchCrossMessages(crossMsgs []*types.UnverifiedCrossMsg) (
-	requests []*mirrequest.Request,
+	requests []*mirproto.Request,
 ) {
 	for _, msg := range crossMsgs {
 		msn, err := msg.Message.From.Subnet()
@@ -353,7 +333,7 @@ func (m *Manager) batchCrossMessages(crossMsgs []*types.UnverifiedCrossMsg) (
 		}
 
 		data := common.NewCrossMessageBytes(msgBytes, nil)
-		r := &mirrequest.Request{
+		r := &mirproto.Request{
 			ClientId: clientID,
 			ReqNo:    nonce,
 			Data:     data,

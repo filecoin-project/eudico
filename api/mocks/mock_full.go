@@ -2469,6 +2469,21 @@ func (mr *MockFullNodeMockRecorder) PaychVoucherSubmit(arg0, arg1, arg2, arg3, a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PaychVoucherSubmit", reflect.TypeOf((*MockFullNode)(nil).PaychVoucherSubmit), arg0, arg1, arg2, arg3, arg4)
 }
 
+// PrivKey mocks base method.
+func (m *MockFullNode) PrivKey(arg0 context.Context) ([]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PrivKey", arg0)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PrivKey indicates an expected call of PrivKey.
+func (mr *MockFullNodeMockRecorder) PrivKey(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrivKey", reflect.TypeOf((*MockFullNode)(nil).PrivKey), arg0)
+}
+
 // ReleaseFunds mocks base method.
 func (m *MockFullNode) ReleaseFunds(arg0 context.Context, arg1 address.Address, arg2 address.SubnetID, arg3 big.Int) (cid.Cid, error) {
 	m.ctrl.T.Helper()

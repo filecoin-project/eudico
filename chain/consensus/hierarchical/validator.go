@@ -4,13 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"golang.org/x/xerrors"
-
 	addr "github.com/filecoin-project/go-address"
-	t "github.com/filecoin-project/mir/pkg/types"
 )
 
-// Validator encapsulated string to be compatible with CBOR implementation.
 type Validator struct {
 	Subnet  addr.SubnetID
 	Addr    addr.Address
@@ -31,84 +27,56 @@ func (v *Validator) ID() string {
 	return fmt.Sprintf("%s:%s", v.Subnet, v.Addr)
 }
 
-// EncodeValidatorInfo adds a validator subnet, address and network address into a string.
-func EncodeValidatorInfo(vilidators []Validator) string {
-	var s string
-	for _, v := range vilidators {
-		s += fmt.Sprintf("%s:%s@%s,", v.Subnet.String(), v.Addr.String(), v.NetAddr)
-	}
-	return strings.TrimSuffix(s, ",")
-}
-
+// ValidatorsFromString parses comma-separated subnet:ID@OpaqueNetAddr validators string.
+// OpaqueNetAddr can contain GRPC or Libp2p addresses.
+//
+// Examples of the validators:
+// 	- /root:t1wpixt5mihkj75lfhrnaa6v56n27epvlgwparujy@/ip4/127.0.0.1/tcp/10000/p2p/12D3KooWJhKBXvytYgPCAaiRtiNLJNSFG5jreKDu2jiVpJetzvVJ
+// 	- /root:t1wpixt5mihkj75lfhrnaa6v56n27epvlgwparujy@127.0.0.1:1000
 func ValidatorsFromString(input string) ([]Validator, error) {
 	var validators []Validator
 	for _, idAddr := range splitAndTrimEmpty(input, ",", " ") {
-		ss := strings.Split(idAddr, "@")
-		if len(ss) != 2 {
-			return nil, xerrors.New("failed to parse string")
+		parts := strings.Split(idAddr, "@")
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("failed to parse validators string")
 		}
+		subnetAndID := parts[0]
+		opaqueNetAddr := parts[1]
 
-		subnetAndID := ss[0]
-		netAddr := ss[1]
-		sss := strings.Split(subnetAndID, ":")
-		if len(sss) != 2 {
-			return nil, xerrors.New("failed to parse addr")
+		subnetAndIDParts := strings.Split(subnetAndID, ":")
+		if len(subnetAndIDParts) != 2 {
+			return nil, fmt.Errorf("failed to parse subnet and ID")
 		}
-		subnet, err := addr.SubnetIDFromString(sss[0])
-		if err != nil {
-			return nil, err
-		}
-		ID := sss[1]
+		subnetStr := subnetAndIDParts[0]
+		ID := subnetAndIDParts[1]
 
 		a, err := addr.NewFromString(ID)
 		if err != nil {
 			return nil, err
 		}
 
-		v := Validator{
-			subnet,
-			a,
-			netAddr,
+		subnet, err := addr.SubnetIDFromString(subnetStr)
+		if err != nil {
+			return nil, err
 		}
 
+		v := Validator{
+			Subnet:  subnet,
+			Addr:    a,
+			NetAddr: opaqueNetAddr,
+		}
 		validators = append(validators, v)
 	}
 	return validators, nil
 }
 
-// ParseValidatorInfo parses comma-delimited ID@host:port persistent validator string.
-// Example of the peers sting: "ID1@IP1:26656,ID2@IP2:26656,ID3@IP3:26656,ID4@IP4:26656".
-// At present, we suppose that input is trusted.
-// TODO: add input validation.
-func ParseValidatorInfo(input string) ([]t.NodeID, map[t.NodeID]string, error) {
-	var nodeIds []t.NodeID
-	nodeAddrs := make(map[t.NodeID]string)
-
-	for _, idAddr := range splitAndTrimEmpty(input, ",", " ") {
-		ss := strings.Split(idAddr, "@")
-		if len(ss) != 2 {
-			return nil, nil, xerrors.New("failed to parse persistent nodes")
-		}
-
-		id := t.NodeID(ss[0])
-		netAddr := ss[1]
-		nodeIds = append(nodeIds, id)
-		nodeAddrs[id] = netAddr
-	}
-	return nodeIds, nodeAddrs, nil
-}
-
-func ValidatorMembership(validators []Validator) ([]t.NodeID, map[t.NodeID]string, error) {
-	var nodeIds []t.NodeID
-	nodeAddrs := make(map[t.NodeID]string)
-
+// ValidatorsToString adds a validator subnet, address and network address into a string.
+func ValidatorsToString(validators []Validator) string {
+	var s string
 	for _, v := range validators {
-		id := t.NodeID(v.ID())
-		netAddr := v.NetAddr
-		nodeIds = append(nodeIds, id)
-		nodeAddrs[id] = netAddr
+		s += fmt.Sprintf("%s:%s@%s,", v.Subnet.String(), v.Addr.String(), v.NetAddr)
 	}
-	return nodeIds, nodeAddrs, nil
+	return strings.TrimSuffix(s, ",")
 }
 
 func splitAndTrimEmpty(s, sep, cutset string) []string {
