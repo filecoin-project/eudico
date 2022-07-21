@@ -12,33 +12,33 @@ import (
 
 type Tx []byte
 
-type Application struct {
+type StateManager struct {
 	ChainNotify chan []Tx
 }
 
-func NewApplication() *Application {
-	app := Application{
+func NewStateManager() *StateManager {
+	sm := StateManager{
 		ChainNotify: make(chan []Tx),
 	}
-	return &app
+	return &sm
 }
 
-func (app *Application) ApplyEvents(eventsIn *events.EventList) (*events.EventList, error) {
-	return modules.ApplyEventsSequentially(eventsIn, app.ApplyEvent)
+func (sm *StateManager) ApplyEvents(eventsIn *events.EventList) (*events.EventList, error) {
+	return modules.ApplyEventsSequentially(eventsIn, sm.ApplyEvent)
 }
 
-func (app *Application) ApplyEvent(event *eventpb.Event) (*events.EventList, error) {
+func (sm *StateManager) ApplyEvent(event *eventpb.Event) (*events.EventList, error) {
 	switch e := event.Type.(type) {
 	case *eventpb.Event_Init:
 		// no actions on init
 	case *eventpb.Event_Deliver:
-		if err := app.ApplyBatch(e.Deliver.Batch); err != nil {
-			return nil, fmt.Errorf("app batch delivery error: %w", err)
+		if err := sm.ApplyBatch(e.Deliver.Batch); err != nil {
+			return nil, fmt.Errorf("sm batch delivery error: %w", err)
 		}
 	case *eventpb.Event_AppSnapshotRequest:
-		data, err := app.Snapshot()
+		data, err := sm.Snapshot()
 		if err != nil {
-			return nil, fmt.Errorf("app snapshot error: %w", err)
+			return nil, fmt.Errorf("sm snapshot error: %w", err)
 		}
 		return (&events.EventList{}).PushBack(events.AppSnapshot(
 			t.ModuleID(e.AppSnapshotRequest.Module),
@@ -46,8 +46,8 @@ func (app *Application) ApplyEvent(event *eventpb.Event) (*events.EventList, err
 			data,
 		)), nil
 	case *eventpb.Event_AppRestoreState:
-		if err := app.RestoreState(e.AppRestoreState.Data); err != nil {
-			return nil, fmt.Errorf("app restore state error: %w", err)
+		if err := sm.RestoreState(e.AppRestoreState.Data); err != nil {
+			return nil, fmt.Errorf("sm restore state error: %w", err)
 		}
 	default:
 		return nil, fmt.Errorf("unexpected type of App event: %T", event.Type)
@@ -57,14 +57,14 @@ func (app *Application) ApplyEvent(event *eventpb.Event) (*events.EventList, err
 }
 
 // ApplyBatch sends a batch consisting of data only to Eudico.
-func (app *Application) ApplyBatch(in *requestpb.Batch) error {
+func (sm *StateManager) ApplyBatch(in *requestpb.Batch) error {
 	var out []Tx
 
 	for _, req := range in.Requests {
 		out = append(out, req.Req.Data)
 	}
 
-	app.ChainNotify <- out
+	sm.ChainNotify <- out
 
 	return nil
 }
@@ -74,16 +74,16 @@ func (app *Application) ApplyBatch(in *requestpb.Batch) error {
 // At the time of writing this comment, the Mir library does not support state transfer
 // and Snapshot is never actually called.
 // We include its implementation for completeness.
-func (app *Application) Snapshot() ([]byte, error) {
+func (sm *StateManager) Snapshot() ([]byte, error) {
 	return nil, nil
 }
 
 // RestoreState restores the application's state to the one represented by the passed argument.
 // The argument is a binary representation of the application state returned from Snapshot().
 // After the chat history is restored, RestoreState prints the whole chat history to stdout.
-func (app *Application) RestoreState(snapshot []byte) error {
+func (sm *StateManager) RestoreState(snapshot []byte) error {
 	return nil
 }
 
 // The ImplementsModule method only serves the purpose of indicating that this is a Module and must not be called.
-func (app *Application) ImplementsModule() {}
+func (sm *StateManager) ImplementsModule() {}

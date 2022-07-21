@@ -28,8 +28,8 @@ import (
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
-// StateManager manages the states of the Eudico and Mir nodes participating in consensus.
-type StateManager struct {
+// Manager manages the Eudico and Mir nodes participating in ISS consensus protocol.
+type Manager struct {
 	NetName    dtypes.NetworkName
 	SubnetID   address.SubnetID
 	Addr       address.Address
@@ -40,10 +40,10 @@ type StateManager struct {
 	MirNode    *mir.Node
 	Wal        *simplewal.WAL
 	Net        net.Transport
-	App        *Application
+	App        *StateManager
 }
 
-func NewStateManager(ctx context.Context, addr address.Address, api v1api.FullNode) (*StateManager, error) {
+func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (*Manager, error) {
 	netName, err := api.StateNetworkName(ctx)
 	if err != nil {
 		return nil, err
@@ -123,7 +123,7 @@ func NewStateManager(ctx context.Context, addr address.Address, api v1api.FullNo
 		return nil, fmt.Errorf("failed to create crypto manager: %w", err)
 	}
 
-	app := NewApplication()
+	sm := NewStateManager()
 
 	pool := newRequestPool()
 
@@ -131,7 +131,7 @@ func NewStateManager(ctx context.Context, addr address.Address, api v1api.FullNo
 	modulesWithDefaults, err := iss.DefaultModules(map[t.ModuleID]modules.Module{
 		"net":    netTransport,
 		"iss":    issProtocol,
-		"app":    app,
+		"app":    sm,
 		"crypto": mircrypto.New(cryptoManager),
 	})
 	if err != nil {
@@ -143,7 +143,7 @@ func NewStateManager(ctx context.Context, addr address.Address, api v1api.FullNo
 		return nil, fmt.Errorf("failed to create Mir node: %w", err)
 	}
 
-	m := StateManager{
+	m := Manager{
 		Addr:       addr,
 		SubnetID:   subnetID,
 		NetName:    netName,
@@ -154,52 +154,52 @@ func NewStateManager(ctx context.Context, addr address.Address, api v1api.FullNo
 		MirNode:    mirNode,
 		Wal:        wal,
 		Net:        netTransport,
-		App:        app,
+		App:        sm,
 	}
 
 	return &m, nil
 }
 
 // Start starts the manager.
-func (sm *StateManager) Start(ctx context.Context) chan error {
-	log.Infof("Mir manager %s starting", sm.MirID)
+func (m *Manager) Start(ctx context.Context) chan error {
+	log.Infof("Mir manager %s starting", m.MirID)
 
 	errChan := make(chan error, 1)
 
 	go func() {
 
 		// Run Mir node until it stops.
-		if err := sm.MirNode.Run(ctx); err != nil && !errors.Is(err, mir.ErrStopped) {
-			log.Infof("Mir manager %s: Mir node stopped with error: %v", sm.MirID, err)
+		if err := m.MirNode.Run(ctx); err != nil && !errors.Is(err, mir.ErrStopped) {
+			log.Infof("Mir manager %s: Mir node stopped with error: %v", m.MirID, err)
 			errChan <- err
 		}
 
 		// Perform cleanup of Node's modules.
-		sm.Stop()
+		m.Stop()
 	}()
 
 	return errChan
 }
 
 // Stop stops the manager.
-func (sm *StateManager) Stop() {
-	log.With("miner", sm.MirID).Infof("Mir manager shutting down")
-	defer log.With("miner", sm.MirID).Info("Mir manager stopped")
+func (m *Manager) Stop() {
+	log.With("miner", m.MirID).Infof("Mir manager shutting down")
+	defer log.With("miner", m.MirID).Info("Mir manager stopped")
 
-	if err := sm.Wal.Close(); err != nil {
+	if err := m.Wal.Close(); err != nil {
 		log.Errorf("Could not close write-ahead log: %s", err)
 	}
 	log.Info("WAL closed")
 
-	sm.Net.Stop()
+	m.Net.Stop()
 }
 
-func (sm *StateManager) SubmitRequests(ctx context.Context, requests []*mirproto.Request) {
+func (m *Manager) SubmitRequests(ctx context.Context, requests []*mirproto.Request) {
 	if len(requests) == 0 {
 		return
 	}
 	e := events.NewClientRequests("iss", requests)
-	if err := sm.MirNode.InjectEvents(ctx, (&events.EventList{}).PushBack(e)); err != nil {
+	if err := m.MirNode.InjectEvents(ctx, (&events.EventList{}).PushBack(e)); err != nil {
 		log.Errorf("failed to submit requests to Mir: %s", err)
 	}
 	log.Infof("submitted %d requests to Mir", len(requests))
@@ -235,7 +235,7 @@ func parseTx(tx []byte) (interface{}, error) {
 }
 
 // GetMessages extracts Filecoin messages from a Mir batch.
-func (sm *StateManager) GetMessages(batch []Tx) (msgs []*types.SignedMessage, crossMsgs []*types.Message) {
+func (m *Manager) GetMessages(batch []Tx) (msgs []*types.SignedMessage, crossMsgs []*types.Message) {
 	log.Infof("received a block with %d messages", len(msgs))
 	for _, tx := range batch {
 
@@ -248,7 +248,7 @@ func (sm *StateManager) GetMessages(batch []Tx) (msgs []*types.SignedMessage, cr
 		switch msg := input.(type) {
 		case *types.SignedMessage:
 			h := msg.Cid()
-			found := sm.Pool.deleteRequest(h.String())
+			found := m.Pool.deleteRequest(h.String())
 			if !found {
 				log.Errorf("unable to find a request with %v hash", h)
 				continue
@@ -257,7 +257,7 @@ func (sm *StateManager) GetMessages(batch []Tx) (msgs []*types.SignedMessage, cr
 			log.Infof("got message: to=%s, nonce= %d", msg.Message.To, msg.Message.Nonce)
 		case *types.UnverifiedCrossMsg:
 			h := msg.Cid()
-			found := sm.Pool.deleteRequest(h.String())
+			found := m.Pool.deleteRequest(h.String())
 			if !found {
 				log.Errorf("unable to find a request with %v hash", h)
 				continue
@@ -271,22 +271,22 @@ func (sm *StateManager) GetMessages(batch []Tx) (msgs []*types.SignedMessage, cr
 	return
 }
 
-func (sm *StateManager) GetRequests(msgs []*types.SignedMessage, crossMsgs []*types.UnverifiedCrossMsg) (
+func (m *Manager) GetRequests(msgs []*types.SignedMessage, crossMsgs []*types.UnverifiedCrossMsg) (
 	requests []*mirproto.Request,
 ) {
-	requests = append(requests, sm.batchSignedMessages(msgs)...)
-	requests = append(requests, sm.batchCrossMessages(crossMsgs)...)
+	requests = append(requests, m.batchSignedMessages(msgs)...)
+	requests = append(requests, m.batchCrossMessages(crossMsgs)...)
 	return
 }
 
 // batchPushSignedMessages pushes signed messages into the request pool and sends them to Mir.
-func (sm *StateManager) batchSignedMessages(msgs []*types.SignedMessage) (
+func (m *Manager) batchSignedMessages(msgs []*types.SignedMessage) (
 	requests []*mirproto.Request,
 ) {
 	for _, msg := range msgs {
-		clientID := newMirID(sm.SubnetID.String(), msg.Message.From.String())
+		clientID := newMirID(m.SubnetID.String(), msg.Message.From.String())
 		nonce := msg.Message.Nonce
-		if !sm.Pool.isTargetRequest(clientID, nonce) {
+		if !m.Pool.isTargetRequest(clientID, nonce) {
 			continue
 		}
 
@@ -303,7 +303,7 @@ func (sm *StateManager) batchSignedMessages(msgs []*types.SignedMessage) (
 			Data:     data,
 		}
 
-		sm.Pool.addRequest(msg.Cid().String(), r)
+		m.Pool.addRequest(msg.Cid().String(), r)
 
 		requests = append(requests, r)
 	}
@@ -311,7 +311,7 @@ func (sm *StateManager) batchSignedMessages(msgs []*types.SignedMessage) (
 }
 
 // batchCrossMessages batches cross messages into the request pool and sends them to Mir.
-func (sm *StateManager) batchCrossMessages(crossMsgs []*types.UnverifiedCrossMsg) (
+func (m *Manager) batchCrossMessages(crossMsgs []*types.UnverifiedCrossMsg) (
 	requests []*mirproto.Request,
 ) {
 	for _, msg := range crossMsgs {
@@ -322,7 +322,7 @@ func (sm *StateManager) batchCrossMessages(crossMsgs []*types.UnverifiedCrossMsg
 		}
 		clientID := newMirID(msn.String(), msg.Message.From.String())
 		nonce := msg.Message.Nonce
-		if !sm.Pool.isTargetRequest(clientID, nonce) {
+		if !m.Pool.isTargetRequest(clientID, nonce) {
 			continue
 		}
 
@@ -338,14 +338,14 @@ func (sm *StateManager) batchCrossMessages(crossMsgs []*types.UnverifiedCrossMsg
 			ReqNo:    nonce,
 			Data:     data,
 		}
-		sm.Pool.addRequest(msg.Cid().String(), r)
+		m.Pool.addRequest(msg.Cid().String(), r)
 		requests = append(requests, r)
 	}
 	return requests
 }
 
 // ID prints Manager ID.
-func (sm *StateManager) ID() string {
-	addr := sm.Addr.String()
-	return fmt.Sprintf("%v:%v", sm.SubnetID, addr[len(addr)-6:])
+func (m *Manager) ID() string {
+	addr := m.Addr.String()
+	return fmt.Sprintf("%v:%v", m.SubnetID, addr[len(addr)-6:])
 }

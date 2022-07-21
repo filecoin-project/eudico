@@ -33,7 +33,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 	log.With("addr", addr).Infof("Mir miner started")
 	defer log.With("addr", addr).Infof("Mir miner completed")
 
-	sm, err := NewStateManager(ctx, addr, api)
+	sm, err := NewManager(ctx, addr, api)
 	if err != nil {
 		return fmt.Errorf("unable to create a state manager: %w", err)
 	}
