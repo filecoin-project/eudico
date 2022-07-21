@@ -42,6 +42,8 @@ func (a *NetAPI) ID(context.Context) (peer.ID, error) {
 	return a.Host.ID(), nil
 }
 
+// FIXME: We should find a better way to pass the libp2p host to Mir
+// without exposing the private key. 
 func (a *NetAPI) PrivKey(context.Context) ([]byte, error) {
 	ownID := a.Host.ID()
 	key := a.Host.Peerstore().PrivKey(ownID)
