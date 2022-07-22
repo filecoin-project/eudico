@@ -77,10 +77,12 @@ func (sm *StateManager) ApplyBatch(in *requestpb.Batch) error {
 
 	if sm.BatchCounter%ReconfigurationBatchNumber == 0 {
 		fmt.Println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+
 		err := sm.Api.CreateMirNode(context.TODO())
 		if err != nil {
 			return err
 		}
+
 	}
 
 	return nil

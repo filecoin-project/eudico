@@ -8,6 +8,7 @@ import (
 
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
 
 	"github.com/filecoin-project/go-address"
@@ -39,6 +40,9 @@ type Manager struct {
 	Validators []hierarchical.Validator
 	libp2pKey  crypto.PrivKey
 
+	//
+	h host.Host
+
 	// Mir types
 	MirNode *mir.Node
 	MirID   string
@@ -60,12 +64,12 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		return nil, err
 	}
 
-	hostKeyBytes, err := api.PrivKey(ctx)
+	libp2pKeyBytes, err := api.PrivKey(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get private key: %w", err)
 	}
 
-	hostPrivKey, err := crypto.UnmarshalPrivateKey(hostKeyBytes)
+	libp2pKey, err := crypto.UnmarshalPrivateKey(libp2pKeyBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal private key: %w", err)
 	}
@@ -89,8 +93,34 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 
 	pool := newRequestPool()
 
+	_, nodeAddrs, err := ValidatorsMembership(validators)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build node membership: %w", err)
+	}
+	mirAddr := nodeAddrs[t.NodeID(mirID)]
+
+	peerID, err := peer.AddrInfoFromP2pAddr(mirAddr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get addr info: %w", err)
+	}
+
+	h, err := libp2p.New(
+		libp2p.Identity(libp2pKey),
+		libp2p.DefaultTransports,
+		libp2p.ListenAddrs(peerID.Addrs[0]),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to construct libp2p host: %w", err)
+	}
+
+	netTransport := mirlibp2p.NewTransport(h, nodeAddrs, t.NodeID(mirID), newMirLogger(managerLog))
+	if err := netTransport.Start(); err != nil {
+		return nil, fmt.Errorf("failed to create libp2p transport: %w", err)
+	}
+	netTransport.Connect(ctx)
+
 	m := Manager{
-		libp2pKey:  hostPrivKey,
+		libp2pKey:  libp2pKey,
 		Addr:       addr,
 		SubnetID:   subnetID,
 		NetName:    netName,
@@ -100,6 +130,8 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		MirID:      mirID,
 		Wal:        wal,
 		Crypto:     cryptoManager,
+		h:          h,
+		Net:        netTransport,
 	}
 
 	sm := NewStateManager(&m)
@@ -148,12 +180,9 @@ func (m *Manager) Stop() {
 
 // CreateMirNode creates a new Mir node.
 func (m *Manager) CreateMirNode(ctx context.Context) error {
-	log.With("miner", m.MirID).Infof("Creating new Mir node")
-	defer log.With("miner", m.MirID).Info("Created new Mir node")
-
-	if m.Net != nil {
-		m.Net.Stop()
-	}
+	fmt.Println("++++++++++++++++++++++++++++++++++++++++++++=")
+	log.With("miner", m.MirID).Infof("Creating a Mir node started")
+	defer log.With("miner", m.MirID).Info("Creating a Mir node finished")
 
 	if len(m.Validators) == 0 {
 		return fmt.Errorf("empty validator set")
@@ -169,37 +198,19 @@ func (m *Manager) CreateMirNode(ctx context.Context) error {
 	log.Info("Mir nodes IDs: ", nodeIDs)
 	log.Info("Mir nodes addresses: ", nodeAddrs)
 
-	peerID, err := peer.AddrInfoFromP2pAddr(mirAddr)
-	if err != nil {
-		return fmt.Errorf("failed to get addr info: %w", err)
-	}
-
-	h, err := libp2p.New(
-		libp2p.Identity(m.libp2pKey),
-		libp2p.DefaultTransports,
-		libp2p.ListenAddrs(peerID.Addrs[0]),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to construct libp2p host: %w", err)
-	}
-
 	issConfig := iss.DefaultConfig(nodeIDs)
 	issProtocol, err := iss.New(t.NodeID(m.MirID), issConfig, newMirLogger(managerLog))
 	if err != nil {
 		return fmt.Errorf("could not instantiate ISS protocol module: %w", err)
 	}
 
+	m.Net.UpdateConnections(ctx, nodeAddrs)
 	// Create Mir modules.
-
-	netTransport := mirlibp2p.NewTransport(h, nodeAddrs, t.NodeID(m.MirID), newMirLogger(managerLog))
-	if err := netTransport.Start(); err != nil {
-		return fmt.Errorf("failed to create libp2p transport: %w", err)
-	}
-	netTransport.Connect(ctx)
+	m.ISS = issProtocol
 
 	mirModules, err := iss.DefaultModules(map[t.ModuleID]modules.Module{
-		"net":    netTransport,
-		"iss":    issProtocol,
+		"net":    m.Net,
+		"iss":    m.ISS,
 		"app":    m.App,
 		"crypto": mircrypto.New(m.Crypto),
 	})
@@ -215,8 +226,6 @@ func (m *Manager) CreateMirNode(ctx context.Context) error {
 	}
 
 	m.MirNode = newMirNode
-	m.Net = netTransport
-	m.ISS = issProtocol
 
 	return nil
 }

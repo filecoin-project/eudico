@@ -62,6 +62,7 @@ NODE_3_MINER_LOG="./eudico_miner_3.log"
 BLOCK0="./testdata/mir.gen"
 
 rm -rf ./eudico-wal
+rm -rf ./eudico-wal*
 rm -rf ./eudico
 make eudico
 
