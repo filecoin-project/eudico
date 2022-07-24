@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-GRAFANA_HOST="localhost:13000"
+GRAFANA_HOST="192.168.1.94:13000"
 
 curl -XPOST http://admin:admin@$GRAFANA_HOST/api/datasources -H 'Content-Type: text/json' --data-binary @- > /dev/null << EOF
 {

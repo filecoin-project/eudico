@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"time"
 
 	"github.com/ipfs/go-cid"
 	"github.com/urfave/cli/v2"
@@ -18,6 +19,9 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/types"
+	"github.com/filecoin-project/lotus/metrics"
+	"go.opencensus.io/stats"
+	"go.opencensus.io/tag"
 	lcli "github.com/filecoin-project/lotus/cli"
 	specbuiltin "github.com/filecoin-project/specs-actors/actors/builtin"
 	init_ "github.com/filecoin-project/specs-actors/actors/builtin/init"
@@ -196,10 +200,20 @@ var addCmd = &cli.Command{
 				Alg:           alg,
 			},
 		}
+
+		start := time.Now()
+
 		actorAddr, err := api.AddSubnet(ctx, params)
 		if err != nil {
 			return err
 		}
+
+		// we only record the successful calls
+		ms := time.Now().Sub(start).Microseconds()
+
+		sctx, _ := tag.New(ctx, tag.Upsert(metrics.SubnetType, cctx.String("consensus")))
+		stats.Record(sctx, metrics.SubnetSpinUpDuration.M(float64(ms)/1000))
+		stats.Record(ctx, metrics.SubnetCount.M(1))
 
 		fmt.Printf("[*] subnet actor deployed as %v and new subnet available with ID=%v\n\n",
 			actorAddr, address.NewSubnetID(parent, actorAddr))

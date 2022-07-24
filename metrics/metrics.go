@@ -53,6 +53,9 @@ var (
 	ProtocolID, _ = tag.NewKey("proto")
 	Direction, _  = tag.NewKey("direction")
 	UseFD, _      = tag.NewKey("use_fd")
+
+	// hc
+	SubnetType, _ = tag.NewKey("subnet_type")
 )
 
 // Measures
@@ -167,6 +170,10 @@ var (
 	RcmgrBlockSvcPeer   = stats.Int64("rcmgr/block_svc", "Number of blocked blocked streams attached to a service for a specific peer", stats.UnitDimensionless)
 	RcmgrAllowMem       = stats.Int64("rcmgr/allow_mem", "Number of allowed memory reservations", stats.UnitDimensionless)
 	RcmgrBlockMem       = stats.Int64("rcmgr/block_mem", "Number of blocked memory reservations", stats.UnitDimensionless)
+
+	// HC
+	SubnetSpinUpDuration    = stats.Float64("hc/subnet_spin_up_duration", "Time spent spinning up new subnet", stats.UnitMilliseconds)
+	SubnetCount             = stats.Float64("hc/subnet_count", "The total number of subnets in the node", stats.UnitDimensionless)
 )
 
 var (
@@ -599,6 +606,17 @@ var (
 		Measure:     RcmgrBlockMem,
 		Aggregation: view.Count(),
 	}
+
+	// hc
+	SubnetSpinUpDurationView = &view.View{
+		Measure:     SubnetSpinUpDuration,
+		Aggregation: defaultMillisecondsDistribution,
+		TagKeys:     []tag.Key{SubnetType},
+	}
+	SubnetCountView = &view.View{
+		Measure:     SubnetCount,
+		Aggregation: view.Count(),
+	}
 )
 
 // DefaultViews is an array of OpenCensus views for metric gathering purposes
@@ -709,6 +727,11 @@ var MinerNodeViews = append([]*view.View{
 	DagStorePRSeekForwardCountView,
 	DagStorePRSeekBackBytesView,
 	DagStorePRSeekForwardBytesView,
+}, DefaultViews...)
+
+var HCViews = append([]*view.View{
+	SubnetSpinUpDurationView,
+	SubnetCountView,
 }, DefaultViews...)
 
 // SinceInMilliseconds returns the duration of time since the provide time as a float64.

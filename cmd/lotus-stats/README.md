@@ -7,7 +7,7 @@
 Influx configuration can be configured through env variables.
 
 ```
-LOTUS_STATS_INFLUX_ADDR="http://localhost:8086"
+LOTUS_STATS_INFLUX_ADDR="http://192.168.1.94:8086"
 LOTUS_STATS_INFLUX_USER=""
 LOTUS_STATS_INFLUX_PASS=""
 ```

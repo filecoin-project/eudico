@@ -54,3 +54,8 @@ scratchpad
 gen.gen
 
 **/*-wal/
+go.mod
+go.sum
+f1*
+Dockerfile
+.devcontainer

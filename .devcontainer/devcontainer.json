@@ -3,7 +3,7 @@
 {
 	"name": "Go",
 	"build": {
-		"dockerfile": "Dockerfile",
+		"dockerfile": "../Dockerfile",
 		"args": {
 			// Update the VARIANT arg to pick a version of Go: 1, 1.16, 1.15
 			"VARIANT": "1.16",
