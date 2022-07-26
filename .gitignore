@@ -54,3 +54,7 @@ scratchpad
 gen.gen
 
 **/*-wal/
+.devcontainer
+/eudico-stats
+f1*
+eudico-stats/prometheus.yml

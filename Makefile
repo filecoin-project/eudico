@@ -225,6 +225,12 @@ lotus-stats:
 .PHONY: lotus-stats
 BINS+=lotus-stats
 
+eudico-stats:
+	rm -f eudico-stats
+	$(GOCC) build $(GOFLAGS) -o eudico-stats ./cmd/eudico-stats
+.PHONY: eudico-stats
+BINS+=eudico-stats
+
 lotus-pcr:
 	rm -f lotus-pcr
 	$(GOCC) build $(GOFLAGS) -o lotus-pcr ./cmd/lotus-pcr
