@@ -40,9 +40,9 @@ func main() {
 		Version: build.UserVersion(),
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:    "lotus-path",
-				EnvVars: []string{"LOTUS_PATH"},
-				Value:   "~/.lotus", // TODO: Consider XDG_DATA_HOME
+				Name:    "eudico-path",
+				EnvVars: []string{"EUDICO_PATH"},
+				Value:   "~/.eudico",
 			},
 			&cli.StringFlag{
 				Name:    "log-level",
@@ -78,7 +78,7 @@ var runCmd = &cli.Command{
 	Flags: []cli.Flag{
 		&cli.BoolFlag{
 			Name:    "no-sync",
-			EnvVars: []string{"LOTUS_STATS_NO_SYNC"},
+			EnvVars: []string{"EUDICO_STATS_NO_SYNC"},
 			Usage:   "do not wait for chain sync to complete",
 			Value:   false,
 		},
