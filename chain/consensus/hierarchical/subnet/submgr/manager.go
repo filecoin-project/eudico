@@ -457,7 +457,7 @@ func (s *Service) AddSubnet(ctx context.Context, params *hierarchical.SubnetPara
 		return address.Undef, aerr
 	}
 
-	stats.Record(ctx, metrics.SubnetCount.M(1))
+	stats.Record(ctx, metrics.SubnetCreatedCount.M(1))
 
 	r := &init_.ExecReturn{}
 	if err := r.UnmarshalCBOR(bytes.NewReader(mw.Receipt.Return)); err != nil {
@@ -803,6 +803,8 @@ func (s *Service) KillSubnet(
 	if aerr != nil {
 		return cid.Undef, aerr
 	}
+
+	stats.Record(ctx, metrics.SubnetKilledCount.M(1))
 
 	log.Infow("Successfully send kill signal to ", "subnetID", id)
 

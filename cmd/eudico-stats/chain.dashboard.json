@@ -57,8 +57,8 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 9,
-        "w": 12,
+        "h": 7,
+        "w": 5,
         "x": 0,
         "y": 0
       },
@@ -85,16 +85,83 @@
             "uid": "cOwoGikVz"
           },
           "editorMode": "code",
-          "expr": "lotus_stats_hc_subnet_count",
+          "expr": "lotus_stats_hc_subnet_created_count",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Total Number Of Subnets",
+      "title": "Number Of Subnets Created",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cOwoGikVz"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 5,
+        "x": 5,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "9.0.4",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cOwoGikVz"
+          },
+          "editorMode": "code",
+          "expr": "max(lotus_stats_hc_subnet_killed_count or on() vector(0))",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Number Of Subnets Killed",
       "type": "stat"
     }
   ],
+  "refresh": "10s",
   "schemaVersion": 36,
   "style": "dark",
   "tags": [],
@@ -109,6 +176,6 @@
   "timezone": "",
   "title": "HC Metrics",
   "uid": "ltIs4ikVk",
-  "version": 1,
+  "version": 4,
   "weekStart": ""
 }

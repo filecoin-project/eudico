@@ -169,7 +169,8 @@ var (
 	RcmgrBlockMem       = stats.Int64("rcmgr/block_mem", "Number of blocked memory reservations", stats.UnitDimensionless)
 
 	// hc
-	SubnetCount = stats.Int64("hc/subnet_count", "The total number of subnets in the node", stats.UnitDimensionless)
+	SubnetCreatedCount = stats.Int64("hc/subnet_created_count", "The total number of subnets created in the node", stats.UnitDimensionless)
+	SubnetKilledCount  = stats.Int64("hc/subnet_killed_count", "The total number of subnets killed in the node", stats.UnitDimensionless)
 )
 
 var (
@@ -604,8 +605,12 @@ var (
 	}
 
 	// hc
-	SubnetCountView = &view.View{
-		Measure:     SubnetCount,
+	SubnetCreatedCountView = &view.View{
+		Measure:     SubnetCreatedCount,
+		Aggregation: view.Count(),
+	}
+	SubnetKilledCountView = &view.View{
+		Measure:     SubnetKilledCount,
 		Aggregation: view.Count(),
 	}
 )
@@ -694,7 +699,8 @@ var ChainNodeViews = append([]*view.View{
 	VMAppliedView,
 
 	// hc related
-	SubnetCountView,
+	SubnetCreatedCountView,
+	SubnetKilledCountView,
 }, DefaultViews...)
 
 var MinerNodeViews = append([]*view.View{
