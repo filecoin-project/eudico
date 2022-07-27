@@ -3,6 +3,8 @@ package submgr
 import (
 	"bytes"
 	"context"
+	"github.com/filecoin-project/lotus/metrics"
+	"go.opencensus.io/stats"
 	"sync"
 
 	"github.com/ipfs/go-blockservice"
@@ -454,6 +456,8 @@ func (s *Service) AddSubnet(ctx context.Context, params *hierarchical.SubnetPara
 	if aerr != nil {
 		return address.Undef, aerr
 	}
+
+	stats.Record(ctx, metrics.SubnetCount.M(1))
 
 	r := &init_.ExecReturn{}
 	if err := r.UnmarshalCBOR(bytes.NewReader(mw.Receipt.Return)); err != nil {

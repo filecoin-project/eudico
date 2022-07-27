@@ -167,6 +167,9 @@ var (
 	RcmgrBlockSvcPeer   = stats.Int64("rcmgr/block_svc", "Number of blocked blocked streams attached to a service for a specific peer", stats.UnitDimensionless)
 	RcmgrAllowMem       = stats.Int64("rcmgr/allow_mem", "Number of allowed memory reservations", stats.UnitDimensionless)
 	RcmgrBlockMem       = stats.Int64("rcmgr/block_mem", "Number of blocked memory reservations", stats.UnitDimensionless)
+
+	// hc
+	SubnetCount = stats.Int64("hc/subnet_count", "The total number of subnets in the node", stats.UnitDimensionless)
 )
 
 var (
@@ -599,6 +602,12 @@ var (
 		Measure:     RcmgrBlockMem,
 		Aggregation: view.Count(),
 	}
+
+	// hc
+	SubnetCountView = &view.View{
+		Measure:     SubnetCount,
+		Aggregation: view.Count(),
+	}
 )
 
 // DefaultViews is an array of OpenCensus views for metric gathering purposes
@@ -683,6 +692,9 @@ var ChainNodeViews = append([]*view.View{
 	VMApplyFlushView,
 	VMSendsView,
 	VMAppliedView,
+
+	// hc related
+	SubnetCountView,
 }, DefaultViews...)
 
 var MinerNodeViews = append([]*view.View{

@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"contrib.go.opencensus.io/exporter/prometheus"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -192,6 +193,20 @@ func daemonCmd(overrides node.Option) *cli.Command {
 			}
 			// Set the metric to one so it is published to the exporter
 			stats.Record(ctx, metrics.LotusInfo.M(1))
+
+			go func() {
+				exporter, err := prometheus.NewExporter(prometheus.Options{
+					Namespace: "lotus_stats",
+				})
+				if err != nil {
+					log.Errorw("failed to create exporter", "err", err)
+				}
+
+				http.Handle("/metrics", exporter)
+				if err := http.ListenAndServe(":6688", nil); err != nil {
+					log.Errorw("failed to start http server", "err", err)
+				}
+			}()
 
 			{
 				dir, err := homedir.Expand(cctx.String("repo"))
