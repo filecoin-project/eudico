@@ -6,6 +6,7 @@ import (
 	"github.com/filecoin-project/lotus/metrics"
 	"go.opencensus.io/stats"
 	"sync"
+	"time"
 
 	"github.com/ipfs/go-blockservice"
 	"github.com/ipfs/go-cid"
@@ -206,6 +207,8 @@ func (s *Service) startSubnet(id address.SubnetID,
 	sh.signingState = newSigningState()
 	defer sh.checklk.Unlock()
 
+	startTime := time.Now()
+
 	// Add subnet to registry
 	s.subnets[id] = sh
 
@@ -331,6 +334,9 @@ func (s *Service) startSubnet(id address.SubnetID,
 	log.Infow("Listening to SCA events in subnet", "subnetID", id)
 
 	log.Infow("Successfully spawned subnet", "subnetID", id)
+
+	ms := time.Now().Sub(startTime).Microseconds()
+	stats.Record(ctx, metrics.SubnetSpinUpDuration.M(float64(ms)/1000))
 
 	return nil
 }
@@ -559,9 +565,21 @@ func (s *Service) JoinSubnet(
 
 	go func() {
 		var newst subnet.SubnetState
+
+		subnetAct, err := parentAPI.StateGetActor(ctx, SubnetActor, types.EmptyTSK)
+		if err != nil {
+			log.Infow("cannot get subnetAct for stats: %w", err)
+			return
+		}
+		pbs := blockstore.NewAPIBlockstore(parentAPI)
+		pcst := cbor.NewCborStore(pbs)
 		if err := pcst.Get(ctx, subnetAct.Head, &newst); err != nil {
 			log.Infow("getting actor state error after join: %w", err)
-		} else if startStatus == subnet.Inactive && newst.Status == subnet.Active {
+			return
+		}
+
+		if (startStatus == subnet.Inactive || startStatus == subnet.Instantiated) &&
+			newst.Status == subnet.Active {
 			stats.Record(ctx, metrics.SubnetActiveCount.M(1))
 		}
 	}()
