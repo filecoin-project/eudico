@@ -54,4 +54,6 @@ scratchpad
 gen.gen
 
 **/*-wal/
-**/eudico-wal*
+.devcontainer
+/eudico-stats
+*.key
