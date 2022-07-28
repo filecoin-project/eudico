@@ -46,9 +46,9 @@ func getSubnetValidators(
 
 // ValidatorsMembership validates that validators addresses are valid multi-addresses and
 // returns all validators IDs and map between IDs and multi-addresses.
-func ValidatorsMembership(validators []hierarchical.Validator) ([]t.NodeID, map[t.NodeID]multiaddr.Multiaddr, error) {
+func ValidatorsMembership(validators []hierarchical.Validator) ([]t.NodeID, map[t.NodeID]t.NodeAddress, error) {
 	var nodeIDs []t.NodeID
-	nodeAddrs := make(map[t.NodeID]multiaddr.Multiaddr)
+	nodeAddrs := make(map[t.NodeID]t.NodeAddress)
 
 	for _, v := range validators {
 		id := t.NodeID(v.ID())
