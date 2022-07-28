@@ -21,7 +21,6 @@ import (
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
 
-	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
@@ -105,7 +104,7 @@ type SubnetParams struct {
 func NewService(
 	mctx helpers.MetricsCtx,
 	lc fx.Lifecycle,
-	// api impl.FullNodeAPI,
+// api impl.FullNodeAPI,
 	self peer.ID,
 	pubsub *pubsub.PubSub,
 	ds dtypes.MetadataDS,
@@ -560,6 +559,7 @@ func (s *Service) JoinSubnet(
 		return cid.Undef, err
 	}
 
+	// TODO: replace this with event listener
 	go func() {
 		var newst subnet.SubnetState
 
