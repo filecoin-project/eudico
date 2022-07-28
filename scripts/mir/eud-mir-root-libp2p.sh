@@ -62,6 +62,7 @@ NODE_3_MINER_LOG="./eudico_miner_3.log"
 BLOCK0="./testdata/mir.gen"
 
 rm -rf ./eudico-wal
+rm -rf ./eudico-wal*
 rm -rf ./eudico
 make eudico
 
@@ -79,7 +80,7 @@ rm -rf ./eudico_daemon_*.log
 rm -rf ./eudico_miner_*.log
 rm -rf ./eudico_shed_*.log
 
-LOG_LEVEL="info,mir-consensus=info,mir-manager=info"
+LOG_LEVEL="info,mir-consensus=debug,mir-manager=debug"
 
 tmux new-session -d -s "mir" \; \
   new-window   -t "mir" \; \

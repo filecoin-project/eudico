@@ -33,3 +33,7 @@ func (m *mirLogger) Log(level mirlogging.LogLevel, text string, args ...interfac
 		m.logger.Debugw(text, "debug", args)
 	}
 }
+
+func (m *mirLogger) IsConcurrent() bool {
+	return true
+}
