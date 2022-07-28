@@ -196,7 +196,7 @@ func daemonCmd(overrides node.Option) *cli.Command {
 
 			go func() {
 				exporter, err := prometheus.NewExporter(prometheus.Options{
-					Namespace: "lotus_stats",
+					Namespace: "eudico_stats",
 				})
 				if err != nil {
 					log.Errorw("failed to create exporter", "err", err)
