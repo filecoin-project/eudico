@@ -47,15 +47,8 @@ func (t *SubnetState) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.ParentID (address.SubnetID) (string)
-	if len(t.ParentID) > cbg.MaxLength {
-		return xerrors.Errorf("Value in field t.ParentID was too long")
-	}
-
-	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len(t.ParentID))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string(t.ParentID)); err != nil {
+	// t.ParentID (address.SubnetID) (struct)
+	if err := t.ParentID.MarshalCBOR(cw); err != nil {
 		return err
 	}
 
@@ -204,15 +197,14 @@ func (t *SubnetState) UnmarshalCBOR(r io.Reader) (err error) {
 
 		t.Name = string(sval)
 	}
-	// t.ParentID (address.SubnetID) (string)
+	// t.ParentID (address.SubnetID) (struct)
 
 	{
-		sval, err := cbg.ReadString(cr)
-		if err != nil {
-			return err
+
+		if err := t.ParentID.UnmarshalCBOR(cr); err != nil {
+			return xerrors.Errorf("unmarshaling t.ParentID: %w", err)
 		}
 
-		t.ParentID = address.SubnetID(sval)
 	}
 	// t.Consensus (hierarchical.ConsensusType) (uint64)
 

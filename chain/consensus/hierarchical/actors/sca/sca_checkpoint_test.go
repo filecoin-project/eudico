@@ -3,19 +3,20 @@ package sca_test
 import (
 	"testing"
 
-	address "github.com/filecoin-project/go-address"
-	abi "github.com/filecoin-project/go-state-types/abi"
+	"github.com/stretchr/testify/require"
+
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
 	"github.com/filecoin-project/specs-actors/v7/support/mock"
 	tutil "github.com/filecoin-project/specs-actors/v7/support/testing"
-	"github.com/stretchr/testify/require"
 
 	actors "github.com/filecoin-project/lotus/chain/consensus/actors"
 	actor "github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
-	schema "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/types"
 )
 
@@ -86,7 +87,7 @@ func TestCheckpoints(t *testing.T) {
 	ch := newCheckpoint(nn1, epoch+9)
 	b, err := ch.MarshalBinary()
 	require.NoError(t, err)
-	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{Checkpoint: b})
 	rt.Verify()
 	windowCh := currWindowCheckpoint(rt, epoch)
 	require.Equal(t, windowCh.Data.Epoch, 100)
@@ -107,7 +108,7 @@ func TestCheckpoints(t *testing.T) {
 	rt.SetEpoch(epoch)
 	require.NoError(t, err)
 	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
-		rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+		rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{Checkpoint: b})
 	})
 
 	t.Log("appending child checkpoint for same source")
@@ -122,7 +123,7 @@ func TestCheckpoints(t *testing.T) {
 	ch.SetPrevious(prevcid)
 	b, err = ch.MarshalBinary()
 	require.NoError(t, err)
-	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{Checkpoint: b})
 	rt.Verify()
 	windowCh = currWindowCheckpoint(rt, epoch)
 	require.Equal(t, windowCh.Data.Epoch, 100)
@@ -146,7 +147,7 @@ func TestCheckpoints(t *testing.T) {
 	b, err = ch.MarshalBinary()
 	require.NoError(t, err)
 	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
-		rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+		rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{Checkpoint: b})
 	})
 
 	t.Log("trying to commit a checkpoint from the past")
@@ -159,7 +160,7 @@ func TestCheckpoints(t *testing.T) {
 	b, err = ch.MarshalBinary()
 	require.NoError(t, err)
 	rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
-		rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+		rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{Checkpoint: b})
 	})
 
 	t.Log("raw checkpoint on first window is empty")
@@ -183,7 +184,7 @@ func TestCheckpoints(t *testing.T) {
 	ch = newCheckpoint(nn2, epoch+10)
 	b, err = ch.MarshalBinary()
 	require.NoError(t, err)
-	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{Checkpoint: b})
 	windowCh = currWindowCheckpoint(rt, epoch)
 	// Check that child was added.
 	require.GreaterOrEqual(t, windowCh.HasChildSource(nn2), 0)
@@ -210,15 +211,15 @@ func TestCheckpoints(t *testing.T) {
 
 	t.Log("trying to commit wrong checkpoint (wrong subnet/wrong epoch/wrong prev")
 	// TODO: We need to populate this with more tests for different conditions.
-
 }
 
 func TestCheckpointCrossMsgs(t *testing.T) {
 	h := newHarness(t)
 	builder := mock.NewBuilder(builtin.StoragePowerActorAddr).WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
 	rt := builder.Build(t)
-	netName := "/root/f01"
-	h.constructAndVerifyWithNetworkName(rt, address.SubnetID(netName))
+	netName, err := address.SubnetIDFromString("/root/f01")
+	require.NoError(t, err)
+	h.constructAndVerifyWithNetworkName(rt, netName)
 	SubnetActorAddr := tutil.NewIDAddr(t, 101)
 
 	t.Log("register new subnet successfully")
@@ -233,7 +234,7 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 	ret := rt.Call(h.SubnetCoordActor.Register, nil)
 	res, ok := ret.(*actor.SubnetIDParam)
 	require.True(t, ok)
-	shid := address.NewSubnetID(address.SubnetID(netName), tutil.NewIDAddr(h.t, 101))
+	shid := address.NewSubnetID(netName, tutil.NewIDAddr(h.t, 101))
 	// Verify the return value is correct.
 	require.Equal(t, res.ID, shid.String())
 	rt.Verify()
@@ -243,7 +244,7 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 	require.True(h.t, found)
 	require.Equal(t, sh.Stake, value)
 	require.Equal(t, sh.ID, shid)
-	require.Equal(t, sh.ParentID.String(), netName)
+	require.Equal(t, sh.ParentID, netName)
 	require.Equal(t, sh.Status, actor.Active)
 
 	t.Log("commit checkpoint with cross msgs")
@@ -254,22 +255,30 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 	rt.SetEpoch(epoch)
 	ch := newCheckpoint(sh.ID, epoch+9)
 	// Add msgMeta directed to other subnets
-	addMsgMeta(t, ch, sh.ID, address.SubnetID("/root/f0102/child1"), "rand1", big.Zero())
+	n, err := address.SubnetIDFromString("/root/f0102/f0101")
+	require.NoError(t, err)
+	addMsgMeta(t, ch, sh.ID, n, "rand1", big.Zero())
 	// By not adding a random string we are checking that nothing fails when to MsgMeta
 	// for different subnets are propagating the same CID. This will probably never be the
 	// case for honest peers, but it is an attack vector.
-	addMsgMeta(t, ch, sh.ID, address.SubnetID("/root/f0102/child2"), "", big.Zero())
-	addMsgMeta(t, ch, sh.ID, address.SubnetID("/root/f0102/child3"), "", big.Zero())
+	n, err = address.SubnetIDFromString("/root/f0102/f0102")
+	require.NoError(t, err)
+	addMsgMeta(t, ch, sh.ID, n, "", big.Zero())
+	n, err = address.SubnetIDFromString("/root/f0102/f0103")
+	require.NoError(t, err)
+	addMsgMeta(t, ch, sh.ID, n, "", big.Zero())
 	// And to this subnet
-	addMsgMeta(t, ch, sh.ID, address.SubnetID(netName), "", big.Zero())
-	addMsgMeta(t, ch, sh.ID, address.SubnetID(netName), "rand", big.Zero())
+	addMsgMeta(t, ch, sh.ID, netName, "", big.Zero())
+	addMsgMeta(t, ch, sh.ID, netName, "rand", big.Zero())
 	// And to a child from other branch (with cross-net messages)
-	addMsgMeta(t, ch, sh.ID, address.SubnetID(netName+"/f02"), "rand", big.Zero())
+	n, err = address.SubnetIDFromString(netName.String() + "/f02")
+	require.NoError(t, err)
+	addMsgMeta(t, ch, sh.ID, n, "rand", big.Zero())
 	prevcid, _ := ch.Cid()
 
 	b, err := ch.MarshalBinary()
 	require.NoError(t, err)
-	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{Checkpoint: b})
 	rt.Verify()
 	windowCh := currWindowCheckpoint(rt, epoch)
 	require.Equal(t, windowCh.Data.Epoch, 100)
@@ -292,12 +301,18 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 
 	// Check msgMeta to other subnets are aggregated
 	m := windowCh.CrossMsgs()
-	subs := []address.SubnetID{"/root/f0102/child1", "/root/f0102/child2", "/root/f0102/child3"}
+	n1, err := address.SubnetIDFromString("/root/f0102/f0101")
+	require.NoError(t, err)
+	n2, err := address.SubnetIDFromString("/root/f0102/f0102")
+	require.NoError(t, err)
+	n3, err := address.SubnetIDFromString("/root/f0102/f0103")
+	require.NoError(t, err)
+	subs := []address.SubnetID{n1, n2, n3}
 	require.Equal(t, len(m), 3)
 	prevs := make(map[string]schema.CrossMsgMeta)
 	for i, mm := range m {
 		// Check that from has been renamed
-		require.Equal(t, mm.From, netName)
+		require.Equal(t, mm.From, netName.String())
 		// Check the to is kept
 		require.Equal(t, len(windowCh.CrossMsgsTo(subs[i])), 1)
 		// Append for the future
@@ -312,14 +327,14 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 	rt.SetEpoch(epoch)
 	ch = newCheckpoint(sh.ID, epoch+6)
 	// Msgs to this subnet
-	addMsgMeta(t, ch, sh.ID, address.SubnetID(netName), "r2", big.Zero())
-	addMsgMeta(t, ch, sh.ID, address.SubnetID(netName), "r3", big.Zero())
+	addMsgMeta(t, ch, sh.ID, netName, "r2", big.Zero())
+	addMsgMeta(t, ch, sh.ID, netName, "r3", big.Zero())
 	ch.SetPrevious(prevcid)
 	prevcid, _ = ch.Cid()
 
 	b, err = ch.MarshalBinary()
 	require.NoError(t, err)
-	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{Checkpoint: b})
 	rt.Verify()
 
 	// Check that the BottomUpMsgs to be applied are added with the right nonce.
@@ -344,16 +359,18 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 	ch = newCheckpoint(sh.ID, epoch+9)
 	ch.SetPrevious(prevcid)
 	// Add msgMeta directed to other subnets
-	addMsgMeta(t, ch, sh.ID, address.SubnetID("/root/f0102/child1"), "", big.Zero())
-	addMsgMeta(t, ch, sh.ID, address.SubnetID("/root/f0102/child2"), "", big.Zero())
-	addMsgMeta(t, ch, sh.ID, address.SubnetID("/root/f0102/child3"), "", abi.NewTokenAmount(100))
-	addMsgMeta(t, ch, sh.ID, address.SubnetID("/root/f0102/child4"), "", abi.NewTokenAmount(100))
+	n4, err := address.SubnetIDFromString("/root/f0102/f0104")
+	require.NoError(t, err)
+	addMsgMeta(t, ch, sh.ID, n1, "", big.Zero())
+	addMsgMeta(t, ch, sh.ID, n2, "", big.Zero())
+	addMsgMeta(t, ch, sh.ID, n3, "", abi.NewTokenAmount(100))
+	addMsgMeta(t, ch, sh.ID, n4, "", abi.NewTokenAmount(100))
 
 	b, err = ch.MarshalBinary()
 	require.NoError(t, err)
 	// Expect burning some funds
 	rt.ExpectSend(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, abi.NewTokenAmount(200), nil, exitcode.Ok)
-	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+	rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{Checkpoint: b})
 	rt.Verify()
 	windowCh = currWindowCheckpoint(rt, epoch)
 	require.Equal(t, windowCh.Data.Epoch, 100)
@@ -368,11 +385,11 @@ func TestCheckpointCrossMsgs(t *testing.T) {
 
 	// Check msgMeta to other subnets are aggregated
 	m = windowCh.CrossMsgs()
-	subs = []address.SubnetID{"/root/f0102/child1", "/root/f0102/child2", "/root/f0102/child3", "/root/f0102/child4"}
+	subs = []address.SubnetID{n1, n2, n3, n4}
 	require.Equal(t, len(m), 4)
 	for i, mm := range m {
 		// Check that from has been renamed
-		require.Equal(t, mm.From, netName)
+		require.Equal(t, mm.From, netName.String())
 		// Check the to is kept
 		require.Equal(t, len(windowCh.CrossMsgsTo(subs[i])), 1)
 		// Get current msgMetas
@@ -458,6 +475,6 @@ func TestCheckpointInactive(t *testing.T) {
 	b, err := ch.MarshalBinary()
 	require.NoError(t, err)
 	rt.ExpectAbort(exitcode.ErrIllegalState, func() {
-		rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{b})
+		rt.Call(h.SubnetCoordActor.CommitChildCheckpoint, &actor.CheckpointParams{Checkpoint: b})
 	})
 }

@@ -27,13 +27,15 @@ import (
 	mapi "github.com/filecoin-project/mir"
 )
 
-func TestEudicoConsensus(t *testing.T) {
-	t.Run("dummy", func(t *testing.T) {
-		runDummyConsensusTests(t, kit.ThroughRPC(), kit.RootDummy())
-	})
-
+func TestMirConsensus(t *testing.T) {
 	t.Run("mir", func(t *testing.T) {
 		runMirConsensusTests(t, kit.ThroughRPC(), kit.RootMir())
+	})
+}
+
+func TestLegacyConsensus(t *testing.T) {
+	t.Run("dummy", func(t *testing.T) {
+		runDummyConsensusTests(t, kit.ThroughRPC(), kit.RootDummy())
 	})
 
 	t.Run("tspow", func(t *testing.T) {
@@ -105,7 +107,7 @@ func (ts *eudicoConsensusSuite) testDummyMining(t *testing.T) {
 func runMirConsensusTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoConsensusSuite{opts: opts}
 
-	t.Run("testMirMining", ts.testMirMining)
+	t.Run("testMirLibp2pMining", ts.testMirLibp2pMining)
 	t.Run("testMirTwoNodes", ts.testMirTwoNodes)
 }
 
@@ -179,9 +181,9 @@ func (ts *eudicoConsensusSuite) testMirTwoNodes(t *testing.T) {
 		Value: big.Zero(),
 	}
 
-	mirNodeOneAddr, err := kit.GetFreeLocalAddr()
+	mirNodeOneAddr, err := kit.NodeLibp2pAddr(one)
 	require.NoError(t, err)
-	mirNodeTwoAddr, err := kit.GetFreeLocalAddr()
+	mirNodeTwoAddr, err := kit.NodeLibp2pAddr(two)
 	require.NoError(t, err)
 
 	mirNodeOne := fmt.Sprintf("%s:%s", address.RootSubnet, l1[0].String())
@@ -266,7 +268,7 @@ func (ts *eudicoConsensusSuite) testMirTwoNodes(t *testing.T) {
 	require.Equal(t, exitcode.Ok, res.Receipt.ExitCode, "msg2 not successful")
 }
 
-func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
+func (ts *eudicoConsensusSuite) testMirLibp2pMining(t *testing.T) {
 	var wg sync.WaitGroup
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -288,12 +290,15 @@ func (ts *eudicoConsensusSuite) testMirMining(t *testing.T) {
 		t.Fatal("wallet key list is empty")
 	}
 
-	mirNodeID := fmt.Sprintf("%s:%s", address.RootSubnet, l[0].String())
-
-	netAddr, err := kit.GetFreeLocalAddr()
+	libp2pPrivKeyBytes, err := full.PrivKey(ctx)
 	require.NoError(t, err)
 
-	err = os.Setenv(mir.ValidatorsEnv, fmt.Sprintf("%s@%s", mirNodeID, netAddr))
+	mirNodeID := fmt.Sprintf("%s:%s", address.RootSubnet, l[0].String())
+
+	addr, err := kit.GetLibp2pAddr(libp2pPrivKeyBytes)
+	require.NoError(t, err)
+
+	err = os.Setenv(mir.ValidatorsEnv, fmt.Sprintf("%s@%s", mirNodeID, addr))
 	require.NoError(t, err)
 	defer os.Unsetenv(mir.ValidatorsEnv) // nolint
 

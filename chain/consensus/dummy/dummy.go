@@ -65,7 +65,10 @@ func NewConsensus(
 	g chain.Genesis,
 	netName dtypes.NetworkName,
 ) (consensus.Consensus, error) {
-	subnetID := address.SubnetID(netName)
+	subnetID, err := address.SubnetIDFromString(string(netName))
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("New Dummy consensus for %s subnet", subnetID)
 
 	return &Dummy{

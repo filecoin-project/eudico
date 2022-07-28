@@ -86,7 +86,10 @@ func NewConsensus(
 	g chain.Genesis,
 	netName dtypes.NetworkName,
 ) (consensus.Consensus, error) {
-	subnetID := address.SubnetID(netName)
+	subnetID, err := address.SubnetIDFromString(string(netName))
+	if err != nil {
+		return nil, xerrors.Errorf("unable to get SubnetID: %s", err)
+	}
 	log.Infof("New Tendermint consensus for %s subnet", subnetID)
 
 	c, err := tmclient.New(NodeAddr())

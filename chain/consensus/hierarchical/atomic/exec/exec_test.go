@@ -15,7 +15,6 @@ import (
 	adt0 "github.com/filecoin-project/specs-actors/actors/util/adt"
 	proof5 "github.com/filecoin-project/specs-actors/v5/actors/runtime/proof"
 	proof7 "github.com/filecoin-project/specs-actors/v7/actors/runtime/proof"
-	"github.com/google/uuid"
 	"github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
 	"github.com/stretchr/testify/require"
@@ -291,7 +290,7 @@ func NewGenerator(t *testing.T) (*ChainGen, error) {
 		},
 		VerifregRootKey:  DefaultVerifregRootkeyActor,
 		RemainderAccount: DefaultRemainderAccountActor,
-		NetworkName:      uuid.New().String(),
+		NetworkName:      address.RootStr,
 		Timestamp:        uint64(build.Clock.Now().Add(-500 * time.Duration(build.BlockDelaySecs) * time.Second).Unix()),
 	}
 

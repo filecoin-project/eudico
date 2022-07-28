@@ -192,7 +192,7 @@ func (s *Service) FundSubnet(
 	params := &sca.SubnetIDParam{ID: id.String()}
 	serParams, err := actors.SerializeParams(params)
 	if err != nil {
-		return cid.Undef, xerrors.Errorf("failed serializing init actor params: %s", err)
+		return cid.Undef, xerrors.Errorf("failed serializing fund subnet params: %s", err)
 	}
 
 	// Get the parent and the actor to know where to send the message.
@@ -387,7 +387,11 @@ func (s *Service) getBottomUpPool(ctx context.Context, id address.SubnetID, heig
 		if err != nil {
 			return nil, err
 		}
-		cross, found, err := r.ResolveCrossMsgs(ctx, c, address.SubnetID(mt.From))
+		sfrom, err := address.SubnetIDFromString(mt.From)
+		if err != nil {
+			return nil, err
+		}
+		cross, found, err := r.ResolveCrossMsgs(ctx, c, sfrom)
 		if err != nil {
 			return nil, err
 		}

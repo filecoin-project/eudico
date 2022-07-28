@@ -77,7 +77,11 @@ func checkBottomUpMsg(ctx context.Context, r *resolver.Resolver, snstore blockad
 	// to check.
 	ctx, cancel := context.WithTimeout(ctx, crossMsgResolutionTimeout)
 	defer cancel()
-	out := r.WaitCrossMsgsResolved(ctx, c, address.SubnetID(comMeta.From))
+	sfrom, err := address.SubnetIDFromString(comMeta.From)
+	if err != nil {
+		return err
+	}
+	out := r.WaitCrossMsgsResolved(ctx, c, sfrom)
 	select {
 	case <-ctx.Done():
 		return xerrors.Errorf("context timeout")
@@ -88,7 +92,7 @@ func checkBottomUpMsg(ctx context.Context, r *resolver.Resolver, snstore blockad
 	}
 
 	// Get cross-messages
-	cross, found, err := r.ResolveCrossMsgs(ctx, c, address.SubnetID(comMeta.From))
+	cross, found, err := r.ResolveCrossMsgs(ctx, c, sfrom)
 	if err != nil {
 		return xerrors.Errorf("Error resolving messages: %v", err)
 	}
@@ -161,12 +165,17 @@ func ApplyCrossMsg(ctx context.Context, vmi vm.Interface, submgr subnet.Manager,
 func applyMsg(ctx context.Context, vmi vm.Interface, em stmgr.ExecMonitor,
 	msg *types.Message, ts *types.TipSet) error {
 	// Serialize params
+	f0, _ := address.NewIDAddress(0)
 	params := &sca.CrossMsgParams{
 		Msg: *msg,
+		// FIXME: Destination is not used in this method. Consider
+		// not reusing the params data structure.
+		// Used to prevent undefined address from failing in SubnetID.
+		Destination: address.SubnetID{Parent: "/", Actor: f0},
 	}
 	serparams, aerr := actors.SerializeParams(params)
 	if aerr != nil {
-		return xerrors.Errorf("failed serializing init actor params: %s", aerr)
+		return xerrors.Errorf("failed serializing apply-message params: %s", aerr)
 	}
 	apply := &types.Message{
 		From:       builtin.SystemActorAddr,
@@ -254,7 +263,11 @@ func SortCrossMsgs(ctx context.Context, sm *stmgr.StateManager, r *resolver.Reso
 		if err != nil {
 			return []*types.Message{}, xerrors.Errorf("error getting network name: %w", err)
 		}
-		isBu, err := hierarchical.ApplyAsBottomUp(address.SubnetID(netName), m)
+		nn, err := address.SubnetIDFromString(string(netName))
+		if err != nil {
+			return []*types.Message{}, xerrors.Errorf("error getting network name ID: %w", err)
+		}
+		isBu, err := hierarchical.ApplyAsBottomUp(nn, m)
 		if err != nil {
 			return []*types.Message{}, xerrors.Errorf("error processing type to apply: %w", err)
 		}

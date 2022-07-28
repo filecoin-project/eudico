@@ -139,7 +139,8 @@ func (r *Resolver) addMsgReceipt(t MsgType, bcid cid.Cid, from peer.ID) int {
 }
 
 func NewRootResolver(self peer.ID, ds dtypes.MetadataDS, pubsub *pubsub.PubSub, nn dtypes.NetworkName) *Resolver {
-	return NewResolver(self, ds, pubsub, address.SubnetID(nn))
+	sn, _ := address.SubnetIDFromString(string(nn))
+	return NewResolver(self, ds, pubsub, sn)
 }
 func NewResolver(self peer.ID, ds dtypes.MetadataDS, pubsub *pubsub.PubSub, netName address.SubnetID) *Resolver {
 	return &Resolver{
@@ -523,7 +524,11 @@ func (r *Resolver) ResolveCrossMsgs(ctx context.Context, c cid.Cid, from address
 				return []types.Message{}, false, nil
 			}
 			// Recursively resolve crossMsg for meta
-			cross, found, err := r.ResolveCrossMsgs(ctx, c, address.SubnetID(mt.From))
+			sfrom, err := address.SubnetIDFromString(mt.From)
+			if err != nil {
+				return []types.Message{}, false, err
+			}
+			cross, found, err := r.ResolveCrossMsgs(ctx, c, sfrom)
 			if err != nil {
 				return []types.Message{}, false, nil
 			}
@@ -635,8 +640,13 @@ func (r *Resolver) PushMsgFromCheckpoint(ch *schema.Checkpoint, st *sca.SCAState
 		if !found {
 			return xerrors.Errorf("couldn't found crossmsgs for msgMeta with cid: %s", c)
 		}
+		// Recursively resolve crossMsg for meta
+		sto, err := address.SubnetIDFromString(meta.To)
+		if err != nil {
+			return err
+		}
 		// Push cross-msgs to subnet
-		if err = r.PushCrossMsgs(*msgs, address.SubnetID(meta.To), false); err != nil {
+		if err = r.PushCrossMsgs(*msgs, sto, false); err != nil {
 			return err
 		}
 	}

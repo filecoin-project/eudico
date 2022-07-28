@@ -123,7 +123,9 @@ func (st *SCAState) releaseMsg(rt runtime.Runtime, value big.Int, to address.Add
 	source := builtin.BurntFundsActorAddr
 
 	// Transform To and From to HCAddresses
-	to, err := address.NewHCAddress(st.NetworkName.Parent(), to)
+	p, err := st.NetworkName.GetParent()
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get parent")
+	to, err = address.NewHCAddress(p, to)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HCAddress")
 	from, err := address.NewHCAddress(st.NetworkName, source)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create HCAddress")
@@ -234,9 +236,11 @@ func incrementNonce(rt runtime.Runtime, nonceCounter *uint64) {
 func (st *SCAState) aggChildMsgMeta(rt runtime.Runtime, ch *schema.Checkpoint, aux map[string][]schema.CrossMsgMeta) {
 	for to, mm := range aux {
 		// Get the cid of MsgMeta from this subnet (if any)
-		metaIndex, msgMeta := ch.CrossMsgMeta(st.NetworkName, address.SubnetID(to))
+		sto, err := address.SubnetIDFromString(to)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "error getting subnet from string")
+		metaIndex, msgMeta := ch.CrossMsgMeta(st.NetworkName, sto)
 		if msgMeta == nil {
-			msgMeta = schema.NewCrossMsgMeta(st.NetworkName, address.SubnetID(to))
+			msgMeta = schema.NewCrossMsgMeta(st.NetworkName, sto)
 		}
 
 		value := abi.NewTokenAmount(0)

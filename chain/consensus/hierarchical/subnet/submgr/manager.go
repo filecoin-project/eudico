@@ -252,7 +252,7 @@ func (s *Service) startSubnet(id address.SubnetID,
 		return err
 	}
 	// Instantiate consensus
-	sh.cons, err = subcns.New(ctx, consensus, sh.sm, s, beacon, sh.r, s.verifier, gen, dtypes.NetworkName(id))
+	sh.cons, err = subcns.New(ctx, consensus, sh.sm, s, beacon, sh.r, s.verifier, gen, dtypes.NetworkName(id.String()))
 	if err != nil {
 		log.Errorw("Error creating consensus", "subnetID", id, "err", err)
 		return err
@@ -443,7 +443,7 @@ func (s *Service) AddSubnet(ctx context.Context, params *hierarchical.SubnetPara
 	}
 	serParams, err = actors.SerializeParams(execParams)
 	if err != nil {
-		return address.Undef, xerrors.Errorf("failed serializing init actor params: %s", err)
+		return address.Undef, xerrors.Errorf("failed serializing init actor constructor params: %s", err)
 	}
 
 	msg, aerr := parentAPI.MpoolPushMessage(ctx, &types.Message{
@@ -484,10 +484,7 @@ func (s *Service) JoinSubnet(
 	defer s.lk.Unlock()
 
 	// Get actor from subnet ID
-	SubnetActor, err := id.Actor()
-	if err != nil {
-		return cid.Undef, err
-	}
+	SubnetActor := id.GetActor()
 
 	// Get the api for the parent network hosting the subnet actor for the subnet.
 	parentAPI, err := s.getParentAPI(id)
@@ -589,10 +586,7 @@ func (s *Service) JoinSubnet(
 
 func (s *Service) syncSubnet(ctx context.Context, id address.SubnetID, parentAPI *API) error {
 	// Get actor from subnet ID
-	SubnetActor, err := id.Actor()
-	if err != nil {
-		return err
-	}
+	SubnetActor := id.GetActor()
 	// See if we are already syncing with that chain.
 	if s.getAPI(id) != nil {
 		return xerrors.Errorf("Already syncing with subnet: %v", id)
@@ -646,10 +640,7 @@ func (s *Service) MineSubnet(
 	defer s.lk.RUnlock()
 
 	// Get actor from subnet ID
-	SubnetActor, err := id.Actor()
-	if err != nil {
-		return err
-	}
+	SubnetActor := id.GetActor()
 
 	// Get subnet
 	sh, err := s.getSubnet(id)
@@ -698,10 +689,7 @@ func (s *Service) LeaveSubnet(
 	defer s.lk.Unlock()
 
 	// Get actor from subnet ID
-	SubnetActor, err := id.Actor()
-	if err != nil {
-		return cid.Undef, err
-	}
+	SubnetActor := id.GetActor()
 
 	// Get the api for the parent network hosting the subnet actor for the subnet.
 	parentAPI, err := s.getParentAPI(id)
@@ -768,10 +756,7 @@ func (s *Service) ListSubnets(ctx context.Context, id address.SubnetID) ([]sca.S
 	var output []sca.SubnetOutput
 
 	for _, sn := range subnets {
-		a, err := sn.ID.Actor()
-		if err != nil {
-			return nil, err
-		}
+		a := sn.ID.GetActor()
 		snAct, err := sapi.StateGetActor(ctx, a, types.EmptyTSK)
 		if err != nil {
 			return nil, err
@@ -802,10 +787,7 @@ func (s *Service) KillSubnet(
 	defer s.lk.RUnlock()
 
 	// Get actor from subnet ID
-	SubnetActor, err := id.Actor()
-	if err != nil {
-		return cid.Undef, err
-	}
+	SubnetActor := id.GetActor()
 
 	// Get the api for the parent network hosting the subnet actor for the subnet.
 	parentAPI, err := s.getParentAPI(id)
@@ -857,7 +839,11 @@ func (s *Service) getAPI(id address.SubnetID) *API {
 }
 
 func (s *Service) getParentAPI(id address.SubnetID) (*API, error) {
-	parentAPI := s.getAPI(id.Parent())
+	p, err := id.GetParent()
+	if err != nil {
+		return nil, err
+	}
+	parentAPI := s.getAPI(p)
 	if parentAPI == nil {
 		return nil, xerrors.Errorf("not syncing with parent network")
 	}
@@ -931,10 +917,7 @@ func (s *Service) SubnetStateWaitMsg(ctx context.Context, id address.SubnetID, c
 }
 
 func (s *Service) SubnetStateGetValidators(ctx context.Context, id address.SubnetID) ([]hierarchical.Validator, error) {
-	actor, err := id.Actor()
-	if err != nil {
-		return nil, err
-	}
+	actor := id.GetActor()
 	st, err := s.GetSubnetState(ctx, id, actor)
 	if err != nil {
 		return nil, err

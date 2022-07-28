@@ -19,7 +19,10 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	if err != nil {
 		return err
 	}
-	subnetID := address.SubnetID(netName)
+	subnetID, err := address.SubnetIDFromString(string(netName))
+	if err != nil {
+		return err
+	}
 
 	submitting := time.NewTicker(300 * time.Millisecond)
 	defer submitting.Stop()
@@ -76,7 +79,6 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 				Header:        bh.Header,
 				BlsMessages:   bh.BlsMessages,
 				SecpkMessages: bh.SecpkMessages,
-				CrossMessages: bh.CrossMessages,
 			})
 			if err != nil {
 				log.Errorw("unable to sync a block", "error", err)

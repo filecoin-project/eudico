@@ -8,7 +8,6 @@ import (
 	"math"
 	"sort"
 
-	address "github.com/filecoin-project/go-address"
 	abi "github.com/filecoin-project/go-state-types/abi"
 	hierarchical "github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	schema "github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
@@ -218,15 +217,8 @@ func (t *SCAState) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.NetworkName (address.SubnetID) (string)
-	if len(t.NetworkName) > cbg.MaxLength {
-		return xerrors.Errorf("Value in field t.NetworkName was too long")
-	}
-
-	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len(t.NetworkName))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string(t.NetworkName)); err != nil {
+	// t.NetworkName (address.SubnetID) (struct)
+	if err := t.NetworkName.MarshalCBOR(cw); err != nil {
 		return err
 	}
 
@@ -332,15 +324,14 @@ func (t *SCAState) UnmarshalCBOR(r io.Reader) (err error) {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.NetworkName (address.SubnetID) (string)
+	// t.NetworkName (address.SubnetID) (struct)
 
 	{
-		sval, err := cbg.ReadString(cr)
-		if err != nil {
-			return err
+
+		if err := t.NetworkName.UnmarshalCBOR(cr); err != nil {
+			return xerrors.Errorf("unmarshaling t.NetworkName: %w", err)
 		}
 
-		t.NetworkName = address.SubnetID(sval)
 	}
 	// t.TotalSubnets (uint64) (uint64)
 
@@ -523,27 +514,13 @@ func (t *Subnet) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.ID (address.SubnetID) (string)
-	if len(t.ID) > cbg.MaxLength {
-		return xerrors.Errorf("Value in field t.ID was too long")
-	}
-
-	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len(t.ID))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string(t.ID)); err != nil {
+	// t.ID (address.SubnetID) (struct)
+	if err := t.ID.MarshalCBOR(cw); err != nil {
 		return err
 	}
 
-	// t.ParentID (address.SubnetID) (string)
-	if len(t.ParentID) > cbg.MaxLength {
-		return xerrors.Errorf("Value in field t.ParentID was too long")
-	}
-
-	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len(t.ParentID))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string(t.ParentID)); err != nil {
+	// t.ParentID (address.SubnetID) (struct)
+	if err := t.ParentID.MarshalCBOR(cw); err != nil {
 		return err
 	}
 
@@ -605,25 +582,23 @@ func (t *Subnet) UnmarshalCBOR(r io.Reader) (err error) {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.ID (address.SubnetID) (string)
+	// t.ID (address.SubnetID) (struct)
 
 	{
-		sval, err := cbg.ReadString(cr)
-		if err != nil {
-			return err
+
+		if err := t.ID.UnmarshalCBOR(cr); err != nil {
+			return xerrors.Errorf("unmarshaling t.ID: %w", err)
 		}
 
-		t.ID = address.SubnetID(sval)
 	}
-	// t.ParentID (address.SubnetID) (string)
+	// t.ParentID (address.SubnetID) (struct)
 
 	{
-		sval, err := cbg.ReadString(cr)
-		if err != nil {
-			return err
+
+		if err := t.ParentID.UnmarshalCBOR(cr); err != nil {
+			return xerrors.Errorf("unmarshaling t.ParentID: %w", err)
 		}
 
-		t.ParentID = address.SubnetID(sval)
 	}
 	// t.Stake (big.Int) (struct)
 
@@ -1041,15 +1016,8 @@ func (t *CrossMsgParams) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.Destination (address.SubnetID) (string)
-	if len(t.Destination) > cbg.MaxLength {
-		return xerrors.Errorf("Value in field t.Destination was too long")
-	}
-
-	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len(t.Destination))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string(t.Destination)); err != nil {
+	// t.Destination (address.SubnetID) (struct)
+	if err := t.Destination.MarshalCBOR(cw); err != nil {
 		return err
 	}
 	return nil
@@ -1087,15 +1055,14 @@ func (t *CrossMsgParams) UnmarshalCBOR(r io.Reader) (err error) {
 		}
 
 	}
-	// t.Destination (address.SubnetID) (string)
+	// t.Destination (address.SubnetID) (struct)
 
 	{
-		sval, err := cbg.ReadString(cr)
-		if err != nil {
-			return err
+
+		if err := t.Destination.UnmarshalCBOR(cr); err != nil {
+			return xerrors.Errorf("unmarshaling t.Destination: %w", err)
 		}
 
-		t.Destination = address.SubnetID(sval)
 	}
 	return nil
 }

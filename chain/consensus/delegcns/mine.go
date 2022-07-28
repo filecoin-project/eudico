@@ -60,7 +60,11 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			if err != nil {
 				return err
 			}
-			crossmsgs, err := api.GetCrossMsgsPool(ctx, address.SubnetID(nn), base.Height()+1)
+			sn, err := address.SubnetIDFromString(string(nn))
+			if err != nil {
+				return err
+			}
+			crossmsgs, err := api.GetCrossMsgsPool(ctx, sn, base.Height()+1)
 			if err != nil {
 				log.Errorw("selecting cross-messages failed", "error", err)
 			}
@@ -87,7 +91,6 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 				Header:        bh.Header,
 				BlsMessages:   bh.BlsMessages,
 				SecpkMessages: bh.SecpkMessages,
-				CrossMessages: bh.CrossMessages,
 			})
 			if err != nil {
 				log.Errorw("submitting block failed", "error", err)

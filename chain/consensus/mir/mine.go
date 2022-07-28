@@ -13,41 +13,37 @@ import (
 	ltypes "github.com/filecoin-project/lotus/chain/types"
 )
 
-// Mine handles block "mining" using Mir framework.
+// Mine implements "block mining" using Mir framework.
 //
 // Mine implements the following algorithm:
-// 1. Retrieve messages and cross-messages from mempool and create Mir requests from them.
+// 1. Retrieve messages and cross-messages from the mempool.
 //    Note, that messages can be added into mempool via the libp2p mechanism and the CLI.
-// 2. Store the requests in cache, that is, at present, a key-value storage in memory.
-//    Each key is the request hash.
-// 3. Send those hashes to the Mir node in FIFO mode for each client.
-// 4. Receive ordered hashes from the Mir node and retrieve the corresponding requests from the storage.
-// 5. Create the next Filecoin block.
-//    Note, only a leader Eudico node, chosen by round-robin election, creates a block.
-// 6. Sunk this block without sending it over the libp2p network.
+// 2. Send messages and cross messages to the Mir node through the request pool implementing FIFO.
+// 3. Receive ordered messages from the Mir node and parse them.
+// 4. Create the next Filecoin block. Note, only a leader Eudico node, chosen by round-robin election, creates a block.
+// 5. Sync this block without sending it over the libp2p network.
 //
 // There are two ways how mining with Mir can be started:
-// 1) Environment variables: validators ID and their network addresses are passed
-//    via EUDICO_MIR_VALIDATORS variable.
+// 1) Environment variables: validators ID and network address are passed via EUDICO_MIR_VALIDATORS variable.
 //    This approach can be used to run Mir in the root network and for simple demos.
-// 2) Hierarchical consensus framework: validators IDs and their network addresses
+// 2) Hierarchical consensus framework: validators ID and network address
 //    are received via state, after each validator joins the subnet.
 //    This is used to run Mir in a subnet.
 func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 	log.With("addr", addr).Infof("Mir miner started")
 	defer log.With("addr", addr).Infof("Mir miner completed")
 
-	m, err := NewManager(ctx, addr, api)
+	sm, err := NewManager(ctx, addr, api)
 	if err != nil {
-		return fmt.Errorf("unable to create a manager: %w", err)
+		return fmt.Errorf("unable to create a state manager: %w", err)
 	}
-	log := logging.FromContext(ctx, log).With("miner", m.ID())
+	log := logging.FromContext(ctx, log).With("miner", sm.ID())
 
 	log.Infof("Miner info:\n\twallet - %s\n\tnetwork - %s\n\tsubnet - %s\n\tMir ID - %s\n\tvalidators - %v",
-		m.Addr, m.NetName, m.SubnetID, m.MirID, m.Validators)
+		sm.Addr, sm.NetName, sm.SubnetID, sm.MirID, sm.Validators)
 
-	mirErrors := m.Start(ctx)
-	mirHead := m.App.ChainNotify
+	mirErrors := sm.Start(ctx)
+	mirHead := sm.App.ChainNotify
 
 	submit := time.NewTicker(SubmitInterval)
 	defer submit.Stop()
@@ -61,7 +57,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 
 		// Miner (leader) for an epoch is assigned deterministically using round-robin.
 		// All other validators use the same Miner in the block.
-		epochMiner := m.Validators[int(base.Height())%len(m.Validators)].Addr
+		epochMiner := sm.Validators[int(base.Height())%len(sm.Validators)].Addr
 		nextEpoch := base.Height() + 1
 
 		select {
@@ -71,7 +67,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 		case err := <-mirErrors:
 			return fmt.Errorf("miner consensus error: %w", err)
 		case batch := <-mirHead:
-			msgs, crossMsgs := m.GetMessages(batch)
+			msgs, crossMsgs := sm.GetMessages(batch)
 			log.With("epoch", nextEpoch).
 				Infof("try to create a block: msgs - %d, crossMsgs - %d", len(msgs), len(crossMsgs))
 
@@ -101,7 +97,6 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 				Header:        bh.Header,
 				BlsMessages:   bh.BlsMessages,
 				SecpkMessages: bh.SecpkMessages,
-				CrossMessages: bh.CrossMessages,
 			})
 			if err != nil {
 				log.With("epoch", nextEpoch).
@@ -118,13 +113,13 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 					Errorw("unable to select messages from mempool", "error", err)
 			}
 
-			crossMsgs, err := api.GetUnverifiedCrossMsgsPool(ctx, m.SubnetID, base.Height()+1)
+			crossMsgs, err := api.GetUnverifiedCrossMsgsPool(ctx, sm.SubnetID, base.Height()+1)
 			if err != nil {
 				log.With("epoch", nextEpoch).
 					Errorw("unable to select cross-messages from mempool", "error", err)
 			}
 
-			m.SubmitRequests(ctx, m.GetRequests(msgs, crossMsgs))
+			sm.SubmitRequests(ctx, sm.GetRequests(msgs, crossMsgs))
 		}
 	}
 }

@@ -296,7 +296,11 @@ func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.St
 	// If subnet manager is not set we are in the root chain and we don't need to get parentSCA
 	// state
 	if submgr != nil {
-		parentSCA, pstore, err = crossmsg.GetSCAState(ctx, sm, submgr, netName.Parent(), baseTs)
+		p, err := netName.GetParent()
+		if err != nil {
+			return err
+		}
+		parentSCA, pstore, err = crossmsg.GetSCAState(ctx, sm, submgr, p, baseTs)
 		if err != nil {
 			return err
 		}
@@ -494,9 +498,13 @@ func FilterBlockMessages(
 	// If subnet manager is not set we are in the root chain and we don't need to get parentSCA
 	// state
 	if submgr != nil {
-		parentSCA, pstore, err = crossmsg.GetSCAState(ctx, sm, submgr, netName.Parent(), baseTs)
+		p, err := netName.GetParent()
 		if err != nil {
-			log.Infof("Failed to get parent SCA state: %s", err)
+			log.Errorf("Failed to get parent: %s", err)
+		}
+		parentSCA, pstore, err = crossmsg.GetSCAState(ctx, sm, submgr, p, baseTs)
+		if err != nil {
+			log.Errorf("Failed to get parent SCA state: %s", err)
 		}
 	}
 	// Get SCA state in subnet.

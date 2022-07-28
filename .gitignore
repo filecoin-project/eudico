@@ -56,4 +56,4 @@ gen.gen
 **/*-wal/
 .devcontainer
 /eudico-stats
-f1*
+*.key

@@ -221,8 +221,9 @@ func (a SubnetCoordActor) CommitChildCheckpoint(rt runtime.Runtime, params *Chec
 	subnetActorAddr := rt.Caller()
 
 	// Check the source of the checkpoint.
-	source, err := address.SubnetID(commit.Data.Source).Actor()
+	id, err := address.SubnetIDFromString(commit.Data.Source)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "error getting checkpoint source")
+	source := id.GetActor()
 	if source != subnetActorAddr {
 		rt.Abortf(exitcode.ErrIllegalArgument, "checkpoint committed doesn't belong to source subnet")
 	}
@@ -314,13 +315,17 @@ func (st *SCAState) applyCheckMsgs(rt runtime.Runtime, sh *Subnet, windowCh *sch
 		// if it is directed to this subnet, or another child of the subnet,
 		// add it to bottom-up messages
 		// for the consensus algorithm in the subnet to pick it up.
+		to, _ := address.SubnetIDFromString(mm.To)
+		from, _ := address.SubnetIDFromString(mm.From)
 		if mm.To == st.NetworkName.String() ||
-			!hierarchical.IsBottomUp(st.NetworkName, address.SubnetID(mm.To)) {
+			!hierarchical.IsBottomUp(st.NetworkName, to) {
 			// Add to BottomUpMsgMeta
 			st.storeBottomUpMsgMeta(rt, mm)
 		} else {
+			parFrom, err := from.GetParent()
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting parent for addr")
 			// Check if it comes from a valid child, i.e. we are their parent.
-			if address.SubnetID(mm.From).Parent() != st.NetworkName {
+			if parFrom != st.NetworkName {
 				// Someone is trying to forge a cross-msgs into the checkpoint
 				// from a network from which we are not a parent.
 				continue
@@ -339,7 +344,7 @@ func (st *SCAState) applyCheckMsgs(rt runtime.Runtime, sh *Subnet, windowCh *sch
 		v, err := mm.GetValue()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting value from meta")
 		burnValue = big.Add(burnValue, v)
-		st.releaseCircSupply(rt, sh, address.SubnetID(mm.From), v)
+		st.releaseCircSupply(rt, sh, from, v)
 	}
 
 	// Aggregate all the msgsMeta directed to other subnets in the hierarchy
@@ -383,7 +388,7 @@ func (a SubnetCoordActor) Kill(rt runtime.Runtime, _ *abi.EmptyValue) *abi.Empty
 		// Remove subnet from subnet registry.
 		subnets, err := adt.AsMap(adt.AsStore(rt), st.Subnets, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state for subnets")
-		err = subnets.Delete(hierarchical.SubnetKey(shid))
+		err = subnets.Delete(abi.SubnetKey(shid))
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to remove miner stake in stake map")
 		// Flush stakes adding miner stake.
 		st.Subnets, err = subnets.Root()
@@ -424,7 +429,9 @@ func (a SubnetCoordActor) Fund(rt runtime.Runtime, params *SubnetIDParam) *abi.E
 	// Increment stake locked for subnet.
 	var st SCAState
 	rt.StateTransaction(&st, func() {
-		msg := fundMsg(rt, address.SubnetID(params.ID), secpAddr, value)
+		sn, err := address.SubnetIDFromString(params.ID)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "error getting subnet from string")
+		msg := fundMsg(rt, sn, secpAddr, value)
 		commitTopDownMsg(rt, &st, msg)
 
 	})
@@ -708,7 +715,7 @@ func (a SubnetCoordActor) SubmitAtomicExec(rt runtime.Runtime, params *SubmitExe
 		st   SCAState
 		exec *AtomicExec
 	)
-	caller := SecpBLSAddr(rt, rt.Caller())
+	caller := rt.Caller()
 	rt.StateTransaction(&st, func() {
 		execMap, err := adt.AsMap(adt.AsStore(rt), st.AtomicExecRegistry, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "error getting exec map")

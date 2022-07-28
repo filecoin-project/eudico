@@ -35,6 +35,8 @@ func NewCryptoManager(key address.Address, wallet WalletCrypto) (*CryptoManager,
 	return &CryptoManager{key, wallet}, nil
 }
 
+func (c *CryptoManager) ImplementsModule() {}
+
 // Sign signs the provided data and returns the resulting signature.
 // The data to be signed is the concatenation of all the passed byte slices.
 // A signature produced by Sign is verifiable using Verify,

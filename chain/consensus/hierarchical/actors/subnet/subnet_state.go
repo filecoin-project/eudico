@@ -148,7 +148,10 @@ func ConstructSubnetState(store adt.Store, params *ConstructParams) (*SubnetStat
 			params.FinalityThreshold, params.CheckpointPeriod)
 	}
 
-	parentID := address.SubnetID(params.NetworkName)
+	parentID, err := address.SubnetIDFromString(params.NetworkName)
+	if err != nil {
+		return nil, err
+	}
 
 	return &SubnetState{
 		ParentID:          parentID,
