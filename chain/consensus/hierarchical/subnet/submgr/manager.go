@@ -519,6 +519,8 @@ func (s *Service) JoinSubnet(
 		return cid.Undef, err
 	}
 
+	var startStatus = st.Status
+
 	// Get the parent and the actor to know where to send the message.
 	// Not everything needs to be sent to the root.
 	smsg, aerr := parentAPI.MpoolPushMessage(ctx, &types.Message{
@@ -554,6 +556,15 @@ func (s *Service) JoinSubnet(
 	if err != nil {
 		return cid.Undef, err
 	}
+
+	go func() {
+		var newst subnet.SubnetState
+		if err := pcst.Get(ctx, subnetAct.Head, &newst); err != nil {
+			log.Infow("getting actor state error after join: %w", err)
+		} else if startStatus == subnet.Inactive && newst.Status == subnet.Active {
+			stats.Record(ctx, metrics.SubnetActiveCount.M(1))
+		}
+	}()
 
 	return smsg.Cid(), nil
 }

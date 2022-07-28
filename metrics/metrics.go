@@ -170,6 +170,7 @@ var (
 
 	// hc
 	SubnetCreatedCount = stats.Int64("hc/subnet_created_count", "The total number of subnets created in the node", stats.UnitDimensionless)
+	SubnetActiveCount  = stats.Int64("hc/subnet_active_count", "The total number of active subnets in the node", stats.UnitDimensionless)
 	SubnetKilledCount  = stats.Int64("hc/subnet_killed_count", "The total number of subnets killed in the node", stats.UnitDimensionless)
 )
 
@@ -613,6 +614,10 @@ var (
 		Measure:     SubnetKilledCount,
 		Aggregation: view.Count(),
 	}
+	SubnetActiveCountView = &view.View{
+		Measure:     SubnetActiveCount,
+		Aggregation: view.Count(),
+	}
 )
 
 // DefaultViews is an array of OpenCensus views for metric gathering purposes
@@ -701,6 +706,7 @@ var ChainNodeViews = append([]*view.View{
 	// hc related
 	SubnetCreatedCountView,
 	SubnetKilledCountView,
+	SubnetActiveCountView,
 }, DefaultViews...)
 
 var MinerNodeViews = append([]*view.View{
