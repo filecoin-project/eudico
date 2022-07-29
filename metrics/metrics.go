@@ -53,6 +53,10 @@ var (
 	ProtocolID, _ = tag.NewKey("proto")
 	Direction, _  = tag.NewKey("direction")
 	UseFD, _      = tag.NewKey("use_fd")
+
+	// Subnet ID
+	SubnetID, _    = tag.NewKey("subnet_id")
+	SubnetLevel, _ = tag.NewKey("subnet_level") // The subnet level, the number of parents it has
 )
 
 // Measures
@@ -167,6 +171,13 @@ var (
 	RcmgrBlockSvcPeer   = stats.Int64("rcmgr/block_svc", "Number of blocked blocked streams attached to a service for a specific peer", stats.UnitDimensionless)
 	RcmgrAllowMem       = stats.Int64("rcmgr/allow_mem", "Number of allowed memory reservations", stats.UnitDimensionless)
 	RcmgrBlockMem       = stats.Int64("rcmgr/block_mem", "Number of blocked memory reservations", stats.UnitDimensionless)
+
+	// hc
+	SubnetCreatedCount = stats.Int64("hc/subnet_created_count", "The total number of subnets created in the node", stats.UnitDimensionless)
+	SubnetActiveCount  = stats.Int64("hc/subnet_active_count", "The total number of active subnets in the node", stats.UnitDimensionless)
+	SubnetKilledCount  = stats.Int64("hc/subnet_killed_count", "The total number of subnets killed in the node", stats.UnitDimensionless)
+
+	SubnetSpinUpDuration = stats.Float64("hc/subnet_start_duration", "Time spent spinning up new subnet", stats.UnitMilliseconds)
 )
 
 var (
@@ -599,6 +610,25 @@ var (
 		Measure:     RcmgrBlockMem,
 		Aggregation: view.Count(),
 	}
+
+	// hc
+	SubnetCreatedCountView = &view.View{
+		Measure:     SubnetCreatedCount,
+		Aggregation: view.Count(),
+	}
+	SubnetKilledCountView = &view.View{
+		Measure:     SubnetKilledCount,
+		Aggregation: view.Count(),
+	}
+	SubnetActiveCountView = &view.View{
+		Measure:     SubnetActiveCount,
+		Aggregation: view.Count(),
+	}
+	SubnetSpinUpDurationView = &view.View{
+		Measure:     SubnetSpinUpDuration,
+		Aggregation: defaultMillisecondsDistribution,
+		TagKeys:     []tag.Key{SubnetID, SubnetLevel},
+	}
 )
 
 // DefaultViews is an array of OpenCensus views for metric gathering purposes
@@ -683,6 +713,12 @@ var ChainNodeViews = append([]*view.View{
 	VMApplyFlushView,
 	VMSendsView,
 	VMAppliedView,
+
+	// hc related
+	SubnetCreatedCountView,
+	SubnetKilledCountView,
+	SubnetActiveCountView,
+	SubnetSpinUpDurationView,
 }, DefaultViews...)
 
 var MinerNodeViews = append([]*view.View{
