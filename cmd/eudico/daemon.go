@@ -142,6 +142,11 @@ func daemonCmd(overrides node.Option) *cli.Command {
 				Name:  "restore-config",
 				Usage: "config file to use when restoring from backup",
 			},
+			&cli.BoolFlag{
+				Name:  "export-metrics",
+				Usage: "export the metrics collected",
+				Value: false,
+			},
 		},
 		Action: func(cctx *cli.Context) error {
 			err := runmetrics.Enable(runmetrics.RunMetricOptions{
@@ -194,19 +199,21 @@ func daemonCmd(overrides node.Option) *cli.Command {
 			// Set the metric to one so it is published to the exporter
 			stats.Record(ctx, metrics.LotusInfo.M(1))
 
-			go func() {
-				exporter, err := prometheus.NewExporter(prometheus.Options{
-					Namespace: "eudico_stats",
-				})
-				if err != nil {
-					log.Errorw("failed to create exporter", "err", err)
-				}
+			if cctx.Bool("export-metrics") {
+				go func() {
+					exporter, err := prometheus.NewExporter(prometheus.Options{
+						Namespace: "eudico_stats",
+					})
+					if err != nil {
+						log.Errorw("failed to create exporter", "err", err)
+					}
 
-				http.Handle("/metrics", exporter)
-				if err := http.ListenAndServe(":6688", nil); err != nil {
-					log.Errorw("failed to start http server", "err", err)
-				}
-			}()
+					http.Handle("/metrics", exporter)
+					if err := http.ListenAndServe(":6688", nil); err != nil {
+						log.Errorw("failed to start http server", "err", err)
+					}
+				}()
+			}
 
 			{
 				dir, err := homedir.Expand(cctx.String("repo"))

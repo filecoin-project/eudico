@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/metrics"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -9,7 +12,6 @@ import (
 
 	"github.com/filecoin-project/lotus/build"
 	lcli "github.com/filecoin-project/lotus/cli"
-	"github.com/filecoin-project/lotus/tools/stats/metrics"
 	"github.com/filecoin-project/lotus/tools/stats/sync"
 
 	logging "github.com/ipfs/go-log/v2"
@@ -88,6 +90,13 @@ var runCmd = &cli.Command{
 
 		noSyncFlag := cctx.Bool("no-sync")
 
+		// Register all metric views
+		if err := view.Register(
+			metrics.ChainNodeViews...,
+		); err != nil {
+			log.Fatalf("Cannot register the view: %v", err)
+		}
+
 		exporter, err := prometheus.NewExporter(prometheus.Options{
 			Namespace: "eudico_stats",
 		})
@@ -115,7 +124,8 @@ var runCmd = &cli.Command{
 		genesisTime := time.Unix(int64(gtp.MinTimestamp()), 0)
 
 		go func() {
-			t := time.NewTicker(time.Second)
+			// trigger calculation every 30 seconds
+			t := time.NewTicker(time.Second * 1)
 
 			for {
 				select {
@@ -123,16 +133,45 @@ var runCmd = &cli.Command{
 					sinceGenesis := build.Clock.Now().Sub(genesisTime)
 					expectedHeight := int64(sinceGenesis.Seconds()) / int64(build.BlockDelaySecs)
 
-					stats.Record(ctx, metrics.TipsetCollectionHeightExpected.M(expectedHeight))
+					activeSubnets, err := countSubnets(ctx, api)
+					if err != nil {
+						log.Errorw("cannot count number of active subnets at height %d", expectedHeight)
+					} else {
+						stats.Record(ctx, metrics.SubnetActiveCount.M(activeSubnets))
+					}
+					stats.Record(ctx, metrics.ChainNodeHeightExpected.M(expectedHeight))
 				}
 			}
 		}()
 
 		http.Handle("/metrics", exporter)
-		if err := http.ListenAndServe(":6688", nil); err != nil {
+		if err := http.ListenAndServe(":6689", nil); err != nil {
 			log.Errorw("failed to start http server", "err", err)
 		}
 
 		return nil
 	},
+}
+
+func countSubnets(ctx context.Context, api api.HierarchicalCns) (int64, error) {
+	return traverseSubnet(address.RootSubnet, ctx, api)
+}
+
+func traverseSubnet(subnet address.SubnetID, ctx context.Context, api api.HierarchicalCns) (int64, error) {
+	subnets, err := api.ListSubnets(ctx, subnet)
+	if err != nil {
+		return 0, err
+	}
+
+	count := int64(0)
+	for _, s := range subnets {
+		subCount, err := traverseSubnet(s.Subnet.ID, ctx, api)
+		if err != nil {
+			return 0, err
+		}
+		count += subCount
+	}
+
+	// add 1 for the current subnet
+	return count + 1, nil
 }

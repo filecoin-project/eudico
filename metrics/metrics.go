@@ -55,8 +55,8 @@ var (
 	UseFD, _      = tag.NewKey("use_fd")
 
 	// Subnet ID
-	SubnetID, _    = tag.NewKey("subnet_id")
-	SubnetLevel, _ = tag.NewKey("subnet_level") // The subnet level, the number of parents it has
+	SubnetID, _        = tag.NewKey("subnet_id")
+	SubnetAncestors, _ = tag.NewKey("subnet_ancestors")
 )
 
 // Measures
@@ -622,12 +622,12 @@ var (
 	}
 	SubnetActiveCountView = &view.View{
 		Measure:     SubnetActiveCount,
-		Aggregation: view.Count(),
+		Aggregation: view.LastValue(),
 	}
 	SubnetSpinUpDurationView = &view.View{
 		Measure:     SubnetSpinUpDuration,
 		Aggregation: defaultMillisecondsDistribution,
-		TagKeys:     []tag.Key{SubnetID, SubnetLevel},
+		TagKeys:     []tag.Key{SubnetID, SubnetAncestors},
 	}
 )
 
