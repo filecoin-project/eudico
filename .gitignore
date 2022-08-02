@@ -57,4 +57,3 @@ gen.gen
 .devcontainer
 /eudico-stats
 *.key
-Dockerfile.eudico

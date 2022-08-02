@@ -1,0 +1,33 @@
+# The base image
+FROM golang:1.18.3-buster as builder
+
+MAINTAINER Eudico Development Team
+
+RUN useradd -m eudico && \
+    apt-get update -y && \
+    apt install -y mesa-opencl-icd ocl-icd-opencl-dev gcc git bzr jq pkg-config curl clang build-essential hwloc libhwloc-dev wget && \
+    apt upgrade -y
+
+ENV GOPATH=/home/eudico/go
+WORKDIR /home/eudico
+
+COPY . .
+
+RUN make clean deps && make eudico eudico-stats lotus-keygen
+
+# The eudico image
+FROM golang:1.18.3-buster as eudico
+
+RUN useradd -m eudico && \
+    apt-get update -y && \
+    apt install -y mesa-opencl-icd ocl-icd-opencl-dev gcc git bzr jq pkg-config curl clang build-essential hwloc libhwloc-dev wget && \
+    apt upgrade -y
+
+COPY --from=builder /home/eudico/eudico /home/eudico/eudico
+COPY --from=builder /home/eudico/eudico-stats /home/eudico/eudico-stats
+COPY --from=builder /home/eudico/lotus-keygen /home/eudico/lotus-keygen
+COPY ./scripts/eudico.sh /home/eudico/eudico.sh
+
+WORKDIR /home/eudico
+
+ENTRYPOINT ["bash", "/home/eudico/eudico.sh"]
