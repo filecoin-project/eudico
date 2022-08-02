@@ -199,6 +199,8 @@ func daemonCmd(overrides node.Option) *cli.Command {
 			// Set the metric to one so it is published to the exporter
 			stats.Record(ctx, metrics.LotusInfo.M(1))
 
+                        // FIXME: Consider moving this to an independent optional process
+                        // (so that is not dependent on the main process).
 			if cctx.Bool("export-metrics") {
 				go func() {
 					exporter, err := prometheus.NewExporter(prometheus.Options{
