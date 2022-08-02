@@ -98,7 +98,7 @@ var runCmd = &cli.Command{
 		}
 
 		exporter, err := prometheus.NewExporter(prometheus.Options{
-			Namespace: "eudico_stats",
+			Namespace: "eudico_external_stats",
 		})
 		if err != nil {
 			return err

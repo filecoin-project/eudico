@@ -31,7 +31,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "zq1zt7zVk"
+        "uid": "Xo5O11k4z"
       },
       "description": "",
       "fieldConfig": {
@@ -77,7 +77,7 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "9.0.4",
+      "pluginVersion": "9.0.6",
       "targets": [
         {
           "datasource": {
@@ -85,7 +85,7 @@
             "uid": "z584F7k4k"
           },
           "editorMode": "code",
-          "expr": "lotus_stats_hc_subnet_created_count",
+          "expr": "max(eudico_node_stats_hc_subnet_created_count OR vector(1))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -95,10 +95,7 @@
       "type": "stat"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "zq1zt7zVk"
-      },
+      "datasource": {},
       "description": "",
       "fieldConfig": {
         "defaults": {
@@ -143,7 +140,7 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "9.0.4",
+      "pluginVersion": "9.0.6",
       "targets": [
         {
           "datasource": {
@@ -151,7 +148,7 @@
             "uid": "z584F7k4k"
           },
           "editorMode": "code",
-          "expr": "max(lotus_stats_hc_subnet_active_count OR vector(0))",
+          "expr": "max(eudico_external_stats_hc_subnet_active_count OR vector(0))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -161,7 +158,10 @@
       "type": "stat"
     },
     {
-      "datasource": {},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Xo5O11k4z"
+      },
       "description": "",
       "fieldConfig": {
         "defaults": {
@@ -206,7 +206,7 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "9.0.4",
+      "pluginVersion": "9.0.6",
       "targets": [
         {
           "datasource": {
@@ -214,7 +214,7 @@
             "uid": "cOwoGikVz"
           },
           "editorMode": "code",
-          "expr": "max(lotus_stats_hc_subnet_killed_count or on() vector(0))",
+          "expr": "max(eudico_node_stats_hc_subnet_killed_count or on() vector(0))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -224,10 +224,7 @@
       "type": "stat"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "zq1zt7zVk"
-      },
+      "datasource": {},
       "description": "The median subnet spin up time in millis seconds",
       "fieldConfig": {
         "defaults": {
@@ -270,7 +267,7 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "9.0.4",
+      "pluginVersion": "9.0.6",
       "targets": [
         {
           "datasource": {
@@ -278,7 +275,7 @@
             "uid": "z584F7k4k"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.5, rate(lotus_stats_hc_subnet_start_duration_bucket[5m]))",
+          "expr": "histogram_quantile(0.5, rate(eudico_node_stats_hc_subnet_start_duration_bucket[5m]))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -303,6 +300,6 @@
   "timezone": "",
   "title": "HC Metrics",
   "uid": "ltIs4ikVk",
-  "version": 3,
+  "version": 2,
   "weekStart": ""
 }

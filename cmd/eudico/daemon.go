@@ -202,7 +202,7 @@ func daemonCmd(overrides node.Option) *cli.Command {
 			if cctx.Bool("export-metrics") {
 				go func() {
 					exporter, err := prometheus.NewExporter(prometheus.Options{
-						Namespace: "eudico_stats",
+						Namespace: "eudico_node_stats",
 					})
 					if err != nil {
 						log.Errorw("failed to create exporter", "err", err)

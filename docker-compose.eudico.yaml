@@ -1,0 +1,80 @@
+# By default, this docker-compose file will start a eudico fullnode
+#
+# Some directives have been left commented out so they serve as an
+# example for more advanced use.
+#
+# To provide a custom configuration file, or automatically import
+# a wallet, uncomment the "configs" or "secrets" sections.
+# 
+# start on a single node:
+#
+#    docker-compose up
+#
+# for more information, please visit docs.filecoin.io
+
+version: "3"
+
+volumes:
+  eudico-data: {}
+  grafana: {}
+
+services:
+  all-in-one:
+    image: eudico:latest
+    volumes:
+      - eudico-data:/home/eudico/.eudico
+      - ./scripts/eudico.sh:/home/eudico/eudico.sh
+      - ./f1jofxivb4wgnekn6qnsfh7brvjidle5abhya4y6q.key:/home/eudico/f1jofxivb4wgnekn6qnsfh7brvjidle5abhya4y6q.key
+      - ./gen.gen:/home/eudico/gen.gen
+    ports:
+      - 1234:1234
+      - 6689:6689
+      - 6688:6688
+      - 2345:2345
+    command:
+      - -a  # start the node
+
+#  miner:
+#    image: eudico:latest
+#    volumes:
+#      - eudico-data:/home/eudico/.eudico
+#      - ./f1jofxivb4wgnekn6qnsfh7brvjidle5abhya4y6q.key:/home/eudico/f1jofxivb4wgnekn6qnsfh7brvjidle5abhya4y6q.key
+#    depends_on:
+#      - eudico
+#    ports:
+#      - 2345:2345
+#    command:
+#      - -m  # start the miner
+
+#  stats:
+#    image: eudico:latest
+#    volumes:
+#      - eudico-data:/home/eudico/.eudico
+#      - ./scripts/eudico.sh:/home/eudico/eudico.sh
+#    depends_on:
+#      - eudico
+#    ports:
+#      - 6689:6689
+#    command:
+#      - -s  # start the eudico stats
+  
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./cmd/eudico-stats/prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - 9090:9090
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "13000:3000"
+    depends_on:
+      - prometheus
+    volumes:
+      - grafana:/var/lib/grafana
