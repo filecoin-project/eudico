@@ -4,6 +4,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/ipfs/go-cid"
+	u "github.com/ipfs/go-ipfs-util"
+	"go.uber.org/zap/buffer"
+
 	addr "github.com/filecoin-project/go-address"
 )
 
@@ -25,6 +29,14 @@ func (v *Validator) HAddr() (addr.Address, error) {
 
 func (v *Validator) ID() string {
 	return fmt.Sprintf("%s:%s", v.Subnet, v.Addr)
+}
+
+func (v *Validator) Bytes() ([]byte, error) {
+	var b buffer.Buffer
+	if err := v.MarshalCBOR(&b); err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
 }
 
 // ValidatorsFromString parses comma-separated subnet:ID@OpaqueNetAddr validators string.
@@ -95,4 +107,28 @@ func splitAndTrimEmpty(s, sep, cutset string) []string {
 	}
 
 	return nonEmptyStrings
+}
+
+type ValidatorSet struct {
+	Validators []Validator
+}
+
+func NewValidatorSet(vals []Validator) *ValidatorSet {
+	return &ValidatorSet{Validators: vals}
+}
+
+func (vs *ValidatorSet) Hash() ([]byte, error) {
+	var hs []byte
+	for _, v := range vs.Validators {
+		b, err := v.Bytes()
+		if err != nil {
+			return nil, err
+		}
+		hs = append(hs, b...)
+	}
+	return cid.NewCidV0(u.Hash(hs)).Bytes(), nil
+}
+
+func (vs *ValidatorSet) GetValidators() []Validator {
+	return vs.Validators
 }

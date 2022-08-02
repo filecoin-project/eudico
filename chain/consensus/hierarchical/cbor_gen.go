@@ -206,3 +206,88 @@ func (t *Validator) UnmarshalCBOR(r io.Reader) (err error) {
 	}
 	return nil
 }
+
+var lengthBufValidatorSet = []byte{129}
+
+func (t *ValidatorSet) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+
+	cw := cbg.NewCborWriter(w)
+
+	if _, err := cw.Write(lengthBufValidatorSet); err != nil {
+		return err
+	}
+
+	// t.Validators ([]hierarchical.Validator) (slice)
+	if len(t.Validators) > cbg.MaxLength {
+		return xerrors.Errorf("Slice value in field t.Validators was too long")
+	}
+
+	if err := cw.WriteMajorTypeHeader(cbg.MajArray, uint64(len(t.Validators))); err != nil {
+		return err
+	}
+	for _, v := range t.Validators {
+		if err := v.MarshalCBOR(cw); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (t *ValidatorSet) UnmarshalCBOR(r io.Reader) (err error) {
+	*t = ValidatorSet{}
+
+	cr := cbg.NewCborReader(r)
+
+	maj, extra, err := cr.ReadHeader()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err == io.EOF {
+			err = io.ErrUnexpectedEOF
+		}
+	}()
+
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 1 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.Validators ([]hierarchical.Validator) (slice)
+
+	maj, extra, err = cr.ReadHeader()
+	if err != nil {
+		return err
+	}
+
+	if extra > cbg.MaxLength {
+		return fmt.Errorf("t.Validators: array too large (%d)", extra)
+	}
+
+	if maj != cbg.MajArray {
+		return fmt.Errorf("expected cbor array")
+	}
+
+	if extra > 0 {
+		t.Validators = make([]Validator, extra)
+	}
+
+	for i := 0; i < int(extra); i++ {
+
+		var v Validator
+		if err := v.UnmarshalCBOR(cr); err != nil {
+			return err
+		}
+
+		t.Validators[i] = v
+	}
+
+	return nil
+}

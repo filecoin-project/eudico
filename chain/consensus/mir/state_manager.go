@@ -1,9 +1,10 @@
 package mir
 
 import (
-	"context"
+	"bytes"
 	"fmt"
 
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
@@ -18,15 +19,17 @@ const (
 type Tx []byte
 
 type StateManager struct {
-	ChainNotify  chan []Tx
-	BatchCounter uint
-	Api          *Manager
+	ChainNotify           chan []Tx
+	ReconfigurationNotify chan []hierarchical.ValidatorSet
+	BatchCounter          uint
+	Api                   *Manager
 }
 
 func NewStateManager(m *Manager) *StateManager {
 	sm := StateManager{
-		ChainNotify: make(chan []Tx),
-		Api:         m,
+		ChainNotify:           make(chan []Tx),
+		ReconfigurationNotify: make(chan []hierarchical.ValidatorSet),
+		Api:                   m,
 	}
 	return &sm
 }
@@ -66,24 +69,40 @@ func (sm *StateManager) ApplyEvent(event *eventpb.Event) (*events.EventList, err
 
 // ApplyBatch sends a batch consisting of data only to Eudico.
 func (sm *StateManager) ApplyBatch(in *requestpb.Batch) error {
-	var out []Tx
+	var txs []Tx
 
 	for _, req := range in.Requests {
-		out = append(out, req.Req.Data)
+		switch req.Req.Type {
+		case TransportType:
+			txs = append(txs, req.Req.Data)
+		case ReconfigurationType:
+			validators := &hierarchical.ValidatorSet{}
+			err := validators.UnmarshalCBOR(bytes.NewReader(req.Req.Data))
+			if err != nil {
+				panic(err)
+			}
+			err = sm.Api.UpdateReconfigurationVotes(validators)
+			if err != nil {
+				panic(err)
+			}
+		}
 	}
 
-	sm.ChainNotify <- out
+	sm.ChainNotify <- txs
 	sm.BatchCounter++
 
-	if sm.BatchCounter%ReconfigurationBatchNumber == 0 {
-		fmt.Println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+	/*
+		if sm.BatchCounter%ReconfigurationBatchNumber == 0 {
+			fmt.Println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
 
-		err := sm.Api.ReconfigureMirNode(context.TODO())
-		if err != nil {
-			return err
+			err := sm.Api.ReconfigureMirNode(context.TODO())
+			if err != nil {
+				return err
+			}
+
 		}
 
-	}
+	*/
 
 	return nil
 }

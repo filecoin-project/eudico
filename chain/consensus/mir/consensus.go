@@ -36,9 +36,10 @@ import (
 )
 
 const (
-	MaxHeightDrift = 5
-	SubmitInterval = 5000 * time.Millisecond
-	ValidatorsEnv  = "EUDICO_MIR_VALIDATORS"
+	MaxHeightDrift          = 5
+	SubmitInterval          = 5000 * time.Millisecond
+	ReconfigurationInterval = 2000 * time.Millisecond
+	ValidatorsEnv           = "EUDICO_MIR_VALIDATORS"
 )
 
 var (

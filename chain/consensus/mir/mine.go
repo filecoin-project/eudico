@@ -1,16 +1,22 @@
 package mir
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"time"
+
+	"go.uber.org/zap/buffer"
 
 	"github.com/filecoin-project/go-address"
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/platform/logging"
 	"github.com/filecoin-project/lotus/chain/types"
 	ltypes "github.com/filecoin-project/lotus/chain/types"
+	mirproto "github.com/filecoin-project/mir/pkg/pb/requestpb"
 )
 
 // Mine implements "block mining" using Mir framework.
@@ -33,20 +39,35 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 	log.With("addr", addr).Infof("Mir miner started")
 	defer log.With("addr", addr).Infof("Mir miner completed")
 
-	sm, err := NewManager(ctx, addr, api)
+	m, err := NewManager(ctx, addr, api)
 	if err != nil {
-		return fmt.Errorf("unable to create a state manager: %w", err)
+		return fmt.Errorf("unable to create a manager: %w", err)
 	}
-	log := logging.FromContext(ctx, log).With("miner", sm.ID())
+	log := logging.FromContext(ctx, log).With("miner", m.ID())
 
 	log.Infof("Miner info:\n\twallet - %s\n\tnetwork - %s\n\tsubnet - %s\n\tMir ID - %s\n\tvalidators - %v",
-		sm.Addr, sm.NetName, sm.SubnetID, sm.MirID, sm.Validators)
+		m.Addr, m.NetName, m.SubnetID, m.MirID, m.Validators)
 
-	mirErrors := sm.Start(ctx)
-	mirHead := sm.App.ChainNotify
+	mirErrors := m.Start(ctx)
+	mirHead := m.App.ChainNotify
 
+	// TODO: remove or use the original variant.
 	submit := time.NewTicker(SubmitInterval)
 	defer submit.Stop()
+
+	reconfigure := time.NewTicker(ReconfigurationInterval)
+	defer reconfigure.Stop()
+
+	updateEnv := time.NewTimer(time.Second * 6)
+	defer updateEnv.Stop()
+
+	var reconfigurationNumber uint64
+
+	vs := hierarchical.NewValidatorSet(m.Validators)
+	lastValidatorSetHash, err := vs.Hash()
+	if err != nil {
+		return err
+	}
 
 	for {
 		base, err := api.ChainHead(ctx)
@@ -57,7 +78,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 
 		// Miner (leader) for an epoch is assigned deterministically using round-robin.
 		// All other validators use the same Miner in the block.
-		epochMiner := sm.Validators[int(base.Height())%len(sm.Validators)].Addr
+		epochMiner := m.Validators[int(base.Height())%len(m.Validators)].Addr
 		nextEpoch := base.Height() + 1
 
 		select {
@@ -66,8 +87,54 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			return nil
 		case err := <-mirErrors:
 			return fmt.Errorf("miner consensus error: %w", err)
+
+		case <-updateEnv.C:
+			gg := os.Getenv(ValidatorsEnv)
+			gg = gg + ",/root:t1sqbkluz5elnekdu62ute5zjammslkplgdcpa2zi@/ip4/127.0.0.1/tcp/10004/p2p/12D3KooWMMNKpXU1NNRE9WyH7CmV4JweJLpVyW76igZYVMfHAUtt"
+			os.Setenv(ValidatorsEnv, gg)
+			updateEnv.Stop()
+
+		case <-reconfigure.C:
+			newValidatorSet, err := getSubnetValidators(ctx, m.SubnetID, api)
+			if err != nil {
+				log.With("epoch", nextEpoch).
+					Warnf("failed to get subnet validators: %v", err)
+				continue
+			}
+
+			newValidatorSetHash, err := newValidatorSet.Hash()
+			if err != nil {
+				log.With("epoch", nextEpoch).
+					Warnf("failed to get validator set hash: %v", err)
+				continue
+			}
+
+			if bytes.Equal(newValidatorSetHash, lastValidatorSetHash) {
+				continue
+			}
+
+			log.With("epoch", nextEpoch).
+				Infof("received new validator set hash: %v", newValidatorSetHash)
+			lastValidatorSetHash = newValidatorSetHash
+
+			var payload buffer.Buffer
+			err = newValidatorSet.MarshalCBOR(&payload)
+			if err != nil {
+				log.With("epoch", nextEpoch).
+					Warnf("failed to marshal validators: %v", err)
+				continue
+			}
+			// TODO: Do we care about nonce here?
+			m.SubmitRequests(ctx, []*mirproto.Request{
+				// TODO: Should Mir define a special type of request for reconfiguration ?
+				// 0 - transport requests to send messages and cross-messages,
+				// 1 - reconfiguration requests to sends data about validators, etc.
+				m.newReconfigurationRequest(reconfigurationNumber, payload.Bytes())},
+			)
+			reconfigurationNumber++
+
 		case batch := <-mirHead:
-			msgs, crossMsgs := sm.GetMessages(batch)
+			msgs, crossMsgs := m.GetMessages(batch)
 			log.With("epoch", nextEpoch).
 				Infof("try to create a block: msgs - %d, crossMsgs - %d", len(msgs), len(crossMsgs))
 
@@ -113,13 +180,13 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 					Errorw("unable to select messages from mempool", "error", err)
 			}
 
-			crossMsgs, err := api.GetUnverifiedCrossMsgsPool(ctx, sm.SubnetID, base.Height()+1)
+			crossMsgs, err := api.GetUnverifiedCrossMsgsPool(ctx, m.SubnetID, base.Height()+1)
 			if err != nil {
 				log.With("epoch", nextEpoch).
 					Errorw("unable to select cross-messages from mempool", "error", err)
 			}
 
-			sm.SubmitRequests(ctx, sm.GetRequests(msgs, crossMsgs))
+			m.SubmitRequests(ctx, m.GetTransportRequests(msgs, crossMsgs))
 		}
 	}
 }

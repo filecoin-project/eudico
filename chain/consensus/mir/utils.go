@@ -23,7 +23,7 @@ func getSubnetValidators(
 	subnetID address.SubnetID,
 	api v1api.FullNode,
 ) (
-	[]hierarchical.Validator, error) {
+	*hierarchical.ValidatorSet, error) {
 	var err error
 	var validators []hierarchical.Validator
 	validatorsEnv := os.Getenv(ValidatorsEnv)
@@ -41,7 +41,7 @@ func getSubnetValidators(
 			return nil, fmt.Errorf("failed to get validators from state")
 		}
 	}
-	return validators, nil
+	return hierarchical.NewValidatorSet(validators), nil
 }
 
 // ValidatorsMembership validates that validators addresses are valid multi-addresses and

@@ -47,7 +47,7 @@ require (
 	github.com/filecoin-project/go-statestore v0.2.0
 	github.com/filecoin-project/go-storedcounter v0.1.0
 	github.com/filecoin-project/index-provider v0.5.0
-	github.com/filecoin-project/mir v0.0.0-20220728102549-aaba3ef4c934
+	github.com/filecoin-project/mir v0.0.0-20220801142417-9c6831f24632
 	github.com/filecoin-project/pubsub v1.0.0
 	github.com/filecoin-project/specs-actors v0.9.14
 	github.com/filecoin-project/specs-actors/v2 v2.3.6

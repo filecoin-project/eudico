@@ -2,6 +2,7 @@
 package mir
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -46,6 +47,12 @@ type Manager struct {
 	ISS     *iss.ISS
 	Crypto  *CryptoManager
 	App     *StateManager
+
+	// Reconfiguration
+	ReconfigurationVotes    map[string]uint64
+	LastReconfigurationHash []byte
+	ValidatorsNumber        int
+	FaultyNumber            int
 }
 
 func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (*Manager, error) {
@@ -69,10 +76,11 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		return nil, fmt.Errorf("failed to unmarshal private key: %w", err)
 	}
 
-	validators, err := getSubnetValidators(ctx, subnetID, api)
+	validatorSet, err := getSubnetValidators(ctx, subnetID, api)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get validators: %w", err)
 	}
+	validators := validatorSet.GetValidators()
 	if len(validators) == 0 {
 		return nil, fmt.Errorf("empty validator set")
 	}
@@ -136,17 +144,20 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	pool := newRequestPool()
 
 	m := Manager{
-		Addr:       addr,
-		SubnetID:   subnetID,
-		NetName:    netName,
-		Validators: validators,
-		EudicoNode: api,
-		Pool:       pool,
-		MirID:      mirID,
-		WAL:        wal,
-		Crypto:     cryptoManager,
-		Net:        netTransport,
-		ISS:        issProtocol,
+		Addr:                 addr,
+		SubnetID:             subnetID,
+		NetName:              netName,
+		Validators:           validators,
+		EudicoNode:           api,
+		Pool:                 pool,
+		MirID:                mirID,
+		WAL:                  wal,
+		Crypto:               cryptoManager,
+		Net:                  netTransport,
+		ISS:                  issProtocol,
+		ReconfigurationVotes: make(map[string]uint64),
+		ValidatorsNumber:     len(validators),
+		FaultyNumber:         (len(validators) - 1) / 3,
 	}
 
 	sm := NewStateManager(&m)
@@ -228,6 +239,41 @@ func (m *Manager) ReconfigureMirNode(ctx context.Context) error {
 
 	return nil
 }
+func (m *Manager) UpdateReconfigurationVotes(vs *hierarchical.ValidatorSet) error {
+	fmt.Println(">>>>")
+	fmt.Println(vs)
+	fmt.Println(len(vs.Validators))
+	h, err := vs.Hash()
+	if err != nil {
+		return err
+	}
+	m.ReconfigurationVotes[string(h)]++
+	votes := int(m.ReconfigurationVotes[string(h)])
+	if votes < (2*m.FaultyNumber + 1) {
+		return nil
+	}
+	newConfigHash, err := vs.Hash()
+	if err != nil {
+		return err
+	}
+
+	if bytes.Equal(m.LastReconfigurationHash, newConfigHash) {
+		return nil
+	}
+
+	fmt.Println(vs)
+
+	fmt.Println("We get enough votes - start reconfiguration: ", votes)
+	m.Validators = vs.Validators
+	m.ValidatorsNumber = len(m.Validators)
+	m.FaultyNumber = f(m.ValidatorsNumber)
+	m.LastReconfigurationHash, err = vs.Hash()
+	if err != nil {
+		return err
+	}
+
+	return m.ReconfigureMirNode(context.TODO())
+}
 
 func (m *Manager) SubmitRequests(ctx context.Context, requests []*mirproto.Request) {
 	if len(requests) == 0 {
@@ -306,12 +352,22 @@ func (m *Manager) GetMessages(batch []Tx) (msgs []*types.SignedMessage, crossMsg
 	return
 }
 
-func (m *Manager) GetRequests(msgs []*types.SignedMessage, crossMsgs []*types.UnverifiedCrossMsg) (
+func (m *Manager) GetTransportRequests(msgs []*types.SignedMessage, crossMsgs []*types.UnverifiedCrossMsg) (
 	requests []*mirproto.Request,
 ) {
 	requests = append(requests, m.batchSignedMessages(msgs)...)
 	requests = append(requests, m.batchCrossMessages(crossMsgs)...)
 	return
+}
+
+func (m *Manager) newReconfigurationRequest(n uint64, payload []byte) *mirproto.Request {
+	r := mirproto.Request{
+		ClientId: m.MirID,
+		ReqNo:    n,
+		Type:     ReconfigurationType,
+		Data:     payload,
+	}
+	return &r
 }
 
 // batchPushSignedMessages pushes signed messages into the request pool and sends them to Mir.
@@ -335,6 +391,7 @@ func (m *Manager) batchSignedMessages(msgs []*types.SignedMessage) (
 		r := &mirproto.Request{
 			ClientId: clientID,
 			ReqNo:    nonce,
+			Type:     TransportType,
 			Data:     data,
 		}
 
@@ -371,6 +428,7 @@ func (m *Manager) batchCrossMessages(crossMsgs []*types.UnverifiedCrossMsg) (
 		r := &mirproto.Request{
 			ClientId: clientID,
 			ReqNo:    nonce,
+			Type:     TransportType,
 			Data:     data,
 		}
 		m.Pool.addRequest(msg.Cid().String(), r)
@@ -383,4 +441,8 @@ func (m *Manager) batchCrossMessages(crossMsgs []*types.UnverifiedCrossMsg) (
 func (m *Manager) ID() string {
 	addr := m.Addr.String()
 	return fmt.Sprintf("%v:%v", m.SubnetID, addr[len(addr)-6:])
+}
+
+func f(n int) int {
+	return (n - 1) / 3
 }
