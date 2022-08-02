@@ -33,6 +33,7 @@ cd cmd/eudico-stats && docker-compose up -d && cd -
 Using docker-compose
 In the root directory
 ```shell
+docker build -t eudico:latest -f Dockerfile.eudico .
 docker run -it -v `pwd`/credentials:/home/eudico/credentials --rm eudico:latest -i
 docker-compose -f docker-compose.eudico.yaml up -d
 docker-compose -f docker-compose.eudico.yaml logs -f all-in-one
