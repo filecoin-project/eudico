@@ -29,3 +29,11 @@ cd cmd/eudico-stats && docker-compose up -d && cd -
 ./eudico subnet join --subnet /root/t01000 4
 # you should be able to see the stats on http://localhost:9090 with eudico*
 ```
+
+Using docker-compose
+In the root directory
+```shell
+docker build -t eudico:latest -f Dockerfile.eudico .
+docker-compose -f docker-compose.eudico.yaml up -d
+docker-compose -f docker-compose.eudico.yaml logs -f all-in-one
+```

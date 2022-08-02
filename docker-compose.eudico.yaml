@@ -24,8 +24,7 @@ services:
     volumes:
       - eudico-data:/home/eudico/.eudico
       - ./scripts/eudico.sh:/home/eudico/eudico.sh
-      - ./f1jofxivb4wgnekn6qnsfh7brvjidle5abhya4y6q.key:/home/eudico/f1jofxivb4wgnekn6qnsfh7brvjidle5abhya4y6q.key
-      - ./gen.gen:/home/eudico/gen.gen
+      - ./credentials:/home/eudico/credentials
     ports:
       - 1234:1234
       - 6689:6689
@@ -57,7 +56,15 @@ services:
 #      - 6689:6689
 #    command:
 #      - -s  # start the eudico stats
-  
+
+  nginx:
+    image: nginx:1.15-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./cmd/eudico-stats/nginx.conf:/etc/nginx/conf.d/default.conf
+
   prometheus:
     image: prom/prometheus
     volumes:

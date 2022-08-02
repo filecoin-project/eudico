@@ -1,9 +1,23 @@
 #!/usr/bin/env bash
 
+# init the node and the genesis
+init() {
+    # generate the wallet
+    ./lotus-keygen -t secp256k1
+
+    # generate the genesis
+    ADDR=$(echo f1* | tr '.' ' ' | awk '{print $1}')
+    ./eudico delegated genesis $ADDR gen.gen
+
+    mkdir -p credentials
+    mv gen.gen ./credentials
+    mv f1* ./credentials
+}
+
 # start the miner process
 miner() {
     # import wallet
-    ./eudico wallet import --format=json-lotus f1*.key || true
+    ./eudico wallet import --format=json-lotus ./credentials/f1*.key || true
 
     # start the miner
     ./eudico delegated miner
@@ -11,7 +25,7 @@ miner() {
 
 # start the node daemon process
 daemon() {
-    ./eudico delegated daemon --genesis=gen.gen --export-metrics=true
+    ./eudico delegated daemon --genesis=./credentials/gen.gen --export-metrics=true
 }
 
 # start the eudico stats process
@@ -26,7 +40,7 @@ stats() {
     ./eudico-stats run --no-sync true
 }
 
-while getopts ":hmnsca" option; do
+while getopts ":hmnscai" option; do
    case $option in
       h) # display Help
         printf "USAGE: Util bash script for eudico testnet commands\n"
@@ -35,6 +49,8 @@ while getopts ":hmnsca" option; do
         echo "-n    Start the node"
         echo "-s    Start the eudico-stats"
         echo "-c    Clear the current node data"
+        echo "-a    Start all in one node"
+        echo "-i    Init the key and genesis"
         exit;;
       m) # start the miner
         miner
@@ -47,6 +63,9 @@ while getopts ":hmnsca" option; do
         exit;;
       s) # start the eudico stats
         stats
+        exit;;
+      i) # init the node and genesis
+        init
         exit;;
       a) # start all in one
         daemon & > node.log
