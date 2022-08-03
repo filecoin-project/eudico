@@ -37,7 +37,6 @@ type Manager struct {
 	SubnetID   address.SubnetID
 	Addr       address.Address
 	Pool       *requestPool
-	Validators []hierarchical.Validator
 
 	// Mir types
 	MirNode *mir.Node
@@ -48,11 +47,10 @@ type Manager struct {
 	Crypto  *CryptoManager
 	App     *StateManager
 
-	// Reconfiguration
+	// Reconfiguration types
+	ValidatorSet            *hierarchical.ValidatorSet
 	ReconfigurationVotes    map[string]uint64
 	LastReconfigurationHash []byte
-	ValidatorsNumber        int
-	FaultyNumber            int
 }
 
 func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (*Manager, error) {
@@ -76,16 +74,15 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		return nil, fmt.Errorf("failed to unmarshal private key: %w", err)
 	}
 
-	validatorSet, err := getSubnetValidators(ctx, subnetID, api)
+	initialValidatorSet, err := getSubnetValidators(ctx, subnetID, api)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get validators: %w", err)
+		return nil, fmt.Errorf("failed to get validator set: %w", err)
 	}
-	validators := validatorSet.GetValidators()
-	if len(validators) == 0 {
+	if initialValidatorSet.Size() == 0 {
 		return nil, fmt.Errorf("empty validator set")
 	}
 
-	nodeIDs, nodes, err := ValidatorsMembership(validators)
+	nodeIDs, nodes, err := ValidatorsMembership(initialValidatorSet.Validators)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build node membership: %w", err)
 	}
@@ -147,7 +144,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		Addr:                 addr,
 		SubnetID:             subnetID,
 		NetName:              netName,
-		Validators:           validators,
+		ValidatorSet:         initialValidatorSet,
 		EudicoNode:           api,
 		Pool:                 pool,
 		MirID:                mirID,
@@ -156,8 +153,6 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		Net:                  netTransport,
 		ISS:                  issProtocol,
 		ReconfigurationVotes: make(map[string]uint64),
-		ValidatorsNumber:     len(validators),
-		FaultyNumber:         (len(validators) - 1) / 3,
 	}
 
 	sm := NewStateManager(&m)
@@ -223,10 +218,10 @@ func (m *Manager) ReconfigureMirNode(ctx context.Context) error {
 	log.With("miner", m.MirID).Infof("Creating a Mir node started")
 	defer log.With("miner", m.MirID).Info("Creating a Mir node finished")
 
-	if len(m.Validators) == 0 {
+	if m.ValidatorSet.Size() == 0 {
 		return fmt.Errorf("empty validator set")
 	}
-	nodeIDs, nodes, err := ValidatorsMembership(m.Validators)
+	nodeIDs, nodes, err := ValidatorsMembership(m.ValidatorSet.GetValidators())
 	if err != nil {
 		return fmt.Errorf("failed to build node membership: %w", err)
 	}
@@ -242,14 +237,14 @@ func (m *Manager) ReconfigureMirNode(ctx context.Context) error {
 func (m *Manager) UpdateReconfigurationVotes(vs *hierarchical.ValidatorSet) error {
 	fmt.Println(">>>>")
 	fmt.Println(vs)
-	fmt.Println(len(vs.Validators))
+	fmt.Println(vs.Size())
 	h, err := vs.Hash()
 	if err != nil {
 		return err
 	}
 	m.ReconfigurationVotes[string(h)]++
 	votes := int(m.ReconfigurationVotes[string(h)])
-	if votes < (2*m.FaultyNumber + 1) {
+	if votes < m.ValidatorSet.Majority() {
 		return nil
 	}
 	newConfigHash, err := vs.Hash()
@@ -264,9 +259,7 @@ func (m *Manager) UpdateReconfigurationVotes(vs *hierarchical.ValidatorSet) erro
 	fmt.Println(vs)
 
 	fmt.Println("We get enough votes - start reconfiguration: ", votes)
-	m.Validators = vs.Validators
-	m.ValidatorsNumber = len(m.Validators)
-	m.FaultyNumber = f(m.ValidatorsNumber)
+	m.ValidatorSet = vs
 	m.LastReconfigurationHash, err = vs.Hash()
 	if err != nil {
 		return err

@@ -19,17 +19,15 @@ const (
 type Tx []byte
 
 type StateManager struct {
-	ChainNotify           chan []Tx
-	ReconfigurationNotify chan []hierarchical.ValidatorSet
-	BatchCounter          uint
-	Api                   *Manager
+	ChainNotify  chan []Tx
+	BatchCounter uint
+	MirManager   *Manager
 }
 
 func NewStateManager(m *Manager) *StateManager {
 	sm := StateManager{
-		ChainNotify:           make(chan []Tx),
-		ReconfigurationNotify: make(chan []hierarchical.ValidatorSet),
-		Api:                   m,
+		ChainNotify: make(chan []Tx),
+		MirManager:  m,
 	}
 	return &sm
 }
@@ -76,12 +74,12 @@ func (sm *StateManager) ApplyBatch(in *requestpb.Batch) error {
 		case TransportType:
 			txs = append(txs, req.Req.Data)
 		case ReconfigurationType:
-			validators := &hierarchical.ValidatorSet{}
-			err := validators.UnmarshalCBOR(bytes.NewReader(req.Req.Data))
+			valSet := &hierarchical.ValidatorSet{}
+			err := valSet.UnmarshalCBOR(bytes.NewReader(req.Req.Data))
 			if err != nil {
 				panic(err)
 			}
-			err = sm.Api.UpdateReconfigurationVotes(validators)
+			err = sm.MirManager.UpdateReconfigurationVotes(valSet)
 			if err != nil {
 				panic(err)
 			}

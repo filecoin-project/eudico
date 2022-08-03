@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap/buffer"
 
 	addr "github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 )
 
 type Validator struct {
@@ -117,9 +118,27 @@ func NewValidatorSet(vals []Validator) *ValidatorSet {
 	return &ValidatorSet{Validators: vals}
 }
 
-func (vs *ValidatorSet) Hash() ([]byte, error) {
+func (set *ValidatorSet) Size() int {
+	return len(set.Validators)
+}
+
+func (set *ValidatorSet) N() int {
+	return set.Size()
+}
+
+func (set *ValidatorSet) F() int {
+	// TODO: what if n=3 and f=0?
+	return (set.N() - 1) / 3
+}
+
+func (set *ValidatorSet) Majority() int {
+	// TODO: what if n=3 and f=0?
+	return 2*set.F() + 1
+}
+
+func (set *ValidatorSet) Hash() ([]byte, error) {
 	var hs []byte
-	for _, v := range vs.Validators {
+	for _, v := range set.Validators {
 		b, err := v.Bytes()
 		if err != nil {
 			return nil, err
@@ -129,6 +148,13 @@ func (vs *ValidatorSet) Hash() ([]byte, error) {
 	return cid.NewCidV0(u.Hash(hs)).Bytes(), nil
 }
 
-func (vs *ValidatorSet) GetValidators() []Validator {
-	return vs.Validators
+func (vals *ValidatorSet) GetValidators() []Validator {
+	return vals.Validators
+}
+
+// BlockMiner returns a miner assigned deterministically using round-robin for an epoch to assign a reward
+// according to the rules of original Filecoin/Eudico consensus.
+func (set *ValidatorSet) BlockMiner(epoch abi.ChainEpoch) addr.Address {
+	i := int(epoch) % len(set.Validators)
+	return set.Validators[i].Addr
 }

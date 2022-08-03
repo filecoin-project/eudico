@@ -12,7 +12,6 @@ import (
 	"github.com/filecoin-project/go-address"
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/platform/logging"
 	"github.com/filecoin-project/lotus/chain/types"
 	ltypes "github.com/filecoin-project/lotus/chain/types"
@@ -46,25 +45,25 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 	log := logging.FromContext(ctx, log).With("miner", m.ID())
 
 	log.Infof("Miner info:\n\twallet - %s\n\tnetwork - %s\n\tsubnet - %s\n\tMir ID - %s\n\tvalidators - %v",
-		m.Addr, m.NetName, m.SubnetID, m.MirID, m.Validators)
+		m.Addr, m.NetName, m.SubnetID, m.MirID, m.ValidatorSet.GetValidators())
 
 	mirErrors := m.Start(ctx)
 	mirHead := m.App.ChainNotify
 
-	// TODO: remove or use the original variant.
+	// TODO: remove or use the original variant of the for-loop.
 	submit := time.NewTicker(SubmitInterval)
 	defer submit.Stop()
 
 	reconfigure := time.NewTicker(ReconfigurationInterval)
 	defer reconfigure.Stop()
 
+	// TODO: This timer is needed for debugging. Remove it when drafting is completed.
 	updateEnv := time.NewTimer(time.Second * 6)
 	defer updateEnv.Stop()
 
 	var reconfigurationNumber uint64
 
-	vs := hierarchical.NewValidatorSet(m.Validators)
-	lastValidatorSetHash, err := vs.Hash()
+	lastValidatorSetHash, err := m.ValidatorSet.Hash()
 	if err != nil {
 		return err
 	}
@@ -78,7 +77,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 
 		// Miner (leader) for an epoch is assigned deterministically using round-robin.
 		// All other validators use the same Miner in the block.
-		epochMiner := m.Validators[int(base.Height())%len(m.Validators)].Addr
+		epochMiner := m.ValidatorSet.BlockMiner(base.Height())
 		nextEpoch := base.Height() + 1
 
 		select {
@@ -88,6 +87,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 		case err := <-mirErrors:
 			return fmt.Errorf("miner consensus error: %w", err)
 
+		// Implement reconfiguration for debugging.
 		case <-updateEnv.C:
 			gg := os.Getenv(ValidatorsEnv)
 			gg = gg + ",/root:t1sqbkluz5elnekdu62ute5zjammslkplgdcpa2zi@/ip4/127.0.0.1/tcp/10004/p2p/12D3KooWMMNKpXU1NNRE9WyH7CmV4JweJLpVyW76igZYVMfHAUtt"
@@ -95,6 +95,10 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			updateEnv.Stop()
 
 		case <-reconfigure.C:
+			//
+			// Send a reconfiguration transaction if validator set in the actor has been changed.
+			//
+
 			newValidatorSet, err := getSubnetValidators(ctx, m.SubnetID, api)
 			if err != nil {
 				log.With("epoch", nextEpoch).
