@@ -27,3 +27,22 @@ then
   ./eudico net connect $(cat $NODE_1_NETADDR);
   ./eudico net connect $(cat $NODE_2_NETADDR);
 fi
+
+if [[ $1 -eq 4 ]];
+then
+  ./eudico net listen | grep '/ip6/::1/' > $NODE_4_NETADDR; sleep $T;
+  ./eudico net connect $(cat $NODE_0_NETADDR);
+  ./eudico net connect $(cat $NODE_1_NETADDR);
+  ./eudico net connect $(cat $NODE_2_NETADDR);
+  ./eudico net connect $(cat $NODE_3_NETADDR);
+fi
+
+if [[ $1 -eq 5 ]];
+then
+  ./eudico net listen | grep '/ip6/::1/' > $NODE_5_NETADDR; sleep $T;
+  ./eudico net connect $(cat $NODE_0_NETADDR);
+  ./eudico net connect $(cat $NODE_1_NETADDR);
+  ./eudico net connect $(cat $NODE_2_NETADDR);
+  ./eudico net connect $(cat $NODE_3_NETADDR);
+  ./eudico net connect $(cat $NODE_4_NETADDR);
+fi

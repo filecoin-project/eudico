@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
@@ -48,7 +49,9 @@ type Manager struct {
 	App     *StateManager
 
 	// Reconfiguration types
-	ValidatorSet            *hierarchical.ValidatorSet
+	LastValidatorSetLock    sync.Mutex
+	LastValidatorSet        *hierarchical.ValidatorSet
+	NextValidatorSet        *hierarchical.ValidatorSet
 	ReconfigurationVotes    map[string]uint64
 	LastReconfigurationHash []byte
 }
@@ -144,7 +147,8 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		Addr:                 addr,
 		SubnetID:             subnetID,
 		NetName:              netName,
-		ValidatorSet:         initialValidatorSet,
+		LastValidatorSet:     initialValidatorSet,
+		NextValidatorSet:     nil,
 		EudicoNode:           api,
 		Pool:                 pool,
 		MirID:                mirID,
@@ -218,10 +222,10 @@ func (m *Manager) ReconfigureMirNode(ctx context.Context) error {
 	log.With("miner", m.MirID).Infof("Creating a Mir node started")
 	defer log.With("miner", m.MirID).Info("Creating a Mir node finished")
 
-	if m.ValidatorSet.Size() == 0 {
+	if m.LastValidatorSet.Size() == 0 {
 		return fmt.Errorf("empty validator set")
 	}
-	nodeIDs, nodes, err := ValidatorsMembership(m.ValidatorSet.GetValidators())
+	nodeIDs, nodes, err := ValidatorsMembership(m.LastValidatorSet.GetValidators())
 	if err != nil {
 		return fmt.Errorf("failed to build node membership: %w", err)
 	}
@@ -244,7 +248,7 @@ func (m *Manager) UpdateReconfigurationVotes(vs *hierarchical.ValidatorSet) erro
 	}
 	m.ReconfigurationVotes[string(h)]++
 	votes := int(m.ReconfigurationVotes[string(h)])
-	if votes < m.ValidatorSet.Majority() {
+	if votes < m.LastValidatorSet.Majority() {
 		return nil
 	}
 	newConfigHash, err := vs.Hash()
@@ -259,7 +263,7 @@ func (m *Manager) UpdateReconfigurationVotes(vs *hierarchical.ValidatorSet) erro
 	fmt.Println(vs)
 
 	fmt.Println("We get enough votes - start reconfiguration: ", votes)
-	m.ValidatorSet = vs
+	m.LastValidatorSet = vs
 	m.LastReconfigurationHash, err = vs.Hash()
 	if err != nil {
 		return err

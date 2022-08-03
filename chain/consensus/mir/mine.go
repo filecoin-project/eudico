@@ -45,7 +45,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 	log := logging.FromContext(ctx, log).With("miner", m.ID())
 
 	log.Infof("Miner info:\n\twallet - %s\n\tnetwork - %s\n\tsubnet - %s\n\tMir ID - %s\n\tvalidators - %v",
-		m.Addr, m.NetName, m.SubnetID, m.MirID, m.ValidatorSet.GetValidators())
+		m.Addr, m.NetName, m.SubnetID, m.MirID, m.LastValidatorSet.GetValidators())
 
 	mirErrors := m.Start(ctx)
 	mirHead := m.App.ChainNotify
@@ -63,7 +63,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 
 	var reconfigurationNumber uint64
 
-	lastValidatorSetHash, err := m.ValidatorSet.Hash()
+	lastValidatorSetHash, err := m.LastValidatorSet.Hash()
 	if err != nil {
 		return err
 	}
@@ -77,7 +77,10 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 
 		// Miner (leader) for an epoch is assigned deterministically using round-robin.
 		// All other validators use the same Miner in the block.
-		epochMiner := m.ValidatorSet.BlockMiner(base.Height())
+		m.LastValidatorSetLock.Lock()
+		epochMiner := m.LastValidatorSet.BlockMiner(base.Height())
+		m.LastValidatorSetLock.Unlock()
+
 		nextEpoch := base.Height() + 1
 
 		select {
@@ -90,7 +93,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 		// Implement reconfiguration for debugging.
 		case <-updateEnv.C:
 			gg := os.Getenv(ValidatorsEnv)
-			gg = gg + ",/root:t1sqbkluz5elnekdu62ute5zjammslkplgdcpa2zi@/ip4/127.0.0.1/tcp/10004/p2p/12D3KooWMMNKpXU1NNRE9WyH7CmV4JweJLpVyW76igZYVMfHAUtt"
+			gg = gg + ",/root:t1sqbkluz5elnekdu62ute5zjammslkplgdcpa2zi@/ip4/127.0.0.1/tcp/10004/p2p/12D3KooWRUDXegwwY6FLgqKuMEnGJSJ7XoMgHh7sE492fcXyDUGC"
 			os.Setenv(ValidatorsEnv, gg)
 			updateEnv.Stop()
 
