@@ -18,6 +18,10 @@ func newMirID(subnet, addr string) string {
 }
 
 // getSubnetValidators retrieves subnet validators from the environment variable or from the state.
+
+// NOTE: You must unset the environment variable in tests if you use Mir in the rootnet and in a subnet.
+// TODO: Implement a sophisticated way to separate getting validator set via environment variable and subnet actor.
+// Should we support passing validators via the environment variable?
 func getSubnetValidators(
 	ctx context.Context,
 	subnetID address.SubnetID,

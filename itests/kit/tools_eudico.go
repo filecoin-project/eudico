@@ -105,12 +105,13 @@ func WaitForBalance(ctx context.Context, addr addr.Address, balance uint64, api 
 	return nil
 }
 
-func SubnetPerformHeightCheckForBlocks(ctx context.Context, validatedBlocksNumber int, subnetAddr addr.SubnetID, api napi.FullNode) error {
+// SubnetMinerMinesBlocks checks that the specified miner has mined `blockNumber` blocks.
+func SubnetMinerMinesBlocks(ctx context.Context, blockNumber int, subnetAddr addr.SubnetID, addr addr.Address, api napi.FullNode) error {
 	subnetHeads, err := getSubnetChainHead(ctx, subnetAddr, api)
 	if err != nil {
 		return err
 	}
-	if validatedBlocksNumber < 2 || validatedBlocksNumber > 100 {
+	if blockNumber < 2 || blockNumber > 100 {
 		return xerrors.New("wrong validated blocks number")
 	}
 
@@ -133,7 +134,7 @@ func SubnetPerformHeightCheckForBlocks(ctx context.Context, validatedBlocksNumbe
 	}
 
 	i := 1
-	for i < validatedBlocksNumber {
+	for i < blockNumber {
 		select {
 		case <-ctx.Done():
 			return xerrors.New("closed channel")
@@ -142,7 +143,66 @@ func SubnetPerformHeightCheckForBlocks(ctx context.Context, validatedBlocksNumbe
 				return xerrors.New("chain head length is not one")
 			}
 
-			if i > validatedBlocksNumber {
+			if i > blockNumber {
+				return nil
+			}
+			height := heads[0].Val.Height()
+
+			if height <= currHeight {
+				return xerrors.Errorf("wrong %d block height: prev block height - %d, current head height - %d",
+					i, currHeight, height)
+			}
+			currHeight = height
+
+			if heads[0].Val.Blocks()[0].Miner == addr {
+				i++
+			}
+		}
+	}
+
+	return nil
+
+}
+
+// SubnetHeightCheckForBlocks checks that there will be mined `blockNumber` blocks in the specified  subnet.
+func SubnetHeightCheckForBlocks(ctx context.Context, blockNumber int, subnetAddr addr.SubnetID, api napi.FullNode) error {
+	subnetHeads, err := getSubnetChainHead(ctx, subnetAddr, api)
+	if err != nil {
+		return err
+	}
+	if blockNumber < 2 || blockNumber > 100 {
+		return xerrors.New("wrong validated blocks number")
+	}
+
+	// ChainNotify returns channel with chain head updates.
+	// First message is guaranteed to be of len == 1, and type == 'current'.
+	// Without forks we can expect that its len always to be 1.
+	initHead := <-subnetHeads
+	if len(initHead) < 1 {
+		return xerrors.New("empty chain head")
+	}
+	currHeight := initHead[0].Val.Height()
+
+	head, err := api.SubnetChainHead(ctx, subnetAddr)
+	if err != nil {
+		return err
+	}
+	height := head.Height()
+	if height != currHeight {
+		return xerrors.New("wrong initial block height")
+	}
+
+	i := 1
+	for i < blockNumber {
+		select {
+		case <-ctx.Done():
+			return xerrors.New("closed channel")
+		case heads := <-subnetHeads:
+			if len(heads) != 1 {
+				return xerrors.New("chain head length is not one")
+			}
+
+			if i > blockNumber {
 				return nil
 			}
 			height := heads[0].Val.Height()

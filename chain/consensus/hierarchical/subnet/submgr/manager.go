@@ -468,7 +468,6 @@ func (s *Service) JoinSubnet(
 	id address.SubnetID,
 	validatorNetAddr string,
 ) (cid.Cid, error) {
-
 	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.Lock()
 	defer s.lk.Unlock()
@@ -500,11 +499,12 @@ func (s *Service) JoinSubnet(
 		}
 	}
 	// Validator address is not supported for consensus other than Mir.
-	if st.Consensus != hierarchical.Mir && validatorNetAddr != "" {
+	if st.Consensus != hierarchical.Mir {
 		if validatorNetAddr == "" {
 			return cid.Undef, xerrors.New("validator address is not supported")
 		}
 	}
+
 	var params bytes.Buffer
 	v := hierarchical.NewValidator(id, wallet, validatorNetAddr)
 	err = v.MarshalCBOR(&params)

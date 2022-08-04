@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"go.uber.org/zap/buffer"
@@ -91,17 +90,24 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			return fmt.Errorf("miner consensus error: %w", err)
 
 		// Implement reconfiguration for debugging.
-		case <-updateEnv.C:
-			gg := os.Getenv(ValidatorsEnv)
-			gg = gg + ",/root:t1sqbkluz5elnekdu62ute5zjammslkplgdcpa2zi@/ip4/127.0.0.1/tcp/10004/p2p/12D3KooWRUDXegwwY6FLgqKuMEnGJSJ7XoMgHh7sE492fcXyDUGC"
-			os.Setenv(ValidatorsEnv, gg)
-			updateEnv.Stop()
+		/*
+			case <-updateEnv.C:
+				gg := os.Getenv(ValidatorsEnv)
+				gg = gg + ",/root:t1sqbkluz5elnekdu62ute5zjammslkplgdcpa2zi@/ip4/127.0.0.1/tcp/10004/p2p/12D3KooWRUDXegwwY6FLgqKuMEnGJSJ7XoMgHh7sE492fcXyDUGC"
+				os.Setenv(ValidatorsEnv, gg)
+				updateEnv.Stop()
+
+		*/
 
 		case <-reconfigure.C:
 			//
 			// Send a reconfiguration transaction if validator set in the actor has been changed.
 			//
 
+			// TODO: decide what should we do with environment variable for root net and subnet actor for subnet.
+			// if the variable is empty then we will get warn messages. And it must be empty because otherwise
+			// it will be prioritized on subnet actor cnfig for a subnet.
+			// But to run Mir in rot and in a subnet and we must to use both.
 			newValidatorSet, err := getSubnetValidators(ctx, m.SubnetID, api)
 			if err != nil {
 				log.With("epoch", nextEpoch).

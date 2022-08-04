@@ -100,7 +100,7 @@ func (ts *eudicoConsensusSuite) testDummyMining(t *testing.T) {
 		}
 	}()
 
-	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 5, address.RootSubnet, full)
+	err = kit.SubnetHeightCheckForBlocks(ctx, 5, address.RootSubnet, full)
 	require.NoError(t, err)
 }
 
@@ -320,7 +320,7 @@ func (ts *eudicoConsensusSuite) testMirLibp2pMining(t *testing.T) {
 		}
 	}()
 
-	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 10, address.RootSubnet, full)
+	err = kit.SubnetHeightCheckForBlocks(ctx, 10, address.RootSubnet, full)
 	if xerrors.Is(mapi.ErrStopped, err) {
 		return
 	}
@@ -366,7 +366,7 @@ func (ts *eudicoConsensusSuite) testTSPoWMining(t *testing.T) {
 		}
 	}()
 
-	err = kit.SubnetPerformHeightCheckForBlocks(ctx, 3, address.RootSubnet, full)
+	err = kit.SubnetHeightCheckForBlocks(ctx, 3, address.RootSubnet, full)
 	require.NoError(t, err)
 }
 
@@ -530,6 +530,6 @@ func (ts *eudicoConsensusSuite) testFilcnsMining(t *testing.T) {
 	bm := kit.NewBlockMiner(t, miner)
 	bm.MineBlocks(ctx, 1*time.Second)
 
-	err := kit.SubnetPerformHeightCheckForBlocks(ctx, 5, address.RootSubnet, full)
+	err := kit.SubnetHeightCheckForBlocks(ctx, 5, address.RootSubnet, full)
 	require.NoError(t, err)
 }
