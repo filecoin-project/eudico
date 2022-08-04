@@ -67,6 +67,15 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 		return err
 	}
 
+	// TODO: ask @alfonso about this approach.
+	// The idea is to read from the mempool only when something has happened in it.
+	// The docs are not clear and I am not sure whether we should use this.
+	// But, probably it is better than the default clause in the select statement.
+	updates, err := api.MpoolSub(ctx)
+	if err != nil {
+		log.Errorw("failed to get channel from mempool", "error", err)
+	}
+
 	for {
 		base, err := api.ChainHead(ctx)
 		if err != nil {
@@ -186,7 +195,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 
 			log.With("epoch", nextEpoch).
 				Infof("%s mined a block %v", epochMiner, bh.Cid())
-		default:
+		case <-updates:
 			msgs, err := api.MpoolSelect(ctx, base.Key(), 1)
 			if err != nil {
 				log.With("epoch", nextEpoch).
