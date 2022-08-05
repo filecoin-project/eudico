@@ -2,9 +2,9 @@ package submgr
 
 import (
 	"context"
+	"sync"
 	"time"
 
-	"github.com/gammazero/keymutex"
 	"github.com/libp2p/go-eventbus"
 	"github.com/libp2p/go-libp2p-core/event"
 	inet "github.com/libp2p/go-libp2p-core/network"
@@ -38,8 +38,8 @@ type helloService struct {
 	// FIXME: We should probably garbage collect this map
 	// periodically to prevent from growing indefinitely
 	// with peers that are no longer part of the subnet.
-	peers map[peer.ID]abi.ChainEpoch
-	lk    *keymutex.KeyMutex
+	// peers map[peer.ID]abi.ChainEpoch
+	peers *sync.Map
 }
 
 // Creates a new hello service for the subnet
@@ -48,25 +48,27 @@ func (sh *Subnet) newHelloService() {
 	sh.hello = &helloService{
 		// NOTE: We added a NewSubnetHelloService to leverage the standard code for send hello.
 		// I don't think we added complexity there, but if not bring all the required code here
-		svc:   hello.NewSubnetHelloService(sh.host, sh.ch, sh.syncer, sh.cons, sh.pmgr, pid),
-		peers: make(map[peer.ID]abi.ChainEpoch),
-		lk:    keymutex.New(0),
+		svc: hello.NewSubnetHelloService(sh.host, sh.ch, sh.syncer, sh.cons, sh.pmgr, pid),
+		// peers: make(map[peer.ID]abi.ChainEpoch),
+		peers: &sync.Map{},
 	}
 	log.Infow("Setting up hello protocol/service for subnet with protocolID", "protocolID", pid)
 	sh.host.SetStreamHandler(protocol.ID(HelloProtoPrefix+sh.ID.String()), sh.handleHelloStream)
 }
 
 func (sh *Subnet) helloBack(p peer.ID, epoch abi.ChainEpoch) {
-	sh.hello.lk.Lock(p.String())
-	defer sh.hello.lk.Unlock(p.String())
-	prev, ok := sh.hello.peers[p]
+	var prev abi.ChainEpoch
+	v, ok := sh.hello.peers.Load(p)
+	if ok {
+		prev = v.(abi.ChainEpoch)
+	}
 
 	// If we haven't interacted with the peer yet, or
 	// our previous communication was epochDiff ago,
 	// update our view of the chain sending hello message.
 	if !ok || (epoch-prev) > epochDiff {
 		// Save hello to peer epoch.
-		sh.hello.peers[p] = epoch
+		sh.hello.peers.Store(p, epoch)
 		// Send hello back
 		sh.sendHello(sh.ctx, sh.hello.svc, p)
 	}

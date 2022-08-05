@@ -467,8 +467,6 @@ github.com/filecoin-project/go-storedcounter v0.1.0 h1:Mui6wSUBC+cQGHbDUBcO7rfh5
 github.com/filecoin-project/go-storedcounter v0.1.0/go.mod h1:4ceukaXi4vFURIoxYMfKzaRF5Xv/Pinh2oTnoxpv+z8=
 github.com/filecoin-project/index-provider v0.5.0 h1:k2C1RFvOvxmA2i8bhmkb3b4qun7RDRDzzs/y25/TwQg=
 github.com/filecoin-project/index-provider v0.5.0/go.mod h1:KHVrP2vU3YuScb+fawObwTFoR882up9U07kk0ZrfP0c=
-github.com/filecoin-project/mir v0.0.0-20220728102549-aaba3ef4c934 h1:8qRWb3n4OhVgsyDfMdzgxlExnkOPATJYnkthv3kSnTQ=
-github.com/filecoin-project/mir v0.0.0-20220728102549-aaba3ef4c934/go.mod h1:O7iIhBNOqk2DVMEcdUZPKVsl8mnAQ+lTEtawZTn03HQ=
 github.com/filecoin-project/mir v0.0.0-20220801142417-9c6831f24632 h1:LF4EEIgGvP0TyJUVZMMP2nPJoTkKBFW3QiKPYEv7zOs=
 github.com/filecoin-project/mir v0.0.0-20220801142417-9c6831f24632/go.mod h1:O7iIhBNOqk2DVMEcdUZPKVsl8mnAQ+lTEtawZTn03HQ=
 github.com/filecoin-project/pubsub v1.0.0 h1:ZTmT27U07e54qV1mMiQo4HDr0buo8I1LDHBYLXlsNXM=
@@ -517,7 +515,6 @@ github.com/fsnotify/fsnotify v1.5.1/go.mod h1:T3375wBYaZdLLcVNkcVbzGHY7f1l/uK5T5
 github.com/fullstorydev/grpcurl v1.6.0/go.mod h1:ZQ+ayqbKMJNhzLmbpCiurTVlaK2M/3nqZCxaQ2Ze/sM=
 github.com/fzipp/gocyclo v0.3.1/go.mod h1:DJHO6AUmbdqj2ET4Z9iArSuwWgYDRryYt2wASxc7x3E=
 github.com/gabriel-vasile/mimetype v1.4.0/go.mod h1:fA8fi6KUiG7MgQQ+mEWotXoEOvmxRtOJlERCzSmRvr8=
-github.com/gammazero/keymutex v0.0.2 h1:cmpLBJHdEwn+WlR5Z/o9/BN92znSZTp5AKPQDpu1QcI=
 github.com/gammazero/keymutex v0.0.2/go.mod h1:qtzWCCLMisQUmVa4dvqHVgwfh4BP2YB7JxNDGXnsKrs=
 github.com/gammazero/radixtree v0.2.5/go.mod h1:VPqqCDZ3YZZxAzUUsIF/ytFBigVWV7JIV1Stld8hri0=
 github.com/gbrlsnchs/jwt/v3 v3.0.1 h1:lbUmgAKpxnClrKloyIwpxm4OuWeDl5wLk52G91ODPw4=

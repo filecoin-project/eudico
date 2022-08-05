@@ -369,10 +369,10 @@ func (ts *eudicoSubnetSuite) testBasicFlow(t *testing.T) {
 func runMirReconfigurationTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoSubnetSuite{opts: opts}
 
-	t.Run("testBasicMirReconfiguration", ts.testBasicMirReconfiguration)
+	t.Run("testMirReconfiguration", ts.testMirReconfiguration)
 }
 
-func (ts *eudicoSubnetSuite) testBasicMirReconfiguration(t *testing.T) {
+func (ts *eudicoSubnetSuite) testMirReconfiguration(t *testing.T) {
 	var wg sync.WaitGroup
 
 	nodeA, nodeB, nodeC, nodeD, ens := kit.EudicoEnsembleFourNodes(t, ts.opts...)
@@ -424,10 +424,11 @@ func (ts *eudicoSubnetSuite) testBasicMirReconfiguration(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, p, "node D has peers")
 
+	// Connect nodes with each other
+
 	ens.Connect(nodeA, nodeB, nodeC, nodeD)
-	ens.Connect(nodeB, nodeA, nodeC, nodeD)
-	ens.Connect(nodeC, nodeB, nodeA, nodeD)
-	ens.Connect(nodeD, nodeB, nodeC, nodeA)
+	ens.Connect(nodeB, nodeC, nodeD)
+	ens.Connect(nodeC, nodeD)
 
 	peers, err := nodeA.NetPeers(ctx)
 	require.NoError(t, err)
@@ -552,7 +553,7 @@ func (ts *eudicoSubnetSuite) testBasicMirReconfiguration(t *testing.T) {
 	t.Log("[*] adding subnet")
 
 	parent := address.RootSubnet
-	subnetName := "PoWSubnet"
+	subnetName := "testSubnet"
 	stake := abi.NewStoragePower(1e8)
 	chp := abi.ChainEpoch(10)
 
@@ -608,13 +609,10 @@ func (ts *eudicoSubnetSuite) testBasicMirReconfiguration(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dtypes.NetworkName("/root"), networkName)
 
+	t.Log("[*] joining the subnet")
+
 	val, err := types.ParseFIL("10")
 	require.NoError(t, err)
-
-	_, err = nodeA.StateLookupID(ctx, minerA, types.EmptyTSK)
-	require.NoError(t, err)
-
-	t.Log("[*] joining the subnet")
 
 	nodeASubnetLibp2pAddr, err := kit.NodeLibp2pAddr(nodeA)
 	require.NoError(t, err)
@@ -716,7 +714,7 @@ func runTwoNodesTestsWithMir(t *testing.T, opts ...interface{}) {
 	ts := eudicoSubnetSuite{opts: opts}
 
 	t.Run("testBasicFlowOnTwoNodes", ts.testBasicFlowOnTwoNodes)
-	t.Run("testStartStopOnTwoNodes", ts.testStartStopOnTwoNodes)
+	// t.Run("testStartStopOnTwoNodes", ts.testStartStopOnTwoNodes)
 }
 
 func (ts *eudicoSubnetSuite) testBasicFlowOnTwoNodes(t *testing.T) {
@@ -781,7 +779,7 @@ func (ts *eudicoSubnetSuite) testBasicFlowOnTwoNodes(t *testing.T) {
 	}
 	minerB := l[0]
 
-	t.Log("[*] running consensus in root net")
+	t.Log("[*] running Mir consensus in root net")
 
 	startTime := time.Now()
 
@@ -825,7 +823,7 @@ func (ts *eudicoSubnetSuite) testBasicFlowOnTwoNodes(t *testing.T) {
 		}
 	}()
 
-	t.Log("[*] adding and joining subnet")
+	t.Log("[*] adding subnet")
 
 	parent := address.RootSubnet
 	subnetName := "testSubnet"
@@ -838,13 +836,13 @@ func (ts *eudicoSubnetSuite) testBasicFlowOnTwoNodes(t *testing.T) {
 	err = kit.WaitForBalance(ctx, minerB, 20, nodeB)
 	require.NoError(t, err)
 
-	balance1, err := nodeA.WalletBalance(ctx, minerA)
+	balanceA, err := nodeA.WalletBalance(ctx, minerA)
 	require.NoError(t, err)
-	t.Logf("[*] node A %s balance: %d", minerA, balance1)
+	t.Logf("[*] node A %s balance: %d", minerA, balanceA)
 
-	balance2, err := nodeB.WalletBalance(ctx, minerB)
+	balanceB, err := nodeB.WalletBalance(ctx, minerB)
 	require.NoError(t, err)
-	t.Logf("[*] node B %s balance: %d", minerB, balance2)
+	t.Logf("[*] node B %s balance: %d", minerB, balanceB)
 
 	os.Unsetenv(mir.ValidatorsEnv) // nolint
 
@@ -870,23 +868,22 @@ func (ts *eudicoSubnetSuite) testBasicFlowOnTwoNodes(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dtypes.NetworkName("/root"), networkName)
 
+	t.Log("[*] joining the subnet")
+
 	val, err := types.ParseFIL("10")
 	require.NoError(t, err)
 
-	_, err = nodeA.StateLookupID(ctx, minerA, types.EmptyTSK)
+	nodeASubnetAddr, err := kit.NodeLibp2pAddr(nodeA)
+	require.NoError(t, err)
+	nodeBSubnetAddr, err := kit.NodeLibp2pAddr(nodeB)
 	require.NoError(t, err)
 
-	saAddr, err := kit.NodeLibp2pAddr(nodeA)
-	require.NoError(t, err)
-	sbAddr, err := kit.NodeLibp2pAddr(nodeB)
-	require.NoError(t, err)
-
-	sc, err := nodeA.JoinSubnet(ctx, minerA, big.Int(val), subnetAddr, saAddr.String())
+	sc, err := nodeA.JoinSubnet(ctx, minerA, big.Int(val), subnetAddr, nodeASubnetAddr.String())
 	require.NoError(t, err)
 	_, err = nodeA.StateWaitMsg(ctx, sc, 1, 100, false)
 	require.NoError(t, err)
 
-	sc, err = nodeB.JoinSubnet(ctx, minerB, big.Int(val), subnetAddr, sbAddr.String())
+	sc, err = nodeB.JoinSubnet(ctx, minerB, big.Int(val), subnetAddr, nodeBSubnetAddr.String())
 	require.NoError(t, err)
 	_, err = nodeB.StateWaitMsg(ctx, sc, 1, 100, false)
 	require.NoError(t, err)
@@ -921,12 +918,6 @@ func (ts *eudicoSubnetSuite) testBasicFlowOnTwoNodes(t *testing.T) {
 		cancel()
 		return
 	}
-
-	err = kit.WaitForBalance(ctx, minerA, 20, nodeA)
-	require.NoError(t, err)
-
-	err = kit.WaitForBalance(ctx, minerB, 20, nodeB)
-	require.NoError(t, err)
 
 	// Inject new funds to the own address in the subnet.
 
@@ -1174,9 +1165,6 @@ func (ts *eudicoSubnetSuite) testStartStopOnTwoNodes(t *testing.T) {
 	val, err := types.ParseFIL("10")
 	require.NoError(t, err)
 
-	_, err = nodeA.StateLookupID(ctx, minerA, types.EmptyTSK)
-	require.NoError(t, err)
-
 	saAddr, err := kit.NodeLibp2pAddr(nodeA)
 	require.NoError(t, err)
 	sbAddr, err := kit.NodeLibp2pAddr(nodeB)
@@ -1392,9 +1380,6 @@ func (ts *eudicoSubnetSuite) testCrossMessageOnTwoNodesMirPow(t *testing.T) {
 	require.Equal(t, dtypes.NetworkName("/root"), networkAName)
 
 	val, err := types.ParseFIL("10")
-	require.NoError(t, err)
-
-	_, err = nodeA.StateLookupID(ctx, minerA, types.EmptyTSK)
 	require.NoError(t, err)
 
 	sc1, err := nodeA.JoinSubnet(ctx, minerA, big.Int(val), subnetAAddr, "")
