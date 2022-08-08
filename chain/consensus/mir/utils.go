@@ -66,3 +66,7 @@ func ValidatorsMembership(validators []hierarchical.Validator) ([]t.NodeID, map[
 
 	return nodeIDs, nodeAddrs, nil
 }
+
+func ValidatorSetMembership(valSet *hierarchical.ValidatorSet) ([]t.NodeID, map[t.NodeID]t.NodeAddress, error) {
+	return ValidatorsMembership(valSet.GetValidators())
+}

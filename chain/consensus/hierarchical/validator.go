@@ -164,6 +164,6 @@ func (vals *ValidatorSet) HasValidatorWithID(id string) bool {
 // BlockMiner returns a miner assigned deterministically using round-robin for an epoch to assign a reward
 // according to the rules of original Filecoin/Eudico consensus.
 func (set *ValidatorSet) BlockMiner(epoch abi.ChainEpoch) addr.Address {
-	i := int(epoch) % len(set.Validators)
+	i := int(epoch) % set.Size()
 	return set.Validators[i].Addr
 }

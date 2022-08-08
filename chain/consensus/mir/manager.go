@@ -2,17 +2,19 @@
 package mir
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 
 	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
@@ -25,6 +27,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/net"
 	mirlibp2p "github.com/filecoin-project/mir/pkg/net/libp2p"
+	"github.com/filecoin-project/mir/pkg/pb/commonpb"
 	mirproto "github.com/filecoin-project/mir/pkg/pb/requestpb"
 	"github.com/filecoin-project/mir/pkg/simplewal"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -33,6 +36,7 @@ import (
 // Manager manages the Eudico and Mir nodes participating in ISS consensus protocol.
 type Manager struct {
 	// Eudico types
+
 	EudicoNode v1api.FullNode
 	NetName    dtypes.NetworkName
 	SubnetID   address.SubnetID
@@ -40,6 +44,7 @@ type Manager struct {
 	Pool       *requestPool
 
 	// Mir types
+
 	MirNode *mir.Node
 	MirID   string
 	WAL     *simplewal.WAL
@@ -48,12 +53,11 @@ type Manager struct {
 	Crypto  *CryptoManager
 	App     *StateManager
 
-	// Reconfiguration types
-	LastValidatorSetLock    sync.Mutex
-	LastValidatorSet        *hierarchical.ValidatorSet
-	NextValidatorSet        *hierarchical.ValidatorSet
-	ReconfigurationVotes    map[string]uint64
-	LastReconfigurationHash []byte
+	// Reconfiguration types.
+
+	LastValidatorSetLock sync.Mutex
+	LastValidatorSet     *hierarchical.ValidatorSet
+	reconfigurationNonce uint64
 }
 
 func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (*Manager, error) {
@@ -81,22 +85,28 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	if err != nil {
 		return nil, fmt.Errorf("failed to get validator set: %w", err)
 	}
+	fmt.Println(initialValidatorSet)
 	if initialValidatorSet.Size() == 0 {
 		return nil, fmt.Errorf("empty validator set")
 	}
 
-	nodeIDs, nodes, err := ValidatorsMembership(initialValidatorSet.Validators)
+	nodeIDs, initialMembership, err := ValidatorsMembership(initialValidatorSet.Validators)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build node membership: %w", err)
 	}
 
+	memberships := make([]*commonpb.Membership, ConfigOffset+1)
+	for i := 0; i < ConfigOffset+1; i++ {
+		memberships[t.EpochNr(i)] = t.MembershipPb(initialMembership)
+	}
+
 	mirID := newMirID(subnetID.String(), addr.String())
-	mirAddr := nodes[t.NodeID(mirID)]
+	mirAddr := initialMembership[t.NodeID(mirID)]
 
 	log.Info("Eudico node's Mir ID: ", mirID)
 	log.Info("Eudico node's address in Mir: ", mirAddr)
 	log.Info("Mir nodes IDs: ", nodeIDs)
-	log.Info("Mir nodes addresses: ", nodes)
+	log.Info("Mir nodes addresses: ", initialMembership)
 
 	peerID, err := peer.AddrInfoFromP2pAddr(mirAddr)
 	if err != nil {
@@ -126,7 +136,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	if err := netTransport.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start transport: %w", err)
 	}
-	netTransport.Connect(ctx, nodes)
+	netTransport.Connect(ctx, initialMembership)
 
 	cryptoManager, err := NewCryptoManager(addr, api)
 	if err != nil {
@@ -136,7 +146,18 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	// Instantiate the ISS protocol module with default configuration.
 
 	issConfig := iss.DefaultConfig(nodeIDs)
-	issProtocol, err := iss.New(t.NodeID(mirID), issConfig, newMirLogger(managerLog))
+	issConfig.SegmentLength = SegmentLength
+	issConfig.PBFTViewChangeSegmentTimeout = 2 * time.Duration(issConfig.SegmentLength) * issConfig.MaxProposeDelay
+	issProtocol, err := iss.New(
+		t.NodeID(mirID),
+		issConfig,
+		&commonpb.StateSnapshot{
+			Epoch:       0,
+			AppData:     []byte{},
+			Memberships: memberships,
+		},
+		newMirLogger(managerLog),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("could not instantiate ISS protocol module: %w", err)
 	}
@@ -144,22 +165,20 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	pool := newRequestPool()
 
 	m := Manager{
-		Addr:                 addr,
-		SubnetID:             subnetID,
-		NetName:              netName,
-		LastValidatorSet:     initialValidatorSet,
-		NextValidatorSet:     nil,
-		EudicoNode:           api,
-		Pool:                 pool,
-		MirID:                mirID,
-		WAL:                  wal,
-		Crypto:               cryptoManager,
-		Net:                  netTransport,
-		ISS:                  issProtocol,
-		ReconfigurationVotes: make(map[string]uint64),
+		Addr:             addr,
+		SubnetID:         subnetID,
+		NetName:          netName,
+		EudicoNode:       api,
+		Pool:             pool,
+		MirID:            mirID,
+		WAL:              wal,
+		Crypto:           cryptoManager,
+		Net:              netTransport,
+		ISS:              issProtocol,
+		LastValidatorSet: initialValidatorSet,
 	}
 
-	sm := NewStateManager(&m)
+	sm := NewStateManager(initialMembership, SegmentLength, &m)
 
 	// Create a Mir node, using the default configuration and passing the modules initialized just above.
 	mirModules, err := iss.DefaultModules(map[t.ModuleID]modules.Module{
@@ -218,58 +237,30 @@ func (m *Manager) Stop() {
 }
 
 // ReconfigureMirNode reconfigures the Mir node.
-func (m *Manager) ReconfigureMirNode(ctx context.Context) error {
-	log.With("miner", m.MirID).Infof("Creating a Mir node started")
-	defer log.With("miner", m.MirID).Info("Creating a Mir node finished")
+func (m *Manager) ReconfigureMirNode(ctx context.Context, nodes map[t.NodeID]t.NodeAddress) error {
+	log.With("miner", m.MirID).Infof("Reconfiguring a Mir node started")
+	defer log.With("miner", m.MirID).Info("Reconfiguring a Mir node finished")
 
-	if m.LastValidatorSet.Size() == 0 {
+	if len(nodes) == 0 {
 		return fmt.Errorf("empty validator set")
 	}
-	nodeIDs, nodes, err := ValidatorsMembership(m.LastValidatorSet.GetValidators())
-	if err != nil {
-		return fmt.Errorf("failed to build node membership: %w", err)
-	}
+
 	m.Net.Connect(ctx, nodes)
-	err = m.MirNode.InjectEvents(ctx, events.ListOf(events.NewConfig("iss", nodeIDs)))
-	if err != nil {
-		return fmt.Errorf("failed to send reconfiguration event: %w", err)
-	}
+
 	m.Net.CloseOldConnections(ctx, nodes)
 
 	return nil
 }
-func (m *Manager) UpdateReconfigurationVotes(vs *hierarchical.ValidatorSet) error {
-	fmt.Println(">>>>")
-	fmt.Println(vs)
-	fmt.Println(vs.Size())
-	h, err := vs.Hash()
+
+// GetBlockMiner computes reconfigures the Mir node.
+func (m *Manager) GetBlockMiner(h abi.ChainEpoch) address.Address {
+	addrs := m.App.OrderedValidatorsAddresses()
+	addr := addrs[int(h)%len(addrs)]
+	a, err := address.NewFromString(strings.Split(addr.Pb(), ":")[1])
 	if err != nil {
-		return err
+		panic(err)
 	}
-	m.ReconfigurationVotes[string(h)]++
-	votes := int(m.ReconfigurationVotes[string(h)])
-	if votes < m.LastValidatorSet.Majority() {
-		return nil
-	}
-	newConfigHash, err := vs.Hash()
-	if err != nil {
-		return err
-	}
-
-	if bytes.Equal(m.LastReconfigurationHash, newConfigHash) {
-		return nil
-	}
-
-	fmt.Println(vs)
-
-	fmt.Println("We get enough votes - start reconfiguration: ", votes)
-	m.LastValidatorSet = vs
-	m.LastReconfigurationHash, err = vs.Hash()
-	if err != nil {
-		return err
-	}
-
-	return m.ReconfigureMirNode(context.TODO())
+	return a
 }
 
 func (m *Manager) SubmitRequests(ctx context.Context, requests []*mirproto.Request) {
@@ -313,7 +304,7 @@ func parseTx(tx []byte) (interface{}, error) {
 }
 
 // GetMessages extracts Filecoin messages from a Mir batch.
-func (m *Manager) GetMessages(batch []Tx) (msgs []*types.SignedMessage, crossMsgs []*types.Message) {
+func (m *Manager) GetMessages(batch []Messages) (msgs []*types.SignedMessage, crossMsgs []*types.Message) {
 	log.Infof("received a block with %d messages", len(msgs))
 	for _, tx := range batch {
 
@@ -357,13 +348,15 @@ func (m *Manager) GetTransportRequests(msgs []*types.SignedMessage, crossMsgs []
 	return
 }
 
-func (m *Manager) newReconfigurationRequest(n uint64, payload []byte) *mirproto.Request {
+func (m *Manager) newReconfigurationRequest(payload []byte) *mirproto.Request {
 	r := mirproto.Request{
 		ClientId: m.MirID,
-		ReqNo:    n,
+		ReqNo:    m.reconfigurationNonce,
 		Type:     ReconfigurationType,
 		Data:     payload,
 	}
+	// TODO: Do we care about nonce here?
+	m.reconfigurationNonce++
 	return &r
 }
 
@@ -438,8 +431,4 @@ func (m *Manager) batchCrossMessages(crossMsgs []*types.UnverifiedCrossMsg) (
 func (m *Manager) ID() string {
 	addr := m.Addr.String()
 	return fmt.Sprintf("%v:%v", m.SubnetID, addr[len(addr)-6:])
-}
-
-func f(n int) int {
-	return (n - 1) / 3
 }

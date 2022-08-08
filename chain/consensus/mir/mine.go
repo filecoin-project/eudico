@@ -17,6 +17,8 @@ import (
 	mirproto "github.com/filecoin-project/mir/pkg/pb/requestpb"
 )
 
+// TODO: Update the description below.
+
 // Mine implements "block mining" using Mir framework.
 //
 // Mine implements the following algorithm:
@@ -60,8 +62,6 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 	updateEnv := time.NewTimer(time.Second * 6)
 	defer updateEnv.Stop()
 
-	var reconfigurationNumber uint64
-
 	lastValidatorSetHash, err := m.LastValidatorSet.Hash()
 	if err != nil {
 		return err
@@ -76,9 +76,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 
 		// Miner (leader) for an epoch is assigned deterministically using round-robin.
 		// All other validators use the same Miner in the block.
-		m.LastValidatorSetLock.Lock()
-		epochMiner := m.LastValidatorSet.BlockMiner(base.Height())
-		m.LastValidatorSetLock.Unlock()
+		epochMiner := m.GetBlockMiner(base.Height())
 
 		nextEpoch := base.Height() + 1
 
@@ -101,12 +99,17 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 
 		case <-reconfigure.C:
 			//
-			// Send a reconfiguration transaction if validator set in the actor has been changed.
+			// Send a reconfiguration transaction if the validator set in the actor has been changed.
 			//
+
+			// TODO: this works only for demo purposes.
+			// In reality, SCA must call us to signal that something has been changed.
+			// For example, two changes may occur between reads and if validators read the state at different times
+			// they could get different val sets.
 
 			// TODO: decide what should we do with environment variable for root net and subnet actor for subnet.
 			// if the variable is empty then we will get warn messages. And it must be empty because otherwise
-			// it will be prioritized on subnet actor cnfig for a subnet.
+			// it will be prioritized on subnet actor config for a subnet.
 			// But to run Mir in rot and in a subnet and we must to use both.
 			newValidatorSet, err := getSubnetValidators(ctx, m.SubnetID, api)
 			if err != nil {
@@ -127,7 +130,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			}
 
 			log.With("epoch", nextEpoch).
-				Infof("received new validator set hash: %v", newValidatorSetHash)
+				Infof("found new validator set hash: %v", newValidatorSetHash)
 			lastValidatorSetHash = newValidatorSetHash
 
 			var payload buffer.Buffer
@@ -137,14 +140,9 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 					Warnf("failed to marshal validators: %v", err)
 				continue
 			}
-			// TODO: Do we care about nonce here?
 			m.SubmitRequests(ctx, []*mirproto.Request{
-				// TODO: Should Mir define a special type of request for reconfiguration ?
-				// 0 - transport requests to send messages and cross-messages,
-				// 1 - reconfiguration requests to sends data about validators, etc.
-				m.newReconfigurationRequest(reconfigurationNumber, payload.Bytes())},
+				m.newReconfigurationRequest(payload.Bytes())},
 			)
-			reconfigurationNumber++
 
 		case batch := <-mirHead:
 			msgs, crossMsgs := m.GetMessages(batch)

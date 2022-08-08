@@ -40,6 +40,13 @@ const (
 	SubmitInterval          = 5000 * time.Millisecond
 	ReconfigurationInterval = 2000 * time.Millisecond
 	ValidatorsEnv           = "EUDICO_MIR_VALIDATORS"
+
+	// SegmentLength is the number of batches per ISS segment (this is ISS-specific, use epoch length instead!)
+	SegmentLength = 4
+
+	// ConfigOffset is the number of epochs by which to delay configuration changes.
+	// If a configuration is agreed upon in epoch e, it will take effect in epoch e + 1 + configOffset.
+	ConfigOffset = 2
 )
 
 var (

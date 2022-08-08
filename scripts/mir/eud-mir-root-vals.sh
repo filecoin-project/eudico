@@ -5,7 +5,7 @@ NODE_0=/root:t1wpixt5mihkj75lfhrnaa6v56n27epvlgwparujy
 NODE_1=/root:t1k7t2zufxvtgamk7ogoifa5mvdagb4cafu6pdzga
 NODE_2=/root:t1rlhubezzmetmmpxyze22tc2uxuiiqv3iy6rvpra
 NODE_3=/root:t1sqbkluz5elnekdu62ute5zjammslkplgdcpa2zi
-NODE_4=/root
+NODE_4=/root:t1wmaksrs27k5j53aabwy6dianwgxqjtjiquq44fi
 
 # Libp2p IDs
 NODE_0_LIBP2P=12D3KooWJhKBXvytYgPCAaiRtiNLJNSFG5jreKDu2jiVpJetzvVJ
@@ -24,7 +24,7 @@ NODES=\
 /root:t1rlhubezzmetmmpxyze22tc2uxuiiqv3iy6rvpra@/ip4/127.0.0.1/tcp/10002/p2p/12D3KooWNuDQaGuwVLPyroJ4FZyNkiFcH2Qi61bNGehK2Mhgq3TK,\
 /root:t1sqbkluz5elnekdu62ute5zjammslkplgdcpa2zi@/ip4/127.0.0.1/tcp/10003/p2p/12D3KooWRF48VL58mRkp5DmysHp2wLwWyycJ6df2ocEHPvRxMrLs
 
-NODES4=$NODES",/root:t1sqbkluz5elnekdu62ute5zjammslkplgdcpa2zi@/ip4/127.0.0.1/tcp/10004/p2p/12D3KooWRUDXegwwY6FLgqKuMEnGJSJ7XoMgHh7sE492fcXyDUGC"
+NODES4=$NODES",/root:t1wmaksrs27k5j53aabwy6dianwgxqjtjiquq44fi@/ip4/127.0.0.1/tcp/10004/p2p/12D3KooWRUDXegwwY6FLgqKuMEnGJSJ7XoMgHh7sE492fcXyDUGC"
 
 # EUDICO_MIR_VALIDATORS=$EUDICO_MIR_VALIDATORS",/root:t1sqbkluz5elnekdu62ute5zjammslkplgdcpa2zi@/ip4/127.0.0.1/tcp/10004/p2p/12D3KooWRUDXegwwY6FLgqKuMEnGJSJ7XoMgHh7sE492fcXyDUGC"
 
@@ -168,7 +168,7 @@ tmux new-session -d -s "mir" \; \
           ./lotus-shed keyinfo import $NODE_4_KEY;
           ./eudico mir daemon --genesis=$BLOCK0 --api=$NODE_4_API 2>&1 | tee $NODE_4_DAEMON_LOG" Enter \; \
     send-keys -t "mir:2.1" "
-          export GOLOG_LOG_LEVEL=$LOG_LEVEL EUDICO_MIR_VALIDATORS=$NODES EUDICO_PATH=$NODE_4_PATH
+          export GOLOG_LOG_LEVEL=$LOG_LEVEL EUDICO_MIR_VALIDATORS=$NODES4 EUDICO_PATH=$NODE_4_PATH
           ./eudico wait-api;
           source ./scripts/mir/connect.sh 4;
           ./eudico wallet import --as-default $WALLET_4_KEY;
