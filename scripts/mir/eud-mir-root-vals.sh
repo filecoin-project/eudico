@@ -163,14 +163,14 @@ tmux new-session -d -s "mir" \; \
        ./eudico mir miner --default-key 2>&1  | tee $NODE_3_MINER_LOG" Enter \; \
    \
     send-keys -t "mir:2.0" "
-          export GOLOG_LOG_LEVEL=$LOG_LEVEL EUDICO_PATH=$NODE_4_PATH LOTUS_PATH=$NODE_4_PATH
-          mkdir -p $NODE_4_PATH/keystore && chmod 0700 $NODE_4_PATH/keystore;
-          ./lotus-shed keyinfo import $NODE_4_KEY;
-          ./eudico mir daemon --genesis=$BLOCK0 --api=$NODE_4_API 2>&1 | tee $NODE_4_DAEMON_LOG" Enter \; \
+        export GOLOG_LOG_LEVEL=$LOG_LEVEL EUDICO_PATH=$NODE_4_PATH LOTUS_PATH=$NODE_4_PATH
+        mkdir -p $NODE_4_PATH/keystore && chmod 0700 $NODE_4_PATH/keystore;
+        ./lotus-shed keyinfo import $NODE_4_KEY;
+        ./eudico mir daemon --genesis=$BLOCK0 --api=$NODE_4_API 2>&1 | tee $NODE_4_DAEMON_LOG" Enter \; \
     send-keys -t "mir:2.1" "
-          export GOLOG_LOG_LEVEL=$LOG_LEVEL EUDICO_MIR_VALIDATORS=$NODES4 EUDICO_PATH=$NODE_4_PATH
-          ./eudico wait-api;
-          source ./scripts/mir/connect.sh 4;
-          ./eudico wallet import --as-default $WALLET_4_KEY;
-          ./eudico mir miner --default-key 2>&1 | tee $NODE_4_MINER_LOG" Enter \; \
+        export GOLOG_LOG_LEVEL=$LOG_LEVEL EUDICO_MIR_VALIDATORS=$NODES4 EUDICO_PATH=$NODE_4_PATH
+        ./eudico wait-api;
+        source ./scripts/mir/connect.sh 4;
+        ./eudico wallet import --as-default $WALLET_4_KEY;
+        ./eudico mir miner --default-key 2>&1 | tee $NODE_4_MINER_LOG" Enter \; \
   attach-session -t "mir:2.0"

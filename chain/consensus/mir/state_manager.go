@@ -195,7 +195,7 @@ func (sm *StateManager) UpdateAndCheckValSetVotes(valSet *hierarchical.Validator
 // and Snapshot is never actually called.
 // We include its implementation for completeness.
 func (sm *StateManager) Snapshot() ([]byte, []map[t.NodeID]t.NodeAddress, error) {
-	return nil, nil, nil
+	// return nil, nil, nil
 	return nil, sm.memberships[:len(sm.memberships)-1], nil
 }
 
@@ -203,7 +203,7 @@ func (sm *StateManager) Snapshot() ([]byte, []map[t.NodeID]t.NodeAddress, error)
 // The argument is a binary representation of the application state returned from Snapshot().
 // After the chat history is restored, RestoreState prints the whole chat history to stdout.
 func (sm *StateManager) RestoreState(snapshot *commonpb.StateSnapshot) error {
-	return nil
+	// return nil
 	sm.currentEpoch = t.EpochNr(snapshot.Epoch)
 	sm.memberships = make([]map[t.NodeID]t.NodeAddress, len(snapshot.Memberships)+1)
 	for e, mem := range snapshot.Memberships {
