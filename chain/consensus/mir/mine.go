@@ -91,7 +91,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			// Implement reconfiguration for debugging.
 
 		case <-updateEnv.C:
-			if len(m.LastValidatorSet.GetValidators()) == 4 {
+			if len(m.LastValidatorSet.GetValidators()) == 100 {
 
 				gg := os.Getenv(ValidatorsEnv)
 				gg = gg + ",/root:t1wmaksrs27k5j53aabwy6dianwgxqjtjiquq44fi@/ip4/127.0.0.1/tcp/10004/p2p/12D3KooWRUDXegwwY6FLgqKuMEnGJSJ7XoMgHh7sE492fcXyDUGC"

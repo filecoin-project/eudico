@@ -1275,6 +1275,23 @@ func EudicoEnsembleFourNodes(t *testing.T, opts ...interface{}) (*TestFullNode, 
 	return &n1, &n2, &n3, &n4, ens
 }
 
+// EudicoEnsembleThreeNodes creates and starts an Ensemble with for full nodes.
+// It does not interconnect nodes nor does it begin mining.
+//
+// This function supports passing both ensemble and node functional options.
+// Functional options are applied to all nodes.
+func EudicoEnsembleThreeNodes(t *testing.T, opts ...interface{}) (*TestFullNode, *TestFullNode, *TestFullNode, *EudicoEnsemble) {
+	opts = append(opts, WithAllSubsystems())
+
+	eopts, nopts := siftOptions(t, opts)
+
+	var (
+		n1, n2, n3 TestFullNode
+	)
+	ens := NewEudicoEnsemble(t, eopts...).FullNode(&n1, nopts...).FullNode(&n2, nopts...).FullNode(&n3, nopts...).Start()
+	return &n1, &n2, &n3, ens
+}
+
 // EudicoEnsembleOneTwo creates and starts an Ensemble with one full node and two miners.
 // It does not interconnect nodes nor does it begin mining.
 //

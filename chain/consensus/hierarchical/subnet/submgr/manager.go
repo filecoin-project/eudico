@@ -633,7 +633,7 @@ func (s *Service) MineSubnet(
 
 	if int(st.MinValidators) > 0 {
 		log.Debugf("%d validators have joined subnet %s", len(st.ValidatorSet), id)
-		if len(st.ValidatorSet) != int(st.MinValidators) {
+		if len(st.ValidatorSet) < int(st.MinValidators) {
 			return xerrors.Errorf("joined validators - %d, required validators - %d", len(st.ValidatorSet), st.MinValidators)
 		}
 	}
