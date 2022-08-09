@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
@@ -95,9 +94,9 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		return nil, fmt.Errorf("failed to build node membership: %w", err)
 	}
 
-	memberships := make([]*commonpb.Membership, ConfigOffset+1)
+	memberships := make([]map[t.NodeID]t.NodeAddress, ConfigOffset+1)
 	for i := 0; i < ConfigOffset+1; i++ {
-		memberships[t.EpochNr(i)] = t.MembershipPb(initialMembership)
+		memberships[t.EpochNr(i)] = initialMembership
 	}
 
 	mirID := newMirID(subnetID.String(), addr.String())
@@ -146,15 +145,13 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	// Instantiate the ISS protocol module with default configuration.
 
 	issConfig := iss.DefaultConfig(nodeIDs)
-	issConfig.SegmentLength = SegmentLength
-	issConfig.PBFTViewChangeSegmentTimeout = 2 * time.Duration(issConfig.SegmentLength) * issConfig.MaxProposeDelay
+	issConfig.ConfigOffset = ConfigOffset
 	issProtocol, err := iss.New(
 		t.NodeID(mirID),
 		issConfig,
 		&commonpb.StateSnapshot{
-			Epoch:       0,
-			AppData:     []byte{},
-			Memberships: memberships,
+			AppData:       []byte{},
+			Configuration: events.EpochConfig(0, memberships),
 		},
 		newMirLogger(managerLog),
 	)
@@ -178,7 +175,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		LastValidatorSet: initialValidatorSet,
 	}
 
-	sm := NewStateManager(initialMembership, SegmentLength, &m)
+	sm := NewStateManager(initialMembership, &m)
 
 	// Create a Mir node, using the default configuration and passing the modules initialized just above.
 	mirModules, err := iss.DefaultModules(map[t.ModuleID]modules.Module{

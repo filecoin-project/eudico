@@ -20,18 +20,9 @@ import (
 type Messages []byte
 
 type StateManager struct {
-	// Number of batches applied to the state.
-	batchesApplied int
-
-	// Length of an ISS segment.
-	segmentLength int
 
 	// The current epoch number.
 	currentEpoch t.EpochNr
-
-	// The first sequence number that belongs to the next epoch.
-	// After having delivered this many batches, the app signals the end of an epoch.
-	nextEpochSN int
 
 	// For each epoch number, stores the corresponding membership.
 	memberships []map[t.NodeID]t.NodeAddress
@@ -44,7 +35,13 @@ type StateManager struct {
 	reconfigurationVotes map[string]uint64
 }
 
-func NewStateManager(initialMembership map[t.NodeID]t.NodeAddress, segmentLength int, m *Manager) *StateManager {
+func NewStateManager(initialMembership map[t.NodeID]t.NodeAddress, m *Manager) *StateManager {
+	// Initialize the membership for the first epochs.
+	// We use configOffset+2 memberships to account for:
+	// - The first epoch (epoch 0)
+	// - The configOffset epochs that already have a fixed membership (epochs 1 to configOffset)
+	// - The membership of the following epoch (configOffset+1) initialized with the same membership,
+	//   but potentially changed during the first epoch (epoch 0) through special configuration requests.
 	memberships := make([]map[t.NodeID]t.NodeAddress, ConfigOffset+2)
 	for i := 0; i < ConfigOffset+2; i++ {
 		memberships[i] = initialMembership
@@ -53,10 +50,7 @@ func NewStateManager(initialMembership map[t.NodeID]t.NodeAddress, segmentLength
 		ChainNotify:          make(chan []Messages),
 		MirManager:           m,
 		memberships:          memberships,
-		segmentLength:        SegmentLength,
-		nextEpochSN:          len(initialMembership) * segmentLength,
 		currentEpoch:         0,
-		batchesApplied:       0,
 		reconfigurationVotes: make(map[string]uint64),
 	}
 	return &sm
@@ -69,37 +63,23 @@ func (sm *StateManager) ApplyEvents(eventsIn *events.EventList) (*events.EventLi
 func (sm *StateManager) ApplyEvent(event *eventpb.Event) (*events.EventList, error) {
 	switch e := event.Type.(type) {
 	case *eventpb.Event_Init:
+		return events.EmptyList(), nil
 	// no actions on init
 	case *eventpb.Event_Deliver:
-		if newEvents, err := sm.ApplyBatch(e.Deliver.Batch); err != nil {
-			return nil, fmt.Errorf("app batch delivery error: %w", err)
-		} else {
-			return newEvents, nil
-		}
+		return sm.applyBatch(e.Deliver.Batch)
+	case *eventpb.Event_NewEpoch:
+		return sm.applyNewEpoch(e.NewEpoch)
 	case *eventpb.Event_StateSnapshotRequest:
-		data, memberships, err := sm.Snapshot()
-		if err != nil {
-			return nil, fmt.Errorf("sm snapshot error: %w", err)
-		}
-		return (&events.EventList{}).PushBack(events.StateSnapshot(
-			t.ModuleID(e.StateSnapshotRequest.Module),
-			t.EpochNr(e.StateSnapshotRequest.Epoch),
-			data,
-			memberships,
-		)), nil
+		return sm.applySnapshotRequest(e.StateSnapshotRequest)
 	case *eventpb.Event_AppRestoreState:
-		if err := sm.RestoreState(e.AppRestoreState.Snapshot); err != nil {
-			return nil, fmt.Errorf("sm restore state error: %w", err)
-		}
+		return sm.applyRestoreState(e.AppRestoreState.Snapshot)
 	default:
 		return nil, fmt.Errorf("unexpected type of App event: %T", event.Type)
 	}
-
-	return events.EmptyList(), nil
 }
 
-// ApplyBatch applies the batch.
-func (sm *StateManager) ApplyBatch(in *requestpb.Batch) (*events.EventList, error) {
+// applyBatch applies a batch of requests to the state of the application.
+func (sm *StateManager) applyBatch(in *requestpb.Batch) (*events.EventList, error) {
 	var msgs []Messages
 
 	for _, req := range in.Requests {
@@ -107,63 +87,63 @@ func (sm *StateManager) ApplyBatch(in *requestpb.Batch) (*events.EventList, erro
 		case TransportType:
 			msgs = append(msgs, req.Req.Data)
 		case ReconfigurationType:
-			newValSet := &hierarchical.ValidatorSet{}
-			err := newValSet.UnmarshalCBOR(bytes.NewReader(req.Req.Data))
+			err := sm.applyConfigMsg(req.Req)
 			if err != nil {
 				panic(err)
-			}
-			voted, err := sm.UpdateAndCheckValSetVotes(newValSet)
-			if err != nil {
-				panic(err)
-			}
-			if voted {
-				err = sm.UpdateNextMembership(newValSet)
-				if err != nil {
-					panic(err)
-				}
 			}
 		}
 	}
 
-	// Update counter of applied batches.
-	sm.batchesApplied++
-
 	// Send messages to Eudico.
 	sm.ChainNotify <- msgs
 
-	eventsOut := events.EmptyList()
-	if sm.batchesApplied == sm.nextEpochSN {
-		eventsOut = sm.EndEpoch()
-	}
-
-	return eventsOut, nil
+	return events.EmptyList(), nil
 }
 
-// EndEpoch ends a Mir epoch.
-func (sm *StateManager) EndEpoch() *events.EventList {
-	eventsOut := events.EmptyList()
-	fmt.Println("end of epoch")
-	sm.currentEpoch++
+func (sm *StateManager) applyConfigMsg(in *requestpb.Request) error {
+	newValSet := &hierarchical.ValidatorSet{}
+	if err := newValSet.UnmarshalCBOR(bytes.NewReader(in.Data)); err != nil {
+		return err
+	}
+	voted, err := sm.UpdateAndCheckValSetVotes(newValSet)
+	if err != nil {
+		return err
+	}
+	if voted {
+		err = sm.UpdateNextMembership(newValSet)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
-	newMembership := sm.memberships[sm.currentEpoch+ConfigOffset]
+func (sm *StateManager) applyNewEpoch(newEpoch *eventpb.NewEpoch) (*events.EventList, error) {
+	// Sanity check.
+	if t.EpochNr(newEpoch.EpochNr) != sm.currentEpoch+1 {
+		return nil, fmt.Errorf("expected next epoch to be %d, got %d", sm.currentEpoch+1, newEpoch.EpochNr)
+	}
+
+	fmt.Printf("New epoch: %d\n", newEpoch.EpochNr)
+
+	// Convenience variable.
+	newMembership := sm.memberships[newEpoch.EpochNr+ConfigOffset]
+
+	// Append a new membership data structure to be modified throughout the new epoch.
+	sm.memberships = append(sm.memberships, newMembership)
 	fmt.Println("new membership:")
 	fmt.Println(newMembership)
 
-	// Initialize new membership to be updated throughput the new epoch if reconfiguration transactions received.
-	sm.memberships = append(sm.memberships, newMembership)
-
-	fmt.Printf(">>> Starting epoch %v.\nMembership:\n%v\n", sm.currentEpoch, sm.memberships[sm.currentEpoch])
-
-	sm.nextEpochSN += len(sm.memberships[sm.currentEpoch]) * sm.segmentLength
-
-	eventsOut.PushBack(events.NewConfig("iss", getSortedKeys(newMembership)))
+	// Update current epoch number.
+	sm.currentEpoch = t.EpochNr(newEpoch.EpochNr)
 
 	err := sm.MirManager.ReconfigureMirNode(context.TODO(), newMembership)
 	if err != nil {
 		panic(err)
 	}
 
-	return eventsOut
+	// Notify ISS about the new membership.
+	return events.ListOf(events.NewConfig("iss", getSortedKeys(newMembership))), nil
 }
 
 func (sm *StateManager) UpdateNextMembership(valSet *hierarchical.ValidatorSet) error {
@@ -189,36 +169,31 @@ func (sm *StateManager) UpdateAndCheckValSetVotes(valSet *hierarchical.Validator
 	return true, nil
 }
 
-// Snapshot returns a binary representation of the application state.
-// The returned value can be passed to RestoreState().
-// At the time of writing this comment, the Mir library does not support state transfer
-// and Snapshot is never actually called.
-// We include its implementation for completeness.
-func (sm *StateManager) Snapshot() ([]byte, []map[t.NodeID]t.NodeAddress, error) {
-	// return nil, nil, nil
-	return nil, sm.memberships[:len(sm.memberships)-1], nil
+// applySnapshotRequest produces a StateSnapshotResponse event containing the current snapshot of the chat app state.
+// The snapshot is a binary representation of the application state that can be passed to applyRestoreState().
+func (sm *StateManager) applySnapshotRequest(snapshotRequest *eventpb.StateSnapshotRequest) (*events.EventList, error) {
+	return events.ListOf(events.StateSnapshotResponse(
+		t.ModuleID(snapshotRequest.Module),
+		events.StateSnapshot(nil, events.EpochConfig(sm.currentEpoch, sm.memberships)),
+	)), nil
 }
 
-// RestoreState restores the application's state to the one represented by the passed argument.
+// applyRestoreState restores the application's state to the one represented by the passed argument.
 // The argument is a binary representation of the application state returned from Snapshot().
-// After the chat history is restored, RestoreState prints the whole chat history to stdout.
-func (sm *StateManager) RestoreState(snapshot *commonpb.StateSnapshot) error {
-	// return nil
-	sm.currentEpoch = t.EpochNr(snapshot.Epoch)
-	sm.memberships = make([]map[t.NodeID]t.NodeAddress, len(snapshot.Memberships)+1)
-	for e, mem := range snapshot.Memberships {
+func (sm *StateManager) applyRestoreState(snapshot *commonpb.StateSnapshot) (*events.EventList, error) {
+	sm.currentEpoch = t.EpochNr(snapshot.Configuration.EpochNr)
+	sm.memberships = make([]map[t.NodeID]t.NodeAddress, len(snapshot.Configuration.Memberships))
+	for e, mem := range snapshot.Configuration.Memberships {
 		sm.memberships[e] = make(map[t.NodeID]t.NodeAddress)
 		for nID, nAddr := range mem.Membership {
 			var err error
 			sm.memberships[e][t.NodeID(nID)], err = multiaddr.NewMultiaddr(nAddr)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
 	}
-	sm.memberships[len(sm.memberships)-1] = copyMap(sm.memberships[len(sm.memberships)-2])
-
-	return nil
+	return events.EmptyList(), nil
 }
 
 func (sm *StateManager) OrderedValidatorsAddresses() []t.NodeID {
