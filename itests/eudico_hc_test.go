@@ -19,7 +19,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/mir"
-	"github.com/filecoin-project/lotus/chain/consensus/tspow"
+	"github.com/filecoin-project/lotus/chain/consensus/roundrobin"
 	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/itests/kit"
@@ -61,8 +61,8 @@ func TestHC_BasicFlowWithMirInSubnet(t *testing.T) {
 }
 
 func TestHC_MirReconfigurationViaSubnetActor(t *testing.T) {
-	t.Run("/root/pow-/subnet/mir", func(t *testing.T) {
-		runMirReconfigurationTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetMir(), kit.MinValidators(4))
+	t.Run("/root/roundrobin-/subnet/mir", func(t *testing.T) {
+		runMirReconfigurationTests(t, kit.ThroughRPC(), kit.RootRoundrobin(), kit.SubnetMir(), kit.MinValidators(2))
 	})
 }
 
@@ -457,7 +457,12 @@ func (ts *eudicoSubnetSuite) testMirReconfiguration(t *testing.T) {
 	}
 	minerC := l[0]
 
-	t.Log("[*] running PoW consensus in root net")
+	t.Log("[*] running RoundRobin consensus in root net")
+
+	err = os.Setenv(roundrobin.ValidatorsEnv,
+		fmt.Sprintf("%s,%s,%s", minerA.String(), minerB.String(), minerC.String()),
+	)
+	require.NoError(t, err)
 
 	wg.Add(3)
 
@@ -467,7 +472,7 @@ func (ts *eudicoSubnetSuite) testMirReconfiguration(t *testing.T) {
 			wg.Done()
 			t.Log("[*] miner A in root net stopped")
 		}()
-		err := tspow.Mine(ctx, minerA, nodeA)
+		err := roundrobin.Mine(ctx, minerA, nodeA)
 		if err != nil {
 			t.Error("miner A error:", err)
 			cancel()
@@ -481,7 +486,7 @@ func (ts *eudicoSubnetSuite) testMirReconfiguration(t *testing.T) {
 			wg.Done()
 			t.Log("[*] miner B in root net stopped")
 		}()
-		err := tspow.Mine(ctx, minerB, nodeB)
+		err := roundrobin.Mine(ctx, minerB, nodeB)
 		if err != nil {
 			t.Error("miner B error:", err)
 			cancel()
@@ -495,7 +500,7 @@ func (ts *eudicoSubnetSuite) testMirReconfiguration(t *testing.T) {
 			wg.Done()
 			t.Log("[*] miner C in root net stopped")
 		}()
-		err := tspow.Mine(ctx, minerC, nodeC)
+		err := roundrobin.Mine(ctx, minerC, nodeC)
 		if err != nil {
 			t.Error("miner C error:", err)
 			cancel()
@@ -530,6 +535,8 @@ func (ts *eudicoSubnetSuite) testMirReconfiguration(t *testing.T) {
 	balanceC, err := nodeC.WalletBalance(ctx, minerC)
 	require.NoError(t, err)
 	t.Logf("[*] node C %s balance: %d", minerC, balanceC)
+
+	os.Unsetenv(roundrobin.ValidatorsEnv) // nolint
 
 	subnetParams := &hierarchical.SubnetParams{
 		Addr:             minerA,
@@ -612,35 +619,33 @@ func (ts *eudicoSubnetSuite) testMirReconfiguration(t *testing.T) {
 	err = kit.SubnetMinerMinesBlocks(ctx, 5, subnetAddr, minerA, nodeA)
 	require.NoError(t, err)
 
-	// Node E is joining the subnet
+	// Node C is joining the subnet
 	sc, err = nodeC.JoinSubnet(ctx, minerC, big.Int(val), subnetAddr, nodeCSubnetLibp2pAddr.String())
 	require.NoError(t, err)
 	_, err = nodeC.StateWaitMsg(ctx, sc, 1, 100, false)
 	require.NoError(t, err)
 
-	t.Log("[*] miner E in subnet is starting")
+	t.Log("[*] miner C in subnet is starting")
 	mp = hierarchical.MiningParams{}
 	err = nodeC.MineSubnet(ctx, minerC, subnetAddr, false, &mp)
 	if err != nil {
-		t.Error("subnet miner E error:", err)
+		t.Error("subnet miner C error:", err)
 		cancel()
 		return
 	}
 
 	t.Log("[*] miners A and C are mining in the subnet")
-	err = kit.SubnetMinerMinesBlocks(ctx, 5, subnetAddr, minerC, nodeA)
-	require.NoError(t, err)
-
 	err = kit.SubnetMinerMinesBlocks(ctx, 5, subnetAddr, minerA, nodeA)
 	require.NoError(t, err)
-
+	err = kit.SubnetMinerMinesBlocks(ctx, 5, subnetAddr, minerC, nodeC)
+	require.NoError(t, err)
 }
 
 func runTwoNodesTestsWithMir(t *testing.T, opts ...interface{}) {
 	ts := eudicoSubnetSuite{opts: opts}
 
 	t.Run("testBasicFlowOnTwoNodes", ts.testBasicFlowOnTwoNodes)
-	// t.Run("testStartStopOnTwoNodes", ts.testStartStopOnTwoNodes)
+	t.Run("testStartStopOnTwoNodes", ts.testStartStopOnTwoNodes)
 }
 
 func (ts *eudicoSubnetSuite) testBasicFlowOnTwoNodes(t *testing.T) {

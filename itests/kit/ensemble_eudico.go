@@ -58,6 +58,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/submgr"
 	"github.com/filecoin-project/lotus/chain/consensus/mir"
+	"github.com/filecoin-project/lotus/chain/consensus/roundrobin"
 	"github.com/filecoin-project/lotus/chain/consensus/tendermint"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/gen"
@@ -91,7 +92,9 @@ import (
 
 const (
 	TSPoWConsensusGenesisTestFile = "../testdata/tspow.gen"
-	DummyConsensusGenesisTestFile = "../testdata/dummy.gen"
+
+	DummyConsensusGenesisTestFile      = "../testdata/dummy.gen"
+	RoundrobinConsensusGenesisTestFile = "../testdata/roundrobin.gen"
 
 	DelegatedConsensusGenesisTestFile = "../testdata/delegcns.gen"
 	DelegatedConsnensusMinerAddr      = "f1ozbo7zqwfx6d4tqb353qoq7sfp4qhycefx6ftgy"
@@ -324,6 +327,11 @@ func NewRootDummyConsensus(ctx context.Context, sm *stmgr.StateManager, beacon b
 	return dummy.NewConsensus(ctx, sm, nil, beacon, r, verifier, genesis, netName)
 }
 
+func NewRootRoundRobinConsensus(ctx context.Context, sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
+	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) (consensus.Consensus, error) {
+	return roundrobin.NewConsensus(ctx, sm, nil, beacon, r, verifier, genesis, netName)
+}
+
 func NetworkName(mctx helpers.MetricsCtx, lc fx.Lifecycle, cs *store.ChainStore, tsexec stmgr.Executor,
 	syscalls vm.SyscallBuilder, us stmgr.UpgradeSchedule, _ dtypes.AfterGenesisSet) (dtypes.NetworkName, error) {
 
@@ -415,6 +423,9 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		rootConsensusConstructor = NewFilecoinExpectedConsensus
 	case hierarchical.Dummy:
 		rootConsensusConstructor = NewRootDummyConsensus
+	case hierarchical.RoundRobin:
+		rootConsensusConstructor = NewRootRoundRobinConsensus
+
 	default:
 		n.t.Fatalf("unknown consensus constructor %d", n.options.rootConsensus)
 	}
@@ -433,6 +444,8 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		rootConsensusWeight = filcns.Weight
 	case hierarchical.Dummy:
 		rootConsensusWeight = dummy.Weight
+	case hierarchical.RoundRobin:
+		rootConsensusWeight = roundrobin.Weight
 	default:
 		n.t.Fatalf("unknown consensus weight %d", n.options.rootConsensus)
 	}
@@ -478,6 +491,10 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		err := subnet.CreateGenesisFile(ctx, DummyConsensusGenesisTestFile, hierarchical.Dummy, address.Undef)
 		require.NoError(n.t, err)
 		rootGenesisBytes, gferr = ioutil.ReadFile(DummyConsensusGenesisTestFile)
+	case hierarchical.RoundRobin:
+		err := subnet.CreateGenesisFile(ctx, RoundrobinConsensusGenesisTestFile, hierarchical.RoundRobin, address.Undef)
+		require.NoError(n.t, err)
+		rootGenesisBytes, gferr = ioutil.ReadFile(RoundrobinConsensusGenesisTestFile)
 	case hierarchical.FilecoinEC:
 	default:
 		n.t.Fatalf("unknown genesis file %d", n.options.rootConsensus)
@@ -578,6 +595,9 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 			addr, err = full.WalletImport(ctx, &full.DefaultKey.KeyInfo)
 			require.NoError(n.t, err)
 		case hierarchical.FilecoinEC:
+			addr, err = full.WalletImport(ctx, &full.DefaultKey.KeyInfo)
+			require.NoError(n.t, err)
+		case hierarchical.RoundRobin:
 			addr, err = full.WalletImport(ctx, &full.DefaultKey.KeyInfo)
 			require.NoError(n.t, err)
 		default:
@@ -1148,6 +1168,8 @@ func EudicoEnsembleTwoMiners(t *testing.T, opts ...interface{}) (*TestFullNode, 
 		rootMiner = mir.Mine
 	case hierarchical.Dummy:
 		rootMiner = dummy.Mine
+	case hierarchical.RoundRobin:
+		rootMiner = roundrobin.Mine
 	case hierarchical.FilecoinEC:
 		// Filecoin miner is created below within itests approach.
 		break

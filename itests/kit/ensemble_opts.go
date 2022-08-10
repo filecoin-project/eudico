@@ -57,6 +57,14 @@ func ValidatorAddress(addr string) EnsembleOpt {
 	}
 }
 
+// RootRoundrobin activates PoW consensus protocol for the root subnet in Eudico.
+func RootRoundrobin() EnsembleOpt {
+	return func(opts *ensembleOpts) error {
+		opts.rootConsensus = hierarchical.RoundRobin
+		return nil
+	}
+}
+
 // RootTSPoW activates PoW consensus protocol for the root subnet in Eudico.
 func RootTSPoW() EnsembleOpt {
 	return func(opts *ensembleOpts) error {

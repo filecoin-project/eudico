@@ -140,6 +140,10 @@ func SubnetMinerMinesBlocks(ctx context.Context, blockNumber int, subnetAddr add
 			return xerrors.New("closed channel")
 		case heads := <-subnetHeads:
 			if len(heads) != 1 {
+				fmt.Println(heads[0].Val.Height())
+				fmt.Println(heads[0].Val.Blocks()[0].Miner)
+				fmt.Println(heads[1].Val.Height())
+				fmt.Println(heads[1].Val.Blocks()[0].Miner)
 				return xerrors.New("chain head length is not one")
 			}
 

@@ -48,7 +48,7 @@ func (v *Validator) Bytes() ([]byte, error) {
 // 	- /root:t1wpixt5mihkj75lfhrnaa6v56n27epvlgwparujy@127.0.0.1:1000
 func ValidatorsFromString(input string) ([]Validator, error) {
 	var validators []Validator
-	for _, idAddr := range splitAndTrimEmpty(input, ",", " ") {
+	for _, idAddr := range SplitAndTrimEmpty(input, ",", " ") {
 		parts := strings.Split(idAddr, "@")
 		if len(parts) != 2 {
 			return nil, fmt.Errorf("failed to parse validators string")
@@ -92,7 +92,7 @@ func ValidatorsToString(validators []Validator) string {
 	return strings.TrimSuffix(s, ",")
 }
 
-func splitAndTrimEmpty(s, sep, cutset string) []string {
+func SplitAndTrimEmpty(s, sep, cutset string) []string {
 	if s == "" {
 		return []string{}
 	}

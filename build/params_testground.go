@@ -133,6 +133,7 @@ const TendermintFinality = 2
 const MirFinality = 2
 const DummyFinality = 1
 const FilecoinFinality = 5
+const RoundRobinFinality = 2
 
 const DelegatedPoWCheckpointPeriod = 10
 const PoWCheckpointPeriod = 10
@@ -140,3 +141,4 @@ const TendermintCheckpointPeriod = 10
 const MirCheckpointPeriod = 10
 const DummyCheckpointPeriod = 10
 const FilecoinCheckpointPeriod = 10
+const RoundRobinCheckpointPeriod = 10
