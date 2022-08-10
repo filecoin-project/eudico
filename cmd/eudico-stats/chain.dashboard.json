@@ -29,10 +29,7 @@
   "liveNow": false,
   "panels": [
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "Xo5O11k4z"
-      },
+      "datasource": {},
       "description": "",
       "fieldConfig": {
         "defaults": {
@@ -77,7 +74,7 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "9.0.6",
+      "pluginVersion": "9.1.0-beta1",
       "targets": [
         {
           "datasource": {
@@ -85,7 +82,7 @@
             "uid": "z584F7k4k"
           },
           "editorMode": "code",
-          "expr": "max(eudico_node_stats_hc_subnet_created_count OR vector(1))",
+          "expr": "max(eudico_node_stats_hc_subnet_created_count OR vector(0))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -140,7 +137,7 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "9.0.6",
+      "pluginVersion": "9.1.0-beta1",
       "targets": [
         {
           "datasource": {
@@ -148,20 +145,17 @@
             "uid": "z584F7k4k"
           },
           "editorMode": "code",
-          "expr": "max(eudico_external_stats_hc_subnet_active_count OR vector(0))",
+          "expr": "max(eudico_external_stats_hc_subnet_active_count-1 OR vector(0))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Number Of Subnets Active",
+      "title": "Number Of Subnets Active (excl. /root)",
       "type": "stat"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "Xo5O11k4z"
-      },
+      "datasource": {},
       "description": "",
       "fieldConfig": {
         "defaults": {
@@ -206,7 +200,7 @@
         },
         "textMode": "auto"
       },
-      "pluginVersion": "9.0.6",
+      "pluginVersion": "9.1.0-beta1",
       "targets": [
         {
           "datasource": {
@@ -267,7 +261,7 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "9.0.6",
+      "pluginVersion": "9.1.0-beta1",
       "targets": [
         {
           "datasource": {
@@ -275,18 +269,18 @@
             "uid": "z584F7k4k"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.5, rate(eudico_node_stats_hc_subnet_start_duration_bucket[5m]))",
+          "expr": "histogram_quantile(0.95, rate(eudico_node_stats_hc_subnet_start_duration_bucket[10m]))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Median Subnet Spin Up Time(ms)",
+      "title": "95% Subnet Spin Up Time(ms)",
       "type": "gauge"
     }
   ],
-  "refresh": "5s",
-  "schemaVersion": 36,
+  "refresh": "1m",
+  "schemaVersion": 37,
   "style": "dark",
   "tags": [],
   "templating": {

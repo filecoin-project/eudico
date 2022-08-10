@@ -55,8 +55,13 @@ var (
 	UseFD, _      = tag.NewKey("use_fd")
 
 	// Subnet ID
-	SubnetID, _        = tag.NewKey("subnet_id")
-	SubnetAncestors, _ = tag.NewKey("subnet_ancestors")
+	SubnetFrom, _         = tag.NewKey("subnet_from")
+	SubnetTo, _           = tag.NewKey("subnet_to")
+	CrossNetMsgType, _    = tag.NewKey("cross_net_msg_type")
+	CrossNetMsgMethod, _  = tag.NewKey("cross_net_msg_method")
+	CrossNetMsgExeCode, _ = tag.NewKey("cross_net_msg_exe_code")
+	SubnetID, _           = tag.NewKey("subnet_id")
+	SubnetAncestors, _    = tag.NewKey("subnet_ancestors")
 )
 
 // Measures
@@ -178,6 +183,9 @@ var (
 	SubnetKilledCount  = stats.Int64("hc/subnet_killed_count", "The total number of subnets killed in the node", stats.UnitDimensionless)
 
 	SubnetSpinUpDuration = stats.Float64("hc/subnet_start_duration", "Time spent spinning up new subnet", stats.UnitMilliseconds)
+
+	SubnetCrossNetMsgSendCount     = stats.Int64("hc/subnet_crossnet_msg_send_count", "The total number of subnets cross messages sent", stats.UnitDimensionless)
+	SubnetCrossNetMsgExecutedCount = stats.Int64("hc/subnet_crossnet_msg_executed_count", "The total number of subnets cross messages executed", stats.UnitDimensionless)
 )
 
 var (
@@ -629,6 +637,16 @@ var (
 		Aggregation: defaultMillisecondsDistribution,
 		TagKeys:     []tag.Key{SubnetID, SubnetAncestors},
 	}
+	SubnetCrossNetMessageSendCountView = &view.View{
+		Measure:     SubnetCrossNetMsgSendCount,
+		Aggregation: view.Count(),
+		TagKeys:     []tag.Key{SubnetFrom, SubnetTo, CrossNetMsgType, CrossNetMsgMethod},
+	}
+	SubnetCrossNetMsgExecutedCountView = &view.View{
+		Measure:     SubnetCrossNetMsgExecutedCount,
+		Aggregation: view.Count(),
+		TagKeys:     []tag.Key{SubnetFrom, SubnetTo, CrossNetMsgType, CrossNetMsgMethod, CrossNetMsgExeCode},
+	}
 )
 
 // DefaultViews is an array of OpenCensus views for metric gathering purposes
@@ -719,6 +737,9 @@ var ChainNodeViews = append([]*view.View{
 	SubnetKilledCountView,
 	SubnetActiveCountView,
 	SubnetSpinUpDurationView,
+
+	SubnetCrossNetMessageSendCountView,
+	SubnetCrossNetMsgExecutedCountView,
 }, DefaultViews...)
 
 var MinerNodeViews = append([]*view.View{
