@@ -88,8 +88,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 		case err := <-mirErrors:
 			return fmt.Errorf("miner consensus error: %w", err)
 
-			// Implement reconfiguration for debugging.
-
+		// Implement reconfiguration for debugging.
 		case <-updateEnv.C:
 			if len(m.LastValidatorSet.GetValidators()) == 100 {
 

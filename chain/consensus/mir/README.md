@@ -43,14 +43,23 @@ To create a deployment run the following script:
 
 Then run the following commands:
 ```
- ./eudico subnet add --consensus mir --name mir --min-validators 1
+ ./eudico subnet add --consensus mir --name mir --min-validators 2
  ./eudico subnet join --subnet=/root/t01004 -val-addr=127.0.0.1:10000 10 
- ./eudico subnet mine  --subnet=/root/t01004 --log-file=mir_miner_0.log --log-level=debug
+ ./eudico subnet mine  --subnet=/root/t01002 --log-file=mir_miner_0.log --log-level=debug
  ./eudico --subnet-api=/root/t01004 wallet list
  ./eudico subnet fund --from=X --subnet=/root/t01002 11
  ./eudico --subnet-api=/root/t01001 send <addr> 10
  ./eudico subnet list-subnets
  ./eudico subnet release --from=X --subnet=/root/t01002
+```
+
+If the minimum number of validators for the specified consensus is 4
+then you must add at least 4 validators before running the consensus in the subnet:
+```
+./eudico subnet join --subnet=/root/t01002 -val-addr=/ip4/127.0.0.1/tcp/10000/p2p/12D3KooWJhKBXvytYgPCAaiRtiNLJNSFG5jreKDu2jiVpJetzvVJ 10
+./eudico subnet join --subnet=/root/t01002 -val-addr=/ip4/127.0.0.1/tcp/10001/p2p/12D3KooWKPASbibHcHMCEuUk5qx4AQbbPiNgot7F4A4VPeEV6srp 10
+./eudico subnet join --subnet=/root/t01002 -val-addr=/ip4/127.0.0.1/tcp/10002/p2p/12D3KooWNuDQaGuwVLPyroJ4FZyNkiFcH2Qi61bNGehK2Mhgq3TK 10
+./eudico subnet join --subnet=/root/t01002 -val-addr=/ip4/127.0.0.1/tcp/10003/p2p/12D3KooWRF48VL58mRkp5DmysHp2wLwWyycJ6df2ocEHPvRxMrLs 10
 ```
 
 Don't forget provide different addresses if you use Mir nodes on the same machine: 
