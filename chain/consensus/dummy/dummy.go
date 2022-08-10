@@ -170,7 +170,7 @@ func (bft *Dummy) ValidateBlock(ctx context.Context, b *types.FullBlock) (err er
 
 func (bft *Dummy) ValidateBlockPubsub(ctx context.Context, self bool, msg *pubsub.Message) (pubsub.ValidationResult, string) {
 	if self {
-		return common.ValidateLocalBlock(ctx, msg)
+		return validateLocalBlock(ctx, msg)
 	}
 
 	// track validation time
@@ -186,7 +186,7 @@ func (bft *Dummy) ValidateBlockPubsub(ctx context.Context, self bool, msg *pubsu
 		panic(what)
 	}
 
-	blk, what, err := common.DecodeAndCheckBlock(msg)
+	blk, what, err := decodeAndCheckBlock(msg)
 	if err != nil {
 		log.Error("got invalid block over pubsub: ", err)
 		recordFailureFlagPeer(what)
@@ -221,12 +221,7 @@ func (bft *Dummy) minerIsValid(maddr address.Address) error {
 // We are currently using defaults here and not worrying about it.
 // We will consider potential changes of Consensus interface in https://github.com/filecoin-project/eudico/issues/143.
 func (bft *Dummy) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
-	if bft.genesis == nil {
-		return false
-	}
-
-	now := uint64(build.Clock.Now().Unix())
-	return epoch > (abi.ChainEpoch((now-bft.genesis.MinTimestamp())/build.BlockDelaySecs) + MaxHeightDrift)
+	return false
 }
 
 func (bft *Dummy) Type() hierarchical.ConsensusType {
@@ -241,4 +236,41 @@ func Weight(ctx context.Context, stateBs bstore.Blockstore, ts *types.TipSet) (t
 	}
 
 	return big.NewInt(int64(ts.Height() + 1)), nil
+}
+
+func validateLocalBlock(ctx context.Context, msg *pubsub.Message) (pubsub.ValidationResult, string) {
+	stats.Record(ctx, metrics.BlockPublished.M(1))
+
+	if size := msg.Size(); size > 1<<20-1<<15 {
+		log.Errorf("ignoring oversize block (%dB)", size)
+		return pubsub.ValidationIgnore, "oversize_block"
+	}
+
+	blk, what, err := decodeAndCheckBlock(msg)
+	if err != nil {
+		log.Errorf("got invalid local block: %s", err)
+		return pubsub.ValidationIgnore, what
+	}
+
+	msg.ValidatorData = blk
+	stats.Record(ctx, metrics.BlockValidationSuccess.M(1))
+	return pubsub.ValidationAccept, ""
+}
+
+func decodeAndCheckBlock(msg *pubsub.Message) (*types.BlockMsg, string, error) {
+	blk, err := types.DecodeBlockMsg(msg.GetData())
+	if err != nil {
+		return nil, "invalid", xerrors.Errorf("error decoding block: %w", err)
+	}
+
+	if count := len(blk.BlsMessages) + len(blk.SecpkMessages); count > build.BlockMessageLimit {
+		return nil, "too_many_messages", xerrors.Errorf("block contains too many messages (%d)", count)
+	}
+
+	// make sure we have a signature
+	if blk.Header.BlockSig != nil {
+		return nil, "missing_signature", xerrors.Errorf("block with a signature")
+	}
+
+	return blk, "", nil
 }

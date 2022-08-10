@@ -36,13 +36,9 @@ import (
 )
 
 const (
-	MaxHeightDrift          = 5
 	SubmitInterval          = 5000 * time.Millisecond
 	ReconfigurationInterval = 2000 * time.Millisecond
 	ValidatorsEnv           = "EUDICO_MIR_VALIDATORS"
-
-	// SegmentLength is the number of batches per ISS segment (this is ISS-specific, use epoch length instead!)
-	SegmentLength = 4
 
 	// ConfigOffset is the number of epochs by which to delay configuration changes.
 	// If a configuration is agreed upon in epoch e, it will take effect in epoch e + 1 + configOffset.
@@ -240,12 +236,7 @@ func (bft *Mir) minerIsValid(maddr address.Address) error {
 // We are currently using defaults here and not worrying about it.
 // We will consider potential changes of Consensus interface in https://github.com/filecoin-project/eudico/issues/143.
 func (bft *Mir) IsEpochBeyondCurrMax(epoch abi.ChainEpoch) bool {
-	if bft.genesis == nil {
-		return false
-	}
-
-	now := uint64(build.Clock.Now().Unix())
-	return epoch > (abi.ChainEpoch((now-bft.genesis.MinTimestamp())/build.BlockDelaySecs) + MaxHeightDrift)
+	return false
 }
 
 func (bft *Mir) Type() hierarchical.ConsensusType {

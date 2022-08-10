@@ -28,10 +28,19 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 	}
 
 	validatorsEnv := os.Getenv(ValidatorsEnv)
-	validators, err := validatorsFromString(validatorsEnv)
+	var validators []address.Address
+	validators, err = validatorsFromString(validatorsEnv)
 	if err != nil {
 		return fmt.Errorf("failed to get validators addresses: %w", err)
 	}
+	if len(validators) == 0 {
+		validators = append(validators, miner)
+	}
+
+	submit := time.NewTicker(400 * time.Millisecond)
+	defer submit.Stop()
+
+	leader := validators[0]
 
 	for {
 		select {
@@ -39,10 +48,14 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 			log.Debug("Dummy miner: context closed")
 			return nil
 
-		default:
+		case <-submit.C:
 			base, err := api.ChainHead(ctx)
 			if err != nil {
 				log.Errorw("failed to get the head of chain", "error", err)
+				continue
+			}
+
+			if miner != leader {
 				continue
 			}
 
@@ -83,7 +96,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 
 			log.Infof("[subnet: %s, epoch: %d] try to sync a block", subnetID, base.Height()+1)
 
-			err = api.SyncBlock(ctx, &types.BlockMsg{
+			err = api.SyncSubmitBlock(ctx, &types.BlockMsg{
 				Header:        bh.Header,
 				BlsMessages:   bh.BlsMessages,
 				SecpkMessages: bh.SecpkMessages,

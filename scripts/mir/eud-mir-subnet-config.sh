@@ -97,25 +97,14 @@ tmux new-session -d -s "mir" \; \
         source ./scripts/mir/connect.sh 1;
         ./eudico wallet import --as-default $WALLET_1_KEY
         ./eudico tspow miner --default-key 2>&1 | tee $NODE_1_MINER_LOG" Enter \; \
-  \
   send-keys -t "mir:1.0" "
         export EUDICO_PATH=$NODE_2_PATH export GOLOG_LOG_LEVEL=$LOG_LEVEL LOTUS_PATH=$NODE_2_PATH
-        mkdir -p $NODE_0_PATH/keystore && chmod 0700 $NODE_0_PATH/keystore;
+        mkdir -p $NODE_2_PATH/keystore && chmod 0700 $NODE_2_PATH/keystore;
         ./lotus-shed keyinfo import $NODE_2_KEY;
         ./eudico tspow daemon --genesis=$BLOCK0 --api=$NODE_2_API 2>&1 | tee $NODE_2_DAEMON_LOG" Enter \; \
   send-keys -t "mir:1.1" "
         export EUDICO_PATH=$NODE_2_PATH GOLOG_LOG_LEVEL=$LOG_LEVEL
         source ./scripts/mir/connect.sh 2;
-        ./eudico wallet import --as-default $WALLET_2_KEY
-        ./eudico tspow miner --default-key 2>&1 | tee $NODE_2_MINER_LOG" Enter \; \
-  send-keys -t "mir:1.2" "
-        export EUDICO_PATH=$NODE_3_PATH GOLOG_LOG_LEVEL=$LOG_LEVEL LOTUS_PATH=$NODE_2_PATH
-        mkdir -p $NODE_0_PATH/keystore && chmod 0700 $NODE_0_PATH/keystore;
-        ./lotus-shed keyinfo import $NODE_3_KEY;
-        ./eudico tspow daemon --genesis=$BLOCK0 --api=$NODE_3_API 2>&1 | tee $NODE_3_DAEMON_LOG" Enter \; \
-  send-keys -t "mir:1.3" "
-        export EUDICO_PATH=$NODE_3_PATH GOLOG_LOG_LEVEL=$LOG_LEVEL
-        source ./scripts/mir/connect.sh 3;
-        ./eudico wallet import --as-default $WALLET_3_KEY
-        ./eudico tspow miner --default-key 2>&1 | tee $NODE_3_MINER_LOG" Enter \; \
- attach-session -t "mir:0.3"
+       ./eudico wallet import --as-default $WALLET_2_KEY
+       ./eudico tspow miner --default-key 2>&1 | tee $NODE_2_MINER_LOG" Enter \; \
+  attach-session -t "mir:0.3"

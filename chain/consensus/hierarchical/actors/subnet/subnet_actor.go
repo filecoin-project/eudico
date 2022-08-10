@@ -203,7 +203,7 @@ func (a SubnetActor) Leave(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValu
 	priorBalance := rt.CurrentBalance()
 	var retFunds abi.TokenAmount
 	rt.StateTransaction(&st, func() {
-		// Remove stake from stake balanace table.
+		// Remove stake from stake balance table.
 		retFunds = st.rmStake(rt, sourceAddr, stakes, minerStake)
 	})
 

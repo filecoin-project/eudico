@@ -82,7 +82,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 
 	initialValidatorSet, err := getSubnetValidators(ctx, subnetID, api)
 	if err != nil {
-		return nil, fmt.Errorf(q"failed to get validator set: %w", err)
+		return nil, fmt.Errorf("failed to get validator set: %w", err)
 	}
 	if initialValidatorSet.Size() == 0 {
 		return nil, fmt.Errorf("empty validator set")

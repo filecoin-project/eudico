@@ -495,14 +495,12 @@ func (s *Service) JoinSubnet(
 	// Validator address is optional for Mir.
 	if st.Consensus == hierarchical.Mir {
 		if validatorNetAddr == "" {
-			return cid.Undef, xerrors.New("Mir validator address must be provided")
+			return cid.Undef, xerrors.New("Mir validator address must be specified")
 		}
 	}
 	// Validator address is not supported for consensus other than Mir.
-	if st.Consensus != hierarchical.Mir {
-		if validatorNetAddr == "" {
-			return cid.Undef, xerrors.New("validator address is not supported")
-		}
+	if st.Consensus != hierarchical.Mir && validatorNetAddr != "" {
+		return cid.Undef, xerrors.New("validator address is not supported")
 	}
 
 	var params bytes.Buffer
