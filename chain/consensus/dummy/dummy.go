@@ -1,6 +1,5 @@
 // Package dummy implements consensus for testing purposes only.
-// Dummy consensus is a centralised consensus, it works on one node only,
-// and fundamentally cannot be extended to run on multiple nodes.
+// Dummy consensus is a permissioned consensus based on round-robin.
 package dummy
 
 import (
@@ -37,6 +36,7 @@ import (
 
 const (
 	MaxHeightDrift = 5
+	ValidatorsEnv  = "EUDICO_DUMMY_VALIDATORS"
 )
 
 var (
@@ -110,7 +110,7 @@ func (bft *Dummy) ValidateBlock(ctx context.Context, b *types.FullBlock) (err er
 		log.Warn("Got block from the future, but within threshold", h.Timestamp, build.Clock.Now().Unix())
 	}
 
-	msgsChecks := common.CheckMsgs(ctx, bft.store, bft.sm, bft.subMgr, bft.resolver, bft.netName, b, baseTs)
+	msgsChecks := common.CheckMsgsWithoutBlockSig(ctx, bft.store, bft.sm, bft.subMgr, bft.resolver, bft.netName, b, baseTs)
 
 	minerCheck := async.Err(func() error {
 		if err := bft.minerIsValid(b.Header.Miner); err != nil {

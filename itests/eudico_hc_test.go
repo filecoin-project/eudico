@@ -16,10 +16,10 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
+	"github.com/filecoin-project/lotus/chain/consensus/dummy"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/mir"
-	"github.com/filecoin-project/lotus/chain/consensus/roundrobin"
 	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/itests/kit"
@@ -61,8 +61,8 @@ func TestHC_BasicFlowWithMirInSubnet(t *testing.T) {
 }
 
 func TestHC_MirReconfigurationViaSubnetActor(t *testing.T) {
-	t.Run("/root/roundrobin-/subnet/mir", func(t *testing.T) {
-		runMirReconfigurationTests(t, kit.ThroughRPC(), kit.RootRoundrobin(), kit.SubnetMir(), kit.MinValidators(2))
+	t.Run("/root/dummy-/subnet/mir", func(t *testing.T) {
+		runMirReconfigurationTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetMir(), kit.MinValidators(2))
 	})
 }
 
@@ -457,9 +457,9 @@ func (ts *eudicoSubnetSuite) testMirReconfiguration(t *testing.T) {
 	}
 	minerC := l[0]
 
-	t.Log("[*] running RoundRobin consensus in root net")
+	t.Log("[*] running Dummy consensus in root net")
 
-	err = os.Setenv(roundrobin.ValidatorsEnv,
+	err = os.Setenv(dummy.ValidatorsEnv,
 		fmt.Sprintf("%s,%s,%s", minerA.String(), minerB.String(), minerC.String()),
 	)
 	require.NoError(t, err)
@@ -472,7 +472,7 @@ func (ts *eudicoSubnetSuite) testMirReconfiguration(t *testing.T) {
 			wg.Done()
 			t.Log("[*] miner A in root net stopped")
 		}()
-		err := roundrobin.Mine(ctx, minerA, nodeA)
+		err := dummy.Mine(ctx, minerA, nodeA)
 		if err != nil {
 			t.Error("miner A error:", err)
 			cancel()
@@ -486,7 +486,7 @@ func (ts *eudicoSubnetSuite) testMirReconfiguration(t *testing.T) {
 			wg.Done()
 			t.Log("[*] miner B in root net stopped")
 		}()
-		err := roundrobin.Mine(ctx, minerB, nodeB)
+		err := dummy.Mine(ctx, minerB, nodeB)
 		if err != nil {
 			t.Error("miner B error:", err)
 			cancel()
@@ -500,7 +500,7 @@ func (ts *eudicoSubnetSuite) testMirReconfiguration(t *testing.T) {
 			wg.Done()
 			t.Log("[*] miner C in root net stopped")
 		}()
-		err := roundrobin.Mine(ctx, minerC, nodeC)
+		err := dummy.Mine(ctx, minerC, nodeC)
 		if err != nil {
 			t.Error("miner C error:", err)
 			cancel()
@@ -536,7 +536,7 @@ func (ts *eudicoSubnetSuite) testMirReconfiguration(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("[*] node C %s balance: %d", minerC, balanceC)
 
-	os.Unsetenv(roundrobin.ValidatorsEnv) // nolint
+	os.Unsetenv(dummy.ValidatorsEnv) // nolint
 
 	subnetParams := &hierarchical.SubnetParams{
 		Addr:             minerA,

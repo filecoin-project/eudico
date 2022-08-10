@@ -25,7 +25,6 @@ const (
 	Mir
 	FilecoinEC
 	Dummy
-	RoundRobin
 )
 
 // ConsensusName returns the consensus algorithm name.
@@ -43,8 +42,6 @@ func ConsensusName(alg ConsensusType) string {
 		return "Mir"
 	case Dummy:
 		return "Dummy"
-	case RoundRobin:
-		return "RoundRobin"
 	default:
 		return "unknown"
 	}
@@ -65,8 +62,6 @@ func Consensus(name string) ConsensusType {
 		return Mir
 	case strings.EqualFold(name, "dummy"):
 		return Dummy
-	case strings.EqualFold(name, "roundrobin"):
-		return RoundRobin
 	default:
 		panic(fmt.Sprintf("unknown or unspecified consensus algorithm %s", name))
 	}
@@ -89,8 +84,6 @@ func MinCheckpointPeriod(alg ConsensusType) abi.ChainEpoch {
 		return build.MirCheckpointPeriod
 	case Dummy:
 		return build.DummyCheckpointPeriod
-	case RoundRobin:
-		return build.RoundRobinCheckpointPeriod
 	default:
 		panic(fmt.Sprintf("unknown consensus algorithm %v", alg))
 	}
@@ -111,8 +104,6 @@ func MinFinality(alg ConsensusType) abi.ChainEpoch {
 		return build.MirFinality
 	case Dummy:
 		return build.DummyFinality
-	case RoundRobin:
-		return build.RoundRobinFinality
 	default:
 		panic(fmt.Sprintf("unknown consensus algorithm %v", alg))
 	}
