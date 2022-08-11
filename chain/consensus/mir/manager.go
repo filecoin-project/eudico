@@ -241,9 +241,8 @@ func (m *Manager) ReconfigureMirNode(ctx context.Context, nodes map[t.NodeID]t.N
 		return fmt.Errorf("empty validator set")
 	}
 
-	m.Net.Connect(ctx, nodes)
-
-	m.Net.CloseOldConnections(ctx, nodes)
+	go m.Net.Connect(ctx, nodes)
+	go m.Net.CloseOldConnections(ctx, nodes)
 
 	return nil
 }

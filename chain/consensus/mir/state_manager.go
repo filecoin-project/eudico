@@ -26,7 +26,8 @@ type StateManager struct {
 	currentEpoch t.EpochNr
 
 	// For each epoch number, stores the corresponding membership.
-	memberships []map[t.NodeID]t.NodeAddress
+	memberships    []map[t.NodeID]t.NodeAddress
+	membershipLock sync.Mutex
 
 	// Channel to send messages to Eudico.
 	ChainNotify chan []Messages
@@ -34,8 +35,6 @@ type StateManager struct {
 	MirManager *Manager
 
 	reconfigurationVotes map[string]uint64
-
-	lock sync.Mutex
 }
 
 func NewStateManager(initialMembership map[t.NodeID]t.NodeAddress, m *Manager) *StateManager {
@@ -121,8 +120,8 @@ func (sm *StateManager) applyConfigMsg(in *requestpb.Request) error {
 }
 
 func (sm *StateManager) applyNewEpoch(newEpoch *eventpb.NewEpoch) (*events.EventList, error) {
-	sm.lock.Lock()
-	defer sm.lock.Unlock()
+	sm.membershipLock.Lock()
+	defer sm.membershipLock.Unlock()
 
 	// Sanity check.
 	if t.EpochNr(newEpoch.EpochNr) != sm.currentEpoch+1 {
@@ -148,8 +147,8 @@ func (sm *StateManager) applyNewEpoch(newEpoch *eventpb.NewEpoch) (*events.Event
 }
 
 func (sm *StateManager) UpdateNextMembership(valSet *hierarchical.ValidatorSet) error {
-	sm.lock.Lock()
-	defer sm.lock.Unlock()
+	sm.membershipLock.Lock()
+	defer sm.membershipLock.Unlock()
 
 	_, mbs, err := ValidatorsMembership(valSet.GetValidators())
 	if err != nil {
@@ -161,8 +160,8 @@ func (sm *StateManager) UpdateNextMembership(valSet *hierarchical.ValidatorSet) 
 
 // UpdateAndCheckValSetVotes votes for the valSet and returns true if it has had enough votes for this valSet.
 func (sm *StateManager) UpdateAndCheckValSetVotes(valSet *hierarchical.ValidatorSet) (bool, error) {
-	sm.lock.Lock()
-	defer sm.lock.Unlock()
+	sm.membershipLock.Lock()
+	defer sm.membershipLock.Unlock()
 
 	h, err := valSet.Hash()
 	if err != nil {
@@ -181,8 +180,8 @@ func (sm *StateManager) UpdateAndCheckValSetVotes(valSet *hierarchical.Validator
 // applySnapshotRequest produces a StateSnapshotResponse event containing the current snapshot of the chat app state.
 // The snapshot is a binary representation of the application state that can be passed to applyRestoreState().
 func (sm *StateManager) applySnapshotRequest(snapshotRequest *eventpb.StateSnapshotRequest) (*events.EventList, error) {
-	sm.lock.Lock()
-	defer sm.lock.Unlock()
+	sm.membershipLock.Lock()
+	defer sm.membershipLock.Unlock()
 
 	return events.ListOf(events.StateSnapshotResponse(
 		t.ModuleID(snapshotRequest.Module),
@@ -193,8 +192,8 @@ func (sm *StateManager) applySnapshotRequest(snapshotRequest *eventpb.StateSnaps
 // applyRestoreState restores the application's state to the one represented by the passed argument.
 // The argument is a binary representation of the application state returned from Snapshot().
 func (sm *StateManager) applyRestoreState(snapshot *commonpb.StateSnapshot) (*events.EventList, error) {
-	sm.lock.Lock()
-	defer sm.lock.Unlock()
+	sm.membershipLock.Lock()
+	defer sm.membershipLock.Unlock()
 	sm.currentEpoch = t.EpochNr(snapshot.Configuration.EpochNr)
 	sm.memberships = make([]map[t.NodeID]t.NodeAddress, len(snapshot.Configuration.Memberships))
 	for e, mem := range snapshot.Configuration.Memberships {
@@ -213,9 +212,10 @@ func (sm *StateManager) applyRestoreState(snapshot *commonpb.StateSnapshot) (*ev
 }
 
 func (sm *StateManager) OrderedValidatorsAddresses() []t.NodeID {
-	sm.lock.Lock()
+	sm.membershipLock.Lock()
+	defer sm.membershipLock.Unlock()
+
 	membership := sm.memberships[sm.currentEpoch]
-	sm.lock.Unlock()
 	sortedIDs := getSortedKeys(membership)
 	return sortedIDs
 }
