@@ -67,7 +67,6 @@ func (sm *StateManager) ApplyEvent(event *eventpb.Event) (*events.EventList, err
 	switch e := event.Type.(type) {
 	case *eventpb.Event_Init:
 		return events.EmptyList(), nil
-	// no actions on init
 	case *eventpb.Event_Deliver:
 		return sm.applyBatch(e.Deliver.Batch)
 	case *eventpb.Event_NewEpoch:
@@ -97,7 +96,7 @@ func (sm *StateManager) applyBatch(in *requestpb.Batch) (*events.EventList, erro
 		}
 	}
 
-	// Send messages to Eudico.
+	// Send messages to the Eudico node.
 	sm.ChainNotify <- msgs
 
 	return events.EmptyList(), nil
@@ -122,7 +121,6 @@ func (sm *StateManager) applyConfigMsg(in *requestpb.Request) error {
 }
 
 func (sm *StateManager) applyNewEpoch(newEpoch *eventpb.NewEpoch) (*events.EventList, error) {
-
 	sm.lock.Lock()
 	defer sm.lock.Unlock()
 
@@ -131,15 +129,11 @@ func (sm *StateManager) applyNewEpoch(newEpoch *eventpb.NewEpoch) (*events.Event
 		return nil, fmt.Errorf("expected next epoch to be %d, got %d", sm.currentEpoch+1, newEpoch.EpochNr)
 	}
 
-	fmt.Printf("New epoch: %d\n", newEpoch.EpochNr)
-
 	// Convenience variable.
 	newMembership := sm.memberships[newEpoch.EpochNr+ConfigOffset]
 
 	// Append a new membership data structure to be modified throughout the new epoch.
 	sm.memberships = append(sm.memberships, newMembership)
-	fmt.Println("new membership:")
-	fmt.Println(newMembership)
 
 	// Update current epoch number.
 	sm.currentEpoch = t.EpochNr(newEpoch.EpochNr)
@@ -176,7 +170,9 @@ func (sm *StateManager) UpdateAndCheckValSetVotes(valSet *hierarchical.Validator
 	}
 	sm.reconfigurationVotes[string(h)]++
 	votes := int(sm.reconfigurationVotes[string(h)])
-	if votes < f(len(sm.memberships[sm.currentEpoch]))+1 {
+	nodes := len(sm.memberships[sm.currentEpoch])
+
+	if votes < f(nodes)+1 {
 		return false, nil
 	}
 	return true, nil
