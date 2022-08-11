@@ -45,7 +45,7 @@ Then run the following commands:
 ```
  ./eudico subnet add --consensus mir --name mir --min-validators 2
  ./eudico subnet join --subnet=/root/t01004 -val-addr=127.0.0.1:10000 10 
- ./eudico subnet mine  --subnet=/root/t01003 --log-file=mir_miner_2.log --log-level=debug
+ ./eudico subnet mine  --subnet=/root/t01003 --log-file=mir_miner_02.log --log-level=debug
  ./eudico --subnet-api=/root/t01003 wallet list
  ./eudico subnet fund --from=X --subnet=/root/t01002 11
  ./eudico --subnet-api=/root/t01001 send <addr> 10

@@ -1,31 +1,13 @@
 # Testbeds
 
-## eud-mir-root
-This testbed uses 4 Eudico nodes with Mir in rootnet.
+`eud-mir-root-grpc.sh` ran Mir in the rootnet with gRPC network transport. This script is for reference purposes only.
 
-The topology:
+`connect.sh` - is a gadget to connect Eudico nodes with each other.
 
-```
-              ++++++++++++++++++++++++
-              +                      +
-[Node 0]+++[Node 1]+++[Node 2]+++[Node 3]
-  +                      +          +
-  ++++++++++++++++++++++++          +
-  +                                 +
-  +++++++++++++++++++++++++++++++++++
-```
+`eud-mir-root-libp2p.sh` runs Mir in the rootnet with libp2p network transport.
 
-## eud-mir-subnet
-This testbed uses 4 Eudico nodes with PoW in rootnet to run Mir in a subnet.
+`eud-mir-subnet.sh` runs Mir in a subnet, the rootnet uses PoW.
 
-The topology:
+`eud-3-mir-subnet.sh` runs Mir in a subnet of the rootnet running with 3 PoW miners.
 
-```
-              ++++++++++++++++++++++++
-              +                      +
-[Node 0]+++[Node 1]+++[Node 2]+++[Node 3]
-  +                      +          +
-  ++++++++++++++++++++++++          +
-  +                                 +
-  +++++++++++++++++++++++++++++++++++
-```
+`eud-4-mir-subnet.sh` runs Mir in a subnet of the rootnet running with 4 PoW miners.
