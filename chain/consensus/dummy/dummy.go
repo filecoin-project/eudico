@@ -1,5 +1,10 @@
-// Package dummy implements consensus for testing purposes only.
-// Dummy consensus is a permissioned consensus based on round-robin.
+// Package dummy implements dummy insecure non-robust consensus protocol for testing and demo purposes only.
+// Dummy consensus has the following properties: permissioned, leader-based, round-robin, non-crash tolerant.
+// It works as follows:
+// 1. All nodes have the same (agreed) validator set.
+// 2. The first validator from this set is the permanent leader.
+// 3. The leader proposes blocks, the block miner is assigned using round-robin.
+// 4. Signing is not used.
 package dummy
 
 import (
@@ -35,8 +40,7 @@ import (
 )
 
 const (
-	MaxHeightDrift = 5
-	ValidatorsEnv  = "EUDICO_DUMMY_VALIDATORS"
+	ValidatorsEnv = "EUDICO_DUMMY_VALIDATORS"
 )
 
 var (
@@ -69,7 +73,7 @@ func NewConsensus(
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("New Dummy consensus for %s subnet", subnetID)
+	log.Infof("New dummy consensus for %s subnet", subnetID)
 
 	return &Dummy{
 		store:    sm.ChainStore(),
