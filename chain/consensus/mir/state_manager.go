@@ -43,7 +43,7 @@ func NewStateManager(initialMembership map[t.NodeID]t.NodeAddress, m *Manager) *
 	// - The first epoch (epoch 0)
 	// - The configOffset epochs that already have a fixed membership (epochs 1 to configOffset)
 	// - The membership of the following epoch (configOffset+1) initialized with the same membership,
-	//   but potentially changed during the first epoch (epoch 0) through special configuration requests.
+	//   but potentially replaced during the first epoch (epoch 0) through special configuration requests.
 	memberships := make([]map[t.NodeID]t.NodeAddress, ConfigOffset+2)
 	for i := 0; i < ConfigOffset+2; i++ {
 		memberships[i] = initialMembership
@@ -70,8 +70,8 @@ func (sm *StateManager) ApplyEvent(event *eventpb.Event) (*events.EventList, err
 		return sm.applyBatch(e.Deliver.Batch)
 	case *eventpb.Event_NewEpoch:
 		return sm.applyNewEpoch(e.NewEpoch)
-	case *eventpb.Event_StateSnapshotRequest:
-		return sm.applySnapshotRequest(e.StateSnapshotRequest)
+	case *eventpb.Event_AppSnapshotRequest:
+		return sm.applySnapshotRequest(e.AppSnapshotRequest)
 	case *eventpb.Event_AppRestoreState:
 		return sm.applyRestoreState(e.AppRestoreState.Snapshot)
 	default:
@@ -81,6 +81,7 @@ func (sm *StateManager) ApplyEvent(event *eventpb.Event) (*events.EventList, err
 
 // applyBatch applies a batch of requests to the state of the application.
 func (sm *StateManager) applyBatch(in *requestpb.Batch) (*events.EventList, error) {
+	fmt.Printf("%v - applyBatch, memb len - %d\n", sm.MirManager.MirID, len(sm.memberships))
 	var msgs []Messages
 
 	for _, req := range in.Requests {
@@ -90,7 +91,7 @@ func (sm *StateManager) applyBatch(in *requestpb.Batch) (*events.EventList, erro
 		case ReconfigurationType:
 			err := sm.applyConfigMsg(req.Req)
 			if err != nil {
-				panic(err)
+				return events.EmptyList(), err
 			}
 		}
 	}
@@ -102,11 +103,12 @@ func (sm *StateManager) applyBatch(in *requestpb.Batch) (*events.EventList, erro
 }
 
 func (sm *StateManager) applyConfigMsg(in *requestpb.Request) error {
+	fmt.Printf("%v - applyConfigMsg, memb len - %d\n", sm.MirManager.MirID, len(sm.memberships))
 	newValSet := &hierarchical.ValidatorSet{}
 	if err := newValSet.UnmarshalCBOR(bytes.NewReader(in.Data)); err != nil {
 		return err
 	}
-	voted, err := sm.UpdateAndCheckValSetVotes(newValSet)
+	voted, err := sm.UpdateAndCheckVotes(newValSet)
 	if err != nil {
 		return err
 	}
@@ -120,6 +122,7 @@ func (sm *StateManager) applyConfigMsg(in *requestpb.Request) error {
 }
 
 func (sm *StateManager) applyNewEpoch(newEpoch *eventpb.NewEpoch) (*events.EventList, error) {
+	fmt.Printf("%v - applyNewEpoch, memb len - %d\n", sm.MirManager.MirID, len(sm.memberships))
 	sm.membershipLock.Lock()
 	defer sm.membershipLock.Unlock()
 
@@ -129,6 +132,12 @@ func (sm *StateManager) applyNewEpoch(newEpoch *eventpb.NewEpoch) (*events.Event
 	}
 
 	// Convenience variable.
+	fmt.Println("-----")
+	fmt.Printf("%v - e: %d\n", sm.MirManager.MirID, newEpoch.EpochNr+ConfigOffset)
+	fmt.Printf("%v - len: %d\n", sm.MirManager.MirID, len(sm.memberships))
+	fmt.Println("++++++")
+
+	// The base membership is the last one membership.
 	newMembership := sm.memberships[newEpoch.EpochNr+ConfigOffset]
 
 	// Append a new membership data structure to be modified throughout the new epoch.
@@ -139,14 +148,17 @@ func (sm *StateManager) applyNewEpoch(newEpoch *eventpb.NewEpoch) (*events.Event
 
 	err := sm.MirManager.ReconfigureMirNode(context.TODO(), newMembership)
 	if err != nil {
-		panic(err)
+		return events.EmptyList(), err
 	}
 
+	delete(sm.memberships, sm.currentEpoch+1)
+
 	// Notify ISS about the new membership.
-	return events.ListOf(events.NewConfig("iss", getSortedKeys(newMembership))), nil
+	return events.ListOf(events.NewConfig("iss", copyMap(newMembership))), nil
 }
 
 func (sm *StateManager) UpdateNextMembership(valSet *hierarchical.ValidatorSet) error {
+	fmt.Printf("%v - updateNextmembership, memb len - %d\n", sm.MirManager.MirID, len(sm.memberships))
 	sm.membershipLock.Lock()
 	defer sm.membershipLock.Unlock()
 
@@ -158,8 +170,8 @@ func (sm *StateManager) UpdateNextMembership(valSet *hierarchical.ValidatorSet) 
 	return nil
 }
 
-// UpdateAndCheckValSetVotes votes for the valSet and returns true if it has had enough votes for this valSet.
-func (sm *StateManager) UpdateAndCheckValSetVotes(valSet *hierarchical.ValidatorSet) (bool, error) {
+// UpdateAndCheckVotes votes for the valSet and returns true if it has had enough votes for this valSet.
+func (sm *StateManager) UpdateAndCheckVotes(valSet *hierarchical.ValidatorSet) (bool, error) {
 	sm.membershipLock.Lock()
 	defer sm.membershipLock.Unlock()
 
@@ -170,7 +182,6 @@ func (sm *StateManager) UpdateAndCheckValSetVotes(valSet *hierarchical.Validator
 	sm.reconfigurationVotes[string(h)]++
 	votes := int(sm.reconfigurationVotes[string(h)])
 	nodes := len(sm.memberships[sm.currentEpoch])
-
 	if votes < f(nodes)+1 {
 		return false, nil
 	}
@@ -179,13 +190,14 @@ func (sm *StateManager) UpdateAndCheckValSetVotes(valSet *hierarchical.Validator
 
 // applySnapshotRequest produces a StateSnapshotResponse event containing the current snapshot of the chat app state.
 // The snapshot is a binary representation of the application state that can be passed to applyRestoreState().
-func (sm *StateManager) applySnapshotRequest(snapshotRequest *eventpb.StateSnapshotRequest) (*events.EventList, error) {
+func (sm *StateManager) applySnapshotRequest(snapshotRequest *eventpb.AppSnapshotRequest) (*events.EventList, error) {
 	sm.membershipLock.Lock()
 	defer sm.membershipLock.Unlock()
 
-	return events.ListOf(events.StateSnapshotResponse(
+	return events.ListOf(events.AppSnapshotResponse(
 		t.ModuleID(snapshotRequest.Module),
-		events.StateSnapshot(nil, events.EpochConfig(sm.currentEpoch, sm.memberships)),
+		nil,
+		snapshotRequest.Origin,
 	)), nil
 }
 
@@ -194,6 +206,7 @@ func (sm *StateManager) applySnapshotRequest(snapshotRequest *eventpb.StateSnaps
 func (sm *StateManager) applyRestoreState(snapshot *commonpb.StateSnapshot) (*events.EventList, error) {
 	sm.membershipLock.Lock()
 	defer sm.membershipLock.Unlock()
+
 	sm.currentEpoch = t.EpochNr(snapshot.Configuration.EpochNr)
 	sm.memberships = make([]map[t.NodeID]t.NodeAddress, len(snapshot.Configuration.Memberships))
 	for e, mem := range snapshot.Configuration.Memberships {
@@ -206,7 +219,13 @@ func (sm *StateManager) applyRestoreState(snapshot *commonpb.StateSnapshot) (*ev
 			}
 		}
 	}
-	fmt.Printf("Restored memberships: %d (epoch: %d)\n", len(sm.memberships), sm.currentEpoch)
+	fmt.Println("---applyRestoreState", sm.MirManager.MirID)
+	fmt.Println("len:", len(sm.memberships))
+	fmt.Println("epoch:", sm.currentEpoch)
+	newMembership := sm.memberships[snapshot.Configuration.EpochNr+ConfigOffset]
+	sm.memberships = append(sm.memberships, newMembership)
+
+	fmt.Printf("Restored memberships for %v: size - %d, epoch: - %d\n", sm.MirManager.MirID, len(sm.memberships), sm.currentEpoch)
 
 	return events.EmptyList(), nil
 }

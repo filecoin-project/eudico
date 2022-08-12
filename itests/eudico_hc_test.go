@@ -635,9 +635,9 @@ func (ts *eudicoSubnetSuite) testMirReconfiguration(t *testing.T) {
 	}
 
 	t.Log("[*] miners A and C are mining in the subnet")
-	err = kit.SubnetMinerMinesBlocks(ctx, 5, subnetAddr, minerA, nodeA)
+	err = kit.SubnetMinerMinesBlocks(ctx, 15, subnetAddr, minerA, nodeA)
 	require.NoError(t, err)
-	err = kit.SubnetMinerMinesBlocks(ctx, 5, subnetAddr, minerC, nodeC)
+	err = kit.SubnetMinerMinesBlocks(ctx, 15, subnetAddr, minerC, nodeC)
 	require.NoError(t, err)
 }
 

@@ -143,7 +143,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 
 	// Instantiate the ISS protocol module with default configuration.
 
-	issConfig := iss.DefaultConfig(nodeIDs)
+	issConfig := iss.DefaultConfig(initialMembership)
 	issConfig.ConfigOffset = ConfigOffset
 	issProtocol, err := iss.New(
 		t.NodeID(mirID),

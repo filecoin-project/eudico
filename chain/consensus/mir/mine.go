@@ -88,6 +88,10 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 
 		select {
 		case err := <-mirErrors:
+			// TODO: This is a temporal solution while we are discussing that issue
+			// https://filecoinproject.slack.com/archives/C03C77HN3AS/p1660330971306019
+			panic(fmt.Errorf("miner consensus error: %w", err))
+
 			return fmt.Errorf("miner consensus error: %w", err)
 
 		case <-reconfigure.C:
