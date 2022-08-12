@@ -151,8 +151,6 @@ func (sm *StateManager) applyNewEpoch(newEpoch *eventpb.NewEpoch) (*events.Event
 		return events.EmptyList(), err
 	}
 
-	delete(sm.memberships, sm.currentEpoch+1)
-
 	// Notify ISS about the new membership.
 	return events.ListOf(events.NewConfig("iss", copyMap(newMembership))), nil
 }
