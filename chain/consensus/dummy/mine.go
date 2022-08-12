@@ -37,7 +37,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		validators = append(validators, miner)
 	}
 
-	submit := time.NewTicker(400 * time.Millisecond)
+	submit := time.NewTicker(300 * time.Millisecond)
 	defer submit.Stop()
 
 	leader := validators[0]

@@ -223,34 +223,6 @@ func (sm *StateManager) OrderedValidatorsAddresses() []t.NodeID {
 // The ImplementsModule method only serves the purpose of indicating that this is a Module and must not be called.
 func (sm *StateManager) ImplementsModule() {}
 
-func serializeMessages(messages []string) []byte {
-	data := make([]byte, 0)
-	for _, msg := range messages {
-		data = append(data, []byte(msg)...)
-		data = append(data, 0)
-	}
-
-	fmt.Printf("Serialized messages (%d): \n\n%s\n\n", len(messages), string(data))
-
-	return data
-}
-
-func deserializeMessages(data []byte) []string {
-	messages := make([]string, 0)
-
-	if len(data) == 0 {
-		return messages
-	}
-
-	for _, msg := range bytes.Split(data[:len(data)-1], []byte{0}) { // len(data)-1 to strip off the last zero byte
-		messages = append(messages, string(msg))
-	}
-
-	fmt.Printf("Deserialized messages (%d): \n\n%s\n\n", len(messages), string(data))
-
-	return messages
-}
-
 func getSortedKeys(m map[t.NodeID]t.NodeAddress) []t.NodeID {
 	skeys := make([]string, len(m))
 	i := 0

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"go.uber.org/zap/buffer"
@@ -69,6 +68,13 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 	}
 
 	for {
+		// Here we use ctx.Err() in the beginning of for loop instead of using it in the select statement
+		// because if ctx has been closed then `api.ChainHead(ctx)` returns an error,
+		// and we will be in the infinite loop dut to continue.
+		if ctx.Err() != nil {
+			log.Debug("Mir miner: context closed")
+			return nil
+		}
 		base, err := api.ChainHead(ctx)
 		if err != nil {
 			log.Errorw("failed to get chain head", "error", err)
@@ -78,25 +84,11 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 		// Miner (leader) for an epoch is assigned deterministically using round-robin.
 		// All other validators use the same Miner in the block.
 		epochMiner := m.GetBlockMiner(base.Height())
-
 		nextEpoch := base.Height() + 1
 
 		select {
-		case <-ctx.Done():
-			log.With("epoch", nextEpoch).Debug("Mir miner: context closed")
-			return nil
 		case err := <-mirErrors:
 			return fmt.Errorf("miner consensus error: %w", err)
-
-		// Implement reconfiguration for debugging.
-		case <-updateEnv.C:
-			if len(m.LastValidatorSet.GetValidators()) == 100 {
-
-				gg := os.Getenv(ValidatorsEnv)
-				gg = gg + ",/root:t1wmaksrs27k5j53aabwy6dianwgxqjtjiquq44fi@/ip4/127.0.0.1/tcp/10004/p2p/12D3KooWRUDXegwwY6FLgqKuMEnGJSJ7XoMgHh7sE492fcXyDUGC"
-				os.Setenv(ValidatorsEnv, gg)
-				updateEnv.Stop()
-			}
 
 		case <-reconfigure.C:
 			//

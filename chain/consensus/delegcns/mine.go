@@ -41,6 +41,9 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 	timer := time.NewTicker(time.Duration(build.BlockDelaySecs) * time.Second)
 	for {
 		select {
+		case <-ctx.Done():
+			log.Debug("Delegcns miner: context closed")
+			return nil
 		case <-timer.C:
 			base, err := api.ChainHead(ctx)
 			if err != nil {
@@ -96,10 +99,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 				log.Errorw("submitting block failed", "error", err)
 				continue
 			}
-
 			log.Info("delegated mined a block! ", bh.Cid(), " msgs ", len(msgs))
-		case <-ctx.Done():
-			return nil
 		}
 	}
 }

@@ -148,12 +148,12 @@ func (set *ValidatorSet) Hash() ([]byte, error) {
 	return cid.NewCidV0(u.Hash(hs)).Bytes(), nil
 }
 
-func (vals *ValidatorSet) GetValidators() []Validator {
-	return vals.Validators
+func (set *ValidatorSet) GetValidators() []Validator {
+	return set.Validators
 }
 
-func (vals *ValidatorSet) HasValidatorWithID(id string) bool {
-	for _, v := range vals.Validators {
+func (set *ValidatorSet) HasValidatorWithID(id string) bool {
+	for _, v := range set.Validators {
 		if v.ID() == id {
 			return true
 		}
