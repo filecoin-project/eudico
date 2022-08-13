@@ -1,4 +1,4 @@
-# Testbeds
+# Mir Scripts
 
 `eud-mir-root-grpc.sh` ran Mir in the rootnet with gRPC network transport. This script is for reference purposes only.
 
