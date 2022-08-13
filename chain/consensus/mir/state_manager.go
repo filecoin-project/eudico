@@ -269,7 +269,3 @@ func copyMap(m map[t.NodeID]t.NodeAddress) map[t.NodeID]t.NodeAddress {
 func f(n int) int {
 	return (n - 1) / 3
 }
-
-func majority(n int) int {
-	return 2*f(n) + 1
-}
