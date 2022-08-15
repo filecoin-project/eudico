@@ -247,7 +247,7 @@ func (m *Manager) ReconfigureMirNode(ctx context.Context, nodes map[t.NodeID]t.N
 	return nil
 }
 
-// GetBlockMiner computes reconfigures the Mir node.
+// GetBlockMiner computes the miner address for the block at h.
 func (m *Manager) GetBlockMiner(h abi.ChainEpoch) address.Address {
 	addrs := m.App.OrderedValidatorsAddresses()
 	addr := addrs[int(h)%len(addrs)]
@@ -350,7 +350,6 @@ func (m *Manager) newReconfigurationRequest(payload []byte) *mirproto.Request {
 		Type:     ReconfigurationType,
 		Data:     payload,
 	}
-	// TODO: Do we care about nonce here?
 	m.reconfigurationNonce++
 	return &r
 }

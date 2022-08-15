@@ -58,10 +58,6 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 	reconfigure := time.NewTicker(ReconfigurationInterval)
 	defer reconfigure.Stop()
 
-	// TODO: This timer is needed for debugging. Remove it when drafting is completed.
-	updateEnv := time.NewTimer(time.Second * 6)
-	defer updateEnv.Stop()
-
 	lastValidatorSetHash, err := m.LastValidatorSet.Hash()
 	if err != nil {
 		return err
@@ -99,7 +95,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			// Send a reconfiguration transaction if the validator set in the actor has been changed.
 			//
 
-			// TODO: this works only for demo purposes.
+			// TODO: this is an initial version of reconfiguration mechanism.
 			// In reality, SCA must call us to signal that something has been changed.
 			// For example, two changes may occur between reads and if validators read the state at different times
 			// they could get different val sets.

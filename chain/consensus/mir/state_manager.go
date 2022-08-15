@@ -81,7 +81,6 @@ func (sm *StateManager) ApplyEvent(event *eventpb.Event) (*events.EventList, err
 
 // applyBatch applies a batch of requests to the state of the application.
 func (sm *StateManager) applyBatch(in *requestpb.Batch) (*events.EventList, error) {
-	fmt.Printf("%v - applyBatch, memb len - %d\n", sm.MirManager.MirID, len(sm.memberships))
 	var msgs []Messages
 
 	for _, req := range in.Requests {
@@ -124,7 +123,6 @@ func (sm *StateManager) applyConfigMsg(in *requestpb.Request) error {
 // applyNewEpoch is applied ?
 //
 func (sm *StateManager) applyNewEpoch(newEpoch *eventpb.NewEpoch) (*events.EventList, error) {
-	fmt.Printf("%v - applyNewEpoch, memb len - %d\n", sm.MirManager.MirID, len(sm.memberships))
 	sm.membershipLock.Lock()
 	defer sm.membershipLock.Unlock()
 
@@ -132,12 +130,6 @@ func (sm *StateManager) applyNewEpoch(newEpoch *eventpb.NewEpoch) (*events.Event
 	if t.EpochNr(newEpoch.EpochNr) != sm.currentEpoch+1 {
 		return nil, fmt.Errorf("expected next epoch to be %d, got %d", sm.currentEpoch+1, newEpoch.EpochNr)
 	}
-
-	// Convenience variable.
-	fmt.Println("-----")
-	fmt.Printf("%v - e: %d\n", sm.MirManager.MirID, newEpoch.EpochNr+ConfigOffset)
-	fmt.Printf("%v - len: %d\n", sm.MirManager.MirID, len(sm.memberships))
-	fmt.Println("++++++")
 
 	// The base membership is the last one membership.
 	newMembership := sm.memberships[newEpoch.EpochNr+ConfigOffset]
@@ -158,7 +150,6 @@ func (sm *StateManager) applyNewEpoch(newEpoch *eventpb.NewEpoch) (*events.Event
 }
 
 func (sm *StateManager) UpdateNextMembership(valSet *hierarchical.ValidatorSet) error {
-	fmt.Printf("%v - updateNextmembership, memb len - %d\n", sm.MirManager.MirID, len(sm.memberships))
 	sm.membershipLock.Lock()
 	defer sm.membershipLock.Unlock()
 
@@ -223,8 +214,6 @@ func (sm *StateManager) applyRestoreState(snapshot *commonpb.StateSnapshot) (*ev
 	newMembership := copyMap(sm.memberships[snapshot.Configuration.EpochNr+ConfigOffset])
 	sm.memberships = append(sm.memberships, newMembership)
 
-	fmt.Printf("Restored memberships for %v: size - %d, epoch: - %d\n", sm.MirManager.MirID, len(sm.memberships), sm.currentEpoch)
-
 	return events.EmptyList(), nil
 }
 
@@ -267,5 +256,8 @@ func copyMap(m map[t.NodeID]t.NodeAddress) map[t.NodeID]t.NodeAddress {
 }
 
 func f(n int) int {
+	if n < 4 {
+		return 0
+	}
 	return (n - 1) / 3
 }
