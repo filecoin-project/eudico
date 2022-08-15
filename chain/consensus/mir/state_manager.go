@@ -121,6 +121,8 @@ func (sm *StateManager) applyConfigMsg(in *requestpb.Request) error {
 	return nil
 }
 
+// applyNewEpoch is applied ?
+//
 func (sm *StateManager) applyNewEpoch(newEpoch *eventpb.NewEpoch) (*events.EventList, error) {
 	fmt.Printf("%v - applyNewEpoch, memb len - %d\n", sm.MirManager.MirID, len(sm.memberships))
 	sm.membershipLock.Lock()
@@ -217,10 +219,8 @@ func (sm *StateManager) applyRestoreState(snapshot *commonpb.StateSnapshot) (*ev
 			}
 		}
 	}
-	fmt.Println("---applyRestoreState", sm.MirManager.MirID)
-	fmt.Println("len:", len(sm.memberships))
-	fmt.Println("epoch:", sm.currentEpoch)
-	newMembership := sm.memberships[snapshot.Configuration.EpochNr+ConfigOffset]
+
+	newMembership := copyMap(sm.memberships[snapshot.Configuration.EpochNr+ConfigOffset])
 	sm.memberships = append(sm.memberships, newMembership)
 
 	fmt.Printf("Restored memberships for %v: size - %d, epoch: - %d\n", sm.MirManager.MirID, len(sm.memberships), sm.currentEpoch)
