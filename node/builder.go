@@ -127,6 +127,8 @@ const (
 	StartSubnetMgrKey
 	StartCrossMsgResolverMgrKey
 
+	EudicoStats
+
 	_nInvokes // keep this last
 )
 
@@ -247,6 +249,9 @@ func isFullNode(s *Settings) bool {
 	return s.nodeType == repo.FullNode && !s.Lite
 }
 func isLiteNode(s *Settings) bool {
+	return s.nodeType == repo.FullNode && s.Lite
+}
+func isEudicoStats(s *Settings) bool {
 	return s.nodeType == repo.FullNode && s.Lite
 }
 

@@ -4,21 +4,18 @@ import (
 	"context"
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/build"
+	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/metrics"
+	"github.com/filecoin-project/lotus/tools/stats/sync"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"time"
-
-	"github.com/filecoin-project/lotus/build"
-	lcli "github.com/filecoin-project/lotus/cli"
-	"github.com/filecoin-project/lotus/tools/stats/sync"
 
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/urfave/cli/v2"
 
 	"contrib.go.opencensus.io/exporter/prometheus"
-	stats "go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
 )
 
@@ -116,33 +113,43 @@ var runCmd = &cli.Command{
 			}
 		}
 
-		gtp, err := api.ChainGetGenesis(ctx)
-		if err != nil {
-			return err
+		if err := api.Listen(ctx, address.RootSubnet, 10); err != nil {
+			log.Errorw("cannot start listening {}", address.RootSubnet)
+			return nil
 		}
 
-		genesisTime := time.Unix(int64(gtp.MinTimestamp()), 0)
+		//gtp, err := api.ChainGetGenesis(ctx)
+		//if err != nil {
+		//	return err
+		//}
 
-		go func() {
-			// trigger calculation every 30 seconds
-			t := time.NewTicker(time.Second * 1)
+		//genesisTime := time.Unix(int64(gtp.MinTimestamp()), 0)
 
-			for {
-				select {
-				case <-t.C:
-					sinceGenesis := build.Clock.Now().Sub(genesisTime)
-					expectedHeight := int64(sinceGenesis.Seconds()) / int64(build.BlockDelaySecs)
-
-					activeSubnets, err := countSubnets(ctx, api)
-					if err != nil {
-						log.Errorw("cannot count number of active subnets at height %d", expectedHeight)
-					} else {
-						stats.Record(ctx, metrics.SubnetActiveCount.M(activeSubnets))
-					}
-					stats.Record(ctx, metrics.ChainNodeHeightExpected.M(expectedHeight))
-				}
-			}
-		}()
+		//go func() {
+		//	// trigger calculation every 30 seconds
+		//	t := time.NewTicker(time.Second * 1)
+		//
+		//	for {
+		//		select {
+		//		case <-t.C:
+		//			//sinceGenesis := build.Clock.Now().Sub(genesisTime)
+		//			//expectedHeight := int64(sinceGenesis.Seconds()) / int64(build.BlockDelaySecs)
+		//
+		//			if err := api.Listen(ctx, address.RootSubnet, 10); err != nil {
+		//				log.Errorw("cannot start listening {}", address.RootSubnet)
+		//				return
+		//			}
+		//
+		//			//activeSubnets, err := countSubnets(ctx, api)
+		//			//if err != nil {
+		//			//	log.Errorw("cannot count number of active subnets at height %d", expectedHeight)
+		//			//} else {
+		//			//	stats.Record(ctx, metrics.SubnetActiveCount.M(activeSubnets))
+		//			//}
+		//			//stats.Record(ctx, metrics.ChainNodeHeightExpected.M(expectedHeight))
+		//		}
+		//	}
+		//}()
 
 		http.Handle("/metrics", exporter)
 		if err := http.ListenAndServe(":6689", nil); err != nil {

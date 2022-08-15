@@ -57,6 +57,7 @@ type API struct {
 	DS          dtypes.MetadataDS
 	NetworkName dtypes.NetworkName
 
+	api.EudicoStats
 	*Service
 }
 
