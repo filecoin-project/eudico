@@ -46,7 +46,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 	log := logging.FromContext(ctx, log).With("miner", m.ID())
 
 	log.Infof("Miner info:\n\twallet - %s\n\tnetwork - %s\n\tsubnet - %s\n\tMir ID - %s\n\tvalidators - %v",
-		m.Addr, m.NetName, m.SubnetID, m.MirID, m.LastValidatorSet.GetValidators())
+		m.Addr, m.NetName, m.SubnetID, m.MirID, m.InitialValidatorSet.GetValidators())
 
 	mirErrors := m.Start(ctx)
 
@@ -57,7 +57,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 	reconfigure := time.NewTicker(ReconfigurationInterval)
 	defer reconfigure.Stop()
 
-	lastValidatorSetHash, err := m.LastValidatorSet.Hash()
+	lastValidatorSetHash, err := m.InitialValidatorSet.Hash()
 	if err != nil {
 		return err
 	}
@@ -76,9 +76,6 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			continue
 		}
 
-		// Miner (leader) for an epoch is assigned deterministically using round-robin.
-		// All other validators use the same Miner in the block.
-		epochMiner := m.GetBlockMiner(base.Height())
 		nextEpoch := base.Height() + 1
 
 		select {
@@ -139,8 +136,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 				continue
 			}
 
-			log.With("epoch", nextEpoch).
-				Infof("found new validator set hash: %v", newValidatorSetHash)
+			log.With("epoch", nextEpoch).Info("found new validator set hash")
 			lastValidatorSetHash = newValidatorSetHash
 
 			var payload buffer.Buffer
@@ -158,6 +154,10 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			msgs, crossMsgs := m.GetMessages(batch)
 			log.With("epoch", nextEpoch).
 				Infof("try to create a block: msgs - %d, crossMsgs - %d", len(msgs), len(crossMsgs))
+
+			// Miner (leader) for an epoch is assigned deterministically using round-robin.
+			// All other validators use the same Miner in the block.
+			epochMiner := m.GetBlockMiner(base.Height())
 
 			bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
 				Miner:            epochMiner,

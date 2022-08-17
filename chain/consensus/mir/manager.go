@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
@@ -53,8 +52,7 @@ type Manager struct {
 
 	// Reconfiguration types.
 
-	LastValidatorSetLock sync.Mutex
-	LastValidatorSet     *hierarchical.ValidatorSet
+	InitialValidatorSet  *hierarchical.ValidatorSet
 	reconfigurationNonce uint64
 }
 
@@ -157,17 +155,17 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	pool := newRequestPool()
 
 	m := Manager{
-		Addr:             addr,
-		SubnetID:         subnetID,
-		NetName:          netName,
-		EudicoNode:       api,
-		Pool:             pool,
-		MirID:            mirID,
-		WAL:              wal,
-		Crypto:           cryptoManager,
-		Net:              netTransport,
-		ISS:              issProtocol,
-		LastValidatorSet: initialValidatorSet,
+		Addr:                addr,
+		SubnetID:            subnetID,
+		NetName:             netName,
+		EudicoNode:          api,
+		Pool:                pool,
+		MirID:               mirID,
+		WAL:                 wal,
+		Crypto:              cryptoManager,
+		Net:                 netTransport,
+		ISS:                 issProtocol,
+		InitialValidatorSet: initialValidatorSet,
 	}
 
 	sm := NewStateManager(initialMembership, &m)
