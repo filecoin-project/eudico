@@ -2,7 +2,6 @@ package mir
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"sync"
 
@@ -32,6 +31,9 @@ type StateManager struct {
 	// Channel to send messages to Eudico.
 	ChainNotify chan []Messages
 
+	// Channel to send a membership.
+	MembershipNotify chan map[t.NodeID]t.NodeAddress
+
 	MirManager *Manager
 
 	// TODO: The vote counting is leaking memory. Resolve that in garbage collection mechanism.
@@ -51,6 +53,7 @@ func NewStateManager(initialMembership map[t.NodeID]t.NodeAddress, m *Manager) *
 	}
 	sm := StateManager{
 		ChainNotify:          make(chan []Messages),
+		MembershipNotify:     make(chan map[t.NodeID]t.NodeAddress, 1),
 		MirManager:           m,
 		memberships:          memberships,
 		currentEpoch:         0,
@@ -141,11 +144,7 @@ func (sm *StateManager) applyNewEpoch(newEpoch *eventpb.NewEpoch) (*events.Event
 
 	// Remove old membership.
 	delete(sm.memberships, oldEpoch)
-
-	err := sm.MirManager.ReconfigureMirNode(context.TODO(), newMembership)
-	if err != nil {
-		return events.EmptyList(), err
-	}
+	sm.MembershipNotify <- newMembership
 
 	// Notify ISS about the new membership.
 	return events.ListOf(events.NewConfig("iss", newMembership)), nil

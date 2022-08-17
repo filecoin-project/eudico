@@ -49,7 +49,6 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 		m.Addr, m.NetName, m.SubnetID, m.MirID, m.LastValidatorSet.GetValidators())
 
 	mirErrors := m.Start(ctx)
-	mirHead := m.App.ChainNotify
 
 	// TODO: remove or use the original variant of the for-loop.
 	submit := time.NewTicker(SubmitInterval)
@@ -83,12 +82,20 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 		nextEpoch := base.Height() + 1
 
 		select {
+
 		case err := <-mirErrors:
 			// return fmt.Errorf("miner consensus error: %w", err)
 			//
 			// TODO: This is a temporary solution while we are discussing that issue
 			// https://filecoinproject.slack.com/archives/C03C77HN3AS/p1660330971306019
 			panic(fmt.Errorf("miner consensus error: %w", err))
+
+		case newMembership := <-m.App.MembershipNotify:
+			if err := m.ReconfigureMirNode(ctx, newMembership); err != nil {
+				log.With("epoch", nextEpoch).
+					Errorw("reconfiguring Mir failed", "error", err)
+				continue
+			}
 
 		case <-reconfigure.C:
 			// Reconfiguration is not used in the rootnet.
@@ -147,7 +154,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 				m.newReconfigurationRequest(payload.Bytes())},
 			)
 
-		case batch := <-mirHead:
+		case batch := <-m.App.ChainNotify:
 			msgs, crossMsgs := m.GetMessages(batch)
 			log.With("epoch", nextEpoch).
 				Infof("try to create a block: msgs - %d, crossMsgs - %d", len(msgs), len(crossMsgs))
@@ -187,6 +194,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 
 			log.With("epoch", nextEpoch).
 				Infof("%s mined a block %v", epochMiner, bh.Cid())
+
 		default:
 			msgs, err := api.MpoolSelect(ctx, base.Key(), 1)
 			if err != nil {
