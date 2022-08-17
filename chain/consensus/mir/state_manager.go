@@ -34,7 +34,8 @@ type StateManager struct {
 
 	MirManager *Manager
 
-	reconfigurationVotes map[string]uint64
+	// TODO: The vote counting is leaking memory. Resolve that in garbage collection mechanism.
+	reconfigurationVotes map[string]int
 }
 
 func NewStateManager(initialMembership map[t.NodeID]t.NodeAddress, m *Manager) *StateManager {
@@ -53,7 +54,7 @@ func NewStateManager(initialMembership map[t.NodeID]t.NodeAddress, m *Manager) *
 		MirManager:           m,
 		memberships:          memberships,
 		currentEpoch:         0,
-		reconfigurationVotes: make(map[string]uint64),
+		reconfigurationVotes: make(map[string]int),
 	}
 	return &sm
 }
@@ -120,8 +121,6 @@ func (sm *StateManager) applyConfigMsg(in *requestpb.Request) error {
 	return nil
 }
 
-// applyNewEpoch is applied ?
-//
 func (sm *StateManager) applyNewEpoch(newEpoch *eventpb.NewEpoch) (*events.EventList, error) {
 	sm.membershipLock.Lock()
 	defer sm.membershipLock.Unlock()
@@ -171,7 +170,7 @@ func (sm *StateManager) UpdateAndCheckVotes(valSet *hierarchical.ValidatorSet) (
 		return false, err
 	}
 	sm.reconfigurationVotes[string(h)]++
-	votes := int(sm.reconfigurationVotes[string(h)])
+	votes := sm.reconfigurationVotes[string(h)]
 	nodes := len(sm.memberships[sm.currentEpoch])
 	if votes < f(nodes)+1 {
 		return false, nil

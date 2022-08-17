@@ -66,7 +66,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 	for {
 		// Here we use `ctx.Err()` in the beginning of the `for` loop instead of using it in the `select` statement,
 		// because if `ctx` has been closed then `api.ChainHead(ctx)` returns an error,
-		// and we will be in the infinite loop dut to `continue`.
+		// and we will be in the infinite loop due to `continue`.
 		if ctx.Err() != nil {
 			log.Debug("Mir miner: context closed")
 			return nil
@@ -86,7 +86,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 		case err := <-mirErrors:
 			// return fmt.Errorf("miner consensus error: %w", err)
 			//
-			// TODO: This is a temporal solution while we are discussing that issue
+			// TODO: This is a temporary solution while we are discussing that issue
 			// https://filecoinproject.slack.com/archives/C03C77HN3AS/p1660330971306019
 			panic(fmt.Errorf("miner consensus error: %w", err))
 
@@ -104,10 +104,16 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			// For example, two changes may occur between reads and if validators read the state at different times
 			// they could get different val sets.
 
-			// TODO: decide what should we do with environment variable for root net and subnet actor for subnet.
-			// if the variable is empty then we will get warn messages. And it must be empty because otherwise
-			// it will be prioritized on subnet actor config for a subnet.
-			// But to run Mir in rot and in a subnet and we must to use both.
+			// NOTE: You must unset the environment variable in tests if you use Mir in the rootnet and in a subnet.
+			// TODO: Should we support passing validators via the environment variable?
+			// If yes then we should Implement a sophisticated way to separate getting validator
+			// set via environment variable and subnet actor.
+			// A membership is passed to Mir via the environment variable for rootnet (for demo and debugging purposes)
+			// and via the subnet actor for a subnet. The environment variable is read first.
+			// We have tests where Mir runs in the rootnet and a subnet simultaneously.
+			// So if you don't unset the variable after instantiation Mir in the rootnet
+			// the subnet Mir miner cannot get membership.
+			// The environment variable must be empty because otherwise it will be prioritized for a subnet.
 			newValidatorSet, err := getSubnetValidators(ctx, m.SubnetID, api)
 			if err != nil {
 				log.With("epoch", nextEpoch).

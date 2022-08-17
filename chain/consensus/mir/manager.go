@@ -26,7 +26,6 @@ import (
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/net"
 	mirlibp2p "github.com/filecoin-project/mir/pkg/net/libp2p"
-	"github.com/filecoin-project/mir/pkg/pb/commonpb"
 	mirproto "github.com/filecoin-project/mir/pkg/pb/requestpb"
 	"github.com/filecoin-project/mir/pkg/simplewal"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -148,10 +147,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	issProtocol, err := iss.New(
 		t.NodeID(mirID),
 		issConfig,
-		&commonpb.StateSnapshot{
-			AppData:       []byte{},
-			Configuration: events.EpochConfig(0, memberships),
-		},
+		iss.InitialStateSnapshot([]byte{}, issConfig),
 		newMirLogger(managerLog),
 	)
 	if err != nil {
@@ -234,8 +230,7 @@ func (m *Manager) Stop() {
 
 // ReconfigureMirNode reconfigures the Mir node.
 func (m *Manager) ReconfigureMirNode(ctx context.Context, nodes map[t.NodeID]t.NodeAddress) error {
-	log.With("miner", m.MirID).Infof("Reconfiguring a Mir node started")
-	defer log.With("miner", m.MirID).Info("Reconfiguring a Mir node finished")
+	log.With("miner", m.MirID).Debug("Reconfiguring a Mir node")
 
 	if len(nodes) == 0 {
 		return fmt.Errorf("empty validator set")
