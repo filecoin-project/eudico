@@ -39,7 +39,7 @@ func TestHC_TwoNodesTestsWithMirConsensus(t *testing.T) {
 }
 
 func TestHC_TwoNodesCrossMessage(t *testing.T) {
-	t.Run("/root/mir-/subnet/mir", func(t *testing.T) {
+	t.Run("/root/mir-/subnet/pow", func(t *testing.T) {
 		runTwoNodesCrossMessage(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetTSPoW())
 	})
 }

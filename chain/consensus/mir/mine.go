@@ -64,9 +64,9 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 	}
 
 	for {
-		// Here we use ctx.Err() in the beginning of for loop instead of using it in the select statement
-		// because if ctx has been closed then `api.ChainHead(ctx)` returns an error,
-		// and we will be in the infinite loop dut to continue.
+		// Here we use `ctx.Err()` in the beginning of the `for` loop instead of using it in the `select` statement,
+		// because if `ctx` has been closed then `api.ChainHead(ctx)` returns an error,
+		// and we will be in the infinite loop dut to `continue`.
 		if ctx.Err() != nil {
 			log.Debug("Mir miner: context closed")
 			return nil
@@ -91,6 +91,10 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			panic(fmt.Errorf("miner consensus error: %w", err))
 
 		case <-reconfigure.C:
+			// Reconfiguration is not used in the rootnet.
+			if m.SubnetID == address.RootSubnet {
+				continue
+			}
 			//
 			// Send a reconfiguration transaction if the validator set in the actor has been changed.
 			//
