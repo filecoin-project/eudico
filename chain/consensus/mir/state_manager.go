@@ -172,7 +172,7 @@ func (sm *StateManager) UpdateAndCheckVotes(valSet *hierarchical.ValidatorSet) (
 	sm.reconfigurationVotes[string(h)]++
 	votes := sm.reconfigurationVotes[string(h)]
 	nodes := len(sm.memberships[sm.currentEpoch])
-	if votes < f(nodes)+1 {
+	if votes < weakQuorum(nodes) {
 		return false, nil
 	}
 	return true, nil
@@ -254,9 +254,14 @@ func copyMap(m map[t.NodeID]t.NodeAddress) map[t.NodeID]t.NodeAddress {
 	return newMap
 }
 
-func f(n int) int {
-	if n < 4 {
-		return 0
-	}
+func maxFaulty(n int) int {
+	// assuming n > 3f:
+	//   return max f
 	return (n - 1) / 3
+}
+
+func weakQuorum(n int) int {
+	// assuming n > 3f:
+	//   return min q: q > f
+	return maxFaulty(n) + 1
 }

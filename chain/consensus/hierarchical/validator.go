@@ -122,20 +122,6 @@ func (set *ValidatorSet) Size() int {
 	return len(set.Validators)
 }
 
-func (set *ValidatorSet) N() int {
-	return set.Size()
-}
-
-func (set *ValidatorSet) F() int {
-	// TODO: what if n=3 and f=0?
-	return (set.N() - 1) / 3
-}
-
-func (set *ValidatorSet) Majority() int {
-	// TODO: what if n=3 and f=0?
-	return 2*set.F() + 1
-}
-
 func (set *ValidatorSet) Hash() ([]byte, error) {
 	var hs []byte
 	for _, v := range set.Validators {
