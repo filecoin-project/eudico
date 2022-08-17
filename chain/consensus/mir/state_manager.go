@@ -26,7 +26,7 @@ type StateManager struct {
 	currentEpoch t.EpochNr
 
 	// For each epoch number, stores the corresponding membership.
-	memberships    []map[t.NodeID]t.NodeAddress
+	memberships    map[t.EpochNr]map[t.NodeID]t.NodeAddress
 	membershipLock sync.Mutex
 
 	// Channel to send messages to Eudico.
@@ -45,9 +45,9 @@ func NewStateManager(initialMembership map[t.NodeID]t.NodeAddress, m *Manager) *
 	// - The configOffset epochs that already have a fixed membership (epochs 1 to configOffset)
 	// - The membership of the following epoch (configOffset+1) initialized with the same membership,
 	//   but potentially replaced during the first epoch (epoch 0) through special configuration requests.
-	memberships := make([]map[t.NodeID]t.NodeAddress, ConfigOffset+2)
-	for i := 0; i < ConfigOffset+2; i++ {
-		memberships[i] = initialMembership
+	memberships := make(map[t.EpochNr]map[t.NodeID]t.NodeAddress, ConfigOffset+2)
+	for e := 0; e < ConfigOffset+2; e++ {
+		memberships[t.EpochNr(e)] = initialMembership
 	}
 	sm := StateManager{
 		ChainNotify:          make(chan []Messages),
@@ -103,7 +103,6 @@ func (sm *StateManager) applyBatch(in *requestpb.Batch) (*events.EventList, erro
 }
 
 func (sm *StateManager) applyConfigMsg(in *requestpb.Request) error {
-	fmt.Printf("%v - applyConfigMsg, memb len - %d\n", sm.MirManager.MirID, len(sm.memberships))
 	newValSet := &hierarchical.ValidatorSet{}
 	if err := newValSet.UnmarshalCBOR(bytes.NewReader(in.Data)); err != nil {
 		return err
@@ -131,13 +130,17 @@ func (sm *StateManager) applyNewEpoch(newEpoch *eventpb.NewEpoch) (*events.Event
 	}
 
 	// The base membership is the last one membership.
-	newMembership := sm.memberships[newEpoch.EpochNr+ConfigOffset]
+	newMembership := copyMap(sm.memberships[t.EpochNr(newEpoch.EpochNr+ConfigOffset)])
 
 	// Append a new membership data structure to be modified throughout the new epoch.
-	sm.memberships = append(sm.memberships, newMembership)
+	sm.memberships[t.EpochNr(newEpoch.EpochNr+ConfigOffset+1)] = newMembership
 
 	// Update current epoch number.
+	oldEpoch := sm.currentEpoch
 	sm.currentEpoch = t.EpochNr(newEpoch.EpochNr)
+
+	// Remove old membership.
+	delete(sm.memberships, oldEpoch)
 
 	err := sm.MirManager.ReconfigureMirNode(context.TODO(), newMembership)
 	if err != nil {
@@ -145,7 +148,7 @@ func (sm *StateManager) applyNewEpoch(newEpoch *eventpb.NewEpoch) (*events.Event
 	}
 
 	// Notify ISS about the new membership.
-	return events.ListOf(events.NewConfig("iss", copyMap(newMembership))), nil
+	return events.ListOf(events.NewConfig("iss", newMembership)), nil
 }
 
 func (sm *StateManager) UpdateNextMembership(valSet *hierarchical.ValidatorSet) error {
@@ -178,7 +181,7 @@ func (sm *StateManager) UpdateAndCheckVotes(valSet *hierarchical.ValidatorSet) (
 	return true, nil
 }
 
-// applySnapshotRequest produces a StateSnapshotResponse event containing the current snapshot of the chat app state.
+// applySnapshotRequest produces a StateSnapshotResponse event containing the current snapshot of the state.
 // The snapshot is a binary representation of the application state that can be passed to applyRestoreState().
 func (sm *StateManager) applySnapshotRequest(snapshotRequest *eventpb.AppSnapshotRequest) (*events.EventList, error) {
 	sm.membershipLock.Lock()
@@ -198,20 +201,21 @@ func (sm *StateManager) applyRestoreState(snapshot *commonpb.StateSnapshot) (*ev
 	defer sm.membershipLock.Unlock()
 
 	sm.currentEpoch = t.EpochNr(snapshot.Configuration.EpochNr)
-	sm.memberships = make([]map[t.NodeID]t.NodeAddress, len(snapshot.Configuration.Memberships))
-	for e, mem := range snapshot.Configuration.Memberships {
-		sm.memberships[e] = make(map[t.NodeID]t.NodeAddress)
-		for nID, nAddr := range mem.Membership {
+	sm.memberships = make(map[t.EpochNr]map[t.NodeID]t.NodeAddress, len(snapshot.Configuration.Memberships))
+
+	for e, membership := range snapshot.Configuration.Memberships {
+		sm.memberships[t.EpochNr(e)] = make(map[t.NodeID]t.NodeAddress)
+		for nID, nAddr := range membership.Membership {
 			var err error
-			sm.memberships[e][t.NodeID(nID)], err = multiaddr.NewMultiaddr(nAddr)
+			sm.memberships[t.EpochNr(e)][t.NodeID(nID)], err = multiaddr.NewMultiaddr(nAddr)
 			if err != nil {
 				return nil, err
 			}
 		}
 	}
 
-	newMembership := copyMap(sm.memberships[snapshot.Configuration.EpochNr+ConfigOffset])
-	sm.memberships = append(sm.memberships, newMembership)
+	newMembership := copyMap(sm.memberships[t.EpochNr(snapshot.Configuration.EpochNr+ConfigOffset)])
+	sm.memberships[t.EpochNr(snapshot.Configuration.EpochNr+ConfigOffset+1)] = newMembership
 
 	return events.EmptyList(), nil
 }
