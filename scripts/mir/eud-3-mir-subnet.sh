@@ -62,6 +62,7 @@ rm -rvf $NODE_3_NETADDR
 
 rm -rf ./eudico_daemon_*.log
 rm -rf ./eudico_miner_*.log
+rm -rf ./mir_miner_*.log
 rm -rf ./shed_daemon_*.log
 
 LOG_LEVEL="ERROR,mir-consensus=debug,mir-manager=debug"
