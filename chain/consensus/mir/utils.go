@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/multiformats/go-multiaddr"
 
 	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -63,6 +65,12 @@ func ValidatorsMembership(validators []hierarchical.Validator) ([]t.NodeID, map[
 	return nodeIDs, nodeAddrs, nil
 }
 
-func ValidatorSetMembership(valSet *hierarchical.ValidatorSet) ([]t.NodeID, map[t.NodeID]t.NodeAddress, error) {
-	return ValidatorsMembership(valSet.GetValidators())
+// getBlockMiner computes the miner address for the block at h.
+func getBlockMiner(validators []t.NodeID, h abi.ChainEpoch) (address.Address, error) {
+	addr := validators[int(h)%len(validators)]
+	a, err := address.NewFromString(strings.Split(addr.Pb(), ":")[1])
+	if err != nil {
+		return address.Undef, err
+	}
+	return a, nil
 }

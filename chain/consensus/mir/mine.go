@@ -89,8 +89,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 
 		case newMembership := <-m.App.MembershipNotify:
 			if err := m.ReconfigureMirNode(ctx, newMembership); err != nil {
-				log.With("epoch", nextEpoch).
-					Errorw("reconfiguring Mir failed", "error", err)
+				log.With("epoch", nextEpoch).Errorw("reconfiguring Mir failed", "error", err)
 				continue
 			}
 
@@ -103,16 +102,11 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			// Send a reconfiguration transaction if the validator set in the actor has been changed.
 			//
 
-			// TODO: this is an initial version of reconfiguration mechanism.
-			// In reality, SCA must call us to signal that something has been changed.
-			// For example, two changes may occur between reads and if validators read the state at different times
-			// they could get different val sets.
-
 			// NOTE: You must unset the environment variable in tests if you use Mir in the rootnet and in a subnet.
 			// TODO: Should we support passing validators via the environment variable?
 			// If yes then we should Implement a sophisticated way to separate getting validator
 			// set via environment variable and subnet actor.
-			// A membership is passed to Mir via the environment variable for rootnet (for demo and debugging purposes)
+			// A membership is passed to Mir via the environment variable for the rootnet (for demo and debugging purposes)
 			// and via the subnet actor for a subnet. The environment variable is read first.
 			// We have tests where Mir runs in the rootnet and a subnet simultaneously.
 			// So if you don't unset the variable after instantiation Mir in the rootnet
@@ -120,15 +114,13 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			// The environment variable must be empty because otherwise it will be prioritized for a subnet.
 			newValidatorSet, err := getSubnetValidators(ctx, m.SubnetID, api)
 			if err != nil {
-				log.With("epoch", nextEpoch).
-					Warnf("failed to get subnet validators: %v", err)
+				log.With("epoch", nextEpoch).Warnf("failed to get subnet validators: %v", err)
 				continue
 			}
 
 			newValidatorSetHash, err := newValidatorSet.Hash()
 			if err != nil {
-				log.With("epoch", nextEpoch).
-					Warnf("failed to get validator set hash: %v", err)
+				log.With("epoch", nextEpoch).Warnf("failed to get validator set hash: %v", err)
 				continue
 			}
 
@@ -136,14 +128,13 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 				continue
 			}
 
-			log.With("epoch", nextEpoch).Info("found new validator set hash")
+			log.With("epoch", nextEpoch).Info("received new validator set")
 			lastValidatorSetHash = newValidatorSetHash
 
 			var payload buffer.Buffer
 			err = newValidatorSet.MarshalCBOR(&payload)
 			if err != nil {
-				log.With("epoch", nextEpoch).
-					Warnf("failed to marshal validators: %v", err)
+				log.With("epoch", nextEpoch).Warnf("failed to marshal validators: %v", err)
 				continue
 			}
 			m.SubmitRequests(ctx, []*mirproto.Request{
@@ -157,7 +148,11 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 
 			// Miner (leader) for an epoch is assigned deterministically using round-robin.
 			// All other validators use the same Miner in the block.
-			epochMiner := m.GetBlockMiner(base.Height())
+			epochMiner, err := getBlockMiner(batch.Validators, base.Height())
+			if err != nil {
+				log.With("epoch", nextEpoch).Errorw("getting miner addr failed", "error", err)
+				continue
+			}
 
 			bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
 				Miner:            epochMiner,
@@ -171,13 +166,11 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 				CrossMessages:    crossMsgs,
 			})
 			if err != nil {
-				log.With("epoch", nextEpoch).
-					Errorw("creating a block failed", "error", err)
+				log.With("epoch", nextEpoch).Errorw("creating a block failed", "error", err)
 				continue
 			}
 			if bh == nil {
-				log.With("epoch", nextEpoch).
-					Debug("created a nil block")
+				log.With("epoch", nextEpoch).Debug("created a nil block")
 				continue
 			}
 
@@ -187,13 +180,11 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 				SecpkMessages: bh.SecpkMessages,
 			})
 			if err != nil {
-				log.With("epoch", nextEpoch).
-					Errorw("unable to sync a block", "error", err)
+				log.With("epoch", nextEpoch).Errorw("unable to sync a block", "error", err)
 				continue
 			}
 
-			log.With("epoch", nextEpoch).
-				Infof("%s mined a block %v", epochMiner, bh.Cid())
+			log.With("epoch", nextEpoch).Infof("%s mined a block %v", epochMiner, bh.Cid())
 
 		default:
 			msgs, err := api.MpoolSelect(ctx, base.Key(), 1)

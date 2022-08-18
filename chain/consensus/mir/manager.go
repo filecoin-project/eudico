@@ -5,14 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 
 	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
@@ -240,17 +238,6 @@ func (m *Manager) ReconfigureMirNode(ctx context.Context, nodes map[t.NodeID]t.N
 	return nil
 }
 
-// GetBlockMiner computes the miner address for the block at h.
-func (m *Manager) GetBlockMiner(h abi.ChainEpoch) address.Address {
-	addrs := m.App.OrderedValidatorsAddresses()
-	addr := addrs[int(h)%len(addrs)]
-	a, err := address.NewFromString(strings.Split(addr.Pb(), ":")[1])
-	if err != nil {
-		panic(err)
-	}
-	return a
-}
-
 func (m *Manager) SubmitRequests(ctx context.Context, requests []*mirproto.Request) {
 	if len(requests) == 0 {
 		return
@@ -292,9 +279,9 @@ func parseTx(tx []byte) (interface{}, error) {
 }
 
 // GetMessages extracts Filecoin messages from a Mir batch.
-func (m *Manager) GetMessages(batch []Messages) (msgs []*types.SignedMessage, crossMsgs []*types.Message) {
+func (m *Manager) GetMessages(batch *Batch) (msgs []*types.SignedMessage, crossMsgs []*types.Message) {
 	log.Infof("received a block with %d messages", len(msgs))
-	for _, tx := range batch {
+	for _, tx := range batch.Messages {
 
 		input, err := parseTx(tx)
 		if err != nil {
