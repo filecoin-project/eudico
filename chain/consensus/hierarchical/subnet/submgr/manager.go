@@ -82,8 +82,9 @@ type Service struct {
 	pmgr         peermgr.MaybePeerMgr
 	bootstrapper dtypes.Bootstrapper
 
-	lk      sync.RWMutex
-	subnets map[address.SubnetID]*Subnet
+	lk          sync.RWMutex
+	subnets     map[address.SubnetID]*Subnet
+	subnetsLock sync.RWMutex
 
 	// Cross-msg general pool
 	cm *crossMsgPool
@@ -102,7 +103,7 @@ type SubnetParams struct {
 func NewService(
 	mctx helpers.MetricsCtx,
 	lc fx.Lifecycle,
-	// api impl.FullNodeAPI,
+// api impl.FullNodeAPI,
 	self peer.ID,
 	pubsub *pubsub.PubSub,
 	ds dtypes.MetadataDS,
@@ -205,7 +206,9 @@ func (s *Service) startSubnet(id address.SubnetID,
 	defer sh.checklk.Unlock()
 
 	// Add subnet to registry
+	s.subnetsLock.Lock()
 	s.subnets[id] = sh
+	s.subnetsLock.Unlock()
 
 	// Wrap the ds with prefix
 	sh.ds = nsds.Wrap(s.ds, ds.NewKey(sh.ID.String()))
@@ -340,6 +343,9 @@ func (s *Service) Start(ctx context.Context) {
 }
 
 func (s *Service) Close(ctx context.Context) error {
+	s.subnetsLock.Lock()
+	defer s.subnetsLock.Unlock()
+
 	for _, sh := range s.subnets {
 		err := sh.Close(ctx)
 		if err != nil {
@@ -588,7 +594,10 @@ func (s *Service) SyncSubnet(ctx context.Context, id address.SubnetID, stop bool
 // stopSyncSubnet stops syncing from a subnet
 func (s *Service) stopSyncSubnet(ctx context.Context, id address.SubnetID) error {
 	if sh, _ := s.getSubnet(id); sh != nil {
+		s.subnetsLock.Lock()
 		delete(s.subnets, id)
+		s.subnetsLock.Unlock()
+
 		return sh.Close(ctx)
 	}
 	return xerrors.Errorf("Not currently syncing with subnet: %s", id)
@@ -685,7 +694,11 @@ func (s *Service) LeaveSubnet(
 	// See if we are already syncing with that chain. If this is the case we can remove the subnet
 	if sh, _ := s.getSubnet(id); sh != nil {
 		log.Infow("Stop syncing with subnet", "subnetID", id)
+
+		s.subnetsLock.Lock()
 		delete(s.subnets, id)
+		s.subnetsLock.Unlock()
+
 		return msg, sh.Close(ctx)
 	}
 
@@ -794,8 +807,8 @@ func (s *Service) getAPI(id address.SubnetID) *API {
 	if s.isRoot(id) || id == address.RootSubnet {
 		return s.api
 	}
-	sh, ok := s.subnets[id]
-	if !ok {
+	sh, err := s.getSubnet(id)
+	if err != nil {
 		return nil
 	}
 	return sh.api
@@ -814,6 +827,9 @@ func (s *Service) getParentAPI(id address.SubnetID) (*API, error) {
 }
 
 func (s *Service) getSubnet(id address.SubnetID) (*Subnet, error) {
+	s.subnetsLock.RLock()
+	defer s.subnetsLock.RUnlock()
+
 	sh, ok := s.subnets[id]
 	if !ok {
 		return nil, xerrors.Errorf("Not part of subnet %v. Consider joining it", id)
