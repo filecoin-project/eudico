@@ -636,7 +636,7 @@ type HierarchicalCnsStub struct {
 
 type EudicoStatsStruct struct {
 	Internal struct {
-		Listen func(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) error `perm:"write"`
+		Listen func(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch, p3 map[string]string) error `perm:"write"`
 	}
 }
 
@@ -3940,11 +3940,11 @@ func (s *HierarchicalCnsStub) ValidateCheckpoint(p0 context.Context, p1 address.
 	return nil, ErrNotSupported
 }
 
-func (s *EudicoStatsStruct) Listen(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) error {
-	return s.Internal.Listen(p0, p1, p2)
+func (s *EudicoStatsStruct) Listen(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch, p3 map[string]string) error {
+	return s.Internal.Listen(p0, p1, p2, p3)
 }
 
-func (s *EudicoStatsStub) Listen(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch) (*schema.Checkpoint, error) {
+func (s *EudicoStatsStub) Listen(p0 context.Context, p1 address.SubnetID, p2 abi.ChainEpoch, p3 map[string]string) (*schema.Checkpoint, error) {
 	return nil, ErrNotSupported
 }
 

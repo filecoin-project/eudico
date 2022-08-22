@@ -19,8 +19,25 @@ volumes:
   grafana: {}
 
 services:
+  neo4j:
+    image: neo4j:latest
+    ports:
+      - 7474:7474
+      - 7687:7687
+    environment:
+      NEO4J_AUTH: neo4j/90d8kOfU*^cR
+
+  neodash:
+    image: nielsdejong/neodash:latest
+    ports:
+      - 5005:5005
+
   all-in-one:
     image: eudico:latest
+    environment:
+      EUDICO_STATS_NEO4J_URI: neo4j://neo4j:7687
+      EUDICO_STATS_NEO4J_USERNAME: neo4j
+      EUDICO_STATS_NEO4J_PASSWORD: 90d8kOfU*^cR
     volumes:
       - eudico-data:/home/eudico/.eudico
       - ./scripts/eudico.sh:/home/eudico/eudico.sh
@@ -57,31 +74,31 @@ services:
 #    command:
 #      - -s  # start the eudico stats
 
-  nginx:
-    image: nginx:1.15-alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./cmd/eudico-stats/nginx.conf:/etc/nginx/conf.d/default.conf
-
-  prometheus:
-    image: prom/prometheus
-    volumes:
-      - ./cmd/eudico-stats/prometheus.yml:/etc/prometheus/prometheus.yml
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
-      - '--web.console.templates=/usr/share/prometheus/consoles'
-    ports:
-      - 9090:9090
-
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "13000:3000"
-    depends_on:
-      - prometheus
-    volumes:
-      - grafana:/var/lib/grafana
+#  nginx:
+#    image: nginx:1.15-alpine
+#    ports:
+#      - "80:80"
+#      - "443:443"
+#    volumes:
+#      - ./cmd/eudico-stats/nginx.conf:/etc/nginx/conf.d/default.conf
+#
+#  prometheus:
+#    image: prom/prometheus
+#    volumes:
+#      - ./cmd/eudico-stats/prometheus.yml:/etc/prometheus/prometheus.yml
+#    command:
+#      - '--config.file=/etc/prometheus/prometheus.yml'
+#      - '--storage.tsdb.path=/prometheus'
+#      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+#      - '--web.console.templates=/usr/share/prometheus/consoles'
+#    ports:
+#      - 9090:9090
+#
+#  grafana:
+#    image: grafana/grafana:latest
+#    ports:
+#      - "13000:3000"
+#    depends_on:
+#      - prometheus
+#    volumes:
+#      - grafana:/var/lib/grafana
