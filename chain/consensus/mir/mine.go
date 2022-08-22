@@ -128,7 +128,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 				continue
 			}
 
-			log.With("epoch", nextEpoch).Info("received new validator set")
+			log.With("epoch", nextEpoch).Info("found new validator set - size: %d", newValidatorSet.Size())
 			lastValidatorSetHash = newValidatorSetHash
 
 			var payload buffer.Buffer

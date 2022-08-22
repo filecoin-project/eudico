@@ -639,6 +639,16 @@ func (ts *eudicoSubnetSuite) testMirReconfiguration(t *testing.T) {
 	require.NoError(t, err)
 	err = kit.SubnetMinerMinesBlocks(ctx, 15, subnetAddr, minerC, nodeC)
 	require.NoError(t, err)
+
+	t.Log("[*] miner B is leaving the subnet")
+	_, err = nodeB.LeaveSubnet(ctx, minerB, subnetAddr)
+	require.NoError(t, err)
+
+	t.Log("[*] miners A and C are still mining in the subnet")
+	err = kit.SubnetMinerMinesBlocks(ctx, 15, subnetAddr, minerA, nodeA)
+	require.NoError(t, err)
+	err = kit.SubnetMinerMinesBlocks(ctx, 15, subnetAddr, minerC, nodeC)
+	require.NoError(t, err)
 }
 
 func runTwoNodesTestsWithMir(t *testing.T, opts ...interface{}) {
