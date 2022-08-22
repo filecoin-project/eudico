@@ -208,7 +208,9 @@ func (a SubnetActor) Leave(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValu
 		retFunds = st.rmStake(rt, sourceAddr, stakes, minerStake)
 
 		// Remove the validator to signal to other validators on the subnet to run reconfiguration.
-		st.ValidatorSet = rmValidator(sourceSecpAddr, st.ValidatorSet)
+		if st.ValidatorSet != nil {
+			st.ValidatorSet = rmValidator(sourceSecpAddr, st.ValidatorSet)
+		}
 	})
 
 	// Never send back if we don't have enough balance

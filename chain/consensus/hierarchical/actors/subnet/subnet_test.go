@@ -109,8 +109,11 @@ func TestLeaveAndKill(t *testing.T) {
 	rt := getRuntime(t)
 	h.constructAndVerify(t, rt)
 	joiner := tutil.NewIDAddr(t, 102)
+	joinerSecp := tutil.NewSECP256K1Addr(h.t, joiner.String())
 	joiner2 := tutil.NewIDAddr(t, 103)
+	joiner2Secp := tutil.NewSECP256K1Addr(h.t, joiner2.String())
 	joiner3 := tutil.NewIDAddr(t, 104)
+	joiner3Secp := tutil.NewSECP256K1Addr(h.t, joiner3.String())
 	totalStake := abi.NewTokenAmount(0)
 
 	t.Log("first miner joins subnet")
@@ -171,6 +174,7 @@ func TestLeaveAndKill(t *testing.T) {
 	minerStake := getStake(t, rt, joiner2)
 	totalStake = big.Sub(totalStake, minerStake)
 	rt.SetBalance(minerStake)
+	rt.ExpectSend(joiner2, builtin.MethodsAccount.PubkeyAddress, nil, big.Zero(), &joiner2Secp, exitcode.Ok)
 	rt.ExpectSend(hierarchical.SubnetCoordActorAddr, sca.Methods.ReleaseStake, &sca.FundParams{Value: minerStake}, big.Zero(), nil, exitcode.Ok)
 	rt.ExpectSend(joiner2, builtin.MethodSend, nil, big.Div(minerStake, actor.LeavingFeeCoeff), nil, exitcode.Ok)
 	rt.Call(h.SubnetActor.Leave, nil)
@@ -194,6 +198,7 @@ func TestLeaveAndKill(t *testing.T) {
 	minerStake = getStake(t, rt, joiner)
 	totalStake = big.Sub(totalStake, minerStake)
 	rt.SetBalance(minerStake)
+	rt.ExpectSend(joiner, builtin.MethodsAccount.PubkeyAddress, nil, big.Zero(), &joinerSecp, exitcode.Ok)
 	rt.ExpectSend(hierarchical.SubnetCoordActorAddr, sca.Methods.ReleaseStake, &sca.FundParams{Value: minerStake}, big.Zero(), nil, exitcode.Ok)
 	rt.ExpectSend(joiner, builtin.MethodSend, nil, big.Div(minerStake, actor.LeavingFeeCoeff), nil, exitcode.Ok)
 	rt.Call(h.SubnetActor.Leave, nil)
@@ -206,6 +211,7 @@ func TestLeaveAndKill(t *testing.T) {
 
 	t.Log("miner can't leave twice")
 	rt.ExpectValidateCallerAny()
+	rt.ExpectSend(joiner, builtin.MethodsAccount.PubkeyAddress, nil, big.Zero(), &joinerSecp, exitcode.Ok)
 	rt.ExpectAbort(exitcode.ErrForbidden, func() {
 		rt.Call(h.SubnetActor.Leave, nil)
 	})
@@ -223,6 +229,7 @@ func TestLeaveAndKill(t *testing.T) {
 
 	t.Log("subnet can't be killed twice")
 	rt.ExpectValidateCallerAny()
+	rt.ExpectSend(joiner3, builtin.MethodsAccount.PubkeyAddress, nil, big.Zero(), &joiner3Secp, exitcode.Ok)
 	rt.ExpectAbort(exitcode.ErrIllegalState, func() {
 		rt.Call(h.SubnetActor.Kill, nil)
 	})
