@@ -616,7 +616,7 @@ func (ts *eudicoSubnetSuite) testMirReconfiguration(t *testing.T) {
 	}
 
 	t.Log("[*] miner A is mining in the subnet")
-	err = kit.SubnetMinerMinesBlocks(ctx, 5, subnetAddr, minerA, nodeA)
+	err = kit.SubnetMinerMinesBlocks(ctx, 5, 20, subnetAddr, minerA, nodeA)
 	require.NoError(t, err)
 
 	// Node C is joining the subnet
@@ -635,20 +635,19 @@ func (ts *eudicoSubnetSuite) testMirReconfiguration(t *testing.T) {
 	}
 
 	t.Log("[*] miners A and C are mining in the subnet")
-	err = kit.SubnetMinerMinesBlocks(ctx, 15, subnetAddr, minerA, nodeA)
+	err = kit.SubnetMinerMinesBlocks(ctx, 5, 20, subnetAddr, minerA, nodeA)
 	require.NoError(t, err)
-	err = kit.SubnetMinerMinesBlocks(ctx, 15, subnetAddr, minerC, nodeC)
-	require.NoError(t, err)
-
-	t.Log("[*] miner B is leaving the subnet")
-	_, err = nodeB.LeaveSubnet(ctx, minerB, subnetAddr)
+	err = kit.SubnetMinerMinesBlocks(ctx, 5, 20, subnetAddr, minerC, nodeC)
 	require.NoError(t, err)
 
 	t.Log("[*] miners A and C are still mining in the subnet")
-	err = kit.SubnetMinerMinesBlocks(ctx, 15, subnetAddr, minerA, nodeA)
+	err = kit.SubnetMinerMinesBlocks(ctx, 5, 20, subnetAddr, minerA, nodeA)
 	require.NoError(t, err)
-	err = kit.SubnetMinerMinesBlocks(ctx, 15, subnetAddr, minerC, nodeC)
+	err = kit.SubnetMinerMinesBlocks(ctx, 5, 20, subnetAddr, minerC, nodeC)
 	require.NoError(t, err)
+
+	// TODO: how to check that miner B is not mining blocks?
+	// The problem is that calls are async and reconfiguration in Mir happens in +2 epochs.
 }
 
 func runTwoNodesTestsWithMir(t *testing.T, opts ...interface{}) {

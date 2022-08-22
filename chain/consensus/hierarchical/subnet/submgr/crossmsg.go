@@ -434,7 +434,9 @@ func (s *Service) getBottomUpPool(ctx context.Context, id address.SubnetID, heig
 func (s *Service) getSubnetResolver(id address.SubnetID) *resolver.Resolver {
 	r := s.r
 	if !s.isRoot(id) {
+		s.subnetsLock.Lock()
 		r = s.subnets[id].r
+		s.subnetsLock.Unlock()
 	}
 	return r
 }

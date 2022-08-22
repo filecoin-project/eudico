@@ -84,7 +84,7 @@ type Service struct {
 
 	lk          sync.RWMutex
 	subnets     map[address.SubnetID]*Subnet
-	subnetsLock sync.RWMutex
+	subnetsLock sync.Mutex
 
 	// Cross-msg general pool
 	cm *crossMsgPool
@@ -827,8 +827,8 @@ func (s *Service) getParentAPI(id address.SubnetID) (*API, error) {
 }
 
 func (s *Service) getSubnet(id address.SubnetID) (*Subnet, error) {
-	s.subnetsLock.RLock()
-	defer s.subnetsLock.RUnlock()
+	s.subnetsLock.Lock()
+	defer s.subnetsLock.Unlock()
 
 	sh, ok := s.subnets[id]
 	if !ok {

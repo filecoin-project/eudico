@@ -105,14 +105,14 @@ func WaitForBalance(ctx context.Context, addr addr.Address, balance uint64, api 
 	return nil
 }
 
-// SubnetMinerMinesBlocks checks that the specified miner has mined `blockNumber` blocks.
-func SubnetMinerMinesBlocks(ctx context.Context, blockNumber int, subnetAddr addr.SubnetID, addr addr.Address, api napi.FullNode) error {
+// SubnetMinerMinesBlocks checks that the specified miner has mined `targetBlockNumber` blocks of `blocks` in the subnet.
+func SubnetMinerMinesBlocks(ctx context.Context, targetBlockNumber, blocks int, subnetAddr addr.SubnetID, miner addr.Address, api napi.FullNode) error {
 	subnetHeads, err := getSubnetChainHead(ctx, subnetAddr, api)
 	if err != nil {
 		return err
 	}
-	if blockNumber < 2 || blockNumber > 100 {
-		return xerrors.New("wrong validated blocks number")
+	if blocks < 2 || blocks > 100 || targetBlockNumber > blocks {
+		return xerrors.New("wrong blocks number")
 	}
 
 	// ChainNotify returns channel with chain head updates.
@@ -133,21 +133,19 @@ func SubnetMinerMinesBlocks(ctx context.Context, blockNumber int, subnetAddr add
 		return xerrors.New("wrong initial block height")
 	}
 
-	i := 1
-	for i < blockNumber {
+	minerAddrs := make(map[addr.Address]int)
+	i := 0
+	minerMinedBlocks := 0
+	for i < blocks {
 		select {
 		case <-ctx.Done():
 			return xerrors.New("closed channel")
 		case heads := <-subnetHeads:
 			if len(heads) != 1 {
-				fmt.Println(heads[0].Val.Height())
-				fmt.Println(heads[0].Val.Blocks()[0].Miner)
-				fmt.Println(heads[1].Val.Height())
-				fmt.Println(heads[1].Val.Blocks()[0].Miner)
 				return xerrors.New("chain head length is not one")
 			}
 
-			if i > blockNumber {
+			if targetBlockNumber == minerMinedBlocks {
 				return nil
 			}
 			height := heads[0].Val.Height()
@@ -158,13 +156,23 @@ func SubnetMinerMinesBlocks(ctx context.Context, blockNumber int, subnetAddr add
 			}
 			currHeight = height
 
-			if heads[0].Val.Blocks()[0].Miner == addr {
-				i++
+			minerAddrs[heads[0].Val.Blocks()[0].Miner]++
+
+			if heads[0].Val.Blocks()[0].Miner == miner {
+				minerMinedBlocks++
 			}
+
+			i++
 		}
 	}
 
-	return nil
+	if targetBlockNumber == minerMinedBlocks {
+		return nil
+	}
+
+	fmt.Println(minerAddrs)
+
+	return fmt.Errorf("failed to mine %d blocks", targetBlockNumber)
 
 }
 
