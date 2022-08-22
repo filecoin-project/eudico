@@ -74,14 +74,14 @@ services:
 #    command:
 #      - -s  # start the eudico stats
 
-#  nginx:
-#    image: nginx:1.15-alpine
-#    ports:
-#      - "80:80"
-#      - "443:443"
-#    volumes:
-#      - ./cmd/eudico-stats/nginx.conf:/etc/nginx/conf.d/default.conf
-#
+  nginx:
+    image: nginx:1.15-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./cmd/eudico-stats/nginx.conf:/etc/nginx/conf.d/default.conf
+
 #  prometheus:
 #    image: prom/prometheus
 #    volumes:
