@@ -176,54 +176,41 @@ func SubnetMinerMinesBlocks(ctx context.Context, m, n int, subnetAddr addr.Subne
 
 }
 
-// SubnetHeightCheckForBlocks checks that there will be mined `blockNumber` blocks in the specified  subnet.
-func SubnetHeightCheckForBlocks(ctx context.Context, blockNumber int, subnetAddr addr.SubnetID, api napi.FullNode) error {
-	subnetHeads, err := getSubnetChainNotify(ctx, subnetAddr, api)
+// SubnetHeightCheckForBlocks checks `n` blocks with correct heights in the subnet will be mined.
+func SubnetHeightCheckForBlocks(ctx context.Context, n int, subnetAddr addr.SubnetID, api napi.FullNode) error {
+	heads, err := getSubnetChainNotify(ctx, subnetAddr, api)
 	if err != nil {
 		return err
 	}
-	if blockNumber < 2 || blockNumber > 100 {
-		return fmt.Errorf("wrong validated blocks number")
+
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("closed channel")
+	case <-heads:
 	}
 
-	// ChainNotify returns channel with chain head updates.
-	// First message is guaranteed to be of len == 1, and type == 'current'.
-	// Without forks we can expect that its len always to be 1.
-	initHead := <-subnetHeads
-	if len(initHead) < 1 {
-		return fmt.Errorf("empty chain head")
-	}
-	currHeight := initHead[0].Val.Height()
-
-	head, err := api.SubnetChainHead(ctx, subnetAddr)
+	currHead, err := getSubnetChainHead(ctx, subnetAddr, api)
 	if err != nil {
 		return err
 	}
-	height := head.Height()
-	if height != currHeight {
-		return fmt.Errorf("wrong initial block height")
-	}
 
-	i := 1
-	for i < blockNumber {
+	i := 0
+	for i < n {
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("closed channel")
-		case heads := <-subnetHeads:
-			if len(heads) != 1 {
-				return fmt.Errorf("chain head length is not one")
+		case <-heads:
+			newHead, err := getSubnetChainHead(ctx, subnetAddr, api)
+			if err != nil {
+				return err
 			}
 
-			if i > blockNumber {
-				return nil
-			}
-			height := heads[0].Val.Height()
-
-			if height <= currHeight {
+			if newHead.Height() <= currHead.Height() {
 				return fmt.Errorf("wrong %d block height: prev block height - %d, current head height - %d",
-					i, currHeight, height)
+					i, currHead.Height(), newHead.Height())
 			}
-			currHeight = height
+
+			currHead = newHead
 			i++
 		}
 	}
