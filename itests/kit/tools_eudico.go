@@ -10,7 +10,6 @@ import (
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/multiformats/go-multiaddr"
-	"golang.org/x/xerrors"
 
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/big"
@@ -25,7 +24,7 @@ const (
 	balanceSleepTime = 3
 )
 
-func getSubnetChainHead(ctx context.Context, subnetAddr addr.SubnetID, api napi.FullNode) (heads <-chan []*napi.HeadChange, err error) {
+func getSubnetChainNotify(ctx context.Context, subnetAddr addr.SubnetID, api napi.FullNode) (heads <-chan []*napi.HeadChange, err error) {
 	switch subnetAddr.String() {
 	case "root":
 		heads, err = api.ChainNotify(ctx)
@@ -35,7 +34,17 @@ func getSubnetChainHead(ctx context.Context, subnetAddr addr.SubnetID, api napi.
 	return
 }
 
-func getSubnetActor(ctx context.Context, subnetAddr addr.SubnetID, addr addr.Address, api napi.FullNode) (a *types.Actor, err error) {
+func getSubnetChainHead(ctx context.Context, subnetAddr addr.SubnetID, api napi.FullNode) (head *types.TipSet, err error) {
+	switch subnetAddr.String() {
+	case "root":
+		head, err = api.ChainHead(ctx)
+	default:
+		head, err = api.SubnetChainHead(ctx, subnetAddr)
+	}
+	return
+}
+
+func getSubnetStateActor(ctx context.Context, subnetAddr addr.SubnetID, addr addr.Address, api napi.FullNode) (a *types.Actor, err error) {
 	switch subnetAddr.String() {
 	case "root":
 		a, err = api.StateGetActor(ctx, addr, types.EmptyTSK)
@@ -46,7 +55,7 @@ func getSubnetActor(ctx context.Context, subnetAddr addr.SubnetID, addr addr.Add
 }
 
 func WaitSubnetActorBalance(ctx context.Context, subnetAddr addr.SubnetID, addr addr.Address, balance big.Int, api napi.FullNode) (int, error) {
-	heads, err := getSubnetChainHead(ctx, subnetAddr, api)
+	heads, err := getSubnetChainNotify(ctx, subnetAddr, api)
 	if err != nil {
 		return 0, err
 	}
@@ -57,9 +66,9 @@ func WaitSubnetActorBalance(ctx context.Context, subnetAddr addr.SubnetID, addr 
 	for {
 		select {
 		case <-ctx.Done():
-			return 0, xerrors.New("context closed")
+			return 0, fmt.Errorf("context closed")
 		case <-heads:
-			a, err := getSubnetActor(ctx, subnetAddr, addr, api)
+			a, err := getSubnetStateActor(ctx, subnetAddr, addr, api)
 			switch {
 			case err != nil && !strings.Contains(err.Error(), types.ErrActorNotFound.Error()):
 				return 0, err
@@ -72,7 +81,7 @@ func WaitSubnetActorBalance(ctx context.Context, subnetAddr addr.SubnetID, addr 
 				n++
 			}
 		case <-timer:
-			return 0, xerrors.New("finality timer exceeded")
+			return 0, fmt.Errorf("finality timer exceeded")
 		}
 	}
 }
@@ -91,28 +100,28 @@ func WaitForBalance(ctx context.Context, addr addr.Address, balance uint64, api 
 	for big.Cmp(currentBalance, targetBalance) != 1 {
 		select {
 		case <-ctx.Done():
-			return xerrors.New("closed channel")
+			return fmt.Errorf("closed channel")
 		case <-ticker.C:
 			currentBalance, err = api.WalletBalance(ctx, addr)
 			if err != nil {
 				return err
 			}
 		case <-timer:
-			return xerrors.New("balance timer exceeded")
+			return fmt.Errorf("balance timer exceeded")
 		}
 	}
 
 	return nil
 }
 
-// SubnetMinerMinesBlocks checks that the specified miner has mined `targetBlockNumber` blocks of `blocks` in the subnet.
-func SubnetMinerMinesBlocks(ctx context.Context, targetBlockNumber, blocks int, subnetAddr addr.SubnetID, miner addr.Address, api napi.FullNode) error {
-	subnetHeads, err := getSubnetChainHead(ctx, subnetAddr, api)
+// SubnetMinerMinesBlocks checks that the miner can mine some `m` blocks of `n` all blocks in the subnet.
+func SubnetMinerMinesBlocks(ctx context.Context, m, n int, subnetAddr addr.SubnetID, miner addr.Address, api napi.FullNode) error {
+	subnetHeads, err := getSubnetChainNotify(ctx, subnetAddr, api)
 	if err != nil {
 		return err
 	}
-	if blocks < 2 || blocks > 100 || targetBlockNumber > blocks {
-		return xerrors.New("wrong blocks number")
+	if n < 2 || n > 100 || m > n {
+		return fmt.Errorf("wrong blocks number")
 	}
 
 	// ChainNotify returns channel with chain head updates.
@@ -120,70 +129,61 @@ func SubnetMinerMinesBlocks(ctx context.Context, targetBlockNumber, blocks int, 
 	// Without forks we can expect that its len always to be 1.
 	initHead := <-subnetHeads
 	if len(initHead) < 1 {
-		return xerrors.New("empty chain head")
+		return fmt.Errorf("empty chain head")
 	}
 	currHeight := initHead[0].Val.Height()
 
-	head, err := api.SubnetChainHead(ctx, subnetAddr)
-	if err != nil {
-		return err
-	}
-	height := head.Height()
-	if height != currHeight {
-		return xerrors.New("wrong initial block height")
-	}
-
-	minerAddrs := make(map[addr.Address]int)
 	i := 0
 	minerMinedBlocks := 0
-	for i < blocks {
+	for i < n {
 		select {
 		case <-ctx.Done():
-			return xerrors.New("closed channel")
-		case heads := <-subnetHeads:
-			if len(heads) != 1 {
-				return xerrors.New("chain head length is not one")
-			}
-
-			if targetBlockNumber == minerMinedBlocks {
+			return fmt.Errorf("closed channel")
+		case <-subnetHeads:
+			if m >= minerMinedBlocks {
 				return nil
 			}
-			height := heads[0].Val.Height()
 
-			if height <= currHeight {
-				return xerrors.Errorf("wrong %d block height: prev block height - %d, current head height - %d",
-					i, currHeight, height)
+			head, err := getSubnetChainHead(ctx, subnetAddr, api)
+			if err != nil {
+				return err
+			}
+
+			height := head.Height()
+			if height < currHeight {
+				return fmt.Errorf("the current height is lower then the previous height")
+			}
+			if height == currHeight {
+				continue
 			}
 			currHeight = height
 
-			minerAddrs[heads[0].Val.Blocks()[0].Miner]++
-
-			if heads[0].Val.Blocks()[0].Miner == miner {
-				minerMinedBlocks++
+			for _, b := range head.Blocks() {
+				if b.Miner == miner {
+					minerMinedBlocks++
+				}
 			}
-
-			i++
 		}
+
+		i++
 	}
 
-	if targetBlockNumber == minerMinedBlocks {
+	if m >= minerMinedBlocks {
 		return nil
 	}
 
-	fmt.Println(minerAddrs)
-
-	return fmt.Errorf("failed to mine %d blocks", targetBlockNumber)
+	return fmt.Errorf("failed to mine %d blocks", m)
 
 }
 
 // SubnetHeightCheckForBlocks checks that there will be mined `blockNumber` blocks in the specified  subnet.
 func SubnetHeightCheckForBlocks(ctx context.Context, blockNumber int, subnetAddr addr.SubnetID, api napi.FullNode) error {
-	subnetHeads, err := getSubnetChainHead(ctx, subnetAddr, api)
+	subnetHeads, err := getSubnetChainNotify(ctx, subnetAddr, api)
 	if err != nil {
 		return err
 	}
 	if blockNumber < 2 || blockNumber > 100 {
-		return xerrors.New("wrong validated blocks number")
+		return fmt.Errorf("wrong validated blocks number")
 	}
 
 	// ChainNotify returns channel with chain head updates.
@@ -191,7 +191,7 @@ func SubnetHeightCheckForBlocks(ctx context.Context, blockNumber int, subnetAddr
 	// Without forks we can expect that its len always to be 1.
 	initHead := <-subnetHeads
 	if len(initHead) < 1 {
-		return xerrors.New("empty chain head")
+		return fmt.Errorf("empty chain head")
 	}
 	currHeight := initHead[0].Val.Height()
 
@@ -201,17 +201,17 @@ func SubnetHeightCheckForBlocks(ctx context.Context, blockNumber int, subnetAddr
 	}
 	height := head.Height()
 	if height != currHeight {
-		return xerrors.New("wrong initial block height")
+		return fmt.Errorf("wrong initial block height")
 	}
 
 	i := 1
 	for i < blockNumber {
 		select {
 		case <-ctx.Done():
-			return xerrors.New("closed channel")
+			return fmt.Errorf("closed channel")
 		case heads := <-subnetHeads:
 			if len(heads) != 1 {
-				return xerrors.New("chain head length is not one")
+				return fmt.Errorf("chain head length is not one")
 			}
 
 			if i > blockNumber {
@@ -220,7 +220,7 @@ func SubnetHeightCheckForBlocks(ctx context.Context, blockNumber int, subnetAddr
 			height := heads[0].Val.Height()
 
 			if height <= currHeight {
-				return xerrors.Errorf("wrong %d block height: prev block height - %d, current head height - %d",
+				return fmt.Errorf("wrong %d block height: prev block height - %d, current head height - %d",
 					i, currHeight, height)
 			}
 			currHeight = height
@@ -279,7 +279,7 @@ func MessageForSend(ctx context.Context, s api.FullNode, params lcli.SendParams)
 	return prototype, nil
 }
 
-func GetFreeLocalAddr() (addr string, err error) {
+func GetFreeTCPLocalAddr() (addr string, err error) {
 	var a *net.TCPAddr
 	if a, err = net.ResolveTCPAddr("tcp", "localhost:0"); err == nil {
 		var l *net.TCPListener
