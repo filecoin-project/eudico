@@ -17,12 +17,16 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/mir"
+	"github.com/filecoin-project/mir/pkg/availability/multisigcollector"
 	mircrypto "github.com/filecoin-project/mir/pkg/crypto"
 	"github.com/filecoin-project/mir/pkg/events"
+	"github.com/filecoin-project/mir/pkg/factorymodule"
 	"github.com/filecoin-project/mir/pkg/iss"
+	"github.com/filecoin-project/mir/pkg/mempool/simplemempool"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/net"
 	mirlibp2p "github.com/filecoin-project/mir/pkg/net/libp2p"
+	"github.com/filecoin-project/mir/pkg/pb/factorymodulepb"
 	mirproto "github.com/filecoin-project/mir/pkg/pb/requestpb"
 	"github.com/filecoin-project/mir/pkg/simplewal"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -142,6 +146,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	issConfig.ConfigOffset = ConfigOffset
 	issProtocol, err := iss.New(
 		t.NodeID(mirID),
+		iss.DefaultModuleConfig(),
 		issConfig,
 		iss.InitialStateSnapshot([]byte{}, issConfig),
 		newMirLogger(managerLog),
@@ -150,14 +155,61 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		return nil, fmt.Errorf("could not instantiate ISS protocol module: %w", err)
 	}
 
-	pool := newRequestPool()
+	// Use a simple mempool for incoming requests.
+	mempool := simplemempool.NewModule(
+		&simplemempool.ModuleConfig{
+			Self:   "mempool",
+			Hasher: "hasher",
+		},
+		&simplemempool.ModuleParams{
+			MaxTransactionsInBatch: 10,
+		},
+	)
+
+	mscFactory := factorymodule.New(
+		"availability",
+		factorymodule.DefaultParams(
+			func(mscID t.ModuleID, params *factorymodulepb.GeneratorParams) (modules.PassiveModule, error) {
+
+				m, ok := params.Type.(*factorymodulepb.GeneratorParams_MultisigCollector)
+				if !ok {
+					return nil, fmt.Errorf("failed type assertion")
+				}
+
+				mscNodeIDs := getSortedKeys(t.Membership(m.MultisigCollector.Membership))
+
+				// Instantiate the availability layer.
+				multisigCollector, err := multisigcollector.NewModule(
+					&multisigcollector.ModuleConfig{
+						Self:    mscID,
+						Mempool: "mempool",
+						Net:     "net",
+						Crypto:  "crypto",
+					},
+					&multisigcollector.ModuleParams{
+						InstanceUID: []byte(mscID),
+						AllNodes:    mscNodeIDs,
+						F:           (len(mscNodeIDs) - 1) / 2,
+					},
+					t.NodeID(mirID),
+				)
+				if err != nil {
+					return nil, err
+				}
+				return multisigCollector, nil
+			},
+		),
+		newMirLogger(managerLog),
+	)
+
+	requestPool := newRequestPool()
 
 	m := Manager{
 		Addr:                addr,
 		SubnetID:            subnetID,
 		NetName:             netName,
 		EudicoNode:          api,
-		Pool:                pool,
+		Pool:                requestPool,
 		MirID:               mirID,
 		WAL:                 wal,
 		Crypto:              cryptoManager,
@@ -170,10 +222,12 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 
 	// Create a Mir node, using the default configuration and passing the modules initialized just above.
 	mirModules, err := iss.DefaultModules(map[t.ModuleID]modules.Module{
-		"net":    netTransport,
-		"iss":    issProtocol,
-		"app":    sm,
-		"crypto": mircrypto.New(m.Crypto),
+		"net":          netTransport,
+		"iss":          issProtocol,
+		"app":          sm,
+		"crypto":       mircrypto.New(m.Crypto),
+		"mempool":      mempool,
+		"availability": mscFactory,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize Mir modules: %w", err)
@@ -242,8 +296,8 @@ func (m *Manager) SubmitRequests(ctx context.Context, requests []*mirproto.Reque
 	if len(requests) == 0 {
 		return
 	}
-	e := events.NewClientRequests("iss", requests)
-	if err := m.MirNode.InjectEvents(ctx, (&events.EventList{}).PushBack(e)); err != nil {
+	e := events.NewClientRequests("mempool", requests)
+	if err := m.MirNode.InjectEvents(ctx, events.ListOf(e)); err != nil {
 		log.Errorf("failed to submit requests to Mir: %s", err)
 	}
 	log.Infof("submitted %d requests to Mir", len(requests))

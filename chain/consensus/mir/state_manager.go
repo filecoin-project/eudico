@@ -8,12 +8,19 @@ import (
 	"go4.org/sort"
 
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	availabilityevents "github.com/filecoin-project/mir/pkg/availability/events"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/modules"
+	"github.com/filecoin-project/mir/pkg/pb/availabilitypb"
 	"github.com/filecoin-project/mir/pkg/pb/commonpb"
+	"github.com/filecoin-project/mir/pkg/pb/contextstorepb"
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	t "github.com/filecoin-project/mir/pkg/types"
+)
+
+const (
+	availabilityModuleID = t.ModuleID("availability")
 )
 
 type Message []byte
@@ -74,10 +81,17 @@ func (sm *StateManager) ApplyEvent(event *eventpb.Event) (*events.EventList, err
 	switch e := event.Type.(type) {
 	case *eventpb.Event_Init:
 		return events.EmptyList(), nil
-	case *eventpb.Event_Deliver:
-		return sm.applyBatch(e.Deliver.Batch)
 	case *eventpb.Event_NewEpoch:
 		return sm.applyNewEpoch(e.NewEpoch)
+	case *eventpb.Event_Deliver:
+		return sm.applyDeliverCertificate(e.Deliver)
+	case *eventpb.Event_Availability:
+		switch e := e.Availability.Type.(type) {
+		case *availabilitypb.Event_ProvideTransactions:
+			return sm.applyProvideTransactions(e.ProvideTransactions)
+		default:
+			return nil, fmt.Errorf("unexpected availability event type: %T", e)
+		}
 	case *eventpb.Event_AppSnapshotRequest:
 		return sm.applySnapshotRequest(e.AppSnapshotRequest)
 	case *eventpb.Event_AppRestoreState:
@@ -87,20 +101,61 @@ func (sm *StateManager) ApplyEvent(event *eventpb.Event) (*events.EventList, err
 	}
 }
 
-// applyBatch applies a batch of requests to the state of the application.
-func (sm *StateManager) applyBatch(in *requestpb.Batch) (*events.EventList, error) {
+// applyDeliver applies a delivered availability certificate.
+func (sm *StateManager) applyDeliverCertificate(deliver *eventpb.Deliver) (*events.EventList, error) {
+
+	// Skip padding certificates. Deliver events with nil certificates are considered noops.
+	if deliver.Cert.Type == nil {
+		return events.EmptyList(), nil
+	}
+
+	switch c := deliver.Cert.Type.(type) {
+	case *availabilitypb.Cert_Msc:
+		// If the certificate was produced by the multisig collector
+
+		// Ignore empty batch availability certificates.
+		if len(c.Msc.BatchId) == 0 {
+			return events.EmptyList(), nil
+		}
+
+		// Request transaction payloads that the received certificate refers to
+		// from the appropriate instance (there is one per epoch) of the availability layer,
+		// which should respond with a ProvideTransactions event.
+		return events.ListOf(availabilityevents.RequestTransactions(
+			availabilityModuleID.Then(t.ModuleID(fmt.Sprintf("%v", sm.currentEpoch))),
+			deliver.Cert,
+			&availabilitypb.RequestTransactionsOrigin{
+				Module: "app",
+				Type: &availabilitypb.RequestTransactionsOrigin_ContextStore{
+					ContextStore: &contextstorepb.Origin{ItemID: 0},
+				},
+			},
+		)), nil
+	default:
+		return nil, fmt.Errorf("unknown availability certificate type: %T", deliver.Cert.Type)
+	}
+}
+
+// applyProvideTransactions applies transactions received from the availability layer to the app state.
+// In our case, it simply extends the message history
+// by appending the payload of each received request as a new chat message.
+// Each appended message is also printed to stdout.
+// Special messages starting with `Config: ` are recognized, parsed, and treated accordingly.
+func (sm *StateManager) applyProvideTransactions(ptx *availabilitypb.ProvideTransactions) (*events.EventList, error) {
 	var msgs []Message
 
-	for _, req := range in.Requests {
-		switch req.Req.Type {
+	// For each request in the batch
+	for _, req := range ptx.Txs {
+		switch req.Type {
 		case TransportType:
-			msgs = append(msgs, req.Req.Data)
+			msgs = append(msgs, req.Data)
 		case ReconfigurationType:
-			err := sm.applyConfigMsg(req.Req)
+			err := sm.applyConfigMsg(req)
 			if err != nil {
 				return events.EmptyList(), err
 			}
 		}
+
 	}
 
 	// Send a batch to the Eudico node.
