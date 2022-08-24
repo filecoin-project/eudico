@@ -145,13 +145,13 @@ var runCmd = &cli.Command{
 		}
 
 		go func() {
-			err = eudicoStats.Listen(ctx, address.RootSubnet, 10)
+			err = eudicoStats.Listen(ctx, address.RootSubnet)
 			if err != nil {
 				log.Errorw("cannot listen to root net")
 				return
 			}
 		}()
-		
+
 		//config := make(map[string]string, 10)
 		//config["type"] = "basic"
 		//if err := api.Listen(ctx, address.RootSubnet, 10, config); err != nil {

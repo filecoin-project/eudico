@@ -168,7 +168,6 @@ func NewService(
 		beaconapi,
 		ds,
 		netName,
-		nil,
 		s,
 	}
 

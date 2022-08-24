@@ -33,10 +33,6 @@ func emptySubnetStat() SubnetStat {
 	}
 }
 
-func newStatsFromState(state *subnet.SubnetState) {
-	return
-}
-
 // ShouldReSync checks if it is needed to resync subnet stats with the current chain data
 func (s *SubnetStat) ShouldReSync(curH abi.ChainEpoch) bool {
 	return s.nextEpoch < curH
