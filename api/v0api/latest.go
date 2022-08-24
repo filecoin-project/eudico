@@ -6,7 +6,6 @@ import (
 
 type Common = api.Common
 type HierarchicalCns = api.HierarchicalCns
-
 type Net = api.Net
 type CommonNet = api.CommonNet
 
@@ -14,10 +13,8 @@ type CommonStruct = api.CommonStruct
 type CommonStub = api.CommonStub
 type NetStruct = api.NetStruct
 type NetStub = api.NetStub
-
 type HierarchicalCnsStruct = api.HierarchicalCnsStruct
 type HierarchicalCnsStub = api.HierarchicalCnsStub
-
 type CommonNetStruct = api.CommonNetStruct
 type CommonNetStub = api.CommonNetStub
 
