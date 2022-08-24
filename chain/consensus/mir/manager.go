@@ -369,7 +369,7 @@ func (m *Manager) GetMessages(batch *Batch) (msgs []*types.SignedMessage, crossM
 	return
 }
 
-func (m *Manager) GetTransportRequests(msgs []*types.SignedMessage, crossMsgs []*types.UnverifiedCrossMsg) (
+func (m *Manager) TransportRequests(msgs []*types.SignedMessage, crossMsgs []*types.UnverifiedCrossMsg) (
 	requests []*mirproto.Request,
 ) {
 	requests = append(requests, m.batchSignedMessages(msgs)...)
@@ -377,7 +377,7 @@ func (m *Manager) GetTransportRequests(msgs []*types.SignedMessage, crossMsgs []
 	return
 }
 
-func (m *Manager) newReconfigurationRequest(payload []byte) *mirproto.Request {
+func (m *Manager) ReconfigurationRequest(payload []byte) *mirproto.Request {
 	r := mirproto.Request{
 		ClientId: m.MirID,
 		ReqNo:    m.reconfigurationNonce,
