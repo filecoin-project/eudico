@@ -111,7 +111,7 @@ func (n *Neo4jClient) Observe(metric string, value ...interface{}) {
 		if err := n.UpsertSubnet(nodes); err != nil {
 			log.Errorw("cannot update nodes", "err", err, "nodes", nodes)
 		}
-	} else if metric == SubnetRelationShipUpdated {
+	} else if metric == SubnetChildAdded {
 		relationships := value[0].(*[]Relationship)
 		if err := n.SetParentRelationship(relationships); err != nil {
 			log.Errorw("cannot update relationships", "err", err, "relationships", relationships)

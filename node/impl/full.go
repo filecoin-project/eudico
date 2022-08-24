@@ -38,7 +38,6 @@ type FullNodeAPI struct {
 	full.SyncAPI
 	full.BeaconAPI
 
-	hierarchical.EudicoStatsAPI
 	hierarchical.HierarchicalAPI
 
 	DS          dtypes.MetadataDS

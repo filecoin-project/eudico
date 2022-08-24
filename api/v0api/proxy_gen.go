@@ -35,7 +35,6 @@ type FullNodeStruct struct {
 	NetStruct
 
 	HierarchicalCnsStruct
-	EudicoStatsStruct
 
 	Internal struct {
 		BeaconGetEntry func(p0 context.Context, p1 abi.ChainEpoch) (*types.BeaconEntry, error) `perm:"read"`

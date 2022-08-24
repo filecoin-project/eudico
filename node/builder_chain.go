@@ -1,7 +1,6 @@
 package node
 
 import (
-	"github.com/filecoin-project/lotus/node/impl/hierarchical"
 	"os"
 
 	"go.uber.org/fx"
@@ -144,7 +143,6 @@ var ChainNode = Options(
 	// Start hierarchical sub to listen to shard events
 	Override(new(*resolver.Resolver), resolver.NewRootResolver),
 	Override(new(*submgr.Service), submgr.NewService),
-	Override(new(hierarchical.EudicoStatsAPI), hierarchical.NewEudicoStatsAPI),
 	Override(new(subnet.Manager), module.SetSubMgrIface),
 	Override(new(api.FullNodeServer), func(path string, api api.FullNode) error { return nil }),
 

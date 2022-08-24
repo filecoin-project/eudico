@@ -6,7 +6,6 @@ import (
 
 type Common = api.Common
 type HierarchicalCns = api.HierarchicalCns
-type EudicoStats = api.EudicoStats
 
 type Net = api.Net
 type CommonNet = api.CommonNet
@@ -18,8 +17,6 @@ type NetStub = api.NetStub
 
 type HierarchicalCnsStruct = api.HierarchicalCnsStruct
 type HierarchicalCnsStub = api.HierarchicalCnsStub
-type EudicoStatsStruct = api.EudicoStatsStruct
-type EudicoStatsStub = api.EudicoStatsStub
 
 type CommonNetStruct = api.CommonNetStruct
 type CommonNetStub = api.CommonNetStub

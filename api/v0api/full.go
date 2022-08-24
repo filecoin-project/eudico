@@ -50,7 +50,6 @@ type FullNode interface {
 	Common
 	Net
 	HierarchicalCns
-	EudicoStats
 
 	// MethodGroup: Chain
 	// The Chain method group contains methods for interacting with the

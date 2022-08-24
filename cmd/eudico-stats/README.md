@@ -36,5 +36,6 @@ In the root directory
 docker build -t eudico:latest -f Dockerfile.eudico .
 docker run -it -v `pwd`/credentials:/home/eudico/credentials --rm eudico:latest -i
 docker-compose -f docker-compose.eudico.yaml up -d
+docker-compose -f docker-compose.eudico.yaml exec all-in-one bash
 docker-compose -f docker-compose.eudico.yaml logs -f all-in-one
 ```
