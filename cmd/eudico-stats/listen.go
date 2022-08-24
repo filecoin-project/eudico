@@ -39,11 +39,11 @@ func (s *SubnetStat) ShouldReSync(curH abi.ChainEpoch) bool {
 }
 
 type EudicoStatsListener struct {
-	Events   *events.Events
-	api      v1api.FullNode
-	observer observer.Observer
+	Events *events.Events
 
 	// Private fields
+	api         v1api.FullNode
+	observer    observer.Observer
 	subnetStats map[address.SubnetID]SubnetStat
 }
 
@@ -55,6 +55,7 @@ func NewEudicoStats(ctx context.Context, api v1api.FullNode, observer observer.O
 
 	listener := EudicoStatsListener{
 		Events:      eventListen,
+		api:         api,
 		subnetStats: make(map[address.SubnetID]SubnetStat),
 		observer:    observer,
 	}
@@ -82,6 +83,7 @@ func (e *EudicoStatsListener) listen(
 
 	log.Infow("starting listening to subnet", "id", id)
 	e.subnetStats[id] = emptySubnetStat()
+	e.observer.Observe(SubnetNodeUpdated, &[]SubnetNode{idOnlySubnetNode(id)})
 
 	checkFunc := func(ctx context.Context, ts *types.TipSet) (done bool, more bool, err error) {
 		return false, true, nil
@@ -90,7 +92,7 @@ func (e *EudicoStatsListener) listen(
 	changeHandler := func(oldTs, newTs *types.TipSet, states events.StateChange, curH abi.ChainEpoch) (more bool, err error) {
 		changes := states.(SubnetChanges)
 
-		log.Debugw("in change handler", "id", id)
+		log.Infow("in change handler", "id", id)
 
 		if !changes.IsUpdated() {
 			log.Debugw("subnet not updated", "id", id)
@@ -106,7 +108,7 @@ func (e *EudicoStatsListener) listen(
 			return false, nil
 		}
 
-		log.Debugw("continue listening to subnet", "id", id)
+		log.Infow("continue listening to subnet", "id", id)
 		return true, nil
 	}
 
@@ -134,26 +136,37 @@ func (e *EudicoStatsListener) listen(
 }
 
 func (e *EudicoStatsListener) handleRelationshipChanges(changes *SubnetRelationshipChange) {
-	e.observer.Observe(SubnetChildAdded, &changes.Added)
-	e.observer.Observe(SubnetChildRemoved, &changes.Removed)
+	if len(changes.Added) > 0 {
+		log.Infow("to add relationship changes", "changes", changes.Added)
+		e.observer.Observe(SubnetChildAdded, &changes.Added)
+	}
+	if len(changes.Removed) > 0 {
+		log.Infow("to removed relationship changes", "changes", changes.Removed)
+		e.observer.Observe(SubnetChildRemoved, &changes.Removed)
+	}
 }
 
 func (e *EudicoStatsListener) handleNodeChanges(changes *NodeChange) bool {
 	if !changes.IsNodeUpdated {
+		log.Infow("node not updated", "id", changes.Node.SubnetID)
 		return false
 	}
 
 	if changes.Node.Subnet.Status == sca.Killed {
+		log.Infow("node KILLED", "id", changes.Node.SubnetID)
 		e.observer.Observe(SubnetNodeRemoved, changes.Node.SubnetID)
 		return true
 	}
 
-	e.observer.Observe(SubnetNodeUpdated, &changes.Node)
+	log.Infow("node updated", "id", changes.Node.SubnetID, "node", changes.Node)
+	e.observer.Observe(SubnetNodeUpdated, &[]SubnetNode{changes.Node})
+
 	return false
 }
 
 func (e *EudicoStatsListener) listenToNewSubnets(ctx context.Context, changes *NodeChange) {
-	if !changes.IsNodeUpdated {
+	if len(changes.Added) == 0 {
+		log.Infow("no new subnet added", "id", changes.Node.SubnetID)
 		return
 	}
 
@@ -163,6 +176,8 @@ func (e *EudicoStatsListener) listenToNewSubnets(ctx context.Context, changes *N
 			err := e.listen(ctx, node.SubnetID)
 			if err != nil {
 				log.Errorw("cannot start listen to subnet", "id", node.SubnetID)
+			} else {
+				log.Infow("started listening to subnet", "id", node.SubnetID)
 			}
 		}()
 	}
@@ -227,22 +242,24 @@ func (e *EudicoStatsListener) detectNodeChange(
 	node := stats.node
 	updated := false
 
-	if node.Consensus != state.Consensus {
-		updated = true
-		node.Consensus = state.Consensus
-	}
-
 	// TODO: what's the diff btw chain/consensus/hierarchical/actors/subnet/subnet_state.go:40
 	// TODO and chain/consensus/hierarchical/actors/sca/sca_state.go:40
-	status := convertStatus(state.Status)
-	if node.Subnet.Status != status {
-		updated = true
-		node.Subnet.Status = status
-	}
+	if state != nil {
+		status := convertStatus(state.Status)
+		if node.Subnet.Status != status {
+			updated = true
+			node.Subnet.Status = status
+		}
 
-	if !node.Subnet.Stake.Equals(state.TotalStake) {
-		updated = true
-		node.Subnet.Stake = state.TotalStake
+		if node.Consensus != state.Consensus {
+			updated = true
+			node.Consensus = state.Consensus
+		}
+
+		if !node.Subnet.Stake.Equals(state.TotalStake) {
+			updated = true
+			node.Subnet.Stake = state.TotalStake
+		}
 	}
 
 	if node.SubnetCount != subnetCount {
@@ -274,27 +291,32 @@ func (e *EudicoStatsListener) detectChanges(id address.SubnetID, subnetOutputs [
 	e.detectAddedSubnets(&latestSubnetMap, &change)
 	e.detectAddedSubnetChildren(&stats, &latestSubnetMap, &change)
 	e.detectRemovedSubnetChildren(&stats, &latestSubnetMap, &change)
-
 	e.detectNodeChange(&stats, state, len(subnetOutputs), &change)
 
 	return change
 }
 
 func (e *EudicoStatsListener) matchSubnetStateChange(ctx context.Context, id address.SubnetID) (bool, SubnetChanges, error) {
-	snst, err := e.obtainSubnetState(ctx, id)
-	if err != nil {
-		log.Errorw("cannot get subnet state", "subnet", id)
-		return false, SubnetChanges{}, err
-	}
-
 	subnets, err := e.api.ListSubnets(ctx, id)
 	if err != nil {
 		log.Errorw("list subnets failed", "id", id, "err", err)
-		return false, SubnetChanges{}, err
+		subnets = make([]sca.SubnetOutput, 0)
 	}
 
-	changes := e.detectChanges(id, subnets, &snst)
+	var changes SubnetChanges
+	var snstPnt *subnet.SubnetState
 
+	snst, err := e.obtainSubnetState(ctx, id)
+	if err != nil {
+		log.Errorw("cannot get subnet state", "subnet", id)
+		snstPnt = nil
+	} else {
+		snstPnt = &snst
+	}
+
+	changes = e.detectChanges(id, subnets, snstPnt)
+
+	log.Infow("changes", "changes", changes)
 	return changes.IsUpdated(), changes, nil
 }
 
@@ -302,9 +324,9 @@ func (e *EudicoStatsListener) obtainSubnetState(ctx context.Context, id address.
 	subnetActAddr := id.GetActor()
 
 	// Get state of subnet actor in parent for heaviest tipset
-	subnetAct, err := e.api.StateGetActor(ctx, subnetActAddr, types.EmptyTSK)
+	subnetAct, err := e.api.SubnetStateGetActor(ctx, id, subnetActAddr, types.EmptyTSK)
 	if err != nil {
-		log.Errorw("cannot get subnet actor", "subnet", id)
+		log.Errorw("cannot get subnet actor", "subnet", id, "err", err)
 		return subnet.SubnetState{}, err
 	}
 

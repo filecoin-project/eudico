@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 )
@@ -95,6 +96,19 @@ type SubnetNode struct {
 
 func emptySubnetNode() SubnetNode {
 	return SubnetNode{}
+}
+
+func idOnlySubnetNode(id address.SubnetID) SubnetNode {
+	return SubnetNode{
+		SubnetID:    id,
+		SubnetCount: 0,
+		Consensus:   0,
+		Subnet: sca.Subnet{
+			ID:    id,
+			Stake: abi.NewTokenAmount(0),
+		},
+		Version: 0,
+	}
 }
 
 //func FromSubnetState(state *subnet.SubnetState) SubnetNode {

@@ -106,13 +106,15 @@ func closeDriver(driver neo4j.Driver) error {
 }
 
 func (n *Neo4jClient) Observe(metric string, value ...interface{}) {
-	if metric == SubnetUpdated {
+	if metric == SubnetNodeUpdated {
 		nodes := value[0].(*[]SubnetNode)
+		log.Infow("received subnet updated", "nodes", nodes)
 		if err := n.UpsertSubnet(nodes); err != nil {
 			log.Errorw("cannot update nodes", "err", err, "nodes", nodes)
 		}
 	} else if metric == SubnetChildAdded {
 		relationships := value[0].(*[]Relationship)
+		log.Infow("received relationships added", "relationships", relationships)
 		if err := n.SetParentRelationship(relationships); err != nil {
 			log.Errorw("cannot update relationships", "err", err, "relationships", relationships)
 		}
