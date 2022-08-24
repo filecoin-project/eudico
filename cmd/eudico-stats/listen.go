@@ -77,6 +77,8 @@ func (e *EudicoStatsListener) listen(
 	ctx context.Context,
 	id address.SubnetID,
 ) error {
+	// TODO: ideally there is no need to add read write lock. Keep in view.
+
 	if _, ok := e.subnetStats[id]; ok {
 		log.Infow("subnet id already tracked", "id", id)
 		return nil
