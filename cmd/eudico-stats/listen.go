@@ -101,7 +101,7 @@ func (e *EudicoStatsListener) listen(
 			return true, nil
 		}
 
-		e.listenToNewSubnets(&changes.NodeChanges)
+		e.listenToNewSubnets(ctx, &changes.NodeChanges)
 		e.handleRelationshipChanges(&changes.RelationshipChanges)
 		shouldStopListening := e.handleNodeChanges(&changes.NodeChanges)
 
