@@ -1,8 +1,11 @@
 package param
 
-import "github.com/filecoin-project/go-state-types/big"
+import (
+	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/lotus/build"
+)
 
 var GenesisWorkTarget = func() big.Int {
-	w, _ := big.FromString("4519783675352289407433363")
+	w, _ := big.FromString(build.GenesisPoWTarget)
 	return w
 }()

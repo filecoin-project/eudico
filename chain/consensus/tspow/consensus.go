@@ -2,26 +2,20 @@ package tspow
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
-	big2 "math/big"
-	"sort"
 	"strings"
-
-	"github.com/multiformats/go-multihash"
-	"go.opencensus.io/stats"
-
-	"github.com/filecoin-project/go-state-types/big"
 
 	"github.com/Gurpartap/async"
 	"github.com/hashicorp/go-multierror"
 	logging "github.com/ipfs/go-log/v2"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"golang.org/x/xerrors"
+	"go.opencensus.io/stats"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
-
-	bstore "github.com/filecoin-project/lotus/blockstore"
+	"github.com/filecoin-project/go-state-types/big"
+	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/beacon"
@@ -40,43 +34,19 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
-var log = logging.Logger("tspow-consensus")
+const (
+	MaxDiffLookback = 70
 
-var _ consensus.Consensus = &TSPoW{}
+	// MaxHeightDrift is the epochs number to define blocks that will be rejected,
+	// if there are more than MaxHeightDrift epochs above the theoretical max height
+	// based on systime.
+	MaxHeightDrift = 5
+)
 
-const MaxDiffLookback = 70
-
-func DiffLookback(baseH abi.ChainEpoch) abi.ChainEpoch {
-	lb := ((baseH + 11) * 217) % (MaxDiffLookback - 40)
-	return lb + 40
-}
-
-func Difficulty(baseTs, lbts *types.TipSet) big.Int {
-	expLbTime := 100000 * uint64(DiffLookback(baseTs.Height())) * build.BlockDelaySecs
-	actTime := (baseTs.Blocks()[0].Timestamp - lbts.Blocks()[0].Timestamp) * 100000
-
-	actTime = expLbTime - uint64(int64(expLbTime-actTime)/100)
-
-	// clamp max adjustment
-	if actTime < expLbTime*99/100 {
-		actTime = expLbTime * 99 / 100
-	}
-	if actTime > expLbTime*101/100 {
-		actTime = expLbTime * 101 / 100
-	}
-
-	prevdiff := big.Zero()
-	prevdiff.SetBytes(baseTs.Blocks()[0].Ticket.VRFProof)
-	diff := big.Div(types.BigMul(prevdiff, big.NewInt(int64(expLbTime))), big.NewInt(int64(actTime)))
-
-	pgen, _ := big2.NewFloat(0).SetInt(param.GenesisWorkTarget.Int).Float64()
-	fdiff, _ := big2.NewFloat(0).SetInt(diff.Int).Float64()
-	pgen = fdiff * 100 / pgen
-	// Difficulty adjustement print. Really helpful for debugging purposes.
-	log.Debugf("adjust %.4f%%, p%s lb%d (%.4f%% gen)\n", 100*float64(expLbTime)/float64(actTime), prevdiff, DiffLookback(baseTs.Height()), pgen)
-
-	return diff
-}
+var (
+	_   consensus.Consensus = &TSPoW{}
+	log                     = logging.Logger("tspow-consensus")
+)
 
 type TSPoW struct {
 	// The interface for accessing and putting tipsets into local storage
@@ -98,10 +68,6 @@ type TSPoW struct {
 
 	netName address.SubnetID
 }
-
-// Blocks that are more than MaxHeightDrift epochs above
-// the theoretical max height based on systime are quickly rejected
-const MaxHeightDrift = 5
 
 func NewTSPoWConsensus(
 	ctx context.Context,
@@ -126,26 +92,63 @@ func NewTSPoWConsensus(
 	}
 }
 
+func (tsp *TSPoW) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.BlockTemplate) (*types.FullBlock, error) {
+	b, err := common.PrepareBlockForSignature(ctx, tsp.sm, bt)
+	if err != nil {
+		return nil, err
+	}
+	next := b.Header
+
+	tgt := big.Zero()
+	tgt.SetBytes(next.Ticket.VRFProof)
+
+	bestH := *next
+	for i := 0; i < 10000; i++ {
+		next.ElectionProof = &types.ElectionProof{
+			VRFProof: []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		}
+		rand.Read(next.ElectionProof.VRFProof) //nolint:errcheck
+		if work(&bestH).LessThan(work(next)) {
+			bestH = *next
+			if work(next).GreaterThanEqual(tgt) {
+				break
+			}
+		}
+	}
+	next = &bestH
+
+	if work(next).LessThan(tgt) {
+		return nil, nil
+	}
+
+	err = common.SignBlock(ctx, w, b)
+	if err != nil {
+		return nil, err
+	}
+
+	return b, nil
+}
+
 func (tsp *TSPoW) ValidateBlock(ctx context.Context, b *types.FullBlock) (err error) {
 	if err := common.BlockSanityChecks(hierarchical.PoW, b.Header); err != nil {
-		return xerrors.Errorf("incoming header failed basic sanity checks: %w", err)
+		return fmt.Errorf("incoming header failed basic sanity checks: %w", err)
 	}
 
 	h := b.Header
 
 	baseTs, err := tsp.store.LoadTipSet(ctx, types.NewTipSetKey(h.Parents...))
 	if err != nil {
-		return xerrors.Errorf("load parent tipset failed (%s): %w", h.Parents, err)
+		return fmt.Errorf("load parent tipset failed (%s): %w", h.Parents, err)
 	}
 
 	// fast checks first
 	if h.Height != baseTs.Height()+1 {
-		return xerrors.Errorf("block height not parent height+1: %d != %d", h.Height, baseTs.Height()+1)
+		return fmt.Errorf("block height not parent height+1: %d != %d", h.Height, baseTs.Height()+1)
 	}
 
 	now := uint64(build.Clock.Now().Unix())
 	if h.Timestamp > now+build.AllowableClockDriftSecs {
-		return xerrors.Errorf("block was from the future (now=%d, blk=%d): %w", now, h.Timestamp, consensus.ErrTemporal)
+		return fmt.Errorf("block was from the future (now=%d, blk=%d): %w", now, h.Timestamp, consensus.ErrTemporal)
 	}
 	if h.Timestamp > now {
 		log.Warn("Got block from the future, but within threshold", h.Timestamp, build.Clock.Now().Unix())
@@ -156,25 +159,25 @@ func (tsp *TSPoW) ValidateBlock(ctx context.Context, b *types.FullBlock) (err er
 	thr := big.Zero()
 	thr.SetBytes(b.Header.Ticket.VRFProof)
 	if thr.GreaterThan(w) {
-		return xerrors.Errorf("block below work threshold")
+		return fmt.Errorf("block below work threshold")
 	}
 
 	// check work threshold
 	if b.Header.Height < MaxDiffLookback {
 		if !thr.Equals(param.GenesisWorkTarget) {
-			return xerrors.Errorf("wrong work target")
+			return fmt.Errorf("wrong work target")
 		}
 	} else {
 		//
 		lbr := b.Header.Height - DiffLookback(baseTs.Height())
 		lbts, err := tsp.store.GetTipsetByHeight(ctx, lbr, baseTs, false)
 		if err != nil {
-			return xerrors.Errorf("failed to get lookback tipset+1: %w", err)
+			return fmt.Errorf("failed to get lookback tipset+1: %w", err)
 		}
 
 		expDiff := Difficulty(baseTs, lbts)
 		if !thr.Equals(expDiff) {
-			return xerrors.Errorf("expected adjusted difficulty %s, was %s (act-exp: %s)", expDiff, thr, big.Sub(thr, expDiff))
+			return fmt.Errorf("expected adjusted difficulty %s, was %s (act-exp: %s)", expDiff, thr, big.Sub(thr, expDiff))
 		}
 	}
 
@@ -182,18 +185,18 @@ func (tsp *TSPoW) ValidateBlock(ctx context.Context, b *types.FullBlock) (err er
 
 	minerCheck := async.Err(func() error {
 		if err := tsp.minerIsValid(h.Miner); err != nil {
-			return xerrors.Errorf("minerIsValid failed: %w", err)
+			return fmt.Errorf("minerIsValid failed: %w", err)
 		}
 		return nil
 	})
 
 	pweight, err := Weight(context.TODO(), nil, baseTs)
 	if err != nil {
-		return xerrors.Errorf("getting parent weight: %w", err)
+		return fmt.Errorf("getting parent weight: %w", err)
 	}
 
 	if types.BigCmp(pweight, b.Header.ParentWeight) != 0 {
-		return xerrors.Errorf("parrent weight different: %s (header) != %s (computed)",
+		return fmt.Errorf("parrent weight different: %s (header) != %s (computed)",
 			b.Header.ParentWeight, pweight)
 	}
 
@@ -250,42 +253,7 @@ func (tsp *TSPoW) minerIsValid(maddr address.Address) error {
 		return nil
 	}
 
-	return xerrors.Errorf("miner address must be a key")
-}
-
-func work(bh *types.BlockHeader) big.Int {
-	w := big.NewInt(0)
-	w.SetBytes([]byte{
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-	})
-
-	bhc := *bh
-	bhc.BlockSig = nil
-
-	dmh, err := multihash.Decode(bhc.Cid().Hash())
-	if err != nil {
-		panic(err) // todo probably definitely not a good idea
-	}
-	s := big.NewInt(0)
-	s.SetBytes(dmh.Digest)
-	return big.Div(w, s)
-}
-
-func Weight(ctx context.Context, stateBs bstore.Blockstore, ts *types.TipSet) (types.BigInt, error) {
-	if ts == nil {
-		return types.NewInt(0), nil
-	}
-
-	w := ts.ParentWeight()
-	for _, header := range ts.Blocks() {
-		w = big.Add(w, work(header))
-	}
-
-	return w, nil
+	return fmt.Errorf("miner address must be a key")
 }
 
 func (tsp *TSPoW) ValidateBlockPubsub(ctx context.Context, self bool, msg *pubsub.Message) (pubsub.ValidationResult, string) {
@@ -353,12 +321,4 @@ func (tsp *TSPoW) validateBlockHeader(ctx context.Context, b *types.BlockHeader)
 
 func (tsp *TSPoW) Type() hierarchical.ConsensusType {
 	return hierarchical.PoW
-}
-
-func BestWorkBlock(ts *types.TipSet) *types.BlockHeader {
-	blks := ts.Blocks()
-	sort.Slice(blks, func(i, j int) bool {
-		return work(blks[i]).GreaterThan(work(blks[j]))
-	})
-	return blks[0]
 }
