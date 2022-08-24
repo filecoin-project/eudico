@@ -68,14 +68,14 @@ func NewEudicoStats(ctx context.Context, api v1api.FullNode, observer observer.O
 	return listener, nil
 }
 
-func (e *EudicoStatsListener) Listen(ctx context.Context, id address.SubnetID, epochThreshold abi.ChainEpoch) error {
-	return e.listen(ctx, id, epochThreshold)
+// Listen TODO: placeholder for future public invocation differences compared to `listen`
+func (e *EudicoStatsListener) Listen(ctx context.Context, id address.SubnetID) error {
+	return e.listen(ctx, id)
 }
 
 func (e *EudicoStatsListener) listen(
 	ctx context.Context,
 	id address.SubnetID,
-	epochThreshold abi.ChainEpoch,
 ) error {
 	if _, ok := e.subnetStats[id]; ok {
 		log.Infow("subnet id already tracked", "id", id)
@@ -99,6 +99,7 @@ func (e *EudicoStatsListener) listen(
 			return true, nil
 		}
 
+		e.listenToNewSubnets(&changes.NodeChanges)
 		e.handleRelationshipChanges(&changes.RelationshipChanges)
 		shouldStopListening := e.handleNodeChanges(&changes.NodeChanges)
 
@@ -151,6 +152,22 @@ func (e *EudicoStatsListener) handleNodeChanges(changes *NodeChange) bool {
 
 	e.observer.Observe(SubnetNodeUpdated, &changes.Node)
 	return false
+}
+
+func (e *EudicoStatsListener) listenToNewSubnets(ctx context.Context, changes *NodeChange) {
+	if !changes.IsNodeUpdated {
+		return
+	}
+
+	for _, node := range changes.Added {
+		node := node
+		go func() {
+			err := e.listen(ctx, node.SubnetID)
+			if err != nil {
+				log.Errorw("cannot start listen to subnet", "id", node.SubnetID)
+			}
+		}()
+	}
 }
 
 func (e *EudicoStatsListener) IsListening(id address.SubnetID) bool {
