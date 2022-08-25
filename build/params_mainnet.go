@@ -114,3 +114,5 @@ const TendermintCheckpointPeriod = 10
 const MirCheckpointPeriod = 10
 const DummyCheckpointPeriod = 10
 const FilecoinCheckpointPeriod = 10
+
+const GenesisPoWTarget = "4519783675352289407433363"
