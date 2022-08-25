@@ -36,7 +36,6 @@ import (
 )
 
 const (
-	SubmitInterval          = 5000 * time.Millisecond
 	ReconfigurationInterval = 2000 * time.Millisecond
 	ValidatorsEnv           = "EUDICO_MIR_VALIDATORS"
 
