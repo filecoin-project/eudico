@@ -1,7 +1,6 @@
 package mir
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"time"
@@ -57,10 +56,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 	reconfigure := time.NewTicker(ReconfigurationInterval)
 	defer reconfigure.Stop()
 
-	lastValidatorSetHash, err := m.InitialValidatorSet.Hash()
-	if err != nil {
-		return err
-	}
+	lastValidatorSet := m.InitialValidatorSet
 
 	for {
 		// Here we use `ctx.Err()` in the beginning of the `for` loop instead of using it in the `select` statement,
@@ -118,18 +114,12 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 				continue
 			}
 
-			newValidatorSetHash, err := newValidatorSet.Hash()
-			if err != nil {
-				log.With("epoch", nextEpoch).Warnf("failed to get validator set hash: %v", err)
-				continue
-			}
-
-			if bytes.Equal(newValidatorSetHash, lastValidatorSetHash) {
+			if lastValidatorSet.Equal(newValidatorSet) {
 				continue
 			}
 
 			log.With("epoch", nextEpoch).Info("found new validator set - size: %d", newValidatorSet.Size())
-			lastValidatorSetHash = newValidatorSetHash
+			lastValidatorSet = newValidatorSet
 
 			var payload buffer.Buffer
 			err = newValidatorSet.MarshalCBOR(&payload)

@@ -122,6 +122,24 @@ func (set *ValidatorSet) Size() int {
 	return len(set.Validators)
 }
 
+func (set *ValidatorSet) Equal(o *ValidatorSet) bool {
+	if set == nil && o == nil {
+		return true
+	}
+	if set == nil || o == nil {
+		return true
+	}
+	if set.Size() != o.Size() {
+		return false
+	}
+	for i, v := range set.Validators {
+		if v != o.Validators[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func (set *ValidatorSet) Hash() ([]byte, error) {
 	var hs []byte
 	for _, v := range set.Validators {
