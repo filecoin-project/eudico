@@ -138,7 +138,7 @@ func (sm *StateManager) applyDeliverCertificate(deliver *eventpb.Deliver) (*even
 
 // applyProvideTransactions applies transactions received from the availability layer to the app state.
 // In our case, it simply extends the message history
-// by appending the payload of each received request as a new chat message.
+// by appending the payload of each received request as a new message.
 // Each appended message is also printed to stdout.
 // Special messages starting with `Config: ` are recognized, parsed, and treated accordingly.
 func (sm *StateManager) applyProvideTransactions(ptx *availabilitypb.ProvideTransactions) (*events.EventList, error) {
