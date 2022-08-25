@@ -53,6 +53,15 @@ var (
 	ProtocolID, _ = tag.NewKey("proto")
 	Direction, _  = tag.NewKey("direction")
 	UseFD, _      = tag.NewKey("use_fd")
+
+	// Subnet ID
+	SubnetFrom, _         = tag.NewKey("subnet_from")
+	SubnetTo, _           = tag.NewKey("subnet_to")
+	CrossNetMsgType, _    = tag.NewKey("cross_net_msg_type")
+	CrossNetMsgMethod, _  = tag.NewKey("cross_net_msg_method")
+	CrossNetMsgExeCode, _ = tag.NewKey("cross_net_msg_exe_code")
+	SubnetID, _           = tag.NewKey("subnet_id")
+	SubnetAncestors, _    = tag.NewKey("subnet_ancestors")
 )
 
 // Measures
@@ -167,6 +176,16 @@ var (
 	RcmgrBlockSvcPeer   = stats.Int64("rcmgr/block_svc", "Number of blocked blocked streams attached to a service for a specific peer", stats.UnitDimensionless)
 	RcmgrAllowMem       = stats.Int64("rcmgr/allow_mem", "Number of allowed memory reservations", stats.UnitDimensionless)
 	RcmgrBlockMem       = stats.Int64("rcmgr/block_mem", "Number of blocked memory reservations", stats.UnitDimensionless)
+
+	// hc
+	SubnetCreatedCount = stats.Int64("hc/subnet_created_count", "The total number of subnets created in the node", stats.UnitDimensionless)
+	SubnetActiveCount  = stats.Int64("hc/subnet_active_count", "The total number of active subnets in the node", stats.UnitDimensionless)
+	SubnetKilledCount  = stats.Int64("hc/subnet_killed_count", "The total number of subnets killed in the node", stats.UnitDimensionless)
+
+	SubnetSpinUpDuration = stats.Float64("hc/subnet_start_duration", "Time spent spinning up new subnet", stats.UnitMilliseconds)
+
+	SubnetCrossNetMsgSendCount     = stats.Int64("hc/subnet_crossnet_msg_send_count", "The total number of subnets cross messages sent", stats.UnitDimensionless)
+	SubnetCrossNetMsgExecutedCount = stats.Int64("hc/subnet_crossnet_msg_executed_count", "The total number of subnets cross messages executed", stats.UnitDimensionless)
 )
 
 var (
@@ -599,6 +618,35 @@ var (
 		Measure:     RcmgrBlockMem,
 		Aggregation: view.Count(),
 	}
+
+	// hc
+	SubnetCreatedCountView = &view.View{
+		Measure:     SubnetCreatedCount,
+		Aggregation: view.Count(),
+	}
+	SubnetKilledCountView = &view.View{
+		Measure:     SubnetKilledCount,
+		Aggregation: view.Count(),
+	}
+	SubnetActiveCountView = &view.View{
+		Measure:     SubnetActiveCount,
+		Aggregation: view.LastValue(),
+	}
+	SubnetSpinUpDurationView = &view.View{
+		Measure:     SubnetSpinUpDuration,
+		Aggregation: defaultMillisecondsDistribution,
+		TagKeys:     []tag.Key{SubnetID, SubnetAncestors},
+	}
+	SubnetCrossNetMessageSendCountView = &view.View{
+		Measure:     SubnetCrossNetMsgSendCount,
+		Aggregation: view.Count(),
+		TagKeys:     []tag.Key{SubnetFrom, SubnetTo, CrossNetMsgType, CrossNetMsgMethod},
+	}
+	SubnetCrossNetMsgExecutedCountView = &view.View{
+		Measure:     SubnetCrossNetMsgExecutedCount,
+		Aggregation: view.Count(),
+		TagKeys:     []tag.Key{SubnetFrom, SubnetTo, CrossNetMsgType, CrossNetMsgMethod, CrossNetMsgExeCode},
+	}
 )
 
 // DefaultViews is an array of OpenCensus views for metric gathering purposes
@@ -683,6 +731,15 @@ var ChainNodeViews = append([]*view.View{
 	VMApplyFlushView,
 	VMSendsView,
 	VMAppliedView,
+
+	// hc related
+	SubnetCreatedCountView,
+	SubnetKilledCountView,
+	SubnetActiveCountView,
+	SubnetSpinUpDurationView,
+
+	SubnetCrossNetMessageSendCountView,
+	SubnetCrossNetMsgExecutedCountView,
 }, DefaultViews...)
 
 var MinerNodeViews = append([]*view.View{

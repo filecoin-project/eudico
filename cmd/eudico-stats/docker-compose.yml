@@ -25,5 +25,4 @@ services:
       - grafana:/var/lib/grafana
 
 volumes:
-  influxdb:
   grafana:

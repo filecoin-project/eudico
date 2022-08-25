@@ -3,7 +3,10 @@ package submgr
 import (
 	"bytes"
 	"context"
+	"github.com/filecoin-project/lotus/metrics"
+	"go.opencensus.io/stats"
 	"sync"
+	"time"
 
 	"github.com/ipfs/go-blockservice"
 	"github.com/ipfs/go-cid"
@@ -102,7 +105,6 @@ type SubnetParams struct {
 func NewService(
 	mctx helpers.MetricsCtx,
 	lc fx.Lifecycle,
-	// api impl.FullNodeAPI,
 	self peer.ID,
 	pubsub *pubsub.PubSub,
 	ds dtypes.MetadataDS,
@@ -203,6 +205,8 @@ func (s *Service) startSubnet(id address.SubnetID,
 	sh.checklk.Lock()
 	sh.signingState = newSigningState()
 	defer sh.checklk.Unlock()
+
+	startTime := time.Now()
 
 	// Add subnet to registry
 	s.subnets[id] = sh
@@ -330,6 +334,9 @@ func (s *Service) startSubnet(id address.SubnetID,
 
 	log.Infow("Successfully spawned subnet", "subnetID", id)
 
+	ms := time.Now().Sub(startTime).Microseconds()
+	stats.Record(ctx, metrics.SubnetSpinUpDuration.M(float64(ms)/1000))
+
 	return nil
 }
 
@@ -454,6 +461,8 @@ func (s *Service) AddSubnet(ctx context.Context, params *hierarchical.SubnetPara
 	if aerr != nil {
 		return address.Undef, aerr
 	}
+
+	stats.Record(ctx, metrics.SubnetCreatedCount.M(1))
 
 	r := &init_.ExecReturn{}
 	if err := r.UnmarshalCBOR(bytes.NewReader(mw.Receipt.Return)); err != nil {
@@ -781,6 +790,8 @@ func (s *Service) KillSubnet(
 	if aerr != nil {
 		return cid.Undef, aerr
 	}
+
+	stats.Record(ctx, metrics.SubnetKilledCount.M(1))
 
 	log.Infow("Successfully send kill signal to ", "subnetID", id)
 

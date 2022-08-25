@@ -13,10 +13,16 @@ scrape_configs:
   - job_name: 'prometheus'
     scrape_interval: 15s
     static_configs:
-      - targets: ['0.0.0.0:9090']
-  - job_name: 'eudico-hc'
+      - targets: ['prometheus:9090']
+  - job_name: 'eudico-node'
     scrape_interval: 15s
     metrics_path: /metrics
     scheme: 'http'
     static_configs:
-      - targets: [ '0.0.0.0:6688' ]
+      - targets: [ 'all-in-one:6688' ]
+  - job_name: 'eudico-stats'
+    scrape_interval: 15s
+    metrics_path: /metrics
+    scheme: 'http'
+    static_configs:
+      - targets: [ 'all-in-one:6689' ]

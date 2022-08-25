@@ -57,3 +57,4 @@ gen.gen
 .devcontainer
 /eudico-stats
 *.key
+credentials
