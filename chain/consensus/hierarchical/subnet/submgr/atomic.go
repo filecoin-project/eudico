@@ -135,7 +135,6 @@ func (s *Service) InitAtomicExec(
 func (s *Service) ListAtomicExecs(
 	ctx context.Context, id address.SubnetID, addr address.Address) ([]sca.AtomicExec, error) {
 
-	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.RLock()
 	defer s.lk.RUnlock()
 

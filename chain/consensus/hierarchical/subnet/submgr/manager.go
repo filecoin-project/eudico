@@ -478,7 +478,6 @@ func (s *Service) JoinSubnet(
 	id address.SubnetID,
 	validatorNetAddr string,
 ) (cid.Cid, error) {
-	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.Lock()
 	defer s.lk.Unlock()
 
@@ -612,8 +611,6 @@ func (s *Service) MineSubnet(
 	id address.SubnetID, stop bool,
 	params *hierarchical.MiningParams,
 ) error {
-
-	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.RLock()
 	defer s.lk.RUnlock()
 
@@ -662,7 +659,6 @@ func (s *Service) LeaveSubnet(
 	ctx context.Context, wallet address.Address,
 	id address.SubnetID) (cid.Cid, error) {
 
-	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.Lock()
 	defer s.lk.Unlock()
 
@@ -764,7 +760,6 @@ func (s *Service) KillSubnet(
 	ctx context.Context, wallet address.Address,
 	id address.SubnetID) (cid.Cid, error) {
 
-	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.RLock()
 	defer s.lk.RUnlock()
 
