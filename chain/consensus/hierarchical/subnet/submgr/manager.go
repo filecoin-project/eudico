@@ -389,6 +389,9 @@ func (s *Service) GetSubnetState(ctx context.Context, id address.SubnetID, actor
 }
 
 func (s *Service) AddSubnet(ctx context.Context, params *hierarchical.SubnetParams) (address.Address, error) {
+	s.lk.Lock()
+	defer s.lk.Unlock()
+
 	if params == nil {
 		return address.Undef, xerrors.New("nil subnet params")
 	}
