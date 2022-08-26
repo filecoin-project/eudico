@@ -5,18 +5,25 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
+	"testing"
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/stretchr/testify/require"
 
 	addr "github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/lotus/api"
 	napi "github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/api/v1api"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
+	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
 const (
@@ -331,4 +338,79 @@ func NodeLibp2pAddr(node *TestFullNode) (m multiaddr.Multiaddr, err error) {
 	}
 
 	return a, nil
+}
+
+func SpawnSideSubnet(
+	ctx context.Context,
+	cancel context.CancelFunc,
+	t *testing.T,
+	wg *sync.WaitGroup,
+	miner addr.Address,
+	parent addr.SubnetID,
+	name string,
+	stake abi.TokenAmount,
+	alg hierarchical.ConsensusType,
+	api v1api.FullNode,
+) {
+	defer func() {
+		wg.Done()
+		t.Logf("[*] miner in subnet %s stopped", name)
+	}()
+	subnetParams := &hierarchical.SubnetParams{
+		Addr:   miner,
+		Parent: parent,
+		Name:   name,
+		Stake:  stake,
+		Consensus: hierarchical.ConsensusParams{
+			Alg:           alg,
+			MinValidators: 0,
+			DelegMiner:    miner,
+		},
+	}
+	actorAddr, err := api.AddSubnet(ctx, subnetParams)
+	require.NoError(t, err)
+
+	subnetAddr := addr.NewSubnetID(parent, actorAddr)
+
+	networkName, err := api.StateNetworkName(ctx)
+	require.NoError(t, err)
+	require.Equal(t, dtypes.NetworkName("/root"), networkName)
+
+	t.Logf("[*] subnet %s addr: %v", name, subnetAddr)
+
+	val, err := types.ParseFIL("10")
+	require.NoError(t, err)
+
+	_, err = api.StateLookupID(ctx, miner, types.EmptyTSK)
+	require.NoError(t, err)
+
+	sc, err := api.JoinSubnet(ctx, miner, big.Int(val), subnetAddr, "")
+	require.NoError(t, err)
+
+	_, err = api.StateWaitMsg(ctx, sc, 1, 100, false)
+	require.NoError(t, err)
+
+	t.Logf("[*] miner in subnet %s starting", name)
+	smp := hierarchical.MiningParams{}
+	err = api.MineSubnet(ctx, miner, subnetAddr, false, &smp)
+	if err != nil {
+		t.Error("subnet 2 miner error:", err)
+		cancel()
+		return
+	}
+
+	err = SubnetHeightCheckForBlocks(ctx, 3, subnetAddr, api)
+	if err != nil {
+		t.Errorf("subnet %s mining error: %v", name, err)
+		cancel()
+		return
+	}
+
+	err = api.MineSubnet(ctx, miner, subnetAddr, true, &smp)
+	if err != nil {
+		t.Error("subnet 4 miner error:", err)
+		cancel()
+		return
+	}
+
 }
