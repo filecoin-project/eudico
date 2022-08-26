@@ -103,7 +103,7 @@ type SubnetParams struct {
 func NewService(
 	mctx helpers.MetricsCtx,
 	lc fx.Lifecycle,
-	// api impl.FullNodeAPI,
+// api impl.FullNodeAPI,
 	self peer.ID,
 	pubsub *pubsub.PubSub,
 	ds dtypes.MetadataDS,
@@ -314,6 +314,7 @@ func (s *Service) startSubnet(id address.SubnetID,
 	log.Infow("Listening for new blocks and messages in subnet", "subnetID", id)
 
 	log.Infow("Populating and registering API for", "subnetID", id)
+
 	err = sh.populateAPIs(parentAPI, s.host, tsExec)
 	if err != nil {
 		log.Errorw("Error populating APIs for subnet", "subnetID", id, "err", err)

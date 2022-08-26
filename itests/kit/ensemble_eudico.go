@@ -9,12 +9,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
-	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -56,8 +55,8 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/submgr"
 	"github.com/filecoin-project/lotus/chain/consensus/mir"
+	"github.com/filecoin-project/lotus/chain/consensus/platform"
 	"github.com/filecoin-project/lotus/chain/consensus/tendermint"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/gen"
@@ -78,7 +77,6 @@ import (
 	lotusminer "github.com/filecoin-project/lotus/miner"
 	"github.com/filecoin-project/lotus/node"
 	"github.com/filecoin-project/lotus/node/config"
-	"github.com/filecoin-project/lotus/node/impl"
 	"github.com/filecoin-project/lotus/node/modules"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/modules/helpers"
@@ -142,6 +140,7 @@ type EudicoEnsemble struct {
 	tendermintAppServer   service.Service
 
 	valNetAddr string
+	lk         sync.Mutex
 }
 
 // NewEudicoEnsemble instantiates a new blank EudicoEnsemble.
@@ -373,36 +372,13 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 	subnetMux := mux.NewRouter()
 	globalMux.NewRoute().PathPrefix("/subnet/").Handler(subnetMux)
 
+	lock := &sync.Mutex{}
+
+	serveNamedApi := platform.ServeNamedAPI(lock, subnetMux, serverOptions)
+
 	var err error
-	serveNamedApi := func(p string, iapi api.FullNode) error {
-		pp := path.Join("/subnet/", p+"/")
-
-		var h http.Handler
-		// If this is a full node API
-		api, ok := iapi.(*impl.FullNodeAPI)
-		if ok {
-			// Instantiate the full node handler.
-			h, err = node.FullNodeHandler(pp, api, true, serverOptions...)
-			if err != nil {
-				return fmt.Errorf("failed to instantiate rpc handler: %s", err)
-			}
-		} else {
-			// If not instantiate a subnet api
-			api, ok := iapi.(*submgr.API)
-			if !ok {
-				return xerrors.Errorf("Couldn't instantiate new subnet API. Something went wrong: %s", err)
-			}
-			// Instantiate the full node handler.
-			h, err = submgr.FullNodeHandler(pp, api, true, serverOptions...)
-			if err != nil {
-				return fmt.Errorf("failed to instantiate rpc handler: %s", err)
-			}
-		}
-		subnetMux.NewRoute().PathPrefix(pp).Handler(h)
-		return nil
-	}
-
 	var rootConsensusConstructor interface{}
+
 	switch n.options.rootConsensus {
 	case hierarchical.PoW:
 		rootConsensusConstructor = NewRootTSPoWConsensus
