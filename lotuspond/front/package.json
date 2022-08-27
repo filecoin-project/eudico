@@ -12,7 +12,7 @@
     "react-cristal": "^0.0.12",
     "react-dom": "^16.8.6",
     "react-router-dom": "^5.0.1",
-    "react-scripts": "3.0.1",
+    "react-scripts": "5.0.1",
     "react-tooltip": "^3.11.1",
     "rpc-websockets": "^4.5.1",
     "styled-components": "^3.3.3",
