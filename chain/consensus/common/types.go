@@ -1,10 +1,9 @@
 package common
 
 const (
-	ConfigMessageType       = 0 // Mir specific config message
-	SignedMessageType       = 1 // Eudico signed message
-	CrossMessageType        = 2 // Eudico cross-message
-	RegistrationMessageType = 3 // Tendermint specific message type
+	ConfigMessageType = 0 // Mir specific config message
+	SignedMessageType = 1 // Eudico signed message
+	CrossMessageType  = 2 // Eudico cross-message
 )
 
 func NewSignedMessageBytes(msg, opaque []byte) []byte {

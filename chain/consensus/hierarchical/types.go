@@ -21,7 +21,6 @@ type ConsensusType uint64
 const (
 	Delegated ConsensusType = iota
 	PoW
-	Tendermint
 	Mir
 	FilecoinEC
 	Dummy
@@ -34,8 +33,6 @@ func ConsensusName(alg ConsensusType) string {
 		return "Delegated"
 	case PoW:
 		return "PoW"
-	case Tendermint:
-		return "Tendermint"
 	case FilecoinEC:
 		return "FilecoinEC"
 	case Mir:
@@ -54,8 +51,6 @@ func Consensus(name string) ConsensusType {
 		return Delegated
 	case strings.EqualFold(name, "pow"):
 		return PoW
-	case strings.EqualFold(name, "tendermint"):
-		return Tendermint
 	case strings.EqualFold(name, "filecoinec"):
 		return FilecoinEC
 	case strings.EqualFold(name, "mir"):
@@ -76,8 +71,6 @@ func MinCheckpointPeriod(alg ConsensusType) abi.ChainEpoch {
 		return build.DelegatedPoWCheckpointPeriod
 	case PoW:
 		return build.PoWCheckpointPeriod
-	case Tendermint:
-		return build.TendermintCheckpointPeriod
 	case FilecoinEC:
 		return build.FilecoinCheckpointPeriod
 	case Mir:
@@ -96,8 +89,6 @@ func MinFinality(alg ConsensusType) abi.ChainEpoch {
 		return build.DelegatedPoWFinality
 	case PoW:
 		return build.PoWFinality
-	case Tendermint:
-		return build.TendermintFinality
 	case FilecoinEC:
 		return build.FilecoinFinality
 	case Mir:
