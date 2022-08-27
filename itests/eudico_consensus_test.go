@@ -19,7 +19,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/delegcns"
 	"github.com/filecoin-project/lotus/chain/consensus/dummy"
 	"github.com/filecoin-project/lotus/chain/consensus/mir"
-	"github.com/filecoin-project/lotus/chain/consensus/tendermint"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/wallet"
@@ -49,12 +48,6 @@ func TestLegacyConsensus(t *testing.T) {
 	t.Run("filcns", func(t *testing.T) {
 		runFilcnsConsensusTests(t, kit.ThroughRPC(), kit.RootFilcns())
 	})
-
-	if os.Getenv("TENDERMINT_ITESTS") != "" {
-		t.Run("tendermint", func(t *testing.T) {
-			runTendermintConsensusTests(t, kit.ThroughRPC(), kit.RootTendermint())
-		})
-	}
 }
 
 type eudicoConsensusSuite struct {
@@ -438,82 +431,6 @@ func (ts *eudicoConsensusSuite) testDelegatedMining(t *testing.T) {
 	require.Equal(t, 1, len(h4))
 	require.Greater(t, int64(h4[0].Val.Height()), int64(h3[0].Val.Height()))
 	require.Equal(t, h4[0].Val.Blocks()[0].Miner, k.Address)
-}
-
-func runTendermintConsensusTests(t *testing.T, opts ...interface{}) {
-	ts := eudicoConsensusSuite{opts: opts}
-	t.Run("testTendermintMining", ts.testTendermintMining)
-}
-
-func (ts *eudicoConsensusSuite) testTendermintMining(t *testing.T) {
-	var wg sync.WaitGroup
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer func() {
-		t.Log("[*] defer: cancelling test context")
-		cancel()
-		wg.Wait()
-	}()
-
-	full, ens := kit.EudicoEnsembleFullNodeOnly(t, ts.opts...)
-	var err error
-	defer func() {
-		t.Log("[*] stopping test ensemble")
-		defer t.Log("[*] ensemble stopped")
-		err = ens.Stop()
-		require.NoError(t, err)
-	}()
-
-	ki, err := tendermint.GetSecp256k1TendermintKey(kit.TendermintConsensusKeyFile)
-	require.NoError(t, err)
-	k, err := wallet.NewKey(*ki)
-	require.NoError(t, err)
-
-	l, err := full.WalletList(ctx)
-	require.NoError(t, err)
-	if len(l) != 1 {
-		t.Fatal("wallet key list is empty")
-	}
-
-	wg.Add(1)
-	go func() {
-		t.Log("[*] miner started")
-		defer func() {
-			t.Log("[*] miner stopped")
-			wg.Done()
-		}()
-		err := tendermint.Mine(ctx, l[0], full)
-		if err != nil {
-			t.Error(err)
-			cancel()
-			return
-		}
-	}()
-
-	newHeads, err := full.ChainNotify(ctx)
-	require.NoError(t, err)
-	initHead := (<-newHeads)[0]
-	baseHeight := initHead.Val.Height()
-
-	h1, err := full.ChainHead(ctx)
-	require.NoError(t, err)
-	require.Equal(t, int64(h1.Height()), int64(baseHeight))
-
-	h2 := <-newHeads
-	require.Equal(t, 1, len(h2))
-	require.Greater(t, int64(h2[0].Val.Height()), int64(h1.Height()))
-	require.Equal(t, h2[0].Val.Blocks()[0].Miner, k.Address)
-
-	h3 := <-newHeads
-	require.Equal(t, 1, len(h3))
-	require.Greater(t, int64(h3[0].Val.Height()), int64(h2[0].Val.Height()))
-	require.Equal(t, h3[0].Val.Blocks()[0].Miner, k.Address)
-
-	h4 := <-newHeads
-	require.Equal(t, 1, len(h4))
-	require.Greater(t, int64(h4[0].Val.Height()), int64(h3[0].Val.Height()))
-	require.Equal(t, h4[0].Val.Blocks()[0].Miner, k.Address)
-
 }
 
 func runFilcnsConsensusTests(t *testing.T, opts ...interface{}) {

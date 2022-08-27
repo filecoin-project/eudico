@@ -105,7 +105,7 @@ var addCmd = &cli.Command{
 		},
 		&cli.StringFlag{
 			Name:  "consensus",
-			Usage: "specify consensus algorithm for the subnet (Delegated, PoW, Tendermint, Mir)",
+			Usage: "specify consensus algorithm for the subnet (Delegated, PoW, Mir)",
 		},
 		&cli.IntFlag{
 			Name:  "checkpoint-period",

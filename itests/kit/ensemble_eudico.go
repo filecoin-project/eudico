@@ -10,11 +10,9 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"testing"
 	"time"
 
@@ -25,12 +23,7 @@ import (
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
-	abciserver "github.com/tendermint/tendermint/abci/server"
-	tmlogger "github.com/tendermint/tendermint/libs/log"
-	"github.com/tendermint/tendermint/libs/service"
 	"go.uber.org/fx"
-	"go.uber.org/multierr"
-	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-jsonrpc"
@@ -57,7 +50,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/consensus/mir"
 	"github.com/filecoin-project/lotus/chain/consensus/platform"
-	"github.com/filecoin-project/lotus/chain/consensus/tendermint"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/gen"
 	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
@@ -96,11 +88,6 @@ const (
 	DelegatedConsnensusMinerAddr      = "f1ozbo7zqwfx6d4tqb353qoq7sfp4qhycefx6ftgy"
 	DelegatedConsensusKeyFile         = "../testdata/wallet/" + DelegatedConsnensusMinerAddr + ".key"
 
-	TendermintConsensusGenesisTestFile = "../testdata/tendermint.gen"
-	TendermintConsensusTestDir         = "../testdata/tendermint-test"
-	TendermintConsensusKeyFile         = TendermintConsensusTestDir + "/config/priv_validator_key.json"
-	TendermintApplicationAddress       = "tcp://127.0.0.1:26658"
-
 	MirConsensusGenesisTestFile = "../testdata/mir.gen"
 
 	FilcnsConsensusGenesisTestFile = "../testdata/filcns.gen"
@@ -135,9 +122,6 @@ type EudicoEnsemble struct {
 		miners   []genesis.Miner
 		accounts []genesis.Actor
 	}
-
-	tendermintContainerID string
-	tendermintAppServer   service.Service
 
 	valNetAddr string
 	lk         sync.Mutex
@@ -304,11 +288,6 @@ func NewRootDelegatedConsensus(ctx context.Context, sm *stmgr.StateManager, beac
 	return delegcns.NewDelegatedConsensus(ctx, sm, nil, beacon, r, verifier, genesis, netName)
 }
 
-func NewRootTendermintConsensus(ctx context.Context, sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
-	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) (consensus.Consensus, error) {
-	return tendermint.NewConsensus(ctx, sm, nil, beacon, r, verifier, genesis, netName)
-}
-
 func NewFilecoinExpectedConsensus(ctx context.Context, sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
 	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
 	return filcns.NewFilecoinExpectedConsensus(ctx, sm, beacon, r, verifier, genesis)
@@ -342,11 +321,6 @@ func NetworkName(mctx helpers.MetricsCtx, lc fx.Lifecycle, cs *store.ChainStore,
 
 // Stop stop ensemble mechanisms.
 func (n *EudicoEnsemble) Stop() error {
-	if n.options.subnetConsensus == hierarchical.Tendermint ||
-		n.options.rootConsensus == hierarchical.Tendermint {
-		return n.stopTendermint()
-	}
-
 	if n.options.subnetConsensus == hierarchical.Mir ||
 		n.options.rootConsensus == hierarchical.Mir {
 		os.Unsetenv(mir.ValidatorsEnv) // nolint
@@ -384,8 +358,6 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		rootConsensusConstructor = NewRootTSPoWConsensus
 	case hierarchical.Delegated:
 		rootConsensusConstructor = NewRootDelegatedConsensus
-	case hierarchical.Tendermint:
-		rootConsensusConstructor = NewRootTendermintConsensus
 	case hierarchical.Mir:
 		rootConsensusConstructor = NewRootMirConsensus
 	case hierarchical.FilecoinEC:
@@ -402,8 +374,6 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		rootConsensusWeight = tspow.Weight
 	case hierarchical.Delegated:
 		rootConsensusWeight = delegcns.Weight
-	case hierarchical.Tendermint:
-		rootConsensusWeight = tendermint.Weight
 	case hierarchical.Mir:
 		rootConsensusWeight = mir.Weight
 	case hierarchical.FilecoinEC:
@@ -412,12 +382,6 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		rootConsensusWeight = dummy.Weight
 	default:
 		n.t.Fatalf("unknown consensus weight %d", n.options.rootConsensus)
-	}
-
-	if n.options.subnetConsensus == hierarchical.Tendermint ||
-		n.options.rootConsensus == hierarchical.Tendermint {
-		err := n.startTendermint()
-		require.NoError(n.t, err)
 	}
 
 	if n.options.subnetConsensus == hierarchical.Mir ||
@@ -443,10 +407,6 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		cerr := subnet.CreateGenesisFile(ctx, DelegatedConsensusGenesisTestFile, hierarchical.Delegated, miner)
 		require.NoError(n.t, cerr)
 		rootGenesisBytes, gferr = ioutil.ReadFile(DelegatedConsensusGenesisTestFile)
-	case hierarchical.Tendermint:
-		err := subnet.CreateGenesisFile(ctx, TendermintConsensusGenesisTestFile, hierarchical.Tendermint, address.Undef)
-		require.NoError(n.t, err)
-		rootGenesisBytes, gferr = ioutil.ReadFile(TendermintConsensusGenesisTestFile)
 	case hierarchical.Mir:
 		err := subnet.CreateGenesisFile(ctx, MirConsensusGenesisTestFile, hierarchical.Mir, address.Undef)
 		require.NoError(n.t, err)
@@ -542,11 +502,6 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 			err = ReadKeyInfoFromFile(DelegatedConsensusKeyFile, &ki)
 			require.NoError(n.t, err)
 			addr, err = full.WalletImport(ctx, &ki)
-			require.NoError(n.t, err)
-		case hierarchical.Tendermint:
-			ki, err := tendermint.GetSecp256k1TendermintKey(TendermintConsensusKeyFile)
-			require.NoError(n.t, err)
-			addr, err = full.WalletImport(ctx, ki)
 			require.NoError(n.t, err)
 		case hierarchical.Mir:
 			addr, err = full.WalletImport(ctx, &full.DefaultKey.KeyInfo)
@@ -989,47 +944,6 @@ func (n *EudicoEnsemble) generateGenesis() *genesis.Template {
 	return templ
 }
 
-func (n *EudicoEnsemble) startTendermint() error {
-	// ensure there is no old tendermint data and config files.
-	if err := n.removeTendermintFiles(); err != nil {
-		return err
-	}
-	shutdown := make(chan os.Signal, 1)
-	signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM)
-	serverErrors := make(chan error, 1)
-	app, err := tendermint.NewApplication()
-	if err != nil {
-		return err
-	}
-
-	logger := tmlogger.MustNewDefaultLogger(tmlogger.LogFormatPlain, tmlogger.LogLevelInfo, false)
-	n.tendermintAppServer = abciserver.NewSocketServer(TendermintApplicationAddress, app)
-	n.tendermintAppServer.SetLogger(logger)
-
-	go func() {
-		serverErrors <- n.tendermintAppServer.Start()
-	}()
-
-	// start Tendermint validator
-	tm, err := StartTendermintContainer()
-	if err != nil {
-		return err
-	}
-
-	n.tendermintContainerID = tm.ID
-	return nil
-}
-
-func (n *EudicoEnsemble) removeTendermintFiles() error {
-	if err := os.RemoveAll(TendermintConsensusTestDir + "/config"); err != nil {
-		return err
-	}
-	if err := os.RemoveAll(TendermintConsensusTestDir + "/data"); err != nil {
-		return err
-	}
-	return nil
-}
-
 func (n *EudicoEnsemble) removeMirFiles() error {
 	files, err := filepath.Glob("./eudico-wal*")
 	if err != nil {
@@ -1042,27 +956,6 @@ func (n *EudicoEnsemble) removeMirFiles() error {
 		}
 	}
 	return nil
-}
-
-func (n *EudicoEnsemble) stopTendermint() error {
-	if n.tendermintAppServer == nil {
-		return xerrors.New("tendermint server is not running")
-	}
-
-	if err := n.tendermintAppServer.Stop(); err != nil {
-		return xerrors.Errorf("failed to stop tendermint server %w:", err)
-	}
-
-	if n.tendermintContainerID == "" {
-		return xerrors.New("tendermint container ID is not set")
-	}
-
-	err1 := StopContainer(n.tendermintContainerID)
-	err2 := n.removeTendermintFiles()
-	return multierr.Combine(
-		err1,
-		err2,
-	)
 }
 
 func (n *EudicoEnsemble) startMir() error {
@@ -1115,8 +1008,6 @@ func EudicoEnsembleTwoMiners(t *testing.T, opts ...interface{}) (*TestFullNode, 
 	var rootMiner EudicoRootMiner
 
 	switch options.rootConsensus {
-	case hierarchical.Tendermint:
-		rootMiner = tendermint.Mine
 	case hierarchical.PoW:
 		rootMiner = tspow.Mine
 	case hierarchical.Delegated:
@@ -1135,8 +1026,6 @@ func EudicoEnsembleTwoMiners(t *testing.T, opts ...interface{}) (*TestFullNode, 
 	var subnetMinerType hierarchical.ConsensusType
 
 	switch options.subnetConsensus {
-	case hierarchical.Tendermint:
-		subnetMinerType = hierarchical.Tendermint
 	case hierarchical.PoW:
 		subnetMinerType = hierarchical.PoW
 	case hierarchical.Delegated:

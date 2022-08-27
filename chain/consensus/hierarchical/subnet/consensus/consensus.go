@@ -16,7 +16,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 	"github.com/filecoin-project/lotus/chain/consensus/mir"
-	"github.com/filecoin-project/lotus/chain/consensus/tendermint"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
@@ -34,8 +33,6 @@ func Weight(consensus hierarchical.ConsensusType) (store.WeightFunc, error) {
 		return delegcns.Weight, nil
 	case hierarchical.PoW:
 		return tspow.Weight, nil
-	case hierarchical.Tendermint:
-		return tendermint.Weight, nil
 	case hierarchical.Mir:
 		return mir.Weight, nil
 	case hierarchical.Dummy:
@@ -58,8 +55,6 @@ func New(
 		return delegcns.NewDelegatedConsensus(ctx, sm, snMgr, beacon, r, verifier, genesis, netName), nil
 	case hierarchical.PoW:
 		return tspow.NewTSPoWConsensus(ctx, sm, snMgr, beacon, r, verifier, genesis, netName), nil
-	case hierarchical.Tendermint:
-		return tendermint.NewConsensus(ctx, sm, snMgr, beacon, r, verifier, genesis, netName)
 	case hierarchical.Mir:
 		return mir.NewConsensus(ctx, sm, snMgr, beacon, r, verifier, genesis, netName)
 	case hierarchical.Dummy:
@@ -75,8 +70,6 @@ func Mine(ctx context.Context, api v1api.FullNode, wallet address.Address, cnsTy
 		err = delegcns.Mine(ctx, wallet, api)
 	case hierarchical.PoW:
 		err = tspow.Mine(ctx, wallet, api)
-	case hierarchical.Tendermint:
-		err = tendermint.Mine(ctx, wallet, api)
 	case hierarchical.Mir:
 		err = mir.Mine(ctx, wallet, api)
 	case hierarchical.Dummy:

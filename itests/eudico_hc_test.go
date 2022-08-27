@@ -87,12 +87,6 @@ func TestHC_BasicFlowWithLegacyConsensus(t *testing.T) {
 		runBasicFlowTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetTSPoW())
 	})
 
-	if os.Getenv("TENDERMINT_ITESTS") != "" {
-		t.Run("/root/filcns-/subnet/tendermint", func(t *testing.T) {
-			runBasicFlowTests(t, kit.ThroughRPC(), kit.RootFilcns(), kit.SubnetTendermint())
-		})
-	}
-
 	if os.Getenv("FULL_ITESTS") != "" {
 
 		// PoW in Root
@@ -100,12 +94,6 @@ func TestHC_BasicFlowWithLegacyConsensus(t *testing.T) {
 		t.Run("/root/pow-/subnet/pow", func(t *testing.T) {
 			runBasicFlowTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTSPoW())
 		})
-
-		if os.Getenv("TENDERMINT_ITESTS") != "" {
-			t.Run("/root/pow-/subnet/tendermint", func(t *testing.T) {
-				runBasicFlowTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetTendermint())
-			})
-		}
 
 		t.Run("/root/pow-/subnet/delegated", func(t *testing.T) {
 			runBasicFlowTests(t, kit.ThroughRPC(), kit.RootTSPoW(), kit.SubnetDelegated())
@@ -116,24 +104,6 @@ func TestHC_BasicFlowWithLegacyConsensus(t *testing.T) {
 		t.Run("/root/delegated-/subnet/delegated", func(t *testing.T) {
 			runBasicFlowTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetDelegated())
 		})
-
-		if os.Getenv("TENDERMINT_ITESTS") != "" {
-			t.Run("/root/delegated-/subnet/tendermint", func(t *testing.T) {
-				runBasicFlowTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetTendermint())
-			})
-		}
-
-		// Tendermint in root
-
-		if os.Getenv("TENDERMINT_ITESTS") != "" {
-			t.Run("/root/tendermint-/subnet/delegated", func(t *testing.T) {
-				runBasicFlowTests(t, kit.ThroughRPC(), kit.RootTendermint(), kit.SubnetDelegated())
-			})
-
-			t.Run("/root/tendermint-/subnet/pow", func(t *testing.T) {
-				runBasicFlowTests(t, kit.ThroughRPC(), kit.RootTendermint(), kit.SubnetTSPoW())
-			})
-		}
 	}
 }
 

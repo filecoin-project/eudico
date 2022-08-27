@@ -24,7 +24,6 @@ var eudCmds = []*cli.Command{
 	lcli.WithCategory("daemon", delegatedCmd),
 	lcli.WithCategory("daemon", tpowCmd),
 	lcli.WithCategory("daemon", filcnsCmd),
-	lcli.WithCategory("daemon", tendermintCmd),
 	lcli.WithCategory("daemon", mirCmd),
 	lcli.WithCategory("subnet", subnetCmds),
 	lcli.WithCategory("benchmark", benchmarkCmd),

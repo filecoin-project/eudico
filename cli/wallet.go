@@ -19,7 +19,6 @@ import (
 	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/go-state-types/network"
 	"github.com/filecoin-project/lotus/build"
-	"github.com/filecoin-project/lotus/chain/consensus/tendermint"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/lib/tablewriter"
 )
@@ -39,7 +38,6 @@ var walletCmd = &cli.Command{
 		walletVerify,
 		walletDelete,
 		walletMarket,
-		walletImportTendermintKey,
 	},
 }
 
@@ -396,49 +394,6 @@ var walletImport = &cli.Command{
 		}
 
 		fmt.Printf("imported key %s successfully!\n", addr)
-		return nil
-	},
-}
-
-var walletImportTendermintKey = &cli.Command{
-	Name:  "import-tendermint-key",
-	Usage: "import Tendermint secp256k1 private key",
-	Flags: []cli.Flag{
-		&cli.StringFlag{
-			Name:  "path",
-			Usage: "Path to Tendermint secp256k1 private key file",
-		},
-		&cli.BoolFlag{
-			Name:  "as-default",
-			Usage: "import the given key as your new default key",
-		},
-	},
-	Action: func(cctx *cli.Context) error {
-		api, closer, err := GetFullNodeAPI(cctx)
-		if err != nil {
-			return err
-		}
-		defer closer()
-
-		ctx := ReqContext(cctx)
-		keyFilePath := cctx.String("path")
-
-		ki, err := tendermint.GetSecp256k1TendermintKey(keyFilePath)
-		if err != nil {
-			return err
-		}
-
-		addr, err := api.WalletImport(ctx, ki)
-		if err != nil {
-			return fmt.Errorf("unable to import key: %w", err)
-		}
-
-		if cctx.Bool("as-default") {
-			if err := api.WalletSetDefault(ctx, addr); err != nil {
-				return fmt.Errorf("failed to set default key: %w", err)
-			}
-		}
-
 		return nil
 	},
 }
