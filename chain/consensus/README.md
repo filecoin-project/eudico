@@ -13,3 +13,10 @@ Eudico has several implementations of different BFT-type and Nakamoto-type conse
    For example, it may be necessary to not process blocks if consensus RPCs are unreachable.
 7. Add a new consensus code to the consensus usage message in `cmd/eudico/subnet.go`.
 
+## Tendermint Consensus
+Eudico leveraged the Tendermint Core consensus for research and investigation purposes.
+But then we decided to remove it due to lack of maintaining.
+
+If we need it in the future we will use the following:
+- The Tendermint reference implementation can be found [here](https://github.com/filecoin-project/eudico/releases/tag/archive%2Ftendermint-ref-final)
+- Tendermint design document is [here](https://hackmd.io/WtXHSn4WRbWeN2ozn89B2w)

@@ -34,7 +34,6 @@ import (
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/beacon"
 	"github.com/filecoin-project/lotus/chain/consensus"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/exchange"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
@@ -692,9 +691,6 @@ func (syncer *Syncer) collectHeaders(ctx context.Context, incoming *types.TipSet
 	// i.e. if a fork of the chain has been requested that we know to be bad.
 	for _, pcid := range incoming.Parents().Cids() {
 		if reason, ok := syncer.bad.Has(pcid); ok {
-			if syncer.consensus.Type() == hierarchical.Tendermint {
-				continue
-			}
 			newReason := reason.Linked("linked to %s", pcid)
 			for _, b := range incoming.Cids() {
 				syncer.bad.Add(b, newReason)
@@ -746,9 +742,6 @@ loop:
 	for blockSet[len(blockSet)-1].Height() > untilHeight {
 		for _, bc := range at.Cids() {
 			if reason, ok := syncer.bad.Has(bc); ok {
-				if syncer.consensus.Type() == hierarchical.Tendermint {
-					continue
-				}
 				newReason := reason.Linked("change contained %s", bc)
 				for _, b := range acceptedBlocks {
 					syncer.bad.Add(b, newReason)
