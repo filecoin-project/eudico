@@ -26,10 +26,11 @@ type SubnetStat struct {
 	node SubnetNode
 }
 
-func emptySubnetStat() SubnetStat {
+func emptySubnetStat(id address.SubnetID) SubnetStat {
 	return SubnetStat{
 		nextEpoch: 0,
 		subnets:   make(map[address.SubnetID]bool),
+		node: idOnlySubnetNode(id),
 	}
 }
 
@@ -82,8 +83,8 @@ func (e *EudicoStatsListener) listen(
 	}
 
 	log.Infow("starting listening to subnet", "id", id)
-	e.subnetStats[id] = emptySubnetStat()
-	e.observer.Observe(SubnetNodeUpdated, &[]SubnetNode{idOnlySubnetNode(id)})
+	e.subnetStats[id] = emptySubnetStat(id)
+	e.observer.Observe(SubnetNodeAdded, id)
 
 	checkFunc := func(ctx context.Context, ts *types.TipSet) (done bool, more bool, err error) {
 		return false, true, nil
@@ -92,7 +93,7 @@ func (e *EudicoStatsListener) listen(
 	changeHandler := func(oldTs, newTs *types.TipSet, states events.StateChange, curH abi.ChainEpoch) (more bool, err error) {
 		changes := states.(SubnetChanges)
 
-		log.Infow("in change handler", "id", id)
+		log.Infow("in change handler", "id", id, "changes", changes);
 
 		if !changes.IsUpdated() {
 			log.Debugw("subnet not updated", "id", id)
@@ -152,7 +153,7 @@ func (e *EudicoStatsListener) handleNodeChanges(changes *NodeChange) bool {
 		return false
 	}
 
-	if changes.Node.Subnet.Status == sca.Killed {
+	if changes.Node.Status == sca.Killed {
 		log.Infow("node KILLED", "id", changes.Node.SubnetID)
 		e.observer.Observe(SubnetNodeRemoved, changes.Node.SubnetID)
 		return true
@@ -200,8 +201,9 @@ func (e *EudicoStatsListener) detectAddedSubnetChildren(
 ) {
 	for id, _ := range *curmap {
 		if _, ok := stats.subnets[id]; !ok {
-			log.Debugw("new child added to subnet", "subnetId", stats.node.SubnetID, "child", id)
+			log.Infow("new child added to subnet", "subnetId", stats.node.SubnetID, "child", id)
 			change.RelationshipChanges.Add(stats.node.SubnetID, id)
+			stats.subnets[id] = true
 		}
 	}
 }
@@ -215,6 +217,7 @@ func (e *EudicoStatsListener) detectRemovedSubnetChildren(
 		if _, ok := (*curSubnetMap)[id]; !ok {
 			log.Debugw("new child remove in subnet", "subnetId", stats.node.SubnetID, "child", id)
 			change.RelationshipChanges.Remove(stats.node.SubnetID, id)
+			delete(stats.subnets, id)
 		}
 	}
 }
@@ -225,9 +228,9 @@ func (e *EudicoStatsListener) detectAddedSubnets(
 ) {
 	for id, subnetOutput := range *curmap {
 		if !e.IsListening(id) {
-			log.Infow("subnet is not tracked by stats", "id", id)
+			log.Infow("subnet is not tracked by stats", "id", id, "node", fromSubnetOutput(id, subnetOutput, 0))
 			// setting to 0 as we are not sure how many at this point, will trigger count as a separate go func
-			change.NodeChanges.Add(fromSubnetOutput(subnetOutput, 0))
+			change.NodeChanges.Add(fromSubnetOutput(id, subnetOutput, 0))
 			continue
 		}
 	}
@@ -246,43 +249,49 @@ func (e *EudicoStatsListener) detectNodeChange(
 	// TODO and chain/consensus/hierarchical/actors/sca/sca_state.go:40
 	if state != nil {
 		status := convertStatus(state.Status)
-		if node.Subnet.Status != status {
+		if node.Status != status {
+			log.Infow("node status updated", "node.Status", node.Status, "Status", state.Status)
 			updated = true
-			node.Subnet.Status = status
+			node.Status = status
 		}
 
 		if node.Consensus != state.Consensus {
+			log.Infow("node Consensus updated", "node.Consensus", node.Consensus, "Consensus", state.Consensus)
 			updated = true
 			node.Consensus = state.Consensus
 		}
 
-		if !node.Subnet.Stake.Equals(state.TotalStake) {
+		if node.Stake != state.TotalStake.String() {
+			log.Infow("node Stake updated", "node.Stake", node.Stake, "Stake", state.TotalStake.String())
 			updated = true
-			node.Subnet.Stake = state.TotalStake
+			node.Stake = state.TotalStake.String()
 		}
 	}
 
 	if node.SubnetCount != subnetCount {
 		updated = true
+		log.Infow("node count updated", "node.SubnetCount", node.SubnetCount, "count", subnetCount)
 		node.SubnetCount = subnetCount
+		log.Infow("node count after", "node.SubnetCount", node.SubnetCount, "count", subnetCount)
 	}
 
 	if updated {
 		change.NodeChanges.UpdateNode(node)
+		stats.node = node
 	}
 }
 
 // detectChanges checks the current stats tracked subnet with that on chain. Returns the
 // newly added subnets and also the ones to remove
-func (e *EudicoStatsListener) detectChanges(id address.SubnetID, subnetOutputs []sca.SubnetOutput, state *subnet.SubnetState) SubnetChanges {
+func (e *EudicoStatsListener) detectChanges(sid address.SubnetID, subnetOutputs []sca.SubnetOutput, state *subnet.SubnetState) SubnetChanges {
 	// stats should always exist
-	stats, _ := e.subnetStats[id]
+	stats, _ := e.subnetStats[sid]
 
-	change := emptySubnetChanges()
+	change := emptySubnetChanges(sid)
 
 	latestSubnetMap := make(map[address.SubnetID]*sca.SubnetOutput)
 	for _, output := range subnetOutputs {
-		if output.Subnet.ID == id {
+		if output.Subnet.ID == sid {
 			continue
 		}
 		latestSubnetMap[output.Subnet.ID] = &output
@@ -291,7 +300,9 @@ func (e *EudicoStatsListener) detectChanges(id address.SubnetID, subnetOutputs [
 	e.detectAddedSubnets(&latestSubnetMap, &change)
 	e.detectAddedSubnetChildren(&stats, &latestSubnetMap, &change)
 	e.detectRemovedSubnetChildren(&stats, &latestSubnetMap, &change)
+
 	e.detectNodeChange(&stats, state, len(subnetOutputs), &change)
+	e.subnetStats[sid] = stats
 
 	return change
 }
@@ -299,24 +310,21 @@ func (e *EudicoStatsListener) detectChanges(id address.SubnetID, subnetOutputs [
 func (e *EudicoStatsListener) matchSubnetStateChange(ctx context.Context, id address.SubnetID) (bool, SubnetChanges, error) {
 	subnets, err := e.api.ListSubnets(ctx, id)
 	if err != nil {
-		log.Errorw("list subnets failed", "id", id, "err", err)
+		log.Warnw("list subnets failed", "id", id, "err", err)
 		subnets = make([]sca.SubnetOutput, 0)
 	}
 
-	var changes SubnetChanges
 	var snstPnt *subnet.SubnetState
-
 	snst, err := e.obtainSubnetState(ctx, id)
 	if err != nil {
-		log.Errorw("cannot get subnet state", "subnet", id)
+		log.Warnw("cannot get subnet state", "subnet", id, "err", err)
 		snstPnt = nil
 	} else {
 		snstPnt = &snst
 	}
 
-	changes = e.detectChanges(id, subnets, snstPnt)
-
-	log.Infow("changes", "changes", changes)
+	changes := e.detectChanges(id, subnets, snstPnt)
+	log.Infow("change detection", "isUpdated", changes.IsUpdated(), "id", id)
 	return changes.IsUpdated(), changes, nil
 }
 
@@ -326,7 +334,7 @@ func (e *EudicoStatsListener) obtainSubnetState(ctx context.Context, id address.
 	// Get state of subnet actor in parent for heaviest tipset
 	subnetAct, err := e.api.SubnetStateGetActor(ctx, id, subnetActAddr, types.EmptyTSK)
 	if err != nil {
-		log.Errorw("cannot get subnet actor", "subnet", id, "err", err)
+		log.Warnw("cannot get subnet actor", "subnet", id, "err", err)
 		return subnet.SubnetState{}, err
 	}
 
@@ -334,7 +342,7 @@ func (e *EudicoStatsListener) obtainSubnetState(ctx context.Context, id address.
 	pbs := blockstore.NewAPIBlockstore(e.api)
 	pcst := cbor.NewCborStore(pbs)
 	if err := pcst.Get(ctx, subnetAct.Head, &snst); err != nil {
-		log.Errorw("cannot get subnet state", "subnet", id)
+		log.Warnw("cannot get subnet state", "subnet", id)
 		return subnet.SubnetState{}, err
 	}
 

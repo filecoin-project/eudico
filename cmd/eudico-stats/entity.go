@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 )
@@ -12,6 +11,7 @@ const SubnetChildAdded = "SubnetChildAdded"
 const SubnetChildRemoved = "SubnetChildRemoved"
 const SubnetNodeRemoved = "SubnetNodeRemoved"
 const SubnetNodeUpdated = "SubnetNodeUpdated"
+const SubnetNodeAdded = "SubnetNodeAdded"
 
 type Relationship struct {
 	From address.SubnetID
@@ -68,11 +68,11 @@ func (s *SubnetChanges) IsUpdated() bool {
 	return s.NodeChanges.IsUpdated() || s.RelationshipChanges.IsUpdated()
 }
 
-func emptySubnetChanges() SubnetChanges {
+func emptySubnetChanges(nodeId address.SubnetID) SubnetChanges {
 	return SubnetChanges{
 		NodeChanges: NodeChange{
 			IsNodeUpdated: false,
-			Node:          emptySubnetNode(),
+			Node:          idOnlySubnetNode(nodeId),
 			Added:         make([]SubnetNode, 0),
 			Removed:       make([]address.SubnetID, 0),
 		},
@@ -85,29 +85,28 @@ func emptySubnetChanges() SubnetChanges {
 
 type SubnetNode struct {
 	SubnetID address.SubnetID
-
 	SubnetCount int
 	Consensus   hierarchical.ConsensusType
-	Subnet      sca.Subnet
+	Stake       string
+	Status      sca.Status
 
 	// for optimistic control
 	Version uint64
 }
 
-func emptySubnetNode() SubnetNode {
-	return SubnetNode{}
-}
-
-func idOnlySubnetNode(id address.SubnetID) SubnetNode {
+func idOnlySubnetNode(nodeId address.SubnetID) SubnetNode {
 	return SubnetNode{
-		SubnetID:    id,
+		SubnetID:    nodeId,
 		SubnetCount: 0,
 		Consensus:   0,
-		Subnet: sca.Subnet{
-			ID:    id,
-			Stake: abi.NewTokenAmount(0),
-		},
+		Stake: "N/A",
 		Version: 0,
+	}
+}
+
+func rootSubnetNode() SubnetNode {
+	return SubnetNode{
+		SubnetID: address.RootSubnet,
 	}
 }
 
@@ -120,12 +119,13 @@ func idOnlySubnetNode(id address.SubnetID) SubnetNode {
 //	}
 //}
 
-func fromSubnetOutput(output *sca.SubnetOutput, count int) SubnetNode {
+func fromSubnetOutput(id address.SubnetID, output *sca.SubnetOutput, count int) SubnetNode {
 	return SubnetNode{
-		SubnetID:    output.Subnet.ID,
+		SubnetID:    id,
 		SubnetCount: count,
 		Consensus:   output.Consensus,
-		Subnet:      output.Subnet,
+		Stake:       output.Subnet.Stake.String(),
+		Status:      output.Subnet.Status,
 		Version:     0,
 	}
 }
@@ -134,6 +134,6 @@ func (s *SubnetNode) Equals(o *SubnetNode) bool {
 	return s.SubnetID == o.SubnetID &&
 		s.SubnetCount == o.SubnetCount &&
 		s.Consensus == o.Consensus &&
-		s.Subnet.Stake.Equals(o.Subnet.Stake) &&
-		s.Subnet.Status == o.Subnet.Status
+		s.Stake == o.Stake &&
+		s.Status == o.Status
 }

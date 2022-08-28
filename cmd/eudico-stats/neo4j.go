@@ -1,8 +1,15 @@
 package main
 
 import (
+	"github.com/filecoin-project/go-address"
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 )
+
+const NewNodeSubnetQueryTemplate = "MATCH (n:SubnetNode) " +
+	"WHERE n.Id=$id " +
+	"WITH count(n) as nodesAltered " +
+	"WHERE nodesAltered = 0 " +
+	"CREATE (n:SubnetNode {Id:$id, SubnetCount:0, Stake:0, Consensus:0})"
 
 const UpsertSubnetQueryTemplate = "MATCH (n:SubnetNode) " +
 	"WHERE n.Id=$id " +
@@ -14,7 +21,7 @@ const UpsertSubnetQueryTemplate = "MATCH (n:SubnetNode) " +
 const UpsertRelationshipQueryTemplate = "MATCH " +
 	"(a:SubnetNode),(b:SubnetNode) " +
 	"WHERE a.Id = $from AND b.Id = $to " +
-	"CREATE (a)-[r:Parent]->(b)"
+	"MERGE (a)-[r:Parent]->(b)"
 
 // Neo4jClient connects to the neo4j db instance
 // TODO: use connection pool maybe?
@@ -41,16 +48,43 @@ func (n *Neo4jClient) UpsertSubnet(subnets *[]SubnetNode) error {
 			_, err := tx.Run(
 				UpsertSubnetQueryTemplate,
 				map[string]interface{}{
-					"id":          subnet.SubnetID.String(),
+					"id":          getSubnetIdString(subnet.SubnetID),
 					"subnetCount": subnet.SubnetCount,
-					"stake":       subnet.Subnet.Stake.String(),
+					"stake":       subnet.Stake,
 					"consensus":   subnet.Consensus,
+					"status":   subnet.Status,
 				})
 			// In face of driver native errors, make sure to return them directly.
 			// Depending on the error, the driver may try to execute the function again.
 			if err != nil {
 				return nil, err
 			}
+		}
+		return nil, nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (n *Neo4jClient) NewSubnet(id address.SubnetID) error {
+	session := n.session()
+	defer session.Close()
+
+	_, err := session.WriteTransaction(func(tx neo4j.Transaction) (interface{}, error) {
+		_, err := tx.Run(
+			NewNodeSubnetQueryTemplate,
+			map[string]interface{}{
+				"id": getSubnetIdString(id),
+			})
+		// In face of driver native errors, make sure to return them directly.
+		// Depending on the error, the driver may try to execute the function again.
+		if err != nil {
+			log.Errorw("cannot create node", "err", err)
+			return nil, err
 		}
 		return nil, nil
 	})
@@ -71,8 +105,8 @@ func (n *Neo4jClient) SetParentRelationship(relationships *[]Relationship) error
 			_, err := tx.Run(
 				UpsertRelationshipQueryTemplate,
 				map[string]interface{}{
-					"from": relationship.From.String(),
-					"to":   relationship.To.String(),
+					"from": getSubnetIdString(relationship.From),
+					"to":   getSubnetIdString(relationship.To),
 				})
 			if err != nil {
 				return nil, err
@@ -112,6 +146,12 @@ func (n *Neo4jClient) Observe(metric string, value ...interface{}) {
 		if err := n.UpsertSubnet(nodes); err != nil {
 			log.Errorw("cannot update nodes", "err", err, "nodes", nodes)
 		}
+	} else if metric == SubnetNodeAdded {
+		id := value[0].(address.SubnetID)
+		log.Infow("received node added", "id", id)
+		if err := n.NewSubnet(id); err != nil {
+			log.Errorw("add node failed", "err", err, "id", id)
+		}
 	} else if metric == SubnetChildAdded {
 		relationships := value[0].(*[]Relationship)
 		log.Infow("received relationships added", "relationships", relationships)
@@ -120,4 +160,11 @@ func (n *Neo4jClient) Observe(metric string, value ...interface{}) {
 		}
 	}
 	return
+}
+
+func getSubnetIdString(id address.SubnetID) string {
+	if id == address.RootSubnet {
+		return "/root"
+	}
+	return id.String()
 }
