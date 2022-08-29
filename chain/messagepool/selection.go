@@ -221,7 +221,7 @@ func (mp *MessagePool) selectMessagesOptimal(ctx context.Context, curTs, ts *typ
 
 	// defer only here so if we have no pending messages we don't spam
 	defer func() {
-		log.Infow("message selection done", "took", time.Since(start))
+		log.Debugw("message selection done", "took", time.Since(start))
 	}()
 
 	// 0b. Select all priority messages that fit in the block
@@ -469,7 +469,7 @@ func (mp *MessagePool) selectMessagesGreedy(ctx context.Context, curTs, ts *type
 
 	// defer only here so if we have no pending messages we don't spam
 	defer func() {
-		log.Infow("message selection done", "took", time.Since(start))
+		log.Debugw("message selection done", "took", time.Since(start))
 	}()
 
 	// 0b. Select all priority messages that fit in the block
