@@ -5,23 +5,22 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/filecoin-project/lotus/blockstore"
-
-	cbor "github.com/ipfs/go-ipld-cbor"
-
-	"github.com/filecoin-project/lotus/chain/state"
-
-	"github.com/filecoin-project/lotus/chain/rand"
-
-	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/ipfs/go-cid"
+	cbor "github.com/ipfs/go-ipld-cbor"
+	"github.com/prometheus/common/log"
 	"go.opencensus.io/trace"
 	"golang.org/x/xerrors"
 
+	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-state-types/crypto"
+
 	"github.com/filecoin-project/lotus/api"
+	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/chain/rand"
+	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/vm"
 )
@@ -80,11 +79,6 @@ func (sm *StateManager) Call(ctx context.Context, msg *types.Message, ts *types.
 		return nil, fmt.Errorf("failed to handle fork: %w", err)
 	}
 
-	filVested, err := sm.GetFilVested(ctx, vmHeight)
-	if err != nil {
-		return nil, err
-	}
-
 	vmopt := &vm.VMOpts{
 		StateBase:      bstate,
 		Epoch:          vmHeight,
@@ -95,8 +89,8 @@ func (sm *StateManager) Call(ctx context.Context, msg *types.Message, ts *types.
 		CircSupplyCalc: sm.GetVMCirculatingSupply,
 		NetworkVersion: sm.GetNetworkVersion(ctx, pheight+1),
 		BaseFee:        types.NewInt(0),
-		FilVested:      filVested,
 		LookbackState:  LookbackStateGetterForTipset(sm, ts),
+		Tracing:        true,
 	}
 
 	vmi, err := sm.newVM(ctx, vmopt)
@@ -165,6 +159,10 @@ func (sm *StateManager) CallWithGas(ctx context.Context, msg *types.Message, pri
 	ctx, span := trace.StartSpan(ctx, "statemanager.CallWithGas")
 	defer span.End()
 
+	// Copy the message as we'll be modifying the nonce.
+	msgCopy := *msg
+	msg = &msgCopy
+
 	if ts == nil {
 		ts = sm.cs.GetHeaviestTipSet()
 
@@ -218,11 +216,6 @@ func (sm *StateManager) CallWithGas(ctx context.Context, msg *types.Message, pri
 		)
 	}
 
-	filVested, err := sm.GetFilVested(ctx, vmHeight)
-	if err != nil {
-		return nil, err
-	}
-
 	buffStore := blockstore.NewTieredBstore(sm.cs.StateBlockstore(), blockstore.NewMemorySync())
 	vmopt := &vm.VMOpts{
 		StateBase:      stateCid,
@@ -234,8 +227,8 @@ func (sm *StateManager) CallWithGas(ctx context.Context, msg *types.Message, pri
 		CircSupplyCalc: sm.GetVMCirculatingSupply,
 		NetworkVersion: sm.GetNetworkVersion(ctx, ts.Height()+1),
 		BaseFee:        ts.Blocks()[0].ParentBaseFee,
-		FilVested:      filVested,
 		LookbackState:  LookbackStateGetterForTipset(sm, ts),
+		Tracing:        true,
 	}
 	vmi, err := sm.newVM(ctx, vmopt)
 	if err != nil {
@@ -288,9 +281,21 @@ func (sm *StateManager) CallWithGas(ctx context.Context, msg *types.Message, pri
 
 	}
 
+	// If the fee cap is set to zero, make gas free.
+	if msg.GasFeeCap.NilOrZero() {
+		// Now estimate with a new VM with no base fee.
+		vmopt.BaseFee = big.Zero()
+		vmopt.StateBase = stateCid
+
+		vmi, err = sm.newVM(ctx, vmopt)
+		if err != nil {
+			return nil, xerrors.Errorf("failed to set up estimation vm: %w", err)
+		}
+	}
+
 	ret, err := vmi.ApplyMessage(ctx, msgApply)
 	if err != nil {
-		return nil, xerrors.Errorf("apply message failed: %w", err)
+		return nil, xerrors.Errorf("gas estimation failed: %w", err)
 	}
 
 	var errs string
@@ -316,7 +321,7 @@ func (sm *StateManager) Replay(ctx context.Context, ts *types.TipSet, mcid cid.C
 	// message to find
 	finder.mcid = mcid
 
-	_, _, err := sm.tsExec.ExecuteTipSet(ctx, sm, sm.cr, ts, &finder)
+	_, _, err := sm.tsExec.ExecuteTipSet(ctx, sm, sm.cr, ts, &finder, true)
 	if err != nil && !xerrors.Is(err, errHaltExecution) {
 		return nil, nil, xerrors.Errorf("unexpected error during execution: %w", err)
 	}

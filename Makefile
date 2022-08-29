@@ -64,7 +64,7 @@ CLEAN+=build/.update-modules
 deps: $(BUILD_DEPS)
 .PHONY: deps
 
-build-devnets: build lotus-seed lotus-shed lotus-wallet lotus-gateway eudico
+build-devnets: build lotus-seed lotus-shed lotus-wallet lotus-gateway lotus-fountain lotus-stats eudico
 .PHONY: build-devnets
 
 debug: GOFLAGS+=-tags=debug
@@ -81,6 +81,9 @@ butterflynet: build-devnets
 
 interopnet: GOFLAGS+=-tags=interopnet
 interopnet: build-devnets
+
+wallabynet: GOFLAGS+=-tags=wallabynet
+wallabynet: build-devnets
 
 lotus: $(BUILD_DEPS)
 	rm -f lotus
@@ -179,6 +182,18 @@ install-worker:
 install-app:
 	install -C ./$(APP) /usr/local/bin/$(APP)
 
+uninstall: uninstall-daemon uninstall-miner uninstall-worker
+.PHONY: uninstall
+
+uninstall-daemon:
+	rm -f /usr/local/bin/lotus
+
+uninstall-miner:
+	rm -f /usr/local/bin/lotus-miner
+
+uninstall-worker:
+	rm -f /usr/local/bin/lotus-worker
+
 # TOOLS
 
 lotus-seed: $(BUILD_DEPS)
@@ -215,7 +230,7 @@ BINS+=lotus-fountain
 
 lotus-bench:
 	rm -f lotus-bench
-	$(GOCC) build -o lotus-bench ./cmd/lotus-bench
+	$(GOCC) build $(GOFLAGS) -o lotus-bench ./cmd/lotus-bench
 .PHONY: lotus-bench
 BINS+=lotus-bench
 
@@ -342,10 +357,19 @@ type-gen: api-gen
 method-gen: api-gen
 	(cd ./lotuspond/front/src/chain && $(GOCC) run ./methodgen.go)
 
-actors-gen:
+actors-code-gen:
 	$(GOCC) run ./gen/inline-gen . gen/inlinegen-data.json
 	$(GOCC) run ./chain/actors/agen
 	$(GOCC) fmt ./...
+
+actors-gen: actors-code-gen fiximports
+.PHONY: actors-gen
+
+bundle-gen:
+	$(GOCC) run ./gen/bundle
+	$(GOCC) fmt ./build/...
+.PHONY: bundle-gen
+
 
 api-gen:
 	$(GOCC) run ./gen/api
@@ -365,7 +389,7 @@ appimage: lotus
 	cp ./lotus AppDir/usr/bin/
 	appimage-builder
 
-docsgen: docsgen-md docsgen-openrpc
+docsgen: docsgen-md docsgen-openrpc fiximports
 
 docsgen-md-bin: api-gen actors-gen
 	$(GOCC) build $(GOFLAGS) -o docgen-md ./api/docgen/cmd
@@ -395,7 +419,10 @@ docsgen-openrpc-gateway: docsgen-openrpc-bin
 
 .PHONY: docsgen docsgen-md-bin docsgen-openrpc-bin
 
-gen: actors-gen type-gen method-gen cfgdoc-gen docsgen api-gen circleci
+fiximports:
+	./scripts/fiximports
+
+gen: actors-code-gen type-gen method-gen cfgdoc-gen docsgen api-gen circleci bundle-gen fiximports
 	@echo ">>> IF YOU'VE MODIFIED THE CLI OR CONFIG, REMEMBER TO ALSO MAKE docsgen-cli"
 .PHONY: gen
 

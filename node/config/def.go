@@ -2,7 +2,6 @@ package config
 
 import (
 	"encoding"
-
 	"os"
 	"strconv"
 	"time"
@@ -16,7 +15,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
 	"github.com/filecoin-project/lotus/chain/actors/policy"
 	"github.com/filecoin-project/lotus/chain/types"
-	sectorstorage "github.com/filecoin-project/lotus/extern/sector-storage"
+	"github.com/filecoin-project/lotus/storage/sealer"
 )
 
 const (
@@ -162,7 +161,7 @@ func DefaultStorageMiner() *StorageMiner {
 			Assigner: "utilization",
 
 			// By default use the hardware resource filtering strategy.
-			ResourceFiltering: sectorstorage.ResourceFilteringHardware,
+			ResourceFiltering: sealer.ResourceFilteringHardware,
 		},
 
 		Dealmaking: DealmakingConfig{
@@ -198,7 +197,7 @@ func DefaultStorageMiner() *StorageMiner {
 		},
 
 		IndexProvider: IndexProviderConfig{
-			Enable:               true,
+			Enable:               false,
 			EntriesCacheCapacity: 1024,
 			EntriesChunkSize:     16384,
 			// The default empty TopicName means it is inferred from network name, in the following

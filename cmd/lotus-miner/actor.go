@@ -6,12 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/filecoin-project/go-state-types/network"
-
-	rlepluslazy "github.com/filecoin-project/go-bitfield/rle"
-	cbor "github.com/ipfs/go-ipld-cbor"
-
 	"github.com/fatih/color"
+	cbor "github.com/ipfs/go-ipld-cbor"
 	"github.com/libp2p/go-libp2p-core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/urfave/cli/v2"
@@ -19,16 +15,19 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-bitfield"
+	rlepluslazy "github.com/filecoin-project/go-bitfield/rle"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-state-types/builtin"
+	"github.com/filecoin-project/go-state-types/builtin/v8/miner"
+	"github.com/filecoin-project/go-state-types/network"
 
-	miner2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/miner"
-
+	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
-	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
+	lminer "github.com/filecoin-project/lotus/chain/actors/builtin/miner"
 	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/lib/tablewriter"
@@ -117,7 +116,7 @@ var actorSetAddrsCmd = &cli.Command{
 			return err
 		}
 
-		params, err := actors.SerializeParams(&miner2.ChangeMultiaddrsParams{NewMultiaddrs: addrs})
+		params, err := actors.SerializeParams(&miner.ChangeMultiaddrsParams{NewMultiaddrs: addrs})
 		if err != nil {
 			return err
 		}
@@ -129,7 +128,7 @@ var actorSetAddrsCmd = &cli.Command{
 			From:     minfo.Worker,
 			Value:    types.NewInt(0),
 			GasLimit: gasLimit,
-			Method:   miner.Methods.ChangeMultiaddrs,
+			Method:   builtin.MethodsMiner.ChangeMultiaddrs,
 			Params:   params,
 		}, nil)
 		if err != nil {
@@ -182,7 +181,7 @@ var actorSetPeeridCmd = &cli.Command{
 			return err
 		}
 
-		params, err := actors.SerializeParams(&miner2.ChangePeerIDParams{NewID: abi.PeerID(pid)})
+		params, err := actors.SerializeParams(&miner.ChangePeerIDParams{NewID: abi.PeerID(pid)})
 		if err != nil {
 			return err
 		}
@@ -194,7 +193,7 @@ var actorSetPeeridCmd = &cli.Command{
 			From:     minfo.Worker,
 			Value:    types.NewInt(0),
 			GasLimit: gasLimit,
-			Method:   miner.Methods.ChangePeerID,
+			Method:   builtin.MethodsMiner.ChangePeerID,
 			Params:   params,
 		}, nil)
 		if err != nil {
@@ -219,6 +218,17 @@ var actorWithdrawCmd = &cli.Command{
 		},
 	},
 	Action: func(cctx *cli.Context) error {
+		amount := abi.NewTokenAmount(0)
+
+		if cctx.Args().Present() {
+			f, err := types.ParseFIL(cctx.Args().First())
+			if err != nil {
+				return xerrors.Errorf("parsing 'amount' argument: %w", err)
+			}
+
+			amount = abi.TokenAmount(f)
+		}
+
 		nodeApi, closer, err := lcli.GetStorageMinerAPI(cctx)
 		if err != nil {
 			return err
@@ -233,67 +243,19 @@ var actorWithdrawCmd = &cli.Command{
 
 		ctx := lcli.ReqContext(cctx)
 
-		maddr, err := nodeApi.ActorAddress(ctx)
+		res, err := nodeApi.ActorWithdrawBalance(ctx, amount)
 		if err != nil {
 			return err
 		}
-
-		mi, err := api.StateMinerInfo(ctx, maddr, types.EmptyTSK)
-		if err != nil {
-			return err
-		}
-
-		available, err := api.StateMinerAvailableBalance(ctx, maddr, types.EmptyTSK)
-		if err != nil {
-			return err
-		}
-
-		amount := available
-		if cctx.Args().Present() {
-			f, err := types.ParseFIL(cctx.Args().First())
-			if err != nil {
-				return xerrors.Errorf("parsing 'amount' argument: %w", err)
-			}
-
-			amount = abi.TokenAmount(f)
-
-			if amount.GreaterThan(available) {
-				return xerrors.Errorf("can't withdraw more funds than available; requested: %s; available: %s", types.FIL(amount), types.FIL(available))
-			}
-		}
-
-		params, err := actors.SerializeParams(&miner2.WithdrawBalanceParams{
-			AmountRequested: amount, // Default to attempting to withdraw all the extra funds in the miner actor
-		})
-		if err != nil {
-			return err
-		}
-
-		smsg, err := api.MpoolPushMessage(ctx, &types.Message{
-			To:     maddr,
-			From:   mi.Owner,
-			Value:  types.NewInt(0),
-			Method: miner.Methods.WithdrawBalance,
-			Params: params,
-		}, nil)
-		if err != nil {
-			return err
-		}
-
-		fmt.Printf("Requested rewards withdrawal in message %s\n", smsg.Cid())
 
 		// wait for it to get mined into a block
-		fmt.Printf("waiting for %d epochs for confirmation..\n", uint64(cctx.Int("confidence")))
-
-		wait, err := api.StateWaitMsg(ctx, smsg.Cid(), uint64(cctx.Int("confidence")))
+		wait, err := api.StateWaitMsg(ctx, res, uint64(cctx.Int("confidence")))
 		if err != nil {
-			return err
+			return xerrors.Errorf("Timeout waiting for withdrawal message %s", wait.Message)
 		}
 
-		// check it executed successfully
 		if wait.Receipt.ExitCode != 0 {
-			fmt.Println(cctx.App.Writer, "withdrawal failed!")
-			return err
+			return xerrors.Errorf("Failed to execute withdrawal message %s: %w", wait.Message, wait.Receipt.ExitCode.Error())
 		}
 
 		nv, err := api.StateNetworkVersion(ctx, wait.TipSet)
@@ -368,7 +330,7 @@ var actorRepayDebtCmd = &cli.Command{
 
 			store := adt.WrapStore(ctx, cbor.NewCborStore(blockstore.NewAPIBlockstore(api)))
 
-			mst, err := miner.Load(store, mact)
+			mst, err := lminer.Load(store, mact)
 			if err != nil {
 				return err
 			}
@@ -395,7 +357,7 @@ var actorRepayDebtCmd = &cli.Command{
 			return err
 		}
 
-		if !mi.IsController(fromId) {
+		if !isController(mi, fromId) {
 			return xerrors.Errorf("sender isn't a controller of miner: %s", fromId)
 		}
 
@@ -403,7 +365,7 @@ var actorRepayDebtCmd = &cli.Command{
 			To:     maddr,
 			From:   fromId,
 			Value:  amount,
-			Method: miner.Methods.RepayDebt,
+			Method: builtin.MethodsMiner.RepayDebt,
 			Params: nil,
 		}, nil)
 		if err != nil {
@@ -682,7 +644,7 @@ var actorControlSet = &cli.Command{
 			return nil
 		}
 
-		cwp := &miner2.ChangeWorkerAddressParams{
+		cwp := &miner.ChangeWorkerAddressParams{
 			NewWorker:       mi.Worker,
 			NewControlAddrs: toSet,
 		}
@@ -695,7 +657,7 @@ var actorControlSet = &cli.Command{
 		smsg, err := api.MpoolPushMessage(ctx, &types.Message{
 			From:   mi.Owner,
 			To:     maddr,
-			Method: miner.Methods.ChangeWorkerAddress,
+			Method: builtin.MethodsMiner.ChangeWorkerAddress,
 
 			Value:  big.Zero(),
 			Params: sp,
@@ -781,7 +743,7 @@ var actorSetOwnerCmd = &cli.Command{
 		smsg, err := api.MpoolPushMessage(ctx, &types.Message{
 			From:   fromAddrId,
 			To:     maddr,
-			Method: miner.Methods.ChangeOwnerAddress,
+			Method: builtin.MethodsMiner.ChangeOwnerAddress,
 			Value:  big.Zero(),
 			Params: sp,
 		}, nil)
@@ -874,7 +836,7 @@ var actorProposeChangeWorker = &cli.Command{
 			return nil
 		}
 
-		cwp := &miner2.ChangeWorkerAddressParams{
+		cwp := &miner.ChangeWorkerAddressParams{
 			NewWorker:       newAddr,
 			NewControlAddrs: mi.ControlAddresses,
 		}
@@ -887,7 +849,7 @@ var actorProposeChangeWorker = &cli.Command{
 		smsg, err := api.MpoolPushMessage(ctx, &types.Message{
 			From:   mi.Owner,
 			To:     maddr,
-			Method: miner.Methods.ChangeWorkerAddress,
+			Method: builtin.MethodsMiner.ChangeWorkerAddress,
 			Value:  big.Zero(),
 			Params: sp,
 		}, nil)
@@ -994,7 +956,7 @@ var actorConfirmChangeWorker = &cli.Command{
 		smsg, err := api.MpoolPushMessage(ctx, &types.Message{
 			From:   mi.Owner,
 			To:     maddr,
-			Method: miner.Methods.ConfirmUpdateWorkerKey,
+			Method: builtin.MethodsMiner.ConfirmUpdateWorkerKey,
 			Value:  big.Zero(),
 		}, nil)
 		if err != nil {
@@ -1081,7 +1043,7 @@ var actorCompactAllocatedCmd = &cli.Command{
 
 		store := adt.WrapStore(ctx, cbor.NewCborStore(blockstore.NewAPIBlockstore(api)))
 
-		mst, err := miner.Load(store, mact)
+		mst, err := lminer.Load(store, mact)
 		if err != nil {
 			return err
 		}
@@ -1140,7 +1102,7 @@ var actorCompactAllocatedCmd = &cli.Command{
 			return err
 		}
 
-		params := &miner2.CompactSectorNumbersParams{
+		params := &miner.CompactSectorNumbersParams{
 			MaskSectorNumbers: maskBf,
 		}
 
@@ -1152,7 +1114,7 @@ var actorCompactAllocatedCmd = &cli.Command{
 		smsg, err := api.MpoolPushMessage(ctx, &types.Message{
 			From:   mi.Worker,
 			To:     maddr,
-			Method: miner.Methods.CompactSectorNumbers,
+			Method: builtin.MethodsMiner.CompactSectorNumbers,
 			Value:  big.Zero(),
 			Params: sp,
 		}, nil)
@@ -1176,4 +1138,18 @@ var actorCompactAllocatedCmd = &cli.Command{
 
 		return nil
 	},
+}
+
+func isController(mi api.MinerInfo, addr address.Address) bool {
+	if addr == mi.Owner || addr == mi.Worker {
+		return true
+	}
+
+	for _, ca := range mi.ControlAddresses {
+		if addr == ca {
+			return true
+		}
+	}
+
+	return false
 }

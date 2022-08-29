@@ -7,8 +7,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/adt"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
 
-	"github.com/filecoin-project/specs-actors/v7/actors/migration/nv15"
-
 	"github.com/filecoin-project/lotus/chain/rand"
 
 	"github.com/filecoin-project/lotus/chain/beacon"
@@ -22,12 +20,16 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/go-state-types/network"
+	"github.com/filecoin-project/specs-actors/v8/actors/migration/nv16"
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
+	"github.com/filecoin-project/lotus/chain/actors/adt"
 	_init "github.com/filecoin-project/lotus/chain/actors/builtin/init"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/paych"
 	"github.com/filecoin-project/lotus/chain/actors/policy"
+	"github.com/filecoin-project/lotus/chain/beacon"
+	"github.com/filecoin-project/lotus/chain/rand"
 	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -58,12 +60,12 @@ type versionSpec struct {
 type migration struct {
 	upgrade       MigrationFunc
 	preMigrations []PreMigration
-	cache         *nv15.MemMigrationCache
+	cache         *nv16.MemMigrationCache
 }
 
 type Executor interface {
 	NewActorRegistry() *vm.ActorRegistry
-	ExecuteTipSet(ctx context.Context, sm *StateManager, cr *resolver.Resolver, ts *types.TipSet, em ExecMonitor) (stateroot cid.Cid, rectsroot cid.Cid, err error)
+	ExecuteTipSet(ctx context.Context, sm *StateManager, cr *resolver.Resolver, ts *types.TipSet, em ExecMonitor, vmTracing bool) (stateroot cid.Cid, rectsroot cid.Cid, err error)
 }
 
 type StateManager struct {
@@ -128,7 +130,7 @@ func NewStateManager(cs *store.ChainStore, exec Executor, cr *resolver.Resolver,
 				migration := &migration{
 					upgrade:       upgrade.Migration,
 					preMigrations: upgrade.PreMigrations,
-					cache:         nv15.NewMemMigrationCache(),
+					cache:         nv16.NewMemMigrationCache(),
 				}
 				stateMigrations[upgrade.Height] = migration
 			}

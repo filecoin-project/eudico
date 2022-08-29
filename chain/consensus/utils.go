@@ -15,6 +15,7 @@ import (
 	// logging "github.com/ipfs/go-log/v2"
 	ffi "github.com/filecoin-project/filecoin-ffi"
 	"github.com/filecoin-project/go-state-types/crypto"
+	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
 )
 
 // var log = logging.Logger("consensus")

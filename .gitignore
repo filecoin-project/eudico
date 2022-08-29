@@ -43,7 +43,6 @@ build/paramfetch.sh
 /darwin
 /linux
 *.snap
-build/builtin-actors
 
 *-fuzz.zip
 /chain/types/work_msg/
@@ -51,9 +50,8 @@ bin/ipget
 bin/tmp/*
 .idea
 scratchpad
-gen.gen
 
-**/*-wal-*/
-.devcontainer
-/eudico-stats
-*.key
+build/builtin-actors/v*
+build/builtin-actors/*.car
+
+dist/
