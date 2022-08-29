@@ -475,8 +475,6 @@ func commitTopDownMsg(rt runtime.Runtime, st *SCAState, msg types.Message) {
 
 	// Flush subnet.
 	st.flushSubnet(rt, sh)
-
-	recordCrossNetMsgSend(rt, msg, st.NetworkName.String(), sto.Down(st.NetworkName).String(), "TopDown")
 }
 
 // Release creates a new check message to release funds in parent chain
@@ -522,8 +520,6 @@ func commitBottomUpMsg(rt runtime.Runtime, st *SCAState, msg types.Message) {
 
 	// Increase nonce.
 	incrementNonce(rt, &st.Nonce)
-
-	recordCrossNetMsgSend(rt, msg, st.NetworkName.String(), sto.String(), "BottomUp")
 }
 
 func SecpBLSAddr(rt runtime.Runtime, raw address.Address) address.Address {
@@ -786,16 +782,4 @@ func (a SubnetCoordActor) SubmitAtomicExec(rt runtime.Runtime, params *SubmitExe
 
 	// Return status of the execution
 	return &SubmitOutput{exec.Status}
-}
-
-func recordCrossNetMsgSend(rt runtime.Runtime, msg types.Message, from string, to string, msgType string) {
-	ctx, _ := tag.New(
-		rt.Context(),
-		tag.Upsert(metrics.SubnetTo, to),
-		tag.Upsert(metrics.SubnetFrom, from),
-		tag.Upsert(metrics.CrossNetMsgType, msgType),
-		tag.Upsert(metrics.CrossNetMsgMethod, msg.Method.String()),
-	)
-
-	stats.Record(ctx, metrics.SubnetCrossNetMsgSendCount.M(1))
 }

@@ -152,49 +152,6 @@ var runCmd = &cli.Command{
 			}
 		}()
 
-		//config := make(map[string]string, 10)
-		//config["type"] = "basic"
-		//if err := api.Listen(ctx, address.RootSubnet, 10, config); err != nil {
-		//	log.Errorw("cannot start listening root subnet stats", "err", err)
-		//	return nil
-		//}
-
-		//gtp, err := api.ChainGetGenesis(ctx)
-		//if err != nil {
-		//	return err
-		//}
-		//
-		//genesisTime := time.Unix(int64(gtp.MinTimestamp()), 0)
-
-		//go func() {
-		//	// trigger calculation every 30 seconds
-		//	t := time.NewTicker(time.Second * 5)
-		//
-		//	for {
-		//		select {
-		//		case <-t.C:
-		//			//if err := api.Listen(ctx, address.RootSubnet, 10); err != nil {
-		//			//	log.Errorw("cannot start listening {}", address.RootSubnet)
-		//			//	return
-		//			//}
-		//
-		//			sinceGenesis := build.Clock.Now().Sub(genesisTime)
-		//			expectedHeight := int64(sinceGenesis.Seconds()) / int64(build.BlockDelaySecs)
-		//
-		//
-		//
-		//			//
-		//			//activeSubnets, err := syncSubnets(ctx, api)
-		//			//if err != nil {
-		//			//	log.Errorw("cannot count number of active subnets at height %d", expectedHeight)
-		//			//} else {
-		//			//	stats.Record(ctx, metrics.SubnetActiveCount.M(activeSubnets))
-		//			//}
-		//			stats.Record(ctx, metrics.ChainNodeHeightExpected.M(expectedHeight))
-		//		}
-		//	}
-		//}()
-
 		http.Handle("/metrics", exporter)
 		if err := http.ListenAndServe(":6689", nil); err != nil {
 			log.Errorw("failed to start http server", "err", err)
