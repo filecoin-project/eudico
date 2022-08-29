@@ -82,8 +82,9 @@ type Service struct {
 	pmgr         peermgr.MaybePeerMgr
 	bootstrapper dtypes.Bootstrapper
 
-	lk      sync.RWMutex
-	subnets map[address.SubnetID]*Subnet
+	lk          sync.RWMutex
+	subnets     map[address.SubnetID]*Subnet
+	subnetsLock sync.Mutex
 
 	// Cross-msg general pool
 	cm *crossMsgPool
@@ -205,7 +206,9 @@ func (s *Service) startSubnet(id address.SubnetID,
 	defer sh.checklk.Unlock()
 
 	// Add subnet to registry
+	s.subnetsLock.Lock()
 	s.subnets[id] = sh
+	s.subnetsLock.Unlock()
 
 	// Wrap the ds with prefix
 	sh.ds = nsds.Wrap(s.ds, ds.NewKey(sh.ID.String()))
@@ -311,6 +314,7 @@ func (s *Service) startSubnet(id address.SubnetID,
 	log.Infow("Listening for new blocks and messages in subnet", "subnetID", id)
 
 	log.Infow("Populating and registering API for", "subnetID", id)
+
 	err = sh.populateAPIs(parentAPI, s.host, tsExec)
 	if err != nil {
 		log.Errorw("Error populating APIs for subnet", "subnetID", id, "err", err)
@@ -340,6 +344,9 @@ func (s *Service) Start(ctx context.Context) {
 }
 
 func (s *Service) Close(ctx context.Context) error {
+	s.subnetsLock.Lock()
+	defer s.subnetsLock.Unlock()
+
 	for _, sh := range s.subnets {
 		err := sh.Close(ctx)
 		if err != nil {
@@ -382,6 +389,9 @@ func (s *Service) GetSubnetState(ctx context.Context, id address.SubnetID, actor
 }
 
 func (s *Service) AddSubnet(ctx context.Context, params *hierarchical.SubnetParams) (address.Address, error) {
+	s.lk.Lock()
+	defer s.lk.Unlock()
+
 	if params == nil {
 		return address.Undef, xerrors.New("nil subnet params")
 	}
@@ -468,8 +478,6 @@ func (s *Service) JoinSubnet(
 	id address.SubnetID,
 	validatorNetAddr string,
 ) (cid.Cid, error) {
-
-	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.Lock()
 	defer s.lk.Unlock()
 
@@ -496,15 +504,14 @@ func (s *Service) JoinSubnet(
 	// Validator address is optional for Mir.
 	if st.Consensus == hierarchical.Mir {
 		if validatorNetAddr == "" {
-			return cid.Undef, xerrors.New("Mir validator address must be provided")
+			return cid.Undef, xerrors.New("Mir validator address must be specified")
 		}
 	}
 	// Validator address is not supported for consensus other than Mir.
 	if st.Consensus != hierarchical.Mir && validatorNetAddr != "" {
-		if validatorNetAddr == "" {
-			return cid.Undef, xerrors.New("validator address is not supported")
-		}
+		return cid.Undef, xerrors.New("validator address is not supported")
 	}
+
 	var params bytes.Buffer
 	v := hierarchical.NewValidator(id, wallet, validatorNetAddr)
 	err = v.MarshalCBOR(&params)
@@ -590,7 +597,10 @@ func (s *Service) SyncSubnet(ctx context.Context, id address.SubnetID, stop bool
 // stopSyncSubnet stops syncing from a subnet
 func (s *Service) stopSyncSubnet(ctx context.Context, id address.SubnetID) error {
 	if sh, _ := s.getSubnet(id); sh != nil {
+		s.subnetsLock.Lock()
 		delete(s.subnets, id)
+		s.subnetsLock.Unlock()
+
 		return sh.Close(ctx)
 	}
 	return xerrors.Errorf("Not currently syncing with subnet: %s", id)
@@ -601,8 +611,6 @@ func (s *Service) MineSubnet(
 	id address.SubnetID, stop bool,
 	params *hierarchical.MiningParams,
 ) error {
-
-	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.RLock()
 	defer s.lk.RUnlock()
 
@@ -633,7 +641,7 @@ func (s *Service) MineSubnet(
 
 	if int(st.MinValidators) > 0 {
 		log.Debugf("%d validators have joined subnet %s", len(st.ValidatorSet), id)
-		if len(st.ValidatorSet) != int(st.MinValidators) {
+		if len(st.ValidatorSet) < int(st.MinValidators) {
 			return xerrors.Errorf("joined validators - %d, required validators - %d", len(st.ValidatorSet), st.MinValidators)
 		}
 	}
@@ -651,7 +659,6 @@ func (s *Service) LeaveSubnet(
 	ctx context.Context, wallet address.Address,
 	id address.SubnetID) (cid.Cid, error) {
 
-	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.Lock()
 	defer s.lk.Unlock()
 
@@ -687,7 +694,11 @@ func (s *Service) LeaveSubnet(
 	// See if we are already syncing with that chain. If this is the case we can remove the subnet
 	if sh, _ := s.getSubnet(id); sh != nil {
 		log.Infow("Stop syncing with subnet", "subnetID", id)
+
+		s.subnetsLock.Lock()
 		delete(s.subnets, id)
+		s.subnetsLock.Unlock()
+
 		return msg, sh.Close(ctx)
 	}
 
@@ -749,7 +760,6 @@ func (s *Service) KillSubnet(
 	ctx context.Context, wallet address.Address,
 	id address.SubnetID) (cid.Cid, error) {
 
-	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.RLock()
 	defer s.lk.RUnlock()
 
@@ -796,8 +806,8 @@ func (s *Service) getAPI(id address.SubnetID) *API {
 	if s.isRoot(id) || id == address.RootSubnet {
 		return s.api
 	}
-	sh, ok := s.subnets[id]
-	if !ok {
+	sh, err := s.getSubnet(id)
+	if err != nil {
 		return nil
 	}
 	return sh.api
@@ -816,6 +826,9 @@ func (s *Service) getParentAPI(id address.SubnetID) (*API, error) {
 }
 
 func (s *Service) getSubnet(id address.SubnetID) (*Subnet, error) {
+	s.subnetsLock.Lock()
+	defer s.subnetsLock.Unlock()
+
 	sh, ok := s.subnets[id]
 	if !ok {
 		return nil, xerrors.Errorf("Not part of subnet %v. Consider joining it", id)

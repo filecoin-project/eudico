@@ -14,6 +14,7 @@ import (
 	"path"
 	"runtime/pprof"
 	"strings"
+	"sync"
 
 	"github.com/gorilla/mux"
 	metricsprom "github.com/ipfs/go-metrics-prometheus"
@@ -30,6 +31,7 @@ import (
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/submgr"
+	"github.com/filecoin-project/lotus/chain/consensus/platform"
 	"github.com/filecoin-project/lotus/chain/types"
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/lib/peermgr"
@@ -277,7 +279,11 @@ func daemonCmd(overrides node.Option) *cli.Command {
 			subnetMux := mux.NewRouter()
 			globalMux.NewRoute().PathPrefix("/subnet/").Handler(subnetMux)
 
-			serveNamedApi := func(p string, iapi api.FullNode) error {
+			lock := &sync.Mutex{}
+
+			serveNamedApi := platform.ServeNamedAPI(lock, subnetMux, serverOptions)
+
+			_ = func(p string, iapi api.FullNode) error {
 				pp := path.Join("/subnet/", p+"/")
 
 				var h http.Handler

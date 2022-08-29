@@ -173,6 +173,7 @@ func (a SubnetActor) Join(rt runtime.Runtime, v *hierarchical.Validator) *abi.Em
 func (a SubnetActor) Leave(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerAcceptAny()
 	sourceAddr := rt.Caller()
+	sourceSecpAddr := sca.SecpBLSAddr(rt, rt.Caller())
 
 	var (
 		st         SubnetState
@@ -203,8 +204,13 @@ func (a SubnetActor) Leave(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValu
 	priorBalance := rt.CurrentBalance()
 	var retFunds abi.TokenAmount
 	rt.StateTransaction(&st, func() {
-		// Remove stake from stake balanace table.
+		// Remove stake from stake balance table.
 		retFunds = st.rmStake(rt, sourceAddr, stakes, minerStake)
+
+		// Remove the validator to signal to other validators on the subnet to run reconfiguration.
+		if st.ValidatorSet != nil {
+			st.ValidatorSet = rmValidator(sourceSecpAddr, st.ValidatorSet)
+		}
 	})
 
 	// Never send back if we don't have enough balance
@@ -482,6 +488,15 @@ func (st *SubnetState) rmStake(rt runtime.Runtime, sourceAddr address.Address, s
 	st.TotalStake = big.Sub(st.TotalStake, retFunds)
 
 	return retFunds
+}
+
+func rmValidator(validator address.Address, validators []hierarchical.Validator) []hierarchical.Validator {
+	for i, v := range validators {
+		if v.Addr == validator {
+			return append(validators[:i], validators[i+1:]...)
+		}
+	}
+	return validators
 }
 
 func rmMiner(miner address.Address, ls []address.Address) []address.Address {

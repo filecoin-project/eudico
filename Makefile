@@ -417,3 +417,7 @@ print-%:
 
 circleci:
 	go generate -x ./.circleci
+
+.PHONY: lint
+lint:
+	golangci-lint run ./...

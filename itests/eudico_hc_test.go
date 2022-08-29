@@ -16,6 +16,7 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
+	"github.com/filecoin-project/lotus/chain/consensus/dummy"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/mir"
@@ -31,6 +32,12 @@ func TestHC_SmokeTestWithDummyConsensus(t *testing.T) {
 	})
 }
 
+func TestHC_DataRaces(t *testing.T) {
+	t.Run("/root/dummy-/subnet/mir", func(t *testing.T) {
+		runDataRacesTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetMir(), kit.MinValidators(3))
+	})
+}
+
 func TestHC_TwoNodesTestsWithMirConsensus(t *testing.T) {
 	t.Run("/root/mir-/subnet/mir", func(t *testing.T) {
 		runTwoNodesTestsWithMir(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetMir())
@@ -38,7 +45,7 @@ func TestHC_TwoNodesTestsWithMirConsensus(t *testing.T) {
 }
 
 func TestHC_TwoNodesCrossMessage(t *testing.T) {
-	t.Run("/root/mir-/subnet/mir", func(t *testing.T) {
+	t.Run("/root/mir-/subnet/pow", func(t *testing.T) {
 		runTwoNodesCrossMessage(t, kit.ThroughRPC(), kit.RootMir(), kit.SubnetTSPoW())
 	})
 }
@@ -56,6 +63,12 @@ func TestHC_BasicFlowWithMirInSubnet(t *testing.T) {
 
 	t.Run("/root/delegated-/subnet/mir", func(t *testing.T) {
 		runBasicFlowTests(t, kit.ThroughRPC(), kit.RootDelegated(), kit.SubnetMir(), kit.MinValidators(1))
+	})
+}
+
+func TestHC_MirReconfigurationViaSubnetActor(t *testing.T) {
+	t.Run("/root/dummy-/subnet/mir", func(t *testing.T) {
+		runMirReconfigurationTests(t, kit.ThroughRPC(), kit.RootDummy(), kit.SubnetMir(), kit.MinValidators(2))
 	})
 }
 
@@ -330,6 +343,506 @@ func (ts *eudicoSubnetSuite) testBasicFlow(t *testing.T) {
 	t.Logf("[*] test time: %v\n", time.Since(startTime).Seconds())
 }
 
+func runMirReconfigurationTests(t *testing.T, opts ...interface{}) {
+	ts := eudicoSubnetSuite{opts: opts}
+
+	t.Run("testMirReconfiguration", ts.testMirReconfiguration)
+}
+
+func (ts *eudicoSubnetSuite) testMirReconfiguration(t *testing.T) {
+	var wg sync.WaitGroup
+
+	nodeA, nodeB, nodeC, ens := kit.EudicoEnsembleThreeNodes(t, ts.opts...)
+	defer func() {
+		t.Log("[*] stopping test ensemble")
+		defer t.Log("[*] ensemble stopped")
+		err := ens.Stop()
+		require.NoError(t, err)
+	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		t.Log("[*] defer: cancelling test context")
+		cancel()
+		wg.Wait()
+	}()
+
+	t.Log("[*] connecting nodes")
+
+	// Fail if genesis blocks are different
+
+	gen1, err := nodeA.ChainGetGenesis(ctx)
+	require.NoError(t, err)
+	gen2, err := nodeB.ChainGetGenesis(ctx)
+	require.NoError(t, err)
+	gen3, err := nodeC.ChainGetGenesis(ctx)
+	require.NoError(t, err)
+
+	require.Equal(t, gen1.String(), gen2.String())
+	require.Equal(t, gen2.String(), gen3.String())
+
+	// Fail if no peers
+
+	p, err := nodeA.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Empty(t, p, "node A has peers")
+
+	p, err = nodeB.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Empty(t, p, "node B has peers")
+
+	p, err = nodeC.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Empty(t, p, "node C has peers")
+
+	// Connect nodes with each other
+
+	ens.Connect(nodeA, nodeB, nodeC)
+	ens.Connect(nodeB, nodeC)
+
+	peers, err := nodeA.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Lenf(t, peers, 2, "node A doesn't have a peer")
+
+	peers, err = nodeB.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Lenf(t, peers, 2, "node B doesn't have a peer")
+
+	peers, err = nodeC.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Lenf(t, peers, 2, "node C doesn't have a peer")
+
+	l, err := nodeA.WalletList(ctx)
+	require.NoError(t, err)
+	if len(l) != 1 {
+		t.Fatal("A's wallet key list is empty")
+	}
+	minerA := l[0]
+
+	l, err = nodeB.WalletList(ctx)
+	require.NoError(t, err)
+	if len(l) != 1 {
+		t.Fatal("B's wallet key list is empty")
+	}
+	minerB := l[0]
+
+	l, err = nodeC.WalletList(ctx)
+	require.NoError(t, err)
+	if len(l) != 1 {
+		t.Fatal("C's wallet key list is empty")
+	}
+	minerC := l[0]
+
+	t.Log("[*] running Dummy consensus in root net")
+
+	err = os.Setenv(dummy.ValidatorsEnv,
+		fmt.Sprintf("%s,%s,%s", minerA.String(), minerB.String(), minerC.String()),
+	)
+	require.NoError(t, err)
+
+	wg.Add(3)
+
+	go func() {
+		t.Log("[*] miner A in root net starting")
+		defer func() {
+			wg.Done()
+			t.Log("[*] miner A in root net stopped")
+		}()
+		err := dummy.Mine(ctx, minerA, nodeA)
+		if err != nil {
+			t.Error("miner A error:", err)
+			cancel()
+			return
+		}
+	}()
+
+	go func() {
+		t.Log("[*] miner B in root net starting")
+		defer func() {
+			wg.Done()
+			t.Log("[*] miner B in root net stopped")
+		}()
+		err := dummy.Mine(ctx, minerB, nodeB)
+		if err != nil {
+			t.Error("miner B error:", err)
+			cancel()
+			return
+		}
+	}()
+
+	go func() {
+		t.Log("[*] miner C in root net starting")
+		defer func() {
+			wg.Done()
+			t.Log("[*] miner C in root net stopped")
+		}()
+		err := dummy.Mine(ctx, minerC, nodeC)
+		if err != nil {
+			t.Error("miner C error:", err)
+			cancel()
+			return
+		}
+	}()
+
+	t.Log("[*] adding subnet")
+
+	parent := address.RootSubnet
+	subnetName := "testSubnet"
+	stake := abi.NewStoragePower(1e8)
+	chp := abi.ChainEpoch(10)
+
+	err = kit.WaitForBalance(ctx, minerA, 20, nodeA)
+	require.NoError(t, err)
+
+	err = kit.WaitForBalance(ctx, minerB, 20, nodeB)
+	require.NoError(t, err)
+
+	err = kit.WaitForBalance(ctx, minerC, 20, nodeC)
+	require.NoError(t, err)
+
+	balanceA, err := nodeA.WalletBalance(ctx, minerA)
+	require.NoError(t, err)
+	t.Logf("[*] node A %s balance: %d", minerA, balanceA)
+
+	balanceB, err := nodeB.WalletBalance(ctx, minerB)
+	require.NoError(t, err)
+	t.Logf("[*] node B %s balance: %d", minerB, balanceB)
+
+	balanceC, err := nodeC.WalletBalance(ctx, minerC)
+	require.NoError(t, err)
+	t.Logf("[*] node C %s balance: %d", minerC, balanceC)
+
+	os.Unsetenv(dummy.ValidatorsEnv) // nolint
+
+	subnetParams := &hierarchical.SubnetParams{
+		Addr:             minerA,
+		Parent:           parent,
+		Name:             subnetName,
+		Stake:            stake,
+		CheckpointPeriod: chp,
+		Consensus: hierarchical.ConsensusParams{
+			Alg:           hierarchical.Mir,
+			MinValidators: 2,
+			DelegMiner:    minerA,
+		},
+	}
+	actorAddr, err := nodeA.AddSubnet(ctx, subnetParams)
+	require.NoError(t, err)
+
+	subnetAddr := address.NewSubnetID(parent, actorAddr)
+	t.Log("[*] subnet addr:", subnetAddr)
+
+	networkName, err := nodeA.StateNetworkName(ctx)
+	require.NoError(t, err)
+	require.Equal(t, dtypes.NetworkName("/root"), networkName)
+
+	t.Log("[*] joining the subnet")
+
+	val, err := types.ParseFIL("10")
+	require.NoError(t, err)
+
+	nodeASubnetLibp2pAddr, err := kit.NodeLibp2pAddr(nodeA)
+	require.NoError(t, err)
+	nodeBSubnetLibp2pAddr, err := kit.NodeLibp2pAddr(nodeB)
+	require.NoError(t, err)
+	nodeCSubnetLibp2pAddr, err := kit.NodeLibp2pAddr(nodeC)
+	require.NoError(t, err)
+
+	// Nodes A, B are joining the created subnet via the subnet actor.
+	sc, err := nodeA.JoinSubnet(ctx, minerA, big.Int(val), subnetAddr, nodeASubnetLibp2pAddr.String())
+	require.NoError(t, err)
+	_, err = nodeA.StateWaitMsg(ctx, sc, 1, 100, false)
+	require.NoError(t, err)
+
+	sc, err = nodeB.JoinSubnet(ctx, minerB, big.Int(val), subnetAddr, nodeBSubnetLibp2pAddr.String())
+	require.NoError(t, err)
+	_, err = nodeB.StateWaitMsg(ctx, sc, 1, 100, false)
+	require.NoError(t, err)
+
+	t.Log("[*] listing subnets")
+
+	subnets, err := nodeA.ListSubnets(ctx, address.RootSubnet)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(subnets))
+	require.NotEqual(t, 0, subnets[0].Subnet.Status)
+	require.Equal(t, hierarchical.Mir, subnets[0].Consensus)
+
+	subnets, err = nodeB.ListSubnets(ctx, address.RootSubnet)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(subnets))
+	require.NotEqual(t, 0, subnets[0].Subnet.Status)
+	require.Equal(t, hierarchical.Mir, subnets[0].Consensus)
+
+	t.Log("[*] miner A in subnet is starting")
+	mp := hierarchical.MiningParams{}
+	err = nodeA.MineSubnet(ctx, minerA, subnetAddr, false, &mp)
+	if err != nil {
+		t.Error("subnet miner A error:", err)
+		cancel()
+		return
+	}
+
+	t.Log("[*] miner B in subnet is starting")
+	mp = hierarchical.MiningParams{}
+	err = nodeB.MineSubnet(ctx, minerB, subnetAddr, false, &mp)
+	if err != nil {
+		t.Error("subnet miner B error:", err)
+		cancel()
+		return
+	}
+
+	t.Log("[*] miner A is mining in the subnet")
+	err = kit.SubnetMinerMinesBlocks(ctx, 5, 20, subnetAddr, minerA, nodeA)
+	require.NoError(t, err)
+
+	// Node C is joining the subnet
+	sc, err = nodeC.JoinSubnet(ctx, minerC, big.Int(val), subnetAddr, nodeCSubnetLibp2pAddr.String())
+	require.NoError(t, err)
+	_, err = nodeC.StateWaitMsg(ctx, sc, 1, 100, false)
+	require.NoError(t, err)
+
+	t.Log("[*] miner C in subnet is starting")
+	mp = hierarchical.MiningParams{}
+	err = nodeC.MineSubnet(ctx, minerC, subnetAddr, false, &mp)
+	if err != nil {
+		t.Error("subnet miner C error:", err)
+		cancel()
+		return
+	}
+
+	t.Log("[*] miners A and C are mining in the subnet")
+	err = kit.SubnetMinerMinesBlocks(ctx, 5, 20, subnetAddr, minerA, nodeA)
+	require.NoError(t, err)
+	err = kit.SubnetMinerMinesBlocks(ctx, 5, 20, subnetAddr, minerC, nodeC)
+	require.NoError(t, err)
+
+	t.Log("[*] miners A and C are still mining in the subnet")
+	err = kit.SubnetMinerMinesBlocks(ctx, 5, 20, subnetAddr, minerA, nodeA)
+	require.NoError(t, err)
+	err = kit.SubnetMinerMinesBlocks(ctx, 5, 20, subnetAddr, minerC, nodeC)
+	require.NoError(t, err)
+
+	// TODO: how to check that miner B is not mining blocks?
+	// The problem is that calls are async and reconfiguration in Mir happens in +2 epochs.
+}
+
+func runDataRacesTests(t *testing.T, opts ...interface{}) {
+	ts := eudicoSubnetSuite{opts: opts}
+
+	t.Run("testMirReconfiguration", ts.testDataRaces)
+}
+
+// testDataRaces explores data-races on adding, joining and starting subnets in best-effort manner.
+// This test use two dummy nodes in rootnet, 2 Mir nodes in subnet,
+// and several additional sidenets with different consensus protocols.
+// These special subnets are called sidenets. They are spawned concurrently.
+// And their goal is to concurrently access subnet API.
+func (ts *eudicoSubnetSuite) testDataRaces(t *testing.T) {
+	var wg sync.WaitGroup // subnet wait group
+
+	nodeA, nodeB, ens := kit.EudicoEnsembleTwoNodes(t, ts.opts...)
+	defer func() {
+		t.Log("[*] stopping test ensemble")
+		defer t.Log("[*] ensemble stopped")
+		err := ens.Stop()
+		require.NoError(t, err)
+	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		t.Log("[*] defer: cancelling test context")
+		cancel()
+		wg.Wait()
+	}()
+
+	t.Log("[*] connecting nodes")
+
+	// Fail if genesis blocks are different
+
+	gen1, err := nodeA.ChainGetGenesis(ctx)
+	require.NoError(t, err)
+	gen2, err := nodeB.ChainGetGenesis(ctx)
+	require.NoError(t, err)
+
+	require.Equal(t, gen1.String(), gen2.String())
+
+	// Fail if no peers
+
+	p, err := nodeA.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Empty(t, p, "node A has peers")
+
+	p, err = nodeB.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Empty(t, p, "node B has peers")
+
+	// Connect nodes with each other
+
+	ens.Connect(nodeA, nodeB)
+
+	peers, err := nodeA.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Lenf(t, peers, 1, "node A doesn't have a peer")
+
+	peers, err = nodeB.NetPeers(ctx)
+	require.NoError(t, err)
+	require.Lenf(t, peers, 1, "node B doesn't have a peer")
+
+	l, err := nodeA.WalletList(ctx)
+	require.NoError(t, err)
+	if len(l) != 1 {
+		t.Fatal("A's wallet key list is empty")
+	}
+	minerA := l[0]
+
+	l, err = nodeB.WalletList(ctx)
+	require.NoError(t, err)
+	if len(l) != 1 {
+		t.Fatal("B's wallet key list is empty")
+	}
+	minerB := l[0]
+
+	t.Log("[*] running Dummy consensus in root net")
+
+	err = os.Setenv(dummy.ValidatorsEnv,
+		fmt.Sprintf("%s,%s", minerA.String(), minerB.String()),
+	)
+	require.NoError(t, err)
+
+	wg.Add(2)
+
+	go func() {
+		t.Log("[*] miner A in root net starting")
+		defer func() {
+			wg.Done()
+			t.Log("[*] miner A in root net stopped")
+		}()
+		err := dummy.Mine(ctx, minerA, nodeA)
+		if err != nil {
+			t.Error("miner A error:", err)
+			cancel()
+			return
+		}
+	}()
+
+	go func() {
+		t.Log("[*] miner B in root net starting")
+		defer func() {
+			wg.Done()
+			t.Log("[*] miner B in root net stopped")
+		}()
+		err := dummy.Mine(ctx, minerB, nodeB)
+		if err != nil {
+			t.Error("miner B error:", err)
+			cancel()
+			return
+		}
+	}()
+
+	t.Log("[*] adding subnet")
+
+	parent := address.RootSubnet
+	subnetName := "testSubnet"
+	stake := abi.NewStoragePower(1e8)
+	chp := abi.ChainEpoch(10)
+
+	err = kit.WaitForBalance(ctx, minerA, 30, nodeA)
+	require.NoError(t, err)
+
+	err = kit.WaitForBalance(ctx, minerB, 20, nodeB)
+	require.NoError(t, err)
+
+	balanceA, err := nodeA.WalletBalance(ctx, minerA)
+	require.NoError(t, err)
+	t.Logf("[*] node A %s balance: %d", minerA, balanceA)
+
+	balanceB, err := nodeB.WalletBalance(ctx, minerB)
+	require.NoError(t, err)
+	t.Logf("[*] node B %s balance: %d", minerB, balanceB)
+
+	os.Unsetenv(dummy.ValidatorsEnv) // nolint
+
+	subnetParams := &hierarchical.SubnetParams{
+		Addr:             minerA,
+		Parent:           parent,
+		Name:             subnetName,
+		Stake:            stake,
+		CheckpointPeriod: chp,
+		Consensus: hierarchical.ConsensusParams{
+			Alg:           hierarchical.Mir,
+			MinValidators: 2,
+			DelegMiner:    minerA,
+		},
+	}
+	actorAddr, err := nodeA.AddSubnet(ctx, subnetParams)
+	require.NoError(t, err)
+
+	subnetAddr := address.NewSubnetID(parent, actorAddr)
+	t.Log("[*] subnet addr:", subnetAddr)
+
+	networkName, err := nodeA.StateNetworkName(ctx)
+	require.NoError(t, err)
+	require.Equal(t, dtypes.NetworkName("/root"), networkName)
+
+	t.Log("[*] spawn testing sidenets")
+	var sg sync.WaitGroup // sidenet wait group
+	sg.Add(5)
+
+	go kit.SpawnSideSubnet(ctx, cancel, t, &sg, minerA, parent, "sideSubnet1", stake, hierarchical.PoW, nodeA)
+	go kit.SpawnSideSubnet(ctx, cancel, t, &sg, minerA, parent, "sideSubnet2", stake, hierarchical.Delegated, nodeA)
+	go kit.SpawnSideSubnet(ctx, cancel, t, &sg, minerA, parent, "sideSubnet3", stake, hierarchical.Dummy, nodeA)
+	go kit.SpawnSideSubnet(ctx, cancel, t, &sg, minerA, parent, "sideSubnet4", stake, hierarchical.PoW, nodeA)
+	go kit.SpawnSideSubnet(ctx, cancel, t, &sg, minerA, parent, "sideSubnet5", stake, hierarchical.Dummy, nodeA)
+
+	t.Log("[*] joining the subnet")
+
+	val, err := types.ParseFIL("10")
+	require.NoError(t, err)
+
+	nodeASubnetLibp2pAddr, err := kit.NodeLibp2pAddr(nodeA)
+	require.NoError(t, err)
+	nodeBSubnetLibp2pAddr, err := kit.NodeLibp2pAddr(nodeB)
+	require.NoError(t, err)
+
+	// Nodes A, B, C are joining the created subnet via the subnet actor.
+	sc, err := nodeA.JoinSubnet(ctx, minerA, big.Int(val), subnetAddr, nodeASubnetLibp2pAddr.String())
+	require.NoError(t, err)
+	_, err = nodeA.StateWaitMsg(ctx, sc, 1, 100, false)
+	require.NoError(t, err)
+
+	sc, err = nodeB.JoinSubnet(ctx, minerB, big.Int(val), subnetAddr, nodeBSubnetLibp2pAddr.String())
+	require.NoError(t, err)
+	_, err = nodeB.StateWaitMsg(ctx, sc, 1, 100, false)
+	require.NoError(t, err)
+
+	t.Log("[*] miner A in subnet is starting")
+	mp := hierarchical.MiningParams{}
+	err = nodeA.MineSubnet(ctx, minerA, subnetAddr, false, &mp)
+	if err != nil {
+		t.Error("subnet miner A error:", err)
+		cancel()
+		return
+	}
+
+	t.Log("[*] miner B in subnet is starting")
+	mp = hierarchical.MiningParams{}
+	err = nodeB.MineSubnet(ctx, minerB, subnetAddr, false, &mp)
+	if err != nil {
+		t.Error("subnet miner B error:", err)
+		cancel()
+		return
+	}
+
+	t.Log("[*] miners A, B are mining in the subnet")
+	err = kit.SubnetMinerMinesBlocks(ctx, 5, 20, subnetAddr, minerA, nodeA)
+	require.NoError(t, err)
+
+	err = kit.SubnetMinerMinesBlocks(ctx, 5, 20, subnetAddr, minerB, nodeB)
+	require.NoError(t, err)
+
+	sg.Wait()
+}
+
 func runTwoNodesTestsWithMir(t *testing.T, opts ...interface{}) {
 	ts := eudicoSubnetSuite{opts: opts}
 
@@ -399,7 +912,7 @@ func (ts *eudicoSubnetSuite) testBasicFlowOnTwoNodes(t *testing.T) {
 	}
 	minerB := l[0]
 
-	t.Log("[*] running consensus in root net")
+	t.Log("[*] running Mir consensus in root net")
 
 	startTime := time.Now()
 
@@ -443,7 +956,7 @@ func (ts *eudicoSubnetSuite) testBasicFlowOnTwoNodes(t *testing.T) {
 		}
 	}()
 
-	t.Log("[*] adding and joining subnet")
+	t.Log("[*] adding subnet")
 
 	parent := address.RootSubnet
 	subnetName := "testSubnet"
@@ -456,13 +969,13 @@ func (ts *eudicoSubnetSuite) testBasicFlowOnTwoNodes(t *testing.T) {
 	err = kit.WaitForBalance(ctx, minerB, 20, nodeB)
 	require.NoError(t, err)
 
-	balance1, err := nodeA.WalletBalance(ctx, minerA)
+	balanceA, err := nodeA.WalletBalance(ctx, minerA)
 	require.NoError(t, err)
-	t.Logf("[*] node A %s balance: %d", minerA, balance1)
+	t.Logf("[*] node A %s balance: %d", minerA, balanceA)
 
-	balance2, err := nodeB.WalletBalance(ctx, minerB)
+	balanceB, err := nodeB.WalletBalance(ctx, minerB)
 	require.NoError(t, err)
-	t.Logf("[*] node B %s balance: %d", minerB, balance2)
+	t.Logf("[*] node B %s balance: %d", minerB, balanceB)
 
 	os.Unsetenv(mir.ValidatorsEnv) // nolint
 
@@ -488,23 +1001,22 @@ func (ts *eudicoSubnetSuite) testBasicFlowOnTwoNodes(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dtypes.NetworkName("/root"), networkName)
 
+	t.Log("[*] joining the subnet")
+
 	val, err := types.ParseFIL("10")
 	require.NoError(t, err)
 
-	_, err = nodeA.StateLookupID(ctx, minerA, types.EmptyTSK)
+	nodeASubnetAddr, err := kit.NodeLibp2pAddr(nodeA)
+	require.NoError(t, err)
+	nodeBSubnetAddr, err := kit.NodeLibp2pAddr(nodeB)
 	require.NoError(t, err)
 
-	saAddr, err := kit.NodeLibp2pAddr(nodeA)
-	require.NoError(t, err)
-	sbAddr, err := kit.NodeLibp2pAddr(nodeB)
-	require.NoError(t, err)
-
-	sc, err := nodeA.JoinSubnet(ctx, minerA, big.Int(val), subnetAddr, saAddr.String())
+	sc, err := nodeA.JoinSubnet(ctx, minerA, big.Int(val), subnetAddr, nodeASubnetAddr.String())
 	require.NoError(t, err)
 	_, err = nodeA.StateWaitMsg(ctx, sc, 1, 100, false)
 	require.NoError(t, err)
 
-	sc, err = nodeB.JoinSubnet(ctx, minerB, big.Int(val), subnetAddr, sbAddr.String())
+	sc, err = nodeB.JoinSubnet(ctx, minerB, big.Int(val), subnetAddr, nodeBSubnetAddr.String())
 	require.NoError(t, err)
 	_, err = nodeB.StateWaitMsg(ctx, sc, 1, 100, false)
 	require.NoError(t, err)
@@ -539,12 +1051,6 @@ func (ts *eudicoSubnetSuite) testBasicFlowOnTwoNodes(t *testing.T) {
 		cancel()
 		return
 	}
-
-	err = kit.WaitForBalance(ctx, minerA, 20, nodeA)
-	require.NoError(t, err)
-
-	err = kit.WaitForBalance(ctx, minerB, 20, nodeB)
-	require.NoError(t, err)
 
 	// Inject new funds to the own address in the subnet.
 
@@ -792,9 +1298,6 @@ func (ts *eudicoSubnetSuite) testStartStopOnTwoNodes(t *testing.T) {
 	val, err := types.ParseFIL("10")
 	require.NoError(t, err)
 
-	_, err = nodeA.StateLookupID(ctx, minerA, types.EmptyTSK)
-	require.NoError(t, err)
-
 	saAddr, err := kit.NodeLibp2pAddr(nodeA)
 	require.NoError(t, err)
 	sbAddr, err := kit.NodeLibp2pAddr(nodeB)
@@ -1010,9 +1513,6 @@ func (ts *eudicoSubnetSuite) testCrossMessageOnTwoNodesMirPow(t *testing.T) {
 	require.Equal(t, dtypes.NetworkName("/root"), networkAName)
 
 	val, err := types.ParseFIL("10")
-	require.NoError(t, err)
-
-	_, err = nodeA.StateLookupID(ctx, minerA, types.EmptyTSK)
 	require.NoError(t, err)
 
 	sc1, err := nodeA.JoinSubnet(ctx, minerA, big.Int(val), subnetAAddr, "")

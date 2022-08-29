@@ -9,11 +9,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -25,7 +24,6 @@ import (
 	"github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/fx"
-	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-jsonrpc"
@@ -50,8 +48,8 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/subnet"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/submgr"
 	"github.com/filecoin-project/lotus/chain/consensus/mir"
+	"github.com/filecoin-project/lotus/chain/consensus/platform"
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/gen"
 	genesis2 "github.com/filecoin-project/lotus/chain/gen/genesis"
@@ -71,7 +69,6 @@ import (
 	lotusminer "github.com/filecoin-project/lotus/miner"
 	"github.com/filecoin-project/lotus/node"
 	"github.com/filecoin-project/lotus/node/config"
-	"github.com/filecoin-project/lotus/node/impl"
 	"github.com/filecoin-project/lotus/node/modules"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/lotus/node/modules/helpers"
@@ -84,6 +81,7 @@ import (
 
 const (
 	TSPoWConsensusGenesisTestFile = "../testdata/tspow.gen"
+
 	DummyConsensusGenesisTestFile = "../testdata/dummy.gen"
 
 	DelegatedConsensusGenesisTestFile = "../testdata/delegcns.gen"
@@ -126,6 +124,7 @@ type EudicoEnsemble struct {
 	}
 
 	valNetAddr string
+	lk         sync.Mutex
 }
 
 // NewEudicoEnsemble instantiates a new blank EudicoEnsemble.
@@ -347,36 +346,13 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 	subnetMux := mux.NewRouter()
 	globalMux.NewRoute().PathPrefix("/subnet/").Handler(subnetMux)
 
+	lock := &sync.Mutex{}
+
+	serveNamedApi := platform.ServeNamedAPI(lock, subnetMux, serverOptions)
+
 	var err error
-	serveNamedApi := func(p string, iapi api.FullNode) error {
-		pp := path.Join("/subnet/", p+"/")
-
-		var h http.Handler
-		// If this is a full node API
-		api, ok := iapi.(*impl.FullNodeAPI)
-		if ok {
-			// Instantiate the full node handler.
-			h, err = node.FullNodeHandler(pp, api, true, serverOptions...)
-			if err != nil {
-				return fmt.Errorf("failed to instantiate rpc handler: %s", err)
-			}
-		} else {
-			// If not instantiate a subnet api
-			api, ok := iapi.(*submgr.API)
-			if !ok {
-				return xerrors.Errorf("Couldn't instantiate new subnet API. Something went wrong: %s", err)
-			}
-			// Instantiate the full node handler.
-			h, err = submgr.FullNodeHandler(pp, api, true, serverOptions...)
-			if err != nil {
-				return fmt.Errorf("failed to instantiate rpc handler: %s", err)
-			}
-		}
-		subnetMux.NewRoute().PathPrefix(pp).Handler(h)
-		return nil
-	}
-
 	var rootConsensusConstructor interface{}
+
 	switch n.options.rootConsensus {
 	case hierarchical.PoW:
 		rootConsensusConstructor = NewRootTSPoWConsensus
@@ -1146,6 +1122,40 @@ func EudicoEnsembleTwoNodes(t *testing.T, opts ...interface{}) (*TestFullNode, *
 	)
 	ens := NewEudicoEnsemble(t, eopts...).FullNode(&one, nopts...).FullNode(&two, nopts...).Start()
 	return &one, &two, ens
+}
+
+// EudicoEnsembleFourNodes creates and starts an Ensemble with for full nodes.
+// It does not interconnect nodes nor does it begin mining.
+//
+// This function supports passing both ensemble and node functional options.
+// Functional options are applied to all nodes.
+func EudicoEnsembleFourNodes(t *testing.T, opts ...interface{}) (*TestFullNode, *TestFullNode, *TestFullNode, *TestFullNode, *EudicoEnsemble) {
+	opts = append(opts, WithAllSubsystems())
+
+	eopts, nopts := siftOptions(t, opts)
+
+	var (
+		n1, n2, n3, n4 TestFullNode
+	)
+	ens := NewEudicoEnsemble(t, eopts...).FullNode(&n1, nopts...).FullNode(&n2, nopts...).FullNode(&n3, nopts...).FullNode(&n4, nopts...).Start()
+	return &n1, &n2, &n3, &n4, ens
+}
+
+// EudicoEnsembleThreeNodes creates and starts an Ensemble with for full nodes.
+// It does not interconnect nodes nor does it begin mining.
+//
+// This function supports passing both ensemble and node functional options.
+// Functional options are applied to all nodes.
+func EudicoEnsembleThreeNodes(t *testing.T, opts ...interface{}) (*TestFullNode, *TestFullNode, *TestFullNode, *EudicoEnsemble) {
+	opts = append(opts, WithAllSubsystems())
+
+	eopts, nopts := siftOptions(t, opts)
+
+	var (
+		n1, n2, n3 TestFullNode
+	)
+	ens := NewEudicoEnsemble(t, eopts...).FullNode(&n1, nopts...).FullNode(&n2, nopts...).FullNode(&n3, nopts...).Start()
+	return &n1, &n2, &n3, ens
 }
 
 // EudicoEnsembleOneTwo creates and starts an Ensemble with one full node and two miners.

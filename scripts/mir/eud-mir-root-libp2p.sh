@@ -19,6 +19,7 @@ NODES=\
 /root:t1rlhubezzmetmmpxyze22tc2uxuiiqv3iy6rvpra@/ip4/127.0.0.1/tcp/10002/p2p/12D3KooWNuDQaGuwVLPyroJ4FZyNkiFcH2Qi61bNGehK2Mhgq3TK,\
 /root:t1sqbkluz5elnekdu62ute5zjammslkplgdcpa2zi@/ip4/127.0.0.1/tcp/10003/p2p/12D3KooWRF48VL58mRkp5DmysHp2wLwWyycJ6df2ocEHPvRxMrLs
 
+
 # Eudico paths
 export NODE_0_PATH="$HOME/.eudico-node0"
 export NODE_1_PATH="$HOME/.eudico-node1"
@@ -62,6 +63,7 @@ NODE_3_MINER_LOG="./eudico_miner_3.log"
 BLOCK0="./testdata/mir.gen"
 
 rm -rf ./eudico-wal
+rm -rf ./eudico-wal*
 rm -rf ./eudico
 make eudico
 
@@ -77,9 +79,10 @@ rm -rvf $NODE_3_NETADDR
 
 rm -rf ./eudico_daemon_*.log
 rm -rf ./eudico_miner_*.log
+rm -rf ./mir_miner_*.log
 rm -rf ./eudico_shed_*.log
 
-LOG_LEVEL="info,mir-consensus=info,mir-manager=info"
+LOG_LEVEL="info,mir-consensus=info,mir-manager=debug"
 
 tmux new-session -d -s "mir" \; \
   new-window   -t "mir" \; \

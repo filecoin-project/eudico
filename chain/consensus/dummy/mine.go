@@ -2,12 +2,15 @@ package dummy
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"time"
 
 	"github.com/filecoin-project/go-address"
 	lapi "github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
+	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/platform/logging"
 	"github.com/filecoin-project/lotus/chain/types"
 )
@@ -24,22 +27,40 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 		return err
 	}
 
-	submitting := time.NewTicker(300 * time.Millisecond)
-	defer submitting.Stop()
+	validatorsEnv := os.Getenv(ValidatorsEnv)
+	var validators []address.Address
+	validators, err = validatorsFromString(validatorsEnv)
+	if err != nil {
+		return fmt.Errorf("failed to get validators addresses: %w", err)
+	}
+	if len(validators) == 0 {
+		validators = append(validators, miner)
+	}
+
+	submit := time.NewTicker(300 * time.Millisecond)
+	defer submit.Stop()
+
+	leader := validators[0]
 
 	for {
-		base, err := api.ChainHead(ctx)
-		if err != nil {
-			log.Errorw("failed to get the head of chain", "error", err)
-			continue
-		}
-
 		select {
 		case <-ctx.Done():
-			log.Debug("Dummy miner %s: context closed")
+			log.Debug("Dummy miner: context closed")
 			return nil
 
-		case <-submitting.C:
+		case <-submit.C:
+			base, err := api.ChainHead(ctx)
+			if err != nil {
+				log.Errorw("failed to get the head of chain", "error", err)
+				continue
+			}
+
+			if miner != leader {
+				continue
+			}
+
+			epochMiner := validators[int(base.Height())%len(validators)]
+
 			msgs, err := api.MpoolSelect(ctx, base.Key(), 1)
 			if err != nil {
 				log.Errorw("unable to select messages from mempool", "error", err)
@@ -54,7 +75,7 @@ func Mine(ctx context.Context, miner address.Address, api v1api.FullNode) error 
 
 			log.Infof("[subnet: %s, epoch: %d] try to create a block", subnetID, base.Height()+1)
 			bh, err := api.MinerCreateBlock(ctx, &lapi.BlockTemplate{
-				Miner:            miner,
+				Miner:            epochMiner,
 				Parents:          base.Key(),
 				BeaconValues:     nil,
 				Ticket:           nil,
@@ -96,10 +117,20 @@ func (bft *Dummy) CreateBlock(ctx context.Context, w lapi.Wallet, bt *lapi.Block
 		return nil, err
 	}
 
-	err = common.SignBlock(ctx, w, b)
-	if err != nil {
-		return nil, err
-	}
-
 	return b, nil
+}
+
+// validatorsFromString parses comma-separated validator addresses string.
+//
+// Examples of the validator string: "t1wpixt5mihkj75lfhrnaa6v56n27epvlgwparujy,t1wpixt5mihkj75lfhrnaa6v56n27epvlgwparujy"
+func validatorsFromString(input string) ([]address.Address, error) {
+	var addrs []address.Address
+	for _, id := range hierarchical.SplitAndTrimEmpty(input, ",", " ") {
+		a, err := address.NewFromString(id)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse %v: %w", id, err)
+		}
+		addrs = append(addrs, a)
+	}
+	return addrs, nil
 }

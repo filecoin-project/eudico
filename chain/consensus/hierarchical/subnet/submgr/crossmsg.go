@@ -99,9 +99,6 @@ func (cm *crossMsgPool) isBottomUpApplied(n uint64, id address.SubnetID, height 
 // getCrossMsgs returns top-down and bottom-up messages.
 func (s *Service) getCrossMsgs(
 	ctx context.Context, id address.SubnetID, height abi.ChainEpoch) ([]*types.Message, []*types.Message, error) {
-	// TODO: Think a bit deeper the locking strategy for subnets.
-	// s.lk.RLock()
-	// defer s.lk.RUnlock()
 
 	var (
 		topdown  []*types.Message
@@ -178,7 +175,6 @@ func (s *Service) FundSubnet(
 	ctx context.Context, wallet address.Address,
 	id address.SubnetID, value abi.TokenAmount) (cid.Cid, error) {
 
-	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.RLock()
 	defer s.lk.RUnlock()
 
@@ -216,7 +212,6 @@ func (s *Service) ReleaseFunds(
 	ctx context.Context, wallet address.Address,
 	id address.SubnetID, value abi.TokenAmount) (cid.Cid, error) {
 
-	// TODO: Think a bit deeper the locking strategy for subnets.
 	s.lk.RLock()
 	defer s.lk.RUnlock()
 
@@ -434,7 +429,9 @@ func (s *Service) getBottomUpPool(ctx context.Context, id address.SubnetID, heig
 func (s *Service) getSubnetResolver(id address.SubnetID) *resolver.Resolver {
 	r := s.r
 	if !s.isRoot(id) {
+		s.subnetsLock.Lock()
 		r = s.subnets[id].r
+		s.subnetsLock.Unlock()
 	}
 	return r
 }

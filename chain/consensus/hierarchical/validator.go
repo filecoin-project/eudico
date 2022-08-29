@@ -4,7 +4,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/ipfs/go-cid"
+	u "github.com/ipfs/go-ipfs-util"
+	"go.uber.org/zap/buffer"
+
 	addr "github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-state-types/abi"
 )
 
 type Validator struct {
@@ -27,6 +32,14 @@ func (v *Validator) ID() string {
 	return fmt.Sprintf("%s:%s", v.Subnet, v.Addr)
 }
 
+func (v *Validator) Bytes() ([]byte, error) {
+	var b buffer.Buffer
+	if err := v.MarshalCBOR(&b); err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
+}
+
 // ValidatorsFromString parses comma-separated subnet:ID@OpaqueNetAddr validators string.
 // OpaqueNetAddr can contain GRPC or Libp2p addresses.
 //
@@ -35,7 +48,7 @@ func (v *Validator) ID() string {
 // 	- /root:t1wpixt5mihkj75lfhrnaa6v56n27epvlgwparujy@127.0.0.1:1000
 func ValidatorsFromString(input string) ([]Validator, error) {
 	var validators []Validator
-	for _, idAddr := range splitAndTrimEmpty(input, ",", " ") {
+	for _, idAddr := range SplitAndTrimEmpty(input, ",", " ") {
 		parts := strings.Split(idAddr, "@")
 		if len(parts) != 2 {
 			return nil, fmt.Errorf("failed to parse validators string")
@@ -79,7 +92,7 @@ func ValidatorsToString(validators []Validator) string {
 	return strings.TrimSuffix(s, ",")
 }
 
-func splitAndTrimEmpty(s, sep, cutset string) []string {
+func SplitAndTrimEmpty(s, sep, cutset string) []string {
 	if s == "" {
 		return []string{}
 	}
@@ -95,4 +108,66 @@ func splitAndTrimEmpty(s, sep, cutset string) []string {
 	}
 
 	return nonEmptyStrings
+}
+
+type ValidatorSet struct {
+	Validators []Validator
+}
+
+func NewValidatorSet(vals []Validator) *ValidatorSet {
+	return &ValidatorSet{Validators: vals}
+}
+
+func (set *ValidatorSet) Size() int {
+	return len(set.Validators)
+}
+
+func (set *ValidatorSet) Equal(o *ValidatorSet) bool {
+	if set == nil && o == nil {
+		return true
+	}
+	if set == nil || o == nil {
+		return true
+	}
+	if set.Size() != o.Size() {
+		return false
+	}
+	for i, v := range set.Validators {
+		if v != o.Validators[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func (set *ValidatorSet) Hash() ([]byte, error) {
+	var hs []byte
+	for _, v := range set.Validators {
+		b, err := v.Bytes()
+		if err != nil {
+			return nil, err
+		}
+		hs = append(hs, b...)
+	}
+	return cid.NewCidV0(u.Hash(hs)).Bytes(), nil
+}
+
+func (set *ValidatorSet) GetValidators() []Validator {
+	return set.Validators
+}
+
+func (set *ValidatorSet) HasValidatorWithID(id string) bool {
+	for _, v := range set.Validators {
+		if v.ID() == id {
+			return true
+		}
+	}
+	return false
+}
+
+// BlockMiner returns a miner assigned deterministically using round-robin for an epoch to assign a reward
+// according to the rules of original Filecoin/Eudico consensus.
+func (set *ValidatorSet) BlockMiner(epoch abi.ChainEpoch) addr.Address {
+	i := int(epoch) % set.Size()
+	return set.Validators[i].Addr
 }
