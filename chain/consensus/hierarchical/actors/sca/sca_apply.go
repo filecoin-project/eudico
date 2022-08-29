@@ -2,9 +2,6 @@ package sca
 
 import (
 	"bytes"
-	"github.com/filecoin-project/lotus/metrics"
-	"go.opencensus.io/stats"
-	"go.opencensus.io/tag"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -72,7 +69,6 @@ func applyTopDown(rt runtime.Runtime, msg types.Message) {
 		// FIXME: Should we not discard the output for any reason?
 		code = rt.SendWithSerializedParams(rto, msg.Method, msg.Params, msg.Value, &builtin.Discard{})
 		requireSuccessWithNoop(rt, msg, code, "error applying bottomUp message")
-		recordCrossNetMsgExecution(rt, msg, code, "TopDown")
 	}
 }
 
@@ -101,7 +97,6 @@ func applyBottomUp(rt runtime.Runtime, msg types.Message) {
 		// FIXME: Should we not discard the output for any reason?
 		code := rt.SendWithSerializedParams(rto, msg.Method, msg.Params, msg.Value, &builtin.Discard{})
 		requireSuccessWithNoop(rt, msg, code, "error applying bottomUp message")
-		recordCrossNetMsgExecution(rt, msg, code, "BottomUp")
 	}
 }
 
@@ -194,24 +189,4 @@ func noopWithStateTransaction(rt runtime.Runtime, msg types.Message, code exitco
 	rt.StateTransaction(&st, func() {
 		noop(rt, &st, msg, code, err)
 	})
-}
-
-func recordCrossNetMsgExecution(rt runtime.Runtime, msg types.Message, code exitcode.ExitCode, msgType string) {
-	sFrom, err := msg.From.Subnet()
-	if err != nil {
-		return
-	}
-
-	sTo, _ := msg.To.Subnet() // no need to check error, should be checked by caller
-
-	ctx, _ := tag.New(
-		rt.Context(),
-		tag.Upsert(metrics.SubnetTo, sTo.String()),
-		tag.Upsert(metrics.SubnetFrom, sFrom.String()),
-		tag.Upsert(metrics.CrossNetMsgType, msgType),
-		tag.Upsert(metrics.CrossNetMsgMethod, msg.Method.String()),
-		tag.Upsert(metrics.CrossNetMsgExeCode, code.String()),
-	)
-
-	stats.Record(ctx, metrics.SubnetCrossNetMsgExecutedCount.M(1))
 }

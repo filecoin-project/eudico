@@ -3,6 +3,9 @@ package sca
 //go:generate go run ./gen/gen.go
 
 import (
+	"github.com/ipfs/go-cid"
+	"golang.org/x/xerrors"
+
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
@@ -13,15 +16,10 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/checkpoints/schema"
 	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/filecoin-project/lotus/metrics"
 	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v7/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v7/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v7/actors/util/adt"
-	"github.com/ipfs/go-cid"
-	"go.opencensus.io/stats"
-	"go.opencensus.io/tag"
-	"golang.org/x/xerrors"
 )
 
 var _ runtime.VMActor = SubnetCoordActor{}
