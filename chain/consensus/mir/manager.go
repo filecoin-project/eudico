@@ -17,16 +17,15 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/mir"
+	"github.com/filecoin-project/mir/pkg/availability/batchdb/fakebatchdb"
 	"github.com/filecoin-project/mir/pkg/availability/multisigcollector"
 	mircrypto "github.com/filecoin-project/mir/pkg/crypto"
 	"github.com/filecoin-project/mir/pkg/events"
-	"github.com/filecoin-project/mir/pkg/factorymodule"
 	"github.com/filecoin-project/mir/pkg/iss"
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/net"
 	mirlibp2p "github.com/filecoin-project/mir/pkg/net/libp2p"
-	"github.com/filecoin-project/mir/pkg/pb/factorymodulepb"
 	mirproto "github.com/filecoin-project/mir/pkg/pb/requestpb"
 	"github.com/filecoin-project/mir/pkg/simplewal"
 	t "github.com/filecoin-project/mir/pkg/types"
@@ -119,6 +118,10 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		return nil, fmt.Errorf("failed to create libp2p host: %w", err)
 	}
 
+	// Logger.
+
+	logger := newManagerLogger()
+
 	// Create Mir modules.
 
 	wal, err := NewWAL(mirID, fmt.Sprintf("eudico-wal-%s", addr))
@@ -126,7 +129,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		return nil, fmt.Errorf("failed to create WAL: %w", err)
 	}
 
-	netTransport, err := mirlibp2p.NewTransport(h, t.NodeID(mirID), newMirLogger(managerLog))
+	netTransport, err := mirlibp2p.NewTransport(h, t.NodeID(mirID), logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transport: %w", err)
 	}
@@ -149,11 +152,18 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		iss.DefaultModuleConfig(),
 		issConfig,
 		iss.InitialStateSnapshot([]byte{}, issConfig),
-		newMirLogger(managerLog),
+		logger,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("could not instantiate ISS protocol module: %w", err)
 	}
+
+	// Use fake batch database.
+	batchdb := fakebatchdb.NewModule(
+		&fakebatchdb.ModuleConfig{
+			Self: "batchdb",
+		},
+	)
 
 	// Use a simple mempool for incoming requests.
 	mempool := simplemempool.NewModule(
@@ -166,40 +176,16 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		},
 	)
 
-	mscFactory := factorymodule.New(
-		"availability",
-		factorymodule.DefaultParams(
-			func(mscID t.ModuleID, params *factorymodulepb.GeneratorParams) (modules.PassiveModule, error) {
-
-				m, ok := params.Type.(*factorymodulepb.GeneratorParams_MultisigCollector)
-				if !ok {
-					return nil, fmt.Errorf("failed type assertion")
-				}
-
-				mscNodeIDs := getSortedKeys(t.Membership(m.MultisigCollector.Membership))
-
-				// Instantiate the availability layer.
-				multisigCollector, err := multisigcollector.NewModule(
-					&multisigcollector.ModuleConfig{
-						Self:    mscID,
-						Mempool: "mempool",
-						Net:     "net",
-						Crypto:  "crypto",
-					},
-					&multisigcollector.ModuleParams{
-						InstanceUID: []byte(mscID),
-						AllNodes:    mscNodeIDs,
-						F:           (len(mscNodeIDs) - 1) / 2,
-					},
-					t.NodeID(mirID),
-				)
-				if err != nil {
-					return nil, err
-				}
-				return multisigCollector, nil
-			},
-		),
-		newMirLogger(managerLog),
+	availability := multisigcollector.NewReconfigurableModule(
+		&multisigcollector.ModuleConfig{
+			Self:    "availability",
+			Mempool: "mempool",
+			BatchDB: "batchdb",
+			Net:     "net",
+			Crypto:  "crypto",
+		},
+		t.NodeID(mirID),
+		logger,
 	)
 
 	requestPool := newRequestPool()
@@ -227,13 +213,14 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		"app":          sm,
 		"crypto":       mircrypto.New(m.Crypto),
 		"mempool":      mempool,
-		"availability": mscFactory,
+		"batchdb":      batchdb,
+		"availability": availability,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize Mir modules: %w", err)
 	}
 
-	cfg := mir.NodeConfig{Logger: newMirLogger(managerLog)}
+	cfg := mir.NodeConfig{Logger: logger}
 	newMirNode, err := mir.NewNode(t.NodeID(mirID), &cfg, mirModules, wal, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Mir node: %w", err)

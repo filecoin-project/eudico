@@ -6,34 +6,39 @@ import (
 	mirlogging "github.com/filecoin-project/mir/pkg/logging"
 )
 
-// managerLog is an Eudico logger used by a Mir node.
-var managerLog = logging.Logger("mir-manager")
+const managerLoggerName = "mir-manager"
+
+var _ mirlogging.Logger = &managerLogger{}
 
 // mirLogger implements Mir's Log interface.
-type mirLogger struct {
+type managerLogger struct {
 	logger *logging.ZapEventLogger
 }
 
-func newMirLogger(logger *logging.ZapEventLogger) *mirLogger {
-	return &mirLogger{
-		logger: logger,
+func newManagerLogger() *managerLogger {
+	return &managerLogger{
+		logger: logging.Logger(managerLoggerName),
 	}
 }
 
 // Log logs a message with additional context.
-func (m *mirLogger) Log(level mirlogging.LogLevel, text string, args ...interface{}) {
+func (l *managerLogger) Log(level mirlogging.LogLevel, text string, args ...interface{}) {
 	switch level {
 	case mirlogging.LevelError:
-		m.logger.Errorw(text, "error", args)
+		l.logger.Errorw(text, "error", args)
 	case mirlogging.LevelInfo:
-		m.logger.Infow(text, "info", args)
+		l.logger.Infow(text, "info", args)
 	case mirlogging.LevelWarn:
-		m.logger.Warnw(text, "warn", args)
+		l.logger.Warnw(text, "warn", args)
 	case mirlogging.LevelDebug:
-		m.logger.Debugw(text, "debug", args)
+		l.logger.Debugw(text, "debug", args)
 	}
 }
 
-func (m *mirLogger) IsConcurrent() bool {
+func (l *managerLogger) MinLevel() mirlogging.LogLevel {
+	return mirlogging.LevelDisable
+}
+
+func (l *managerLogger) IsConcurrent() bool {
 	return true
 }
