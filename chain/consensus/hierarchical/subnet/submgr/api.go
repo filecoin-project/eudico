@@ -52,7 +52,6 @@ type API struct {
 	full.MsigAPI
 	full.WalletAPI
 	full.SyncAPI
-	full.BeaconAPI
 
 	DS          dtypes.MetadataDS
 	NetworkName dtypes.NetworkName
@@ -181,7 +180,6 @@ func (sh *Subnet) populateAPIs(
 		MsigAPI:     msigAPI,
 		WalletAPI:   walletAPI,
 		SyncAPI:     syncAPI,
-		BeaconAPI:   parentAPI.BeaconAPI,
 		DS:          sh.ds,
 		NetworkName: dtypes.NetworkName(sh.ID.String()),
 		Service:     parentAPI.Service,

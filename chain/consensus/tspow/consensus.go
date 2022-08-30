@@ -28,7 +28,8 @@ import (
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
+	"github.com/filecoin-project/lotus/storage/sealer/storiface"
+
 	"github.com/filecoin-project/lotus/lib/sigs"
 	"github.com/filecoin-project/lotus/metrics"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
@@ -58,7 +59,7 @@ type TSPoW struct {
 	// the state manager handles making state queries
 	sm *stmgr.StateManager
 
-	verifier ffiwrapper.Verifier
+	verifier storiface.Verifier
 
 	genesis *types.TipSet
 
@@ -75,7 +76,7 @@ func NewTSPoWConsensus(
 	submgr subnet.Manager,
 	beacon beacon.Schedule,
 	r *resolver.Resolver,
-	verifier ffiwrapper.Verifier,
+	verifier storiface.Verifier,
 	genesis chain.Genesis,
 	netName dtypes.NetworkName,
 ) consensus.Consensus {

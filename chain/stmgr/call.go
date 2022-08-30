@@ -7,7 +7,6 @@ import (
 
 	"github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
-	"github.com/prometheus/common/log"
 	"go.opencensus.io/trace"
 	"golang.org/x/xerrors"
 

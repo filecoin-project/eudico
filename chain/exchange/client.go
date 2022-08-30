@@ -48,7 +48,7 @@ func NewClient(lc fx.Lifecycle, host host.Host, pmgr peermgr.MaybePeerMgr) Clien
 	return &client{
 		host:        host,
 		peerTracker: newPeerTracker(lc, host, pmgr.Mgr),
-		protocolIDs: []string{BlockSyncProtocolID, ChainExchangeProtocolID},
+		protocolIDs: []string{ChainExchangeProtocolID},
 	}
 }
 
@@ -420,14 +420,13 @@ func (c *client) sendRequestToPeer(ctx context.Context, peer peer.ID, req *Reque
 	// See if it supports any some protocol.
 	if len(supported) == 0 {
 		return nil, xerrors.Errorf("peer %s does not support protocols %s",
-			peer, []string{BlockSyncProtocolID, ChainExchangeProtocolID})
+			peer, []string{ChainExchangeProtocolID})
 	}
 
 	// Check that peer supports standard and subnet protocols.
 	// NOTE: This may need to be revisited, we are being extremely verbose.
 	// I think it is enough to check if the other end supports c.protocolIDs.
-	if len(supported) > 0 && (supported[0] != BlockSyncProtocolID &&
-		supported[0] != ChainExchangeProtocolID &&
+	if len(supported) > 0 && (supported[0] != ChainExchangeProtocolID &&
 		supported[0] != c.protocolIDs[0]) {
 		return nil, xerrors.Errorf("peer %s does not support protocols %s",
 			peer, []string{ChainExchangeProtocolID})

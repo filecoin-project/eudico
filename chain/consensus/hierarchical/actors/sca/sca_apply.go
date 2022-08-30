@@ -2,6 +2,7 @@ package sca
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -65,10 +66,12 @@ func applyTopDown(rt runtime.Runtime, msg types.Message) {
 			commitTopDownMsg(rt, &st, msg)
 		})
 	} else {
-		// Send the cross-message
+		// Release funds to the destination address if it is directed to the current network.
 		// FIXME: Should we not discard the output for any reason?
-		code = rt.SendWithSerializedParams(rto, msg.Method, msg.Params, msg.Value, &builtin.Discard{})
-		requireSuccessWithNoop(rt, msg, code, "error applying bottomUp message")
+		// FIXME: We should uncomment this if we end up not removing the specs-actors and legacy VM.
+		// code = rt.SendWithSerializedParams(rto, msg.Method, msg.Params, msg.Value, &builtin.Discard{})
+		// requireSuccessWithNoop(rt, msg, code, "error applying bottomUp message")
+		fmt.Printf(">>>>> send with arbitrary parameters not implemented: %v\n", rto)
 	}
 }
 
@@ -95,8 +98,10 @@ func applyBottomUp(rt runtime.Runtime, msg types.Message) {
 	if sto == st.NetworkName {
 		// Release funds to the destination address if it is directed to the current network.
 		// FIXME: Should we not discard the output for any reason?
-		code := rt.SendWithSerializedParams(rto, msg.Method, msg.Params, msg.Value, &builtin.Discard{})
-		requireSuccessWithNoop(rt, msg, code, "error applying bottomUp message")
+		// FIXME: We should uncomment this if we end up not removing the specs-actors and legacy VM.
+		// code = rt.SendWithSerializedParams(rto, msg.Method, msg.Params, msg.Value, &builtin.Discard{})
+		// requireSuccessWithNoop(rt, msg, code, "error applying bottomUp message")
+		fmt.Printf(">>>> send with arbitrary parameters not implemented: %v\n", rto)
 	}
 }
 

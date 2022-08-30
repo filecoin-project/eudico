@@ -27,6 +27,8 @@ import (
 	"github.com/filecoin-project/lotus/chain"
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
+	"github.com/filecoin-project/lotus/chain/beacon"
+	"github.com/filecoin-project/lotus/chain/beacon/drand"
 	act "github.com/filecoin-project/lotus/chain/consensus/actors"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
@@ -41,7 +43,8 @@ import (
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/vm"
-	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
+	"github.com/filecoin-project/lotus/storage/sealer/storiface"
+
 	"github.com/filecoin-project/lotus/journal"
 	"github.com/filecoin-project/lotus/lib/peermgr"
 	"github.com/filecoin-project/lotus/node/impl/client"
@@ -77,7 +80,7 @@ type Service struct {
 	ds           dtypes.MetadataDS
 	syscalls     vm.SyscallBuilder
 	us           stmgr.UpgradeSchedule
-	verifier     ffiwrapper.Verifier
+	verifier     storiface.Verifier
 	nodeServer   api.FullNodeServer
 	pmgr         peermgr.MaybePeerMgr
 	bootstrapper dtypes.Bootstrapper
@@ -111,7 +114,7 @@ func NewService(
 	syscalls vm.SyscallBuilder,
 	us stmgr.UpgradeSchedule,
 	nodeServer api.FullNodeServer,
-	verifier ffiwrapper.Verifier,
+	verifier storiface.Verifier,
 	pmgr peermgr.MaybePeerMgr,
 	bootstrapper dtypes.Bootstrapper,
 	commonapi commonapi.CommonAPI,
@@ -127,7 +130,6 @@ func NewService(
 	walletapi full.WalletAPI,
 	netName dtypes.NetworkName,
 	syncapi full.SyncAPI,
-	beaconapi full.BeaconAPI,
 	r *resolver.Resolver,
 	j journal.Journal) (*Service, error) {
 
@@ -164,7 +166,6 @@ func NewService(
 		msigapi,
 		walletapi,
 		syncapi,
-		beaconapi,
 		ds,
 		netName,
 		s,
@@ -227,9 +228,29 @@ func (s *Service) startSubnet(id address.SubnetID,
 		return err
 	}
 
-	beacon := s.api.BeaconAPI.Beacon
+	gen, err := sh.LoadGenesis(ctx, genesis)
+	if err != nil {
+		log.Errorw("Error loading genesis bootstrap for subnet", "subnetID", id, "err", err)
+		return err
+	}
+	genTs, err := sh.sm.ChainStore().GetGenesis(ctx)
+	if err != nil {
+		log.Errorw("Error getting genesis block to fetch timestamp", "subnetID", id, "err", err)
+		return err
+	}
+
+	// Initialize beacon scheduler
+	beaconShd := beacon.Schedule{}
+	for _, dc := range build.DrandConfigSchedule() {
+		bc, err := drand.NewDrandBeacon(genTs.Timestamp, build.BlockDelaySecs, s.pubsub, dc.Config)
+		if err != nil {
+			return xerrors.Errorf("creating drand beacon: %w", err)
+		}
+		beaconShd = append(beaconShd, beacon.BeaconPoint{Start: dc.Start, Beacon: bc})
+	}
+
 	sh.ch = store.NewChainStore(sh.bs, sh.bs, sh.ds, weight, s.j)
-	sh.sm, err = stmgr.NewStateManager(sh.ch, tsExec, sh.r, s.syscalls, s.us, beacon)
+	sh.sm, err = stmgr.NewStateManager(sh.ch, tsExec, sh.r, s.syscalls, s.us, beaconShd)
 	if err != nil {
 		log.Errorw("Error creating state manager for subnet", "subnetID", id, "err", err)
 		return err
@@ -244,13 +265,8 @@ func (s *Service) startSubnet(id address.SubnetID,
 		return xerrors.Errorf("error starting sm for subnet %s: %s", sh.ID, err)
 	}
 
-	gen, err := sh.LoadGenesis(ctx, genesis)
-	if err != nil {
-		log.Errorw("Error loading genesis bootstrap for subnet", "subnetID", id, "err", err)
-		return err
-	}
 	// Instantiate consensus
-	sh.cons, err = subcns.New(ctx, consensus, sh.sm, s, beacon, sh.r, s.verifier, gen, dtypes.NetworkName(id.String()))
+	sh.cons, err = subcns.New(ctx, consensus, sh.sm, s, beaconShd, sh.r, s.verifier, gen, dtypes.NetworkName(id.String()))
 	if err != nil {
 		log.Errorw("Error creating consensus", "subnetID", id, "err", err)
 		return err
@@ -268,7 +284,7 @@ func (s *Service) startSubnet(id address.SubnetID,
 	// We are passing to the syncer a new exchange client for the subnet to enable
 	// peers to catch up with the subnet chain.
 	// NOTE: We reuse the same peer manager from the root chain.
-	sh.syncer, err = chain.NewSyncer(sh.ds, sh.sm, sh.exchangeClient(ctx), chain.NewSyncManager, s.host.ConnManager(), s.host.ID(), beacon, gen, sh.cons)
+	sh.syncer, err = chain.NewSyncer(sh.ds, sh.sm, sh.exchangeClient(ctx), chain.NewSyncManager, s.host.ConnManager(), s.host.ID(), beaconShd, gen, sh.cons)
 	if err != nil {
 		log.Errorw("Error creating syncer for subnet", "subnetID", id, "err", err)
 		return err

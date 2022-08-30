@@ -6,8 +6,6 @@ import (
 
 	"github.com/ipfs/go-cid"
 
-	blockadt "github.com/filecoin-project/specs-actors/actors/util/adt"
-
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"go.opencensus.io/trace"
 	"golang.org/x/xerrors"

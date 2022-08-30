@@ -19,7 +19,8 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/tspow"
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
-	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
+	"github.com/filecoin-project/lotus/storage/sealer/storiface"
+
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
@@ -47,7 +48,7 @@ func New(
 	consensus hierarchical.ConsensusType,
 	sm *stmgr.StateManager, snMgr subnet.Manager,
 	beacon beacon.Schedule, r *resolver.Resolver,
-	verifier ffiwrapper.Verifier,
+	verifier storiface.Verifier,
 	genesis chain.Genesis, netName dtypes.NetworkName,
 ) (consensus.Consensus, error) {
 	switch consensus {

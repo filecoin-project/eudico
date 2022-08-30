@@ -17,6 +17,10 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/go-state-types/network"
+	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
+	verifreg0 "github.com/filecoin-project/specs-actors/actors/builtin/verifreg"
+	adt0 "github.com/filecoin-project/specs-actors/actors/util/adt"
+
 	bstore "github.com/filecoin-project/lotus/blockstore"
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors"
@@ -31,11 +35,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/actors/builtin/reward"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/system"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/verifreg"
-	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
-	"github.com/filecoin-project/lotus/chain/consensus/actors/registry"
-	rew "github.com/filecoin-project/lotus/chain/consensus/actors/reward"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
+	"github.com/filecoin-project/lotus/chain/consensus/filcns"
 	"github.com/filecoin-project/lotus/chain/state"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
@@ -43,9 +43,7 @@ import (
 	"github.com/filecoin-project/lotus/genesis"
 	"github.com/filecoin-project/lotus/journal"
 	"github.com/filecoin-project/lotus/lib/sigs"
-	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
-	verifreg0 "github.com/filecoin-project/specs-actors/actors/builtin/verifreg"
-	adt0 "github.com/filecoin-project/specs-actors/actors/util/adt"
+	"github.com/filecoin-project/lotus/node/bundle"
 )
 
 const AccountStart = 100
@@ -122,6 +120,7 @@ Genesis: {
 
 func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template genesis.Template) (*state.StateTree, map[address.Address]address.Address, error) {
 	// Create empty state tree
+
 	cst := cbor.NewCborStore(bs)
 	_, err := cst.Put(context.TODO(), []struct{}{})
 	if err != nil {
@@ -143,92 +142,83 @@ func MakeInitialStateTree(ctx context.Context, bs bstore.Blockstore, template ge
 		return nil, nil, xerrors.Errorf("getting network version: %w", err)
 	}
 
+	if err := bundle.LoadBundles(ctx, bs, av); err != nil {
+		return nil, nil, xerrors.Errorf("loading actors for genesis block: %w", err)
+	}
+
 	// Create system actor
-	sysAct, err := SetupSystemActor(ctx, bs, av)
+
+	sysact, err := SetupSystemActor(ctx, bs, av)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup system actor: %w", err)
 	}
-	if err := state.SetActor(system.Address, sysAct); err != nil {
+	if err := state.SetActor(system.Address, sysact); err != nil {
 		return nil, nil, xerrors.Errorf("set system actor: %w", err)
 	}
 
 	// Create init actor
-	idStart, initAct, keyIDs, err := SetupInitActor(ctx, bs, template.NetworkName, template.Accounts, template.VerifregRootKey, template.RemainderAccount, av)
+
+	idStart, initact, keyIDs, err := SetupInitActor(ctx, bs, template.NetworkName, template.Accounts, template.VerifregRootKey, template.RemainderAccount, av)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup init actor: %w", err)
 	}
-	if err := state.SetActor(init_.Address, initAct); err != nil {
+	if err := state.SetActor(init_.Address, initact); err != nil {
 		return nil, nil, xerrors.Errorf("set init actor: %w", err)
 	}
 
 	// Setup reward
 	// RewardActor's state is overwritten by SetupStorageMiners, but needs to exist for miner creation messages
-	rewAct, err := SetupHierarchicalRewardActor(ctx, bs, big.Zero(), av)
+	rewact, err := SetupRewardActor(ctx, bs, big.Zero(), av)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup reward actor: %w", err)
 	}
 
-	err = state.SetActor(reward.Address, rewAct)
+	err = state.SetActor(reward.Address, rewact)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("set reward actor: %w", err)
 	}
 
 	// Setup cron
-	cronAct, err := SetupCronActor(ctx, bs, av)
+	cronact, err := SetupCronActor(ctx, bs, av)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup cron actor: %w", err)
 	}
-	if err := state.SetActor(cron.Address, cronAct); err != nil {
+	if err := state.SetActor(cron.Address, cronact); err != nil {
 		return nil, nil, xerrors.Errorf("set cron actor: %w", err)
 	}
 
-	// Setup sca actor
-	params := &sca.ConstructorParams{
-		NetworkName:      template.NetworkName,
-		CheckpointPeriod: uint64(hierarchical.MinCheckpointPeriod(hierarchical.FilecoinEC)),
-		Consensus:        hierarchical.FilecoinEC,
-	}
-	scaAct, err := SetupSCAActor(ctx, bs, params)
-	if err != nil {
-		return nil, nil, err
-	}
-	err = state.SetActor(hierarchical.SubnetCoordActorAddr, scaAct)
-	if err != nil {
-		return nil, nil, xerrors.Errorf("set SCA actor: %w", err)
-	}
-
 	// Create empty power actor
-	spAct, err := SetupStoragePowerActor(ctx, bs, av)
+	spact, err := SetupStoragePowerActor(ctx, bs, av)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup storage power actor: %w", err)
 	}
-	if err := state.SetActor(power.Address, spAct); err != nil {
+	if err := state.SetActor(power.Address, spact); err != nil {
 		return nil, nil, xerrors.Errorf("set storage power actor: %w", err)
 	}
 
 	// Create empty market actor
-	marketAct, err := SetupStorageMarketActor(ctx, bs, av)
+	marketact, err := SetupStorageMarketActor(ctx, bs, av)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup storage market actor: %w", err)
 	}
-	if err := state.SetActor(market.Address, marketAct); err != nil {
+	if err := state.SetActor(market.Address, marketact); err != nil {
 		return nil, nil, xerrors.Errorf("set storage market actor: %w", err)
 	}
 
 	// Create verified registry
-	verifAct, err := SetupVerifiedRegistryActor(ctx, bs, av)
+	verifact, err := SetupVerifiedRegistryActor(ctx, bs, av)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup verified registry market actor: %w", err)
 	}
-	if err := state.SetActor(verifreg.Address, verifAct); err != nil {
+	if err := state.SetActor(verifreg.Address, verifact); err != nil {
 		return nil, nil, xerrors.Errorf("set verified registry actor: %w", err)
 	}
 
-	bAct, err := MakeAccountActor(ctx, cst, av, builtin.BurntFundsActorAddr, big.Zero())
+	bact, err := MakeAccountActor(ctx, cst, av, builtin.BurntFundsActorAddr, big.Zero())
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup burnt funds actor state: %w", err)
 	}
-	if err := state.SetActor(builtin.BurntFundsActorAddr, bAct); err != nil {
+	if err := state.SetActor(builtin.BurntFundsActorAddr, bact); err != nil {
 		return nil, nil, xerrors.Errorf("set burnt funds actor: %w", err)
 	}
 
@@ -377,9 +367,9 @@ func MakeAccountActor(ctx context.Context, cst cbor.IpldStore, av actors.Version
 		return nil, err
 	}
 
-	actcid, err := account.GetActorCodeID(av)
-	if err != nil {
-		return nil, err
+	actcid, ok := actors.GetActorCodeID(av, actors.AccountKey)
+	if !ok {
+		return nil, xerrors.Errorf("failed to get account actor code ID for actors version %d", av)
 	}
 
 	act := &types.Actor{
@@ -459,9 +449,9 @@ func CreateMultisigAccount(ctx context.Context, cst cbor.IpldStore, state *state
 		return err
 	}
 
-	actcid, err := multisig.GetActorCodeID(av)
-	if err != nil {
-		return err
+	actcid, ok := actors.GetActorCodeID(av, actors.MultisigKey)
+	if !ok {
+		return xerrors.Errorf("failed to get multisig code ID for actors version %d", av)
 	}
 
 	err = state.SetActor(ida, &types.Actor{
@@ -489,16 +479,15 @@ func VerifyPreSealedData(ctx context.Context, cs *store.ChainStore, sys vm.Sysca
 		Epoch:          0,
 		Rand:           &fakeRand{},
 		Bstore:         cs.StateBlockstore(),
-		Actors:         registry.NewActorRegistry(),
+		Actors:         filcns.NewActorRegistry(),
 		Syscalls:       mkFakedSigSyscalls(sys),
 		CircSupplyCalc: csc,
-		FilVested:      big.Zero(),
 		NetworkVersion: nv,
 		BaseFee:        big.Zero(),
 	}
-	vm, err := vm.NewLegacyVM(ctx, &vmopt)
+	vm, err := vm.NewVM(ctx, &vmopt)
 	if err != nil {
-		return cid.Undef, xerrors.Errorf("failed to create NewLegacyVM: %w", err)
+		return cid.Undef, xerrors.Errorf("failed to create VM: %w", err)
 	}
 
 	for mi, m := range template.Miners {
@@ -663,47 +652,4 @@ func MakeGenesisBlock(ctx context.Context, j journal.Journal, bs bstore.Blocksto
 	return &GenesisBootstrap{
 		Genesis: b,
 	}, nil
-}
-
-func SetupSCAActor(ctx context.Context, bs bstore.Blockstore, params *sca.ConstructorParams) (*types.Actor, error) {
-	cst := cbor.NewCborStore(bs)
-	st, err := sca.ConstructSCAState(adt.WrapStore(ctx, cst), params)
-	if err != nil {
-		return nil, err
-	}
-
-	statecid, err := cst.Put(ctx, st)
-	if err != nil {
-		return nil, err
-	}
-
-	act := &types.Actor{
-		Code:    actor.SubnetCoordActorCodeID,
-		Balance: big.Zero(),
-		Head:    statecid,
-	}
-
-	return act, nil
-}
-
-func SetupHierarchicalRewardActor(ctx context.Context, bs bstore.Blockstore, qaPower big.Int, av actors.Version) (*types.Actor, error) {
-	cst := cbor.NewCborStore(bs)
-	rst := rew.ConstructState(qaPower)
-
-	statecid, err := cst.Put(ctx, rst)
-	if err != nil {
-		return nil, err
-	}
-
-	// NOTE: For now, everything in the reward actor is the same except the code,
-	// where we included an additional method to fund accounts. This may change
-	// in the future when we design specific reward system for subnets.
-	act := &types.Actor{
-		Code: actor.RewardActorCodeID,
-		// NOTE: This sets up the initial balance of the reward actor.
-		Balance: types.BigInt{Int: build.InitialRewardBalance},
-		Head:    statecid,
-	}
-
-	return act, nil
 }

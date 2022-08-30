@@ -5,7 +5,6 @@ import (
 	"sync/atomic"
 
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/subnet/resolver"
-	"github.com/filecoin-project/lotus/chain/rand"
 
 	/* inline-gen template
 	   {{range .actorVersions}}

@@ -28,8 +28,6 @@ import (
 	"github.com/filecoin-project/go-bitfield"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 
-	textselector "github.com/ipld/go-ipld-selector-text-lite"
-
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-fil-markets/filestore"
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket"

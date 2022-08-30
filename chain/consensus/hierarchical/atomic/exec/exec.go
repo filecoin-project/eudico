@@ -61,11 +61,6 @@ func ComputeAtomicOutput(ctx context.Context, sm *stmgr.StateManager, ts *types.
 	// Since we're simulating a future message, pretend we're applying it in the "next" tipset
 	vmHeight := pheight + 1
 
-	filVested, err := sm.GetFilVested(ctx, vmHeight)
-	if err != nil {
-		return nil, err
-	}
-
 	vmopt := &vm.VMOpts{
 		StateBase: bstate,
 		Epoch:     vmHeight,
@@ -78,7 +73,7 @@ func ComputeAtomicOutput(ctx context.Context, sm *stmgr.StateManager, ts *types.
 		NetworkVersion: sm.GetNetworkVersion(ctx, pheight+1),
 		BaseFee:        types.NewInt(0),
 		LookbackState:  stmgr.LookbackStateGetterForTipset(sm, ts),
-		FilVested:      filVested,
+		Tracing:        false,
 	}
 	vmi, err := sm.VMConstructor()(ctx, vmopt)
 	if err != nil {

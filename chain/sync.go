@@ -23,13 +23,8 @@ import (
 	"go.opencensus.io/trace"
 	"golang.org/x/xerrors"
 
-	"github.com/filecoin-project/pubsub"
-
 	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/pubsub"
-
-	"github.com/filecoin-project/lotus/chain/consensus"
-	"github.com/filecoin-project/lotus/node/modules/dtypes"
 
 	// named msgarray here to make it clear that these are the types used by
 	// messages, regardless of specs-actors version.

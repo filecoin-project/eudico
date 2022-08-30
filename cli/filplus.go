@@ -360,7 +360,7 @@ var filplusSignRemoveDataCapProposal = &cli.Command{
 		}
 
 		params := verifregtypes.RemoveDataCapProposal{
-			RemovalProposalID: verifregtypes.RmDcProposalID{ProposalID: id},
+			RemovalProposalID: verifregtypes.RmDcProposalID(id),
 			DataCapAmount:     allowanceToRemove,
 			VerifiedClient:    clientIdAddr,
 		}

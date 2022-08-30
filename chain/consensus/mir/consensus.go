@@ -30,7 +30,8 @@ import (
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
+	"github.com/filecoin-project/lotus/storage/sealer/storiface"
+
 	"github.com/filecoin-project/lotus/metrics"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
@@ -53,7 +54,7 @@ type Mir struct {
 	store    *store.ChainStore
 	beacon   beacon.Schedule
 	sm       *stmgr.StateManager
-	verifier ffiwrapper.Verifier
+	verifier storiface.Verifier
 	genesis  *types.TipSet
 	subMgr   subnet.Manager
 	netName  address.SubnetID
@@ -66,7 +67,7 @@ func NewConsensus(
 	submgr subnet.Manager,
 	b beacon.Schedule,
 	r *resolver.Resolver,
-	v ffiwrapper.Verifier,
+	v storiface.Verifier,
 	g chain.Genesis,
 	netName dtypes.NetworkName,
 ) (consensus.Consensus, error) {

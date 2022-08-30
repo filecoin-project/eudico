@@ -16,6 +16,7 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	bstore "github.com/filecoin-project/lotus/blockstore"
+	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain"
@@ -28,7 +29,6 @@ import (
 	"github.com/filecoin-project/lotus/chain/stmgr"
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
-	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
 	"github.com/filecoin-project/lotus/lib/sigs"
 	"github.com/filecoin-project/lotus/metrics"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
@@ -48,7 +48,7 @@ type Delegated struct {
 	// the state manager handles making state queries
 	sm *stmgr.StateManager
 
-	verifier ffiwrapper.Verifier
+	verifier storiface.Verifier
 
 	genesis *types.TipSet
 
@@ -79,7 +79,7 @@ func NewDelegatedConsensus(
 	submgr subnet.Manager,
 	beacon beacon.Schedule,
 	r *resolver.Resolver,
-	verifier ffiwrapper.Verifier,
+	verifier storiface.Verifier,
 	genesis chain.Genesis,
 	netName dtypes.NetworkName,
 ) consensus.Consensus {

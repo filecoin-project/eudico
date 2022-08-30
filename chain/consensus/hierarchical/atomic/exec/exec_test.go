@@ -10,8 +10,8 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/go-state-types/network"
-	"github.com/filecoin-project/specs-actors/actors/builtin"
 	adt0 "github.com/filecoin-project/specs-actors/actors/util/adt"
 	proof5 "github.com/filecoin-project/specs-actors/v5/actors/runtime/proof"
 	proof7 "github.com/filecoin-project/specs-actors/v7/actors/runtime/proof"
@@ -25,17 +25,21 @@ import (
 	"github.com/filecoin-project/lotus/build"
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/adt"
-	actbuiltin "github.com/filecoin-project/lotus/chain/actors/builtin"
+	"github.com/filecoin-project/lotus/chain/actors/builtin"
+	"github.com/filecoin-project/lotus/chain/actors/builtin/account"
+	"github.com/filecoin-project/lotus/chain/actors/builtin/cron"
 	init_ "github.com/filecoin-project/lotus/chain/actors/builtin/init"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/market"
+	"github.com/filecoin-project/lotus/chain/actors/builtin/multisig"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/power"
+	"github.com/filecoin-project/lotus/chain/actors/builtin/reward"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/system"
+	"github.com/filecoin-project/lotus/chain/actors/builtin/verifreg"
 	"github.com/filecoin-project/lotus/chain/beacon"
 	actor "github.com/filecoin-project/lotus/chain/consensus/actors"
 	replace "github.com/filecoin-project/lotus/chain/consensus/actors/atomic-replace"
-	"github.com/filecoin-project/lotus/chain/consensus/actors/reward"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
-	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	consensus "github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/actors/sca"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical/atomic/exec"
@@ -46,12 +50,14 @@ import (
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/vm"
 	"github.com/filecoin-project/lotus/chain/wallet"
-	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
 	"github.com/filecoin-project/lotus/genesis"
 	"github.com/filecoin-project/lotus/journal"
+	"github.com/filecoin-project/lotus/lib/sigs"
 	_ "github.com/filecoin-project/lotus/lib/sigs/bls"
 	_ "github.com/filecoin-project/lotus/lib/sigs/secp"
+	"github.com/filecoin-project/lotus/node/bundle"
 	"github.com/filecoin-project/lotus/node/repo"
+	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 )
 
 var cidUndef, _ = abi.CidBuilder.Sum([]byte("test"))
@@ -432,7 +438,10 @@ func makeDelegatedGenesisBlock(ctx context.Context, bs blockstore.Blockstore, te
 	}, nil
 }
 
-func MakeInitialStateTree(ctx context.Context, bs blockstore.Blockstore, template genesis.Template, checkPeriod abi.ChainEpoch) (*state.StateTree, map[address.Address]address.Address, error) {
+func MakeInitialStateTree(ctx context.Context,
+	bs blockstore.Blockstore,
+	template genesis.Template,
+	chp abi.ChainEpoch) (*state.StateTree, map[address.Address]address.Address, error) {
 	// Create empty state tree
 
 	cst := cbor.NewCborStore(bs)
@@ -456,6 +465,10 @@ func MakeInitialStateTree(ctx context.Context, bs blockstore.Blockstore, templat
 		return nil, nil, xerrors.Errorf("getting network version: %w", err)
 	}
 
+	if err := bundle.LoadBundles(ctx, bs, av); err != nil {
+		return nil, nil, xerrors.Errorf("loading actors for genesis block: %w", err)
+	}
+
 	// Create system actor
 
 	sysact, err := genesis2.SetupSystemActor(ctx, bs, av)
@@ -464,15 +477,6 @@ func MakeInitialStateTree(ctx context.Context, bs blockstore.Blockstore, templat
 	}
 	if err := state.SetActor(system.Address, sysact); err != nil {
 		return nil, nil, xerrors.Errorf("set system actor: %w", err)
-	}
-
-	// Create empty power actor
-	spact, err := SetupStoragePowerActor(ctx, bs, av)
-	if err != nil {
-		return nil, nil, xerrors.Errorf("setup storage power actor: %w", err)
-	}
-	if err := state.SetActor(power.Address, spact); err != nil {
-		return nil, nil, xerrors.Errorf("set storage power actor: %w", err)
 	}
 
 	// Create init actor
@@ -485,53 +489,69 @@ func MakeInitialStateTree(ctx context.Context, bs blockstore.Blockstore, templat
 		return nil, nil, xerrors.Errorf("set init actor: %w", err)
 	}
 
+	// Setup reward
+	// FIXME: Reward actor should be overwritten to be used with IPC.
+	rewact, err := genesis2.SetupRewardActor(ctx, bs, big.Zero(), av)
+	if err != nil {
+		return nil, nil, xerrors.Errorf("setup reward actor: %w", err)
+	}
+
+	err = state.SetActor(reward.Address, rewact)
+	if err != nil {
+		return nil, nil, xerrors.Errorf("set reward actor: %w", err)
+	}
+
+	// Setup cron
+	cronact, err := genesis2.SetupCronActor(ctx, bs, av)
+	if err != nil {
+		return nil, nil, xerrors.Errorf("setup cron actor: %w", err)
+	}
+	if err := state.SetActor(cron.Address, cronact); err != nil {
+		return nil, nil, xerrors.Errorf("set cron actor: %w", err)
+	}
+
 	// Setup sca actor
 	params := &sca.ConstructorParams{
 		NetworkName:      template.NetworkName,
-		CheckpointPeriod: uint64(checkPeriod),
+		CheckpointPeriod: uint64(chp),
 	}
-	scaact, err := SetupSCAActor(ctx, bs, params)
+	scaAct, err := SetupSCAActor(ctx, bs, params)
 	if err != nil {
 		return nil, nil, err
 	}
-	err = state.SetActor(hierarchical.SubnetCoordActorAddr, scaact)
+
+	err = state.SetActor(consensus.SubnetCoordActorAddr, scaAct)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("set SCA actor: %w", err)
 	}
-
-	// NOTE: Setting a replace actor at the beginning so we don't have
-	// to initialize it for testing.
-	ract, err := SetupReplaceActor(ctx, bs)
+	// Create empty power actor
+	spact, err := genesis2.SetupStoragePowerActor(ctx, bs, av)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, xerrors.Errorf("setup storage power actor: %w", err)
 	}
-	err = state.SetActor(ReplaceActorAddr, ract)
-	if err != nil {
-		return nil, nil, xerrors.Errorf("set Replace actor: %w", err)
+	if err := state.SetActor(power.Address, spact); err != nil {
+		return nil, nil, xerrors.Errorf("set storage power actor: %w", err)
 	}
 
 	// Create empty market actor
-	marketact, err := SetupStorageMarketActor(ctx, bs, av)
+	marketact, err := genesis2.SetupStorageMarketActor(ctx, bs, av)
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup storage market actor: %w", err)
 	}
 	if err := state.SetActor(market.Address, marketact); err != nil {
 		return nil, nil, xerrors.Errorf("set storage market actor: %w", err)
 	}
-	// Setup reward actor
-	// This is a modified reward actor to support the needs of hierarchical consensus
-	// protocol.
-	rewact, err := SetupRewardActor(ctx, bs, big.Zero(), av)
+
+	// Create verified registry
+	verifact, err := genesis2.SetupVerifiedRegistryActor(ctx, bs, av)
 	if err != nil {
-		return nil, nil, xerrors.Errorf("setup reward actor: %w", err)
+		return nil, nil, xerrors.Errorf("setup verified registry market actor: %w", err)
+	}
+	if err := state.SetActor(verifreg.Address, verifact); err != nil {
+		return nil, nil, xerrors.Errorf("set verified registry actor: %w", err)
 	}
 
-	err = state.SetActor(reward.RewardActorAddr, rewact)
-	if err != nil {
-		return nil, nil, xerrors.Errorf("set reward actor: %w", err)
-	}
-
-	bact, err := genesis2.MakeAccountActor(ctx, cst, av, builtin.BurntFundsActorAddr, big.Zero())
+	bact, err := MakeAccountActor(ctx, cst, av, builtin.BurntFundsActorAddr, big.Zero())
 	if err != nil {
 		return nil, nil, xerrors.Errorf("setup burnt funds actor state: %w", err)
 	}
@@ -544,7 +564,7 @@ func MakeInitialStateTree(ctx context.Context, bs blockstore.Blockstore, templat
 
 		switch info.Type {
 		case genesis.TAccount:
-			if err := genesis2.CreateAccountActor(ctx, cst, state, info, keyIDs, av); err != nil {
+			if err := CreateAccountActor(ctx, cst, state, info, keyIDs, av); err != nil {
 				return nil, nil, xerrors.Errorf("failed to create account actor: %w", err)
 			}
 
@@ -556,13 +576,44 @@ func MakeInitialStateTree(ctx context.Context, bs blockstore.Blockstore, templat
 			}
 			idStart++
 
-			if err := genesis2.CreateMultisigAccount(ctx, cst, state, ida, info, keyIDs, av); err != nil {
+			if err := CreateMultisigAccount(ctx, cst, state, ida, info, keyIDs, av); err != nil {
 				return nil, nil, err
 			}
 		default:
 			return nil, nil, xerrors.New("unsupported account type")
 		}
 
+	}
+
+	// Setup the first verifier as ID-address 81
+	// TODO: remove this
+	skBytes, err := sigs.Generate(crypto.SigTypeBLS)
+	if err != nil {
+		return nil, nil, xerrors.Errorf("creating random verifier secret key: %w", err)
+	}
+
+	verifierPk, err := sigs.ToPublic(crypto.SigTypeBLS, skBytes)
+	if err != nil {
+		return nil, nil, xerrors.Errorf("creating random verifier public key: %w", err)
+	}
+
+	verifierAd, err := address.NewBLSAddress(verifierPk)
+	if err != nil {
+		return nil, nil, xerrors.Errorf("creating random verifier address: %w", err)
+	}
+
+	verifierId, err := address.NewIDAddress(81)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	verifierAct, err := MakeAccountActor(ctx, cst, av, verifierAd, big.Zero())
+	if err != nil {
+		return nil, nil, xerrors.Errorf("setup first verifier state: %w", err)
+	}
+
+	if err = state.SetActor(verifierId, verifierAct); err != nil {
+		return nil, nil, xerrors.Errorf("set first verifier actor: %w", err)
 	}
 
 	totalFilAllocated := big.Zero()
@@ -598,14 +649,14 @@ func MakeInitialStateTree(ctx context.Context, bs blockstore.Blockstore, templat
 			return nil, nil, fmt.Errorf("remainder account has already been declared, cannot be assigned 90: %s", ainfo.Owner)
 		}
 
-		keyIDs[ainfo.Owner] = actbuiltin.ReserveAddress
-		err = genesis2.CreateAccountActor(ctx, cst, state, template.RemainderAccount, keyIDs, av)
+		keyIDs[ainfo.Owner] = builtin.ReserveAddress
+		err = CreateAccountActor(ctx, cst, state, template.RemainderAccount, keyIDs, av)
 		if err != nil {
 			return nil, nil, xerrors.Errorf("creating remainder acct: %w", err)
 		}
 
 	case genesis.TMultisig:
-		if err = genesis2.CreateMultisigAccount(ctx, cst, state, actbuiltin.ReserveAddress, template.RemainderAccount, keyIDs, av); err != nil {
+		if err = CreateMultisigAccount(ctx, cst, state, builtin.ReserveAddress, template.RemainderAccount, keyIDs, av); err != nil {
 			return nil, nil, xerrors.Errorf("failed to set up remainder: %w", err)
 		}
 	default:
@@ -613,6 +664,116 @@ func MakeInitialStateTree(ctx context.Context, bs blockstore.Blockstore, templat
 	}
 
 	return state, keyIDs, nil
+}
+
+func MakeAccountActor(ctx context.Context, cst cbor.IpldStore, av actors.Version, addr address.Address, bal types.BigInt) (*types.Actor, error) {
+	ast, err := account.MakeState(adt.WrapStore(ctx, cst), av, addr)
+	if err != nil {
+		return nil, err
+	}
+
+	statecid, err := cst.Put(ctx, ast.GetState())
+	if err != nil {
+		return nil, err
+	}
+
+	actcid, ok := actors.GetActorCodeID(av, actors.AccountKey)
+	if !ok {
+		return nil, xerrors.Errorf("failed to get account actor code ID for actors version %d", av)
+	}
+
+	act := &types.Actor{
+		Code:    actcid,
+		Head:    statecid,
+		Balance: bal,
+	}
+
+	return act, nil
+}
+
+func CreateAccountActor(ctx context.Context, cst cbor.IpldStore, state *state.StateTree, info genesis.Actor, keyIDs map[address.Address]address.Address, av actors.Version) error {
+	var ainfo genesis.AccountMeta
+	if err := json.Unmarshal(info.Meta, &ainfo); err != nil {
+		return xerrors.Errorf("unmarshaling account meta: %w", err)
+	}
+
+	aa, err := MakeAccountActor(ctx, cst, av, ainfo.Owner, info.Balance)
+	if err != nil {
+		return err
+	}
+
+	ida, ok := keyIDs[ainfo.Owner]
+	if !ok {
+		return fmt.Errorf("no registered ID for account actor: %s", ainfo.Owner)
+	}
+
+	err = state.SetActor(ida, aa)
+	if err != nil {
+		return xerrors.Errorf("setting account from actmap: %w", err)
+	}
+	return nil
+}
+
+func CreateMultisigAccount(ctx context.Context, cst cbor.IpldStore, state *state.StateTree, ida address.Address, info genesis.Actor, keyIDs map[address.Address]address.Address, av actors.Version) error {
+	if info.Type != genesis.TMultisig {
+		return fmt.Errorf("can only call CreateMultisigAccount with multisig Actor info")
+	}
+	var ainfo genesis.MultisigMeta
+	if err := json.Unmarshal(info.Meta, &ainfo); err != nil {
+		return xerrors.Errorf("unmarshaling account meta: %w", err)
+	}
+
+	var signers []address.Address
+
+	for _, e := range ainfo.Signers {
+		idAddress, ok := keyIDs[e]
+		if !ok {
+			return fmt.Errorf("no registered key ID for signer: %s", e)
+		}
+
+		// Check if actor already exists
+		_, err := state.GetActor(e)
+		if err == nil {
+			signers = append(signers, idAddress)
+			continue
+		}
+
+		aa, err := MakeAccountActor(ctx, cst, av, e, big.Zero())
+		if err != nil {
+			return err
+		}
+
+		if err = state.SetActor(idAddress, aa); err != nil {
+			return xerrors.Errorf("setting account from actmap: %w", err)
+		}
+		signers = append(signers, idAddress)
+	}
+
+	mst, err := multisig.MakeState(adt.WrapStore(ctx, cst), av, signers, uint64(ainfo.Threshold), abi.ChainEpoch(ainfo.VestingStart), abi.ChainEpoch(ainfo.VestingDuration), info.Balance)
+	if err != nil {
+		return err
+	}
+
+	statecid, err := cst.Put(ctx, mst.GetState())
+	if err != nil {
+		return err
+	}
+
+	actcid, ok := actors.GetActorCodeID(av, actors.MultisigKey)
+	if !ok {
+		return xerrors.Errorf("failed to get multisig code ID for actors version %d", av)
+	}
+
+	err = state.SetActor(ida, &types.Actor{
+		Code:    actcid,
+		Balance: info.Balance,
+		Head:    statecid,
+	})
+	if err != nil {
+		return xerrors.Errorf("setting account from actmap: %w", err)
+	}
+
+	return nil
 }
 
 func SetupSCAActor(ctx context.Context, bs blockstore.Blockstore, params *sca.ConstructorParams) (*types.Actor, error) {
@@ -636,105 +797,9 @@ func SetupSCAActor(ctx context.Context, bs blockstore.Blockstore, params *sca.Co
 	return act, nil
 }
 
-func SetupReplaceActor(ctx context.Context, bs blockstore.Blockstore) (*types.Actor, error) {
-	cst := cbor.NewCborStore(bs)
-	st, err := replace.ConstructState(adt.WrapStore(ctx, cst))
-	if err != nil {
-		return nil, err
-	}
-
-	statecid, err := cst.Put(ctx, st)
-	if err != nil {
-		return nil, err
-	}
-
-	act := &types.Actor{
-		Code:    actor.ReplaceActorCodeID,
-		Balance: big.Zero(),
-		Head:    statecid,
-	}
-
-	return act, nil
-}
-
-func SetupRewardActor(ctx context.Context, bs blockstore.Blockstore, qaPower big.Int, av actors.Version) (*types.Actor, error) {
-	cst := cbor.NewCborStore(bs)
-	rst := reward.ConstructState(qaPower)
-
-	statecid, err := cst.Put(ctx, rst)
-	if err != nil {
-		return nil, err
-	}
-
-	// NOTE: For now, everything in the reward actor is the same except the code,
-	// where we included an additional method to fund accounts. This may change
-	// in the future when we design specific reward system for subnets.
-	act := &types.Actor{
-		Code: actor.RewardActorCodeID,
-		// NOTE: This sets up the initial balance of the reward actor.
-		Balance: types.BigInt{Int: build.InitialRewardBalance},
-		Head:    statecid,
-	}
-
-	return act, nil
-}
-
-func SetupStorageMarketActor(ctx context.Context, bs blockstore.Blockstore, av actors.Version) (*types.Actor, error) {
-	cst := cbor.NewCborStore(bs)
-	mst, err := market.MakeState(adt.WrapStore(ctx, cbor.NewCborStore(bs)), av)
-	if err != nil {
-		return nil, err
-	}
-
-	statecid, err := cst.Put(ctx, mst.GetState())
-	if err != nil {
-		return nil, err
-	}
-
-	actcid, err := market.GetActorCodeID(av)
-	if err != nil {
-		return nil, err
-	}
-
-	act := &types.Actor{
-		Code:    actcid,
-		Head:    statecid,
-		Balance: big.Zero(),
-	}
-
-	return act, nil
-}
-
-func SetupStoragePowerActor(ctx context.Context, bs blockstore.Blockstore, av actors.Version) (*types.Actor, error) {
-
-	cst := cbor.NewCborStore(bs)
-	pst, err := power.MakeState(adt.WrapStore(ctx, cbor.NewCborStore(bs)), av)
-	if err != nil {
-		return nil, err
-	}
-
-	statecid, err := cst.Put(ctx, pst.GetState())
-	if err != nil {
-		return nil, err
-	}
-
-	actcid, err := power.GetActorCodeID(av)
-	if err != nil {
-		return nil, err
-	}
-
-	act := &types.Actor{
-		Code:    actcid,
-		Head:    statecid,
-		Balance: big.Zero(),
-	}
-
-	return act, nil
-}
-
 type genFakeVerifier struct{}
 
-var _ ffiwrapper.Verifier = (*genFakeVerifier)(nil)
+var _ storiface.Verifier = (*genFakeVerifier)(nil)
 
 func (m genFakeVerifier) VerifySeal(svi proof5.SealVerifyInfo) (bool, error) {
 	return true, nil

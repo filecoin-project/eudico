@@ -2,7 +2,6 @@ package crossmsg
 
 import (
 	"context"
-	"os"
 	"sort"
 	"time"
 
@@ -189,6 +188,9 @@ func applyMsg(ctx context.Context, vmi vm.Interface, em stmgr.ExecMonitor,
 		Params:     serparams,
 	}
 
+	/* FIXME: This may require additional changes, we need a way in the FVM
+	to verify that the account has been initialized before sending the cross message.
+
 	// Before applying the message in subnet, if the destination
 	// account hasn't been initialized, init the account actor.
 	// TODO: When handling arbitrary cross-messages, we should check if
@@ -211,6 +213,7 @@ func applyMsg(ctx context.Context, vmi vm.Interface, em stmgr.ExecMonitor,
 			}
 		}
 	}
+	*/
 
 	ret, actErr := vmi.ApplyImplicitMessage(ctx, apply)
 	if actErr != nil {

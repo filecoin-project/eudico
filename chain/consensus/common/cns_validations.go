@@ -209,7 +209,7 @@ func checkBlockMessages(ctx context.Context, str *store.ChainStore, sm *stmgr.St
 	}
 
 	nv := sm.GetNetworkVersion(ctx, b.Header.Height)
-	pl := vm.PricelistByEpochAndNetworkVersion(baseTs.Height(), nv)
+	pl := vm.PricelistByEpoch(b.Header.Height)
 	var sumGasLimit int64
 	checkMsg := func(msg types.ChainMsg) error {
 		m := msg.VMMessage()
@@ -407,7 +407,7 @@ func FilterBlockMessages(
 	}
 
 	nv := sm.GetNetworkVersion(ctx, b.Header.Height)
-	pl := vm.PricelistByEpochAndNetworkVersion(baseTs.Height(), nv)
+	pl := vm.PricelistByEpoch(b.Header.Height)
 	var sumGasLimit int64
 	checkMsg := func(msg types.ChainMsg) error {
 		m := msg.VMMessage()

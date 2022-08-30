@@ -61,9 +61,8 @@ import (
 	"github.com/filecoin-project/lotus/chain/vm"
 	"github.com/filecoin-project/lotus/chain/wallet"
 	"github.com/filecoin-project/lotus/cmd/lotus-seed/seed"
-	sectorstorage "github.com/filecoin-project/lotus/extern/sector-storage"
-	"github.com/filecoin-project/lotus/extern/sector-storage/ffiwrapper"
-	"github.com/filecoin-project/lotus/extern/sector-storage/mock"
+	sectorstorage "github.com/filecoin-project/lotus/storage/sealer"
+
 	"github.com/filecoin-project/lotus/genesis"
 	"github.com/filecoin-project/lotus/lib/peermgr"
 	lotusminer "github.com/filecoin-project/lotus/miner"
@@ -74,7 +73,9 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/helpers"
 	testing2 "github.com/filecoin-project/lotus/node/modules/testing"
 	"github.com/filecoin-project/lotus/node/repo"
-	"github.com/filecoin-project/lotus/storage/mockstorage"
+	"github.com/filecoin-project/lotus/storage/sealer/ffiwrapper"
+	"github.com/filecoin-project/lotus/storage/sealer/mock"
+	"github.com/filecoin-project/lotus/storage/sealer/storiface"
 	miner2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/miner"
 	power2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/power"
 )
@@ -233,7 +234,7 @@ func (n *EudicoEnsemble) Miner(minerNode *TestMiner, full *TestFullNode, opts ..
 
 		// Create the preseal commitment.
 		if n.options.mockProofs {
-			genm, k, err = mockstorage.PreSeal(proofType, actorAddr, sectors)
+			genm, k, err = mock.PreSeal(proofType, actorAddr, sectors)
 		} else {
 			genm, k, err = seed.PreSeal(actorAddr, proofType, 0, sectors, tdir, []byte("make genesis mem random"), nil, true)
 		}
@@ -279,27 +280,27 @@ func (n *EudicoEnsemble) Miner(minerNode *TestMiner, full *TestFullNode, opts ..
 }
 
 func NewRootTSPoWConsensus(ctx context.Context, sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
-	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
+	verifier storiface.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
 	return tspow.NewTSPoWConsensus(ctx, sm, nil, beacon, r, verifier, genesis, netName)
 }
 
 func NewRootDelegatedConsensus(ctx context.Context, sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
-	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
+	verifier storiface.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
 	return delegcns.NewDelegatedConsensus(ctx, sm, nil, beacon, r, verifier, genesis, netName)
 }
 
 func NewFilecoinExpectedConsensus(ctx context.Context, sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
-	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
+	verifier storiface.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) consensus.Consensus {
 	return filcns.NewFilecoinExpectedConsensus(ctx, sm, beacon, r, verifier, genesis)
 }
 
 func NewRootMirConsensus(ctx context.Context, sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
-	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) (consensus.Consensus, error) {
+	verifier storiface.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) (consensus.Consensus, error) {
 	return mir.NewConsensus(ctx, sm, nil, beacon, r, verifier, genesis, netName)
 }
 
 func NewRootDummyConsensus(ctx context.Context, sm *stmgr.StateManager, beacon beacon.Schedule, r *resolver.Resolver,
-	verifier ffiwrapper.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) (consensus.Consensus, error) {
+	verifier storiface.Verifier, genesis chain.Genesis, netName dtypes.NetworkName) (consensus.Consensus, error) {
 	return dummy.NewConsensus(ctx, sm, nil, beacon, r, verifier, genesis, netName)
 }
 
@@ -478,7 +479,7 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 		// Are we mocking proofs?
 		if n.options.mockProofs {
 			opts = append(opts,
-				node.Override(new(ffiwrapper.Verifier), mock.MockVerifier),
+				node.Override(new(storiface.Verifier), mock.MockVerifier),
 				node.Override(new(ffiwrapper.Prover), mock.MockProver),
 			)
 		}
@@ -752,7 +753,7 @@ func (n *EudicoEnsemble) Start() *EudicoEnsemble {
 				node.Override(new(sectorstorage.Unsealer), node.From(new(*mock.SectorMgr))),
 				node.Override(new(sectorstorage.PieceProvider), node.From(new(*mock.SectorMgr))),
 
-				node.Override(new(ffiwrapper.Verifier), mock.MockVerifier),
+				node.Override(new(storiface.Verifier), mock.MockVerifier),
 				node.Override(new(ffiwrapper.Prover), mock.MockProver),
 				node.Unset(new(*sectorstorage.Manager)),
 			)

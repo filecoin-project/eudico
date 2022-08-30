@@ -80,7 +80,7 @@ func NewFilecoinExpectedConsensus(
 	sm *stmgr.StateManager,
 	beacon beacon.Schedule,
 	r *resolver.Resolver,
-	verifier ffiwrapper.Verifier,
+	verifier storiface.Verifier,
 	genesis chain.Genesis,
 ) consensus.Consensus {
 	if build.InsecurePoStValidation {

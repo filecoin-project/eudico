@@ -34,7 +34,7 @@ func DefaultUpgradeSchedule() stmgr.UpgradeSchedule {
 
 	updates := []stmgr.Upgrade{{
 		Height:    -1,
-		Network:   network.Version15,
+		Network:   network.Version16,
 		Migration: nil,
 		Expensive: true,
 	},
@@ -246,7 +246,7 @@ func applyMiningRewards(ctx context.Context, vmi vm.Interface, em stmgr.ExecMoni
 	return nil
 }
 
-func (t *tipSetExecutor) ExecuteTipSet(ctx context.Context, sm *stmgr.StateManager, cr *resolver.Resolver, ts *types.TipSet, em stmgr.ExecMonitor) (stateroot cid.Cid, rectsroot cid.Cid, err error) {
+func (t *tipSetExecutor) ExecuteTipSet(ctx context.Context, sm *stmgr.StateManager, cr *resolver.Resolver, ts *types.TipSet, em stmgr.ExecMonitor, vmTracing bool) (stateroot cid.Cid, rectsroot cid.Cid, err error) {
 	ctx, span := trace.StartSpan(ctx, "computeTipSetState")
 	defer span.End()
 
