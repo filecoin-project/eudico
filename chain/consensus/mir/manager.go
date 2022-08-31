@@ -38,7 +38,6 @@ import (
 const (
 	ValidatorsEnv        = "EUDICO_MIR_VALIDATORS"
 	InterceptorOutputEnv = "EUDICO_INTERCEPTOR_OUTPUT"
-	interceptorFileName  = "eventlog.gz"
 )
 
 // Manager manages the Eudico and Mir nodes participating in ISS consensus protocol.
