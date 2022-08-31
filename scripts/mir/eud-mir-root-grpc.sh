@@ -59,6 +59,8 @@ rm -rvf $NODE_3_NETADDR
 rm -rf ./eudico_daemon_*.log
 rm -rf ./eudico_miner_*.log
 rm -rf ./mir_miner_*.log
+rm -rf ./eudico-recorder-*
+rm -rf ./eudico-wal-*
 
 LOG_LEVEL="info,mir-consensus=debug,mir-manager=debug"
 

@@ -81,8 +81,11 @@ rm -rf ./eudico_daemon_*.log
 rm -rf ./eudico_miner_*.log
 rm -rf ./mir_miner_*.log
 rm -rf ./eudico_shed_*.log
+rm -rf ./eudico-recorder*.log
+rm -rf ./eudico-wal*.log
 
 LOG_LEVEL="info,mir-consensus=info,mir-manager=debug"
+MIR_OUTPUT="./"
 
 tmux new-session -d -s "mir" \; \
   new-window   -t "mir" \; \
@@ -100,7 +103,7 @@ tmux new-session -d -s "mir" \; \
         ./lotus-shed keyinfo import $NODE_0_KEY;
         ./eudico mir daemon --genesis=$BLOCK0 --api=$NODE_0_API 2>&1 | tee $NODE_0_DAEMON_LOG" Enter \; \
   send-keys -t "mir:0.1" "
-        export EUDICO_MIR_VALIDATORS=$NODES EUDICO_PATH=$NODE_0_PATH GOLOG_LOG_LEVEL=$LOG_LEVEL
+        export EUDICO_MIR_VALIDATORS=$NODES EUDICO_PATH=$NODE_0_PATH GOLOG_LOG_LEVEL=$LOG_LEVEL EUDICO_INTERCEPTOR_OUTPUT=$MIR_OUTPUT
         ./eudico wait-api;
         source ./scripts/mir/connect.sh 0;
         ./eudico wallet import --as-default $WALLET_0_KEY;
@@ -111,7 +114,7 @@ tmux new-session -d -s "mir" \; \
         ./lotus-shed keyinfo import $NODE_1_KEY;
         ./eudico mir daemon --genesis=$BLOCK0 --api=$NODE_1_API 2>&1 | tee $NODE_1_DAEMON_LOG" Enter \; \
   send-keys -t "mir:0.3" "
-        export GOLOG_LOG_LEVEL=$LOG_LEVEL EUDICO_MIR_VALIDATORS=$NODES EUDICO_PATH=$NODE_1_PATH
+        export GOLOG_LOG_LEVEL=$LOG_LEVEL EUDICO_MIR_VALIDATORS=$NODES EUDICO_PATH=$NODE_1_PATH EUDICO_INTERCEPTOR_OUTPUT=$MIR_OUTPUT
         ./eudico wait-api;
         source ./scripts/mir/connect.sh 1;
         ./eudico wallet import --as-default $WALLET_1_KEY;
@@ -123,7 +126,7 @@ tmux new-session -d -s "mir" \; \
         ./lotus-shed keyinfo import $NODE_2_KEY;
         ./eudico mir daemon --genesis=$BLOCK0 --api=$NODE_2_API 2>&1 | tee $NODE_2_DAEMON_LOG" Enter \; \
     send-keys -t "mir:1.1" "
-        export GOLOG_LOG_LEVEL=$LOG_LEVEL EUDICO_MIR_VALIDATORS=$NODES EUDICO_PATH=$NODE_2_PATH
+        export GOLOG_LOG_LEVEL=$LOG_LEVEL EUDICO_MIR_VALIDATORS=$NODES EUDICO_PATH=$NODE_2_PATH EUDICO_INTERCEPTOR_OUTPUT=$MIR_OUTPUT
         ./eudico wait-api;
         source ./scripts/mir/connect.sh 2;
         ./eudico wallet import --as-default $WALLET_2_KEY;
@@ -134,7 +137,7 @@ tmux new-session -d -s "mir" \; \
         ./lotus-shed keyinfo import $NODE_3_KEY;
         ./eudico mir daemon --genesis=$BLOCK0 --api=$NODE_3_API 2>&1 | tee $NODE_3_DAEMON_LOG" Enter \; \
     send-keys -t "mir:1.3" "
-       export GOLOG_LOG_LEVEL=$LOG_LEVEL EUDICO_MIR_VALIDATORS=$NODES EUDICO_PATH=$NODE_3_PATH
+       export GOLOG_LOG_LEVEL=$LOG_LEVEL EUDICO_MIR_VALIDATORS=$NODES EUDICO_PATH=$NODE_3_PATH EUDICO_INTERCEPTOR_OUTPUT=$MIR_OUTPUT
        ./eudico wait-api;
        source ./scripts/mir/connect.sh 3;
        ./eudico wallet import --as-default $WALLET_3_KEY

@@ -16,6 +16,10 @@ import (
 	mirproto "github.com/filecoin-project/mir/pkg/pb/requestpb"
 )
 
+const (
+	ReconfigurationInterval = 2000 * time.Millisecond
+)
+
 // Mine implements "block mining" using the Mir framework.
 //
 // Mine implements the following main algorithm:
