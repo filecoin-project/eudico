@@ -157,7 +157,6 @@ require (
 	go.uber.org/fx v1.15.0
 	go.uber.org/multierr v1.8.0
 	go.uber.org/zap v1.21.0
-	go4.org v0.0.0-20200411211856-f5505b9728dd
 	golang.org/x/net v0.0.0-20220617184016-355a448f1bc9
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20220615213510-4f61da869c0c
@@ -346,6 +345,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.3.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/dig v1.12.0 // indirect
+	go4.org v0.0.0-20200411211856-f5505b9728dd // indirect
 	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4 // indirect
 	golang.org/x/exp v0.0.0-20220613132600-b0d781184e0d // indirect
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect
