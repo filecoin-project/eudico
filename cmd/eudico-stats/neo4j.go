@@ -1,9 +1,17 @@
 package main
 
 import (
+	"time"
+
 	"github.com/filecoin-project/go-address"
 	"github.com/neo4j/neo4j-go-driver/v4/neo4j"
 )
+
+const NewCrossNetNodeQueryTemplate = "MATCH (n:CrossNetNode) " +
+	"WHERE n.Id=$id " +
+	"WITH count(n) as nodesAltered " +
+	"WHERE nodesAltered = 0 " +
+	"CREATE (n:CrossNetNode {Id:$id})"
 
 const NewNodeSubnetQueryTemplate = "MATCH (n:SubnetNode) " +
 	"WHERE n.Id=$id " +
@@ -18,10 +26,9 @@ const UpsertSubnetQueryTemplate = "MATCH (n:SubnetNode) " +
 	"WHERE nodesAltered = 0 " +
 	"CREATE (n:SubnetNode {Id:$id, SubnetCount:$subnetCount, Stake:$stake, Consensus:$consensus})"
 
-const UpsertRelationshipQueryTemplate = "MATCH " +
-	"(a:SubnetNode),(b:SubnetNode) " +
-	"WHERE a.Id = $from AND b.Id = $to " +
-	"MERGE (a)-[r:Parent]->(b)"
+const ExistsQueryTemplate = "MATCH (a:SubnetNode{Id:$id}) WITH COUNT(a) > 0 AS nodeExists RETURN nodeExists"
+
+const UpsertRelationshipQueryTemplate = "MATCH (a:SubnetNode{Id:$from}) MATCH (b:SubnetNode{Id:$to}) MERGE (a)-[r:Parent]->(b)"
 
 // Neo4jClient connects to the neo4j db instance
 // TODO: use connection pool maybe?
@@ -39,9 +46,70 @@ func NewNeo4jClient(uri, username, password string) (Neo4jClient, error) {
 	return Neo4jClient{driver: driver}, nil
 }
 
+
+// ========================= Crossnet Messages =======================
+func (n *Neo4jClient) NewCrossNetNode(id address.SubnetID) error {
+	session := n.session()
+	defer session.Close()
+
+	_, err := session.WriteTransaction(func(tx neo4j.Transaction) (interface{}, error) {
+		_, err := tx.Run(
+			NewCrossNetNodeQueryTemplate,
+			map[string]interface{}{
+				"id": getSubnetIdString(id),
+			})
+
+		if err != nil {
+			log.Errorw("cannot create cross net node", "err", err)
+			return nil, err
+		}
+		return nil, nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ======================= Subnet Info =====================
+func (n *Neo4jClient) EnsureExists(id address.SubnetID, tx neo4j.Session) error {
+	for {
+		result, err := tx.Run(
+			ExistsQueryTemplate,
+			map[string]interface{}{
+				"id":          getSubnetIdString(id),
+			},
+		)
+
+		if err != nil {
+			log.Errorw("cannot ensure node exists", "error", err, "id", id)
+			return err
+		}
+
+		for result.Next() {
+			record := result.Record()
+    		nodeExists, ok := record.Get("nodeExists")
+
+			if ok && nodeExists == true {
+				log.Infow("node exists", "id", id, "nodeExists", nodeExists, "ok", ok)
+				return nil
+			}
+		}
+		
+
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
 func (n *Neo4jClient) UpsertSubnet(subnets *[]SubnetNode) error {
 	session := n.session()
 	defer session.Close()
+
+	for _, subnet := range *subnets {
+		n.EnsureExists(subnet.SubnetID, session)
+	}
 
 	_, err := session.WriteTransaction(func(tx neo4j.Transaction) (interface{}, error) {
 		for _, subnet := range *subnets {
@@ -100,8 +168,16 @@ func (n *Neo4jClient) SetParentRelationship(relationships *[]Relationship) error
 	session := n.session()
 	defer session.Close()
 
+	for _, relationship := range *relationships {
+		n.EnsureExists(relationship.From, session)
+		n.EnsureExists(relationship.To, session)
+	}
 	_, err := session.WriteTransaction(func(tx neo4j.Transaction) (interface{}, error) {
 		for _, relationship := range *relationships {
+			log.Infow("relationships", "map", map[string]interface{}{
+				"from": getSubnetIdString(relationship.From),
+				"to":   getSubnetIdString(relationship.To),
+			})
 			_, err := tx.Run(
 				UpsertRelationshipQueryTemplate,
 				map[string]interface{}{
@@ -116,6 +192,7 @@ func (n *Neo4jClient) SetParentRelationship(relationships *[]Relationship) error
 	})
 
 	if err != nil {
+		log.Errorw("cannot insert relationships to neo4j", "relationshiops", relationships)
 		return err
 	}
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 # init the node and the genesis
 init() {
@@ -14,13 +14,37 @@ init() {
     mv f1* ./credentials
 }
 
-# start the miner process
+# start the miner process for the root net
 miner() {
     # import wallet
     ./eudico wallet import --format=json-lotus ./credentials/f1*.key || true
 
     # start the miner
     ./eudico delegated miner
+}
+
+fund_subnet() {
+  subnet_id=$1
+  fund=$2
+  ./eudico subnet fund --subnet ${subnet_id} ${fund}
+}
+
+# start the miner process for subnets
+mine_subnet() {
+  subnet_id=$1
+  ./eudico subnet mine --subnet ${subnet_id}
+}
+
+create_subnet() {
+  subnet_id=$(./eudico subnet add --name test1 --consensus POW | grep -o "/root/.*")
+  echo "create subnet ${subnet_id}"
+  ./eudico subnet join --subnet ${subnet_id} 2
+  echo "join subnet ${subnet_id}"
+}
+
+create_subnets() {
+  num=10
+  for i in $(seq 1 $num); do create_subnet; done
 }
 
 # start the node daemon process
@@ -40,7 +64,7 @@ stats() {
     ./eudico-stats run --no-sync true
 }
 
-while getopts ":hmnscai" option; do
+while getopts ":hmnscaiv" option; do
    case $option in
       h) # display Help
         printf "USAGE: Util bash script for eudico testnet commands\n"
@@ -51,6 +75,7 @@ while getopts ":hmnscai" option; do
         echo "-c    Clear the current node data"
         echo "-a    Start all in one node"
         echo "-i    Init the key and genesis"
+        echo "-k    Create subnets"
         exit;;
       m) # start the miner
         miner
@@ -66,6 +91,9 @@ while getopts ":hmnscai" option; do
         exit;;
       i) # init the node and genesis
         init
+        exit;;
+      v) # create subnets
+        create_subnets
         exit;;
       a) # start all in one
         daemon & > node.log

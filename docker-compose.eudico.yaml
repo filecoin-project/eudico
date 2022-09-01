@@ -26,7 +26,7 @@ services:
       EUDICO_STATS_NEO4J_PASSWORD: 90d8kOfU*^cR
     volumes:
       - eudico-data:/home/eudico/.eudico
-      - ./scripts/eudico.sh:/home/eudico/eudico.sh
+      - ./scripts/eudico-stats.sh:/home/eudico/eudico-stats.sh
       - ./credentials:/home/eudico/credentials
     ports:
       - 1234:1234
@@ -36,23 +36,23 @@ services:
     command:
       - -a  # start "all in one"
 
-  prometheus:
-    image: prom/prometheus
-    volumes:
-      - ./cmd/eudico-stats/prometheus.yml:/etc/prometheus/prometheus.yml
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
-      - '--web.console.templates=/usr/share/prometheus/consoles'
-    ports:
-      - 9090:9090
+  # prometheus:
+  #   image: prom/prometheus
+  #   volumes:
+  #     - ./cmd/eudico-stats/prometheus.yml:/etc/prometheus/prometheus.yml
+  #   command:
+  #     - '--config.file=/etc/prometheus/prometheus.yml'
+  #     - '--storage.tsdb.path=/prometheus'
+  #     - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+  #     - '--web.console.templates=/usr/share/prometheus/consoles'
+  #   ports:
+  #     - 9090:9090
 
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "13000:3000"
-    depends_on:
-      - prometheus
-    volumes:
-      - grafana:/var/lib/grafana
+  # grafana:
+  #   image: grafana/grafana:latest
+  #   ports:
+  #     - "13000:3000"
+  #   depends_on:
+  #     - prometheus
+  #   volumes:
+  #     - grafana:/var/lib/grafana

@@ -26,8 +26,8 @@ RUN useradd -m eudico && \
 COPY --from=builder /home/eudico/eudico /home/eudico/eudico
 COPY --from=builder /home/eudico/eudico-stats /home/eudico/eudico-stats
 COPY --from=builder /home/eudico/lotus-keygen /home/eudico/lotus-keygen
-COPY ./scripts/eudico.sh /home/eudico/eudico.sh
+COPY ./scripts/eudico-stats.sh /home/eudico/eudico-stats.sh
 
 WORKDIR /home/eudico
 
-ENTRYPOINT ["bash", "/home/eudico/eudico.sh"]
+ENTRYPOINT ["bash", "/home/eudico/eudico-stats.sh"]

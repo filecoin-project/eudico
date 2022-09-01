@@ -62,6 +62,7 @@ func (s *NodeChange) IsUpdated() bool {
 type SubnetChanges struct {
 	NodeChanges         NodeChange
 	RelationshipChanges SubnetRelationshipChange
+	CrossNetChanges CrossnetRelationshipChange
 }
 
 func (s *SubnetChanges) IsUpdated() bool {
@@ -78,6 +79,10 @@ func emptySubnetChanges(nodeId address.SubnetID) SubnetChanges {
 		},
 		RelationshipChanges: SubnetRelationshipChange{
 			Added:   make([]Relationship, 0),
+			Removed: make([]Relationship, 0),
+		},
+		CrossNetChanges: CrossnetRelationshipChange{
+			Added:   make([]CrossNetRelationship, 0),
 			Removed: make([]Relationship, 0),
 		},
 	}

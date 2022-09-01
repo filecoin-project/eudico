@@ -24,9 +24,23 @@ cd cmd/eudico-stats && docker-compose up -d && cd -
 ./eudico-stats run --no-sync true
 
 # step 6. Add subnet
+```
+# e.g. ./eudico wallet set-default f1lubprfrtjvwodaszrtxow36p53cjx3nevdkboby
 ./eudico wallet set-default <Your Key>
+
 ./eudico subnet add --name test1 --consensus POW
 ./eudico subnet join --subnet /root/t01000 4
+
+# fund subnets
+./eudico subnet fund --subnet /root/t01000 100
+
+# mine the created subnet
+./eudico subnet mine --subnet /root/t01000
+
+# create subnets in subnet and join
+./eudico subnet add --name test2 --parent /root/t01000 --consensus POW
+./eudico subnet join --subnet /root/t01000/t01001 4
+
 # you should be able to see the stats on http://localhost:9090 with eudico*
 ```
 
