@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/multiformats/go-multiaddr"
-	"go4.org/sort"
 
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	availabilityevents "github.com/filecoin-project/mir/pkg/availability/events"
@@ -17,6 +16,7 @@ import (
 	"github.com/filecoin-project/mir/pkg/pb/eventpb"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
 	t "github.com/filecoin-project/mir/pkg/types"
+	"github.com/filecoin-project/mir/pkg/util/maputil"
 )
 
 const (
@@ -161,7 +161,7 @@ func (sm *StateManager) applyProvideTransactions(ptx *availabilitypb.ProvideTran
 	// Send a batch to the Eudico node.
 	sm.ChainNotify <- &Batch{
 		Messages:   msgs,
-		Validators: getSortedKeys(sm.memberships[sm.currentEpoch]),
+		Validators: maputil.GetSortedKeys(sm.memberships[sm.currentEpoch]),
 	}
 
 	return events.EmptyList(), nil
@@ -192,7 +192,7 @@ func (sm *StateManager) applyNewEpoch(newEpoch *eventpb.NewEpoch) (*events.Event
 	}
 
 	// The base membership is the last one membership.
-	newMembership := copyMap(sm.memberships[t.EpochNr(newEpoch.EpochNr+ConfigOffset)])
+	newMembership := maputil.Copy(sm.memberships[t.EpochNr(newEpoch.EpochNr+ConfigOffset)])
 
 	// Append a new membership data structure to be modified throughout the new epoch.
 	sm.memberships[t.EpochNr(newEpoch.EpochNr+ConfigOffset+1)] = newMembership
@@ -261,7 +261,7 @@ func (sm *StateManager) applyRestoreState(snapshot *commonpb.StateSnapshot) (*ev
 		}
 	}
 
-	newMembership := copyMap(sm.memberships[t.EpochNr(snapshot.Configuration.EpochNr+ConfigOffset)])
+	newMembership := maputil.Copy(sm.memberships[t.EpochNr(snapshot.Configuration.EpochNr+ConfigOffset)])
 	sm.memberships[t.EpochNr(snapshot.Configuration.EpochNr+ConfigOffset+1)] = newMembership
 
 	return events.EmptyList(), nil
@@ -269,32 +269,6 @@ func (sm *StateManager) applyRestoreState(snapshot *commonpb.StateSnapshot) (*ev
 
 // ImplementsModule method only serves the purpose of indicating that this is a Module and must not be called.
 func (sm *StateManager) ImplementsModule() {}
-
-func getSortedKeys(m map[t.NodeID]t.NodeAddress) []t.NodeID {
-	skeys := make([]string, len(m))
-	i := 0
-	for k := range m {
-		skeys[i] = k.Pb()
-		i++
-	}
-
-	sort.Strings(skeys)
-
-	keys := make([]t.NodeID, len(m))
-	for k := range skeys {
-		keys[k] = t.NodeID(skeys[k])
-	}
-
-	return keys
-}
-
-func copyMap(m map[t.NodeID]t.NodeAddress) map[t.NodeID]t.NodeAddress {
-	newMap := make(map[t.NodeID]t.NodeAddress, len(m))
-	for k, v := range m {
-		newMap[k] = v
-	}
-	return newMap
-}
 
 func maxFaulty(n int) int {
 	// assuming n > 3f:

@@ -16,6 +16,7 @@ import (
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
+	"github.com/filecoin-project/lotus/chain/consensus/mir/pool"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/mir"
@@ -26,7 +27,6 @@ import (
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/iss"
 	"github.com/filecoin-project/mir/pkg/logging"
-	"github.com/filecoin-project/mir/pkg/mempool/simplemempool"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/net"
 	mirlibp2p "github.com/filecoin-project/mir/pkg/net/libp2p"
@@ -188,13 +188,13 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		},
 	)
 
-	// Use a simple mempool for incoming requests.
-	mempool := simplemempool.NewModule(
-		&simplemempool.ModuleConfig{
+	// Use a mempool for incoming requests.
+	pool := pool.NewModule(
+		&pool.ModuleConfig{
 			Self:   "mempool",
 			Hasher: "hasher",
 		},
-		&simplemempool.ModuleParams{
+		&pool.ModuleParams{
 			MaxTransactionsInBatch: 10,
 		},
 	)
@@ -211,14 +211,12 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		logger,
 	)
 
-	requestPool := newRequestPool()
-
 	m := Manager{
 		Addr:                addr,
 		SubnetID:            subnetID,
 		NetName:             netName,
 		EudicoNode:          api,
-		Pool:                requestPool,
+		Pool:                newRequestPool(),
 		MirID:               mirID,
 		interceptor:         interceptor,
 		WAL:                 wal,
@@ -236,7 +234,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		"iss":          issProtocol,
 		"app":          sm,
 		"crypto":       mircrypto.New(m.Crypto),
-		"mempool":      mempool,
+		"mempool":      pool,
 		"batchdb":      batchdb,
 		"availability": availability,
 	})
