@@ -216,10 +216,18 @@ jobs:
               << parameters.go-test-flags >> \
               << parameters.target >>
           no_output_timeout: 30m
+      - run:
+          command: |
+            dates="$(date +%s)"
+            mkdir -p /tmp/test-mir-eventlogs/"$dates"
+            cp -R ./itests/event-recorder.* /tmp/test-mir-eventlogs/"$dates"/
+          when: on_fail
       - store_test_results:
           path: /tmp/test-reports
       - store_artifacts:
           path: /tmp/test-artifacts/<< parameters.suite >>.json
+      - store_artifacts:
+          path: /tmp/test-mir-eventlogs
       - when:
           condition: << parameters.codecov-upload >>
           steps:

@@ -1,7 +1,7 @@
 package mir
 
 import (
-	logging "github.com/ipfs/go-log/v2"
+	ipfslogging "github.com/ipfs/go-log/v2"
 
 	mirlogging "github.com/filecoin-project/mir/pkg/logging"
 )
@@ -12,12 +12,12 @@ var _ mirlogging.Logger = &managerLogger{}
 
 // mirLogger implements Mir's Log interface.
 type managerLogger struct {
-	logger *logging.ZapEventLogger
+	logger *ipfslogging.ZapEventLogger
 }
 
 func newManagerLogger() *managerLogger {
 	return &managerLogger{
-		logger: logging.Logger(managerLoggerName),
+		logger: ipfslogging.Logger(managerLoggerName),
 	}
 }
 

@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
@@ -20,8 +22,10 @@ import (
 	"github.com/filecoin-project/mir/pkg/availability/batchdb/fakebatchdb"
 	"github.com/filecoin-project/mir/pkg/availability/multisigcollector"
 	mircrypto "github.com/filecoin-project/mir/pkg/crypto"
+	"github.com/filecoin-project/mir/pkg/eventlog"
 	"github.com/filecoin-project/mir/pkg/events"
 	"github.com/filecoin-project/mir/pkg/iss"
+	"github.com/filecoin-project/mir/pkg/logging"
 	"github.com/filecoin-project/mir/pkg/mempool/simplemempool"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/net"
@@ -29,6 +33,11 @@ import (
 	mirproto "github.com/filecoin-project/mir/pkg/pb/requestpb"
 	"github.com/filecoin-project/mir/pkg/simplewal"
 	t "github.com/filecoin-project/mir/pkg/types"
+)
+
+const (
+	ValidatorsEnv        = "EUDICO_MIR_VALIDATORS"
+	InterceptorOutputEnv = "EUDICO_INTERCEPTOR_OUTPUT"
 )
 
 // Manager manages the Eudico and Mir nodes participating in ISS consensus protocol.
@@ -43,13 +52,14 @@ type Manager struct {
 
 	// Mir types
 
-	MirNode *mir.Node
-	MirID   string
-	WAL     *simplewal.WAL
-	Net     net.Transport
-	ISS     *iss.ISS
-	Crypto  *CryptoManager
-	App     *StateManager
+	MirNode     *mir.Node
+	MirID       string
+	WAL         *simplewal.WAL
+	Net         net.Transport
+	ISS         *iss.ISS
+	Crypto      *CryptoManager
+	App         *StateManager
+	interceptor *eventlog.Recorder
 
 	// Reconfiguration types.
 
@@ -86,7 +96,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		return nil, fmt.Errorf("empty validator set")
 	}
 
-	nodeIDs, initialMembership, err := ValidatorsMembership(initialValidatorSet.Validators)
+	nodeIDs, initialMembership, err := validatorsMembership(initialValidatorSet.Validators)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build node membership: %w", err)
 	}
@@ -123,8 +133,8 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	logger := newManagerLogger()
 
 	// Create Mir modules.
-
-	wal, err := NewWAL(mirID, fmt.Sprintf("eudico-wal-%s", addr))
+	walDir := fmt.Sprintf("eudico-wal%s", strings.Replace(mirID, "/", "-", -1))
+	wal, err := NewWAL(mirID, walDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create WAL: %w", err)
 	}
@@ -141,6 +151,19 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	cryptoManager, err := NewCryptoManager(addr, api)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create crypto manager: %w", err)
+	}
+
+	// Instantiate an interceptor.
+
+	var interceptor *eventlog.Recorder
+
+	interceptorOutput := os.Getenv(InterceptorOutputEnv)
+	if interceptorOutput != "" {
+		path := fmt.Sprintf("eudico-recorder%s", strings.Replace(mirID, "/", "-", -1))
+		interceptor, err = eventlog.NewRecorder(t.NodeID(mirID), path, logging.Decorate(logger, "Interceptor: "))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create interceptor: %w", err)
+		}
 	}
 
 	// Instantiate the ISS protocol module with default configuration.
@@ -197,6 +220,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		EudicoNode:          api,
 		Pool:                requestPool,
 		MirID:               mirID,
+		interceptor:         interceptor,
 		WAL:                 wal,
 		Crypto:              cryptoManager,
 		Net:                 netTransport,
@@ -252,7 +276,7 @@ func (m *Manager) Start(ctx context.Context) chan error {
 	return errChan
 }
 
-// Stop stops the manager.
+// Stop stops the manager and all its components.
 func (m *Manager) Stop() {
 	log.With("miner", m.MirID).Infof("Mir manager shutting down")
 	defer log.With("miner", m.MirID).Info("Mir manager stopped")
@@ -262,7 +286,15 @@ func (m *Manager) Stop() {
 	}
 	log.Info("WAL closed")
 
+	if m.interceptor != nil {
+		if err := m.interceptor.Stop(); err != nil {
+			log.Errorf("Could not close interceptor: %s", err)
+		}
+		log.Info("Interceptor closed")
+	}
+
 	m.Net.Stop()
+	log.Info("Network transport stopped")
 }
 
 // ReconfigureMirNode reconfigures the Mir node.

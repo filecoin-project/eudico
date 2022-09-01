@@ -945,7 +945,7 @@ func (n *EudicoEnsemble) generateGenesis() *genesis.Template {
 }
 
 func (n *EudicoEnsemble) removeMirFiles() error {
-	files, err := filepath.Glob("./eudico-wal*")
+	files, err := filepath.Glob("./eudico-wal-*")
 	if err != nil {
 		return err
 	}

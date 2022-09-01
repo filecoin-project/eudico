@@ -514,6 +514,11 @@ func (ts *eudicoSubnetSuite) testMirReconfiguration(t *testing.T) {
 
 	os.Unsetenv(dummy.ValidatorsEnv) // nolint
 
+	// Set the special variable to enable interceptor logs in Mir.
+	err = os.Setenv(mir.InterceptorOutputEnv, "./")
+	require.NoError(t, err)
+	defer os.Unsetenv(dummy.ValidatorsEnv) // nolint
+
 	subnetParams := &hierarchical.SubnetParams{
 		Addr:             minerA,
 		Parent:           parent,
@@ -573,6 +578,7 @@ func (ts *eudicoSubnetSuite) testMirReconfiguration(t *testing.T) {
 	require.NotEqual(t, 0, subnets[0].Subnet.Status)
 	require.Equal(t, hierarchical.Mir, subnets[0].Consensus)
 
+	// Enable interceptor for all Mir miners
 	t.Log("[*] miner A in subnet is starting")
 	mp := hierarchical.MiningParams{}
 	err = nodeA.MineSubnet(ctx, minerA, subnetAddr, false, &mp)

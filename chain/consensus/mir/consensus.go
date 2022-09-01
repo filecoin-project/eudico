@@ -5,11 +5,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/Gurpartap/async"
 	"github.com/hashicorp/go-multierror"
-	logging "github.com/ipfs/go-log/v2"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"go.opencensus.io/stats"
 	"golang.org/x/xerrors"
@@ -35,19 +33,7 @@ import (
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 )
 
-const (
-	ReconfigurationInterval = 2000 * time.Millisecond
-	ValidatorsEnv           = "EUDICO_MIR_VALIDATORS"
-
-	// ConfigOffset is the number of epochs by which to delay configuration changes.
-	// If a configuration is agreed upon in epoch e, it will take effect in epoch e + 1 + configOffset.
-	ConfigOffset = 2
-)
-
-var (
-	log                     = logging.Logger("mir-consensus")
-	_   consensus.Consensus = &Mir{}
-)
+var _ consensus.Consensus = &Mir{}
 
 type Mir struct {
 	store    *store.ChainStore
