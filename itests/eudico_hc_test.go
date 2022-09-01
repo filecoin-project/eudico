@@ -557,7 +557,7 @@ func (ts *eudicoSubnetSuite) testMirReconfiguration(t *testing.T) {
 	// Set the special variable to enable interceptor logs in Mir.
 	err = os.Setenv(mir.InterceptorOutputEnv, "./")
 	require.NoError(t, err)
-	defer os.Unsetenv(dummy.ValidatorsEnv) // nolint
+	defer os.Unsetenv(mir.InterceptorOutputEnv) // nolint
 
 	subnetParams := &hierarchical.SubnetParams{
 		Addr:             minerA,
