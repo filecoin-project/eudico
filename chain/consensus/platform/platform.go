@@ -40,11 +40,11 @@ func ServeNamedAPI(m *sync.Mutex, mux *mux.Router, serverOptions []jsonrpc.Serve
 			// Instantiate the full node handler.
 			m.Lock()
 			h, err = submgr.FullNodeHandler(pp, managerAPI, true, serverOptions...)
-			m.Unlock()
 			if err != nil {
 				m.Unlock()
 				return fmt.Errorf("failed to instantiate rpc handler: %s", err)
 			}
+			m.Unlock()
 		}
 		m.Lock()
 		mux.NewRoute().PathPrefix(pp).Handler(h)
