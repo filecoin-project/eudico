@@ -220,7 +220,7 @@ jobs:
           command: |
             dates="$(date +%s)"
             mkdir -p /tmp/test-mir-eventlogs/"$dates"
-            cp -R ./itests/eudico-recorder.* /tmp/test-mir-eventlogs/"$dates"/
+            cp -R ./itests/eudico-recorder* /tmp/test-mir-eventlogs/"$dates"/
           when: on_fail
       - store_test_results:
           path: /tmp/test-reports
