@@ -133,8 +133,8 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	logger := newManagerLogger()
 
 	// Create Mir modules.
-	walDir := fmt.Sprintf("eudico-wal%s", strings.Replace(mirID, "/", "-", -1))
-	wal, err := NewWAL(mirID, walDir)
+	path := fmt.Sprintf("eudico-wal%s", strings.Replace(mirID, "/", "-", -1))
+	wal, err := NewWAL(mirID, path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create WAL: %w", err)
 	}
