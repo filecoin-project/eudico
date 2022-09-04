@@ -43,8 +43,10 @@ create_subnet() {
 }
 
 create_subnets() {
-  num=10
-  for i in $(seq 1 $num); do create_subnet; done
+  ADDR=$(echo ./credentials/f1* | tr '.' ' ' | tr '/' ' ' | awk '{print $2}')
+  ./eudico wallet set-default ${ADDR}
+  echo "amount $1"
+  for i in $(seq 1 $1); do create_subnet; done
 }
 
 # start the node daemon process
@@ -75,7 +77,7 @@ while getopts ":hmnscaiv" option; do
         echo "-c    Clear the current node data"
         echo "-a    Start all in one node"
         echo "-i    Init the key and genesis"
-        echo "-k    Create subnets"
+        echo "-v    Create subnets"
         exit;;
       m) # start the miner
         miner
@@ -93,7 +95,8 @@ while getopts ":hmnscaiv" option; do
         init
         exit;;
       v) # create subnets
-        create_subnets
+        shift
+        create_subnets $@
         exit;;
       a) # start all in one
         daemon & > node.log

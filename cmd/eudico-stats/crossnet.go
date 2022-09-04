@@ -7,12 +7,9 @@ import (
 )
 
 const BottomUpType = "ButtomUp"
-const CrossnetUpdated = "CrossnetUpdated"
-const CrossnetChildAdded = "CrossnetChildAdded"
-const CrossnetChildRemoved = "CrossnetChildRemoved"
-const CrossnetNodeRemoved = "CrossnetNodeRemoved"
-const CrossnetNodeUpdated = "CrossnetNodeUpdated"
-const CrossnetNodeAdded = "CrossnetNodeAdded"
+const TopDownType = "TopDown"
+const TopDownMsgUpdated = "TopDownMsgUpdated"
+const BottomUpMsgUpdated = "BottomUpMsgUpdated"
 
 type CrossNetRelationship struct {
 	From address.SubnetID
@@ -22,7 +19,7 @@ type CrossNetRelationship struct {
 }
 
 type CrossnetRelationshipChange struct {
-	Added   []CrossNetRelationship
+	TopDownAdded   []CrossNetRelationship
 	Removed []Relationship
 }
 
@@ -30,18 +27,35 @@ func (s *CrossnetRelationshipChange) Remove(parent address.SubnetID, child addre
 	s.Removed = append(s.Removed, Relationship{From: parent, To: child})
 }
 
-func (s *CrossnetRelationshipChange) Add(parent address.SubnetID, child address.SubnetID, msgType string, count int) {
-	r := CrossNetRelationship{
-		From: parent,
-		To: child,
-		Type: msgType,
-		Count: count,
+func (s *CrossnetRelationshipChange) AddTopDown(parent address.SubnetID, child address.SubnetID, count int) {
+	if len(s.TopDownAdded) == 0 {
+		r := CrossNetRelationship{
+			From: parent,
+			To: child,
+			Type: TopDownType,
+			Count: count,
+		}
+		s.TopDownAdded = append(s.TopDownAdded, r)
+	} else {
+		for i, relationship := range s.TopDownAdded {
+			if relationship.From == parent && relationship.To == child {
+				relationship.Count += count
+				s.TopDownAdded[i] = relationship
+			} else {
+				r := CrossNetRelationship{
+					From: parent,
+					To: child,
+					Type: TopDownType,
+					Count: count,
+				}
+				s.TopDownAdded = append(s.TopDownAdded, r)
+			}
+		}
 	}
-	s.Added = append(s.Added, r)
 }
 
 func (s *CrossnetRelationshipChange) IsUpdated() bool {
-	return len(s.Removed) > 0 || len(s.Added) > 0
+	return len(s.Removed) > 0 || len(s.TopDownAdded) > 0
 }
 
 type CrossNetNodeChange struct {
@@ -86,7 +100,7 @@ func emptyCrossnetChanges(nodeId address.SubnetID) CrossnetChanges {
 			Removed:       make([]address.SubnetID, 0),
 		},
 		RelationshipChanges: CrossnetRelationshipChange{
-			Added:   make([]CrossNetRelationship, 0),
+			TopDownAdded:   make([]CrossNetRelationship, 0),
 			Removed: make([]Relationship, 0),
 		},
 	}
