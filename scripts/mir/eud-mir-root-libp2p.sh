@@ -81,8 +81,8 @@ rm -rf ./eudico_daemon_*.log
 rm -rf ./eudico_miner_*.log
 rm -rf ./mir_miner_*.log
 rm -rf ./eudico_shed_*.log
-rm -rf ./eudico-recorder*.log
-rm -rf ./eudico-wal*.log
+rm -rf ./eudico-recorder-*
+rm -rf ./eudico-wal-*
 
 LOG_LEVEL="info,mir-consensus=info,mir-manager=debug"
 MIR_OUTPUT="./"
