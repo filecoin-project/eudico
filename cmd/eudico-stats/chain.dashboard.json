@@ -29,10 +29,7 @@
   "liveNow": false,
   "panels": [
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "RJ3jzGMVk"
-      },
+      "datasource": {},
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -96,7 +93,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "RJ3jzGMVk"
+        "uid": "4IcWiKGVz"
       },
       "fieldConfig": {
         "defaults": {
@@ -151,7 +148,7 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 25,
+        "h": 18,
         "w": 14,
         "x": 10,
         "y": 0
@@ -177,6 +174,7 @@
           },
           "editorMode": "code",
           "expr": "histogram_quantile(0.95, rate(eudico_node_stats_api_request_duration_ms_bucket{api=\"eudico-daemon\"}[10m]))",
+          "hide": false,
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -251,7 +249,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "RJ3jzGMVk"
+        "uid": "4IcWiKGVz"
       },
       "description": "The median subnet spin up time in millis seconds",
       "fieldConfig": {
@@ -303,7 +301,8 @@
             "uid": "z584F7k4k"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, rate(eudico_node_stats_hc_subnet_start_duration_bucket[5m]))",
+          "expr": "histogram_quantile(0.95, rate(eudico_node_stats_hc_subnet_start_duration_bucket[24h]))",
+          "hide": false,
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -315,7 +314,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "RJ3jzGMVk"
+        "uid": "4IcWiKGVz"
       },
       "fieldConfig": {
         "defaults": {
@@ -365,6 +364,7 @@
           },
           "editorMode": "code",
           "expr": "eudico_node_stats_api_request_duration_ms_sum{endpoint=\"AddSubnet\"} / eudico_node_stats_api_request_duration_ms_count{endpoint=\"AddSubnet\"}",
+          "hide": false,
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -374,10 +374,7 @@
       "type": "stat"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "RJ3jzGMVk"
-      },
+      "datasource": {},
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -437,7 +434,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "RJ3jzGMVk"
+        "uid": "4IcWiKGVz"
       },
       "fieldConfig": {
         "defaults": {
@@ -492,7 +489,7 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 1,
         "w": 10,
         "x": 0,
         "y": 17
@@ -518,7 +515,8 @@
             "uid": "RJ3jzGMVk"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(55, rate(eudico_node_stats_block_validation_ms_bucket[60m]))",
+          "expr": "histogram_quantile(95, rate(eudico_node_stats_block_validation_ms_bucket[10m]))",
+          "hide": false,
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -536,13 +534,13 @@
     "list": []
   },
   "time": {
-    "from": "now-30m",
+    "from": "now-5m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "HC Metrics",
   "uid": "ltIs4ikVk",
-  "version": 8,
+  "version": 4,
   "weekStart": ""
 }

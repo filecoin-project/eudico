@@ -13,6 +13,7 @@ WORKDIR /home/eudico
 
 COPY . .
 
+# RUN make clean deps && make eudico-stats
 RUN make clean deps && make eudico eudico-stats lotus-keygen
 
 # The eudico image

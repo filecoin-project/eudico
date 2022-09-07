@@ -382,6 +382,7 @@ func (e *EudicoStatsListener) detectAddedSubnets(
 }
 
 func (e *EudicoStatsListener) detectNodeChange(
+	ctx context.Context,
 	stats *SubnetStat,
 	state *subnet.SubnetState,
 	subnetCount int,
@@ -390,15 +391,47 @@ func (e *EudicoStatsListener) detectNodeChange(
 	node := stats.node
 	updated := false
 
+	id := node.SubnetID
+	if id != address.RootSubnet {
+		parent, _ := id.GetParent()
+
+		subnets, err := e.api.ListSubnets(ctx, parent)
+		if err != nil {
+			log.Warnw("list subnets failed", "id", id, "err", err)
+			subnets = make([]sca.SubnetOutput, 0)
+		}
+
+		for _, output := range(subnets) {
+			if output.Subnet.ID != id {
+				continue
+			}
+			subnet := output.Subnet
+
+			if node.Consensus != output.Consensus {
+				log.Infow("node Consensus updated", "node.Consensus", node.Consensus, "Consensus", output.Consensus)
+				updated = true
+				node.Consensus = output.Consensus
+			}
+	
+			if node.Stake != subnet.Stake.String() {
+				log.Infow("node Stake updated", "node.Stake", node.Stake, "Stake", subnet.Stake.String())
+				updated = true
+				node.Stake = subnet.Stake.String()
+			}
+		}
+
+	}
+
+	log.Infow("state received", "state", state)
 	// TODO: what's the diff btw chain/consensus/hierarchical/actors/subnet/subnet_state.go:40
 	// TODO and chain/consensus/hierarchical/actors/sca/sca_state.go:40
 	if state != nil {
-		status := convertStatus(state.Status)
-		if node.Status != status {
-			log.Infow("node status updated", "node.Status", node.Status, "Status", state.Status)
-			updated = true
-			node.Status = status
-		}
+		// status := convertStatus(state.Status)
+		// if node.Status != status {
+		// 	log.Infow("node status updated", "node.Status", node.Status, "Status", state.Status)
+		// 	updated = true
+		// 	node.Status = status
+		// }
 
 		if node.Consensus != state.Consensus {
 			log.Infow("node Consensus updated", "node.Consensus", node.Consensus, "Consensus", state.Consensus)
@@ -453,7 +486,7 @@ func (e *EudicoStatsListener) detectChanges(
 	e.detectAddedSubnetChildren(&stats, &latestSubnetMap, &change)
 	e.detectRemovedSubnetChildren(&stats, &latestSubnetMap, &change)
 
-	e.detectNodeChange(&stats, state, len(subnetOutputs), &change)
+	e.detectNodeChange(ctx, &stats, state, len(subnetOutputs), &change)
 	e.subnetStats[sid] = stats
 
 	e.detectCrossNetMsgChanges(ctx, sid, &subnetOutputs, oldTs, newTs, &change.CrossNetChanges)
@@ -474,26 +507,27 @@ func (e *EudicoStatsListener) matchSubnetStateChange(
 	}
 
 	var snstPnt *subnet.SubnetState
-	snst, err := e.obtainSubnetState(ctx, id)
+	snst, err := e.obtainSubnetState(ctx, id, newTs)
 	if err != nil {
 		log.Warnw("cannot get subnet state", "subnet", id, "err", err)
 		snstPnt = nil
 	} else {
 		snstPnt = &snst
 	}
+	log.Infow("subnet state obtained", "state", snst, "id", id)
 
 	changes := e.detectChanges(ctx, id, subnets, snstPnt, oldTs, newTs)
 	log.Infow("change detection", "isUpdated", changes.IsUpdated(), "id", id)
 	return changes.IsUpdated(), changes, nil
 }
 
-func (e *EudicoStatsListener) obtainSubnetState(ctx context.Context, id address.SubnetID) (subnet.SubnetState, error) {
+func (e *EudicoStatsListener) obtainSubnetState(ctx context.Context, id address.SubnetID, ts *types.TipSet) (subnet.SubnetState, error) {
 	subnetActAddr := id.GetActor()
 
 	// Get state of subnet actor in parent for heaviest tipset
-	subnetAct, err := e.api.SubnetStateGetActor(ctx, id, subnetActAddr, types.EmptyTSK)
+	subnetAct, err := e.api.SubnetStateGetActor(ctx, id, subnetActAddr, ts.Key())
 	if err != nil {
-		log.Warnw("cannot get subnet actor", "subnet", id, "err", err)
+		log.Debugw("cannot get subnet actor", "subnet", id, "err", err)
 		return subnet.SubnetState{}, err
 	}
 
@@ -501,7 +535,7 @@ func (e *EudicoStatsListener) obtainSubnetState(ctx context.Context, id address.
 	pbs := blockstore.NewAPIBlockstore(e.api)
 	pcst := cbor.NewCborStore(pbs)
 	if err := pcst.Get(ctx, subnetAct.Head, &snst); err != nil {
-		log.Warnw("cannot get subnet state", "subnet", id)
+		log.Debugw("cannot get subnet state", "subnet", id)
 		return subnet.SubnetState{}, err
 	}
 
