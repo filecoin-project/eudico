@@ -3,6 +3,9 @@
 This fork allows to run the [Pikachu protocol](https://arxiv.org/abs/2208.05408) on top of [Eudico](https://github.com/filecoin-project/eudico), a fork of Lotus, the main client for Filecoin nodes.
 We propose two different options to run this demo: either do a demo with 4 nodes on your local machine, or deploy a Kubernetes container to test with around 20 nodes.
 
+NB: this meant to be a demo and by no means used in production.
+
+
 ## Pre-requisite
 
 ### Install Go
