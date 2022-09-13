@@ -180,7 +180,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 
 			log.With("epoch", nextEpoch).Infof("%s mined a block at %d", epochMiner, bh.Header.Height)
 
-		default:
+		case <-m.MempoolRequestBatch:
 			msgs, err := api.MpoolSelect(ctx, base.Key(), 1)
 			if err != nil {
 				log.With("epoch", nextEpoch).

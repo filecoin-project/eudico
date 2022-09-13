@@ -42,27 +42,25 @@ const (
 
 // Manager manages the Eudico and Mir nodes participating in ISS consensus protocol.
 type Manager struct {
-	// Eudico types
-
+	// Eudico types.
 	EudicoNode v1api.FullNode
 	NetName    dtypes.NetworkName
 	SubnetID   address.SubnetID
 	Addr       address.Address
-	Pool       *requestPool
+	Pool       *fifoPool
 
-	// Mir types
-
-	MirNode     *mir.Node
-	MirID       string
-	WAL         *simplewal.WAL
-	Net         net.Transport
-	ISS         *iss.ISS
-	Crypto      *CryptoManager
-	App         *StateManager
-	interceptor *eventlog.Recorder
+	// Mir types.
+	MirNode             *mir.Node
+	MirID               string
+	WAL                 *simplewal.WAL
+	Net                 net.Transport
+	ISS                 *iss.ISS
+	Crypto              *CryptoManager
+	App                 *StateManager
+	interceptor         *eventlog.Recorder
+	MempoolRequestBatch chan bool
 
 	// Reconfiguration types.
-
 	InitialValidatorSet  *hierarchical.ValidatorSet
 	reconfigurationNonce uint64
 }
@@ -188,8 +186,27 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		},
 	)
 
+	m := Manager{
+		Addr:                addr,
+		SubnetID:            subnetID,
+		NetName:             netName,
+		EudicoNode:          api,
+		Pool:                newFIFOPool(),
+		MirID:               mirID,
+		interceptor:         interceptor,
+		WAL:                 wal,
+		Crypto:              cryptoManager,
+		Net:                 netTransport,
+		ISS:                 issProtocol,
+		InitialValidatorSet: initialValidatorSet,
+		MempoolRequestBatch: make(chan bool),
+	}
+
+	sm := NewStateManager(initialMembership, &m)
+
 	// Use a mempool for incoming requests.
 	pool := pool.NewModule(
+		m.MempoolRequestBatch,
 		&pool.ModuleConfig{
 			Self:   "mempool",
 			Hasher: "hasher",
@@ -210,23 +227,6 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		t.NodeID(mirID),
 		logger,
 	)
-
-	m := Manager{
-		Addr:                addr,
-		SubnetID:            subnetID,
-		NetName:             netName,
-		EudicoNode:          api,
-		Pool:                newRequestPool(),
-		MirID:               mirID,
-		interceptor:         interceptor,
-		WAL:                 wal,
-		Crypto:              cryptoManager,
-		Net:                 netTransport,
-		ISS:                 issProtocol,
-		InitialValidatorSet: initialValidatorSet,
-	}
-
-	sm := NewStateManager(initialMembership, &m)
 
 	// Create a Mir node, using the default configuration and passing the modules initialized just above.
 	mirModules, err := iss.DefaultModules(map[t.ModuleID]modules.Module{
@@ -362,19 +362,17 @@ func (m *Manager) GetMessages(batch *Batch) (msgs []*types.SignedMessage, crossM
 
 		switch msg := input.(type) {
 		case *types.SignedMessage:
-			h := msg.Cid()
-			found := m.Pool.deleteRequest(h.String())
+			found := m.Pool.deleteRequest(msg.Cid().String())
 			if !found {
-				log.Errorf("unable to find a request with %v hash", h)
+				log.Errorf("unable to find a request with %v hash", msg.Cid())
 				continue
 			}
 			msgs = append(msgs, msg)
 			log.Infof("got message: to=%s, nonce= %d", msg.Message.To, msg.Message.Nonce)
 		case *types.UnverifiedCrossMsg:
-			h := msg.Cid()
-			found := m.Pool.deleteRequest(h.String())
+			found := m.Pool.deleteRequest(msg.Cid().String())
 			if !found {
-				log.Errorf("unable to find a request with %v hash", h)
+				log.Errorf("unable to find a request with %v hash", msg.Cid())
 				continue
 			}
 			crossMsgs = append(crossMsgs, msg.Message)
@@ -412,7 +410,7 @@ func (m *Manager) batchSignedMessages(msgs []*types.SignedMessage) (
 	for _, msg := range msgs {
 		clientID := newMirID(m.SubnetID.String(), msg.Message.From.String())
 		nonce := msg.Message.Nonce
-		if !m.Pool.isTargetRequest(clientID, nonce) {
+		if !m.Pool.isTargetRequest(clientID) {
 			continue
 		}
 
@@ -449,7 +447,7 @@ func (m *Manager) batchCrossMessages(crossMsgs []*types.UnverifiedCrossMsg) (
 		}
 		clientID := newMirID(msn.String(), msg.Message.From.String())
 		nonce := msg.Message.Nonce
-		if !m.Pool.isTargetRequest(clientID, nonce) {
+		if !m.Pool.isTargetRequest(clientID) {
 			continue
 		}
 

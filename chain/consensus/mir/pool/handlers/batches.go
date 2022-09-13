@@ -44,6 +44,8 @@ func IncludeBatchCreation(
 		var txs []*requestpb.Request
 		batchSize := 0
 
+		state.RequestBatchChannel <- true
+
 		txCount := 0
 		for _, txID := range state.NewTxIDs {
 			tx := state.TxByID[txID]
