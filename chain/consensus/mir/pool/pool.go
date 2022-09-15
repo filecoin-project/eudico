@@ -32,7 +32,7 @@ func DefaultModuleConfig() *ModuleConfig {
 // previous batch request as possible with respect to params.MaxTransactionsInBatch.
 //
 // This implementation uses the hash function provided by the mc.Hasher module to compute transaction IDs and batch IDs.
-func NewModule(requestChan chan bool, mc *ModuleConfig, params *ModuleParams) modules.Module {
+func NewModule(requestChan chan struct{}, mc *ModuleConfig, params *ModuleParams) modules.Module {
 	m := dsl.NewModule(mc.Self)
 
 	commonState := &types.State{

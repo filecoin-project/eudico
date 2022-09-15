@@ -17,6 +17,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/mir/pool"
+	"github.com/filecoin-project/lotus/chain/consensus/mir/pool/fifo"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/mir"
@@ -47,7 +48,7 @@ type Manager struct {
 	NetName    dtypes.NetworkName
 	SubnetID   address.SubnetID
 	Addr       address.Address
-	Pool       *fifoPool
+	Pool       *fifo.Pool
 
 	// Mir types.
 	MirNode             *mir.Node
@@ -58,7 +59,7 @@ type Manager struct {
 	Crypto              *CryptoManager
 	App                 *StateManager
 	interceptor         *eventlog.Recorder
-	MempoolRequestBatch chan bool
+	MempoolRequestBatch chan struct{}
 
 	// Reconfiguration types.
 	InitialValidatorSet  *hierarchical.ValidatorSet
@@ -191,7 +192,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		SubnetID:            subnetID,
 		NetName:             netName,
 		EudicoNode:          api,
-		Pool:                newFIFOPool(),
+		Pool:                fifo.New(),
 		MirID:               mirID,
 		interceptor:         interceptor,
 		WAL:                 wal,
@@ -199,7 +200,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		Net:                 netTransport,
 		ISS:                 issProtocol,
 		InitialValidatorSet: initialValidatorSet,
-		MempoolRequestBatch: make(chan bool),
+		MempoolRequestBatch: make(chan struct{}),
 	}
 
 	sm := NewStateManager(initialMembership, &m)
@@ -362,7 +363,7 @@ func (m *Manager) GetMessages(batch *Batch) (msgs []*types.SignedMessage, crossM
 
 		switch msg := input.(type) {
 		case *types.SignedMessage:
-			found := m.Pool.deleteRequest(msg.Cid().String())
+			found := m.Pool.DeleteRequest(msg.Cid().String())
 			if !found {
 				log.Errorf("unable to find a request with %v hash", msg.Cid())
 				continue
@@ -370,7 +371,7 @@ func (m *Manager) GetMessages(batch *Batch) (msgs []*types.SignedMessage, crossM
 			msgs = append(msgs, msg)
 			log.Infof("got message: to=%s, nonce= %d", msg.Message.To, msg.Message.Nonce)
 		case *types.UnverifiedCrossMsg:
-			found := m.Pool.deleteRequest(msg.Cid().String())
+			found := m.Pool.DeleteRequest(msg.Cid().String())
 			if !found {
 				log.Errorf("unable to find a request with %v hash", msg.Cid())
 				continue
@@ -410,7 +411,7 @@ func (m *Manager) batchSignedMessages(msgs []*types.SignedMessage) (
 	for _, msg := range msgs {
 		clientID := newMirID(m.SubnetID.String(), msg.Message.From.String())
 		nonce := msg.Message.Nonce
-		if !m.Pool.isTargetRequest(clientID) {
+		if !m.Pool.IsTargetRequest(clientID) {
 			continue
 		}
 
@@ -428,7 +429,7 @@ func (m *Manager) batchSignedMessages(msgs []*types.SignedMessage) (
 			Data:     data,
 		}
 
-		m.Pool.addRequest(msg.Cid().String(), r)
+		m.Pool.AddRequest(msg.Cid().String(), r)
 
 		requests = append(requests, r)
 	}
@@ -447,7 +448,7 @@ func (m *Manager) batchCrossMessages(crossMsgs []*types.UnverifiedCrossMsg) (
 		}
 		clientID := newMirID(msn.String(), msg.Message.From.String())
 		nonce := msg.Message.Nonce
-		if !m.Pool.isTargetRequest(clientID) {
+		if !m.Pool.IsTargetRequest(clientID) {
 			continue
 		}
 
@@ -464,7 +465,7 @@ func (m *Manager) batchCrossMessages(crossMsgs []*types.UnverifiedCrossMsg) (
 			Type:     TransportType,
 			Data:     data,
 		}
-		m.Pool.addRequest(msg.Cid().String(), r)
+		m.Pool.AddRequest(msg.Cid().String(), r)
 		requests = append(requests, r)
 	}
 	return requests

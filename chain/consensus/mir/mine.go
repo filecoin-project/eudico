@@ -193,7 +193,9 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 					Errorw("unable to select cross-messages from mempool", "error", err)
 			}
 
-			m.SubmitRequests(ctx, m.TransportRequests(msgs, crossMsgs))
+			requests := m.TransportRequests(msgs, crossMsgs)
+
+			m.SubmitRequests(ctx, requests)
 		}
 	}
 }

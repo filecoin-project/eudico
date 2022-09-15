@@ -1,33 +1,27 @@
-package mir
+package fifo
 
 import (
-	"sync"
-
 	mirrequest "github.com/filecoin-project/mir/pkg/pb/requestpb"
 )
 
-// fifoPool is a structure to implement the simplest pool that enforces FIFO policy on client messages.
+// Pool is a structure to implement the simplest pool that enforces FIFO policy on client messages.
 // When a client sends a message we add clientID to orderingClients map and clientByCID.
 // When we receive a message we find the clientID and remove it from orderingClients.
-type fifoPool struct {
-	lk sync.Mutex
-
+// We don't need using sync primitives since the pool's methods are called only by one goroutine.
+type Pool struct {
 	clientByCID     map[string]string // messageCID -> clientID
 	orderingClients map[string]bool   // clientID -> bool
 }
 
-func newFIFOPool() *fifoPool {
-	return &fifoPool{
+func New() *Pool {
+	return &Pool{
 		clientByCID:     make(map[string]string),
 		orderingClients: make(map[string]bool),
 	}
 }
 
-// addRequest adds the request if it satisfies to the FIFO policy.
-func (p *fifoPool) addRequest(cid string, r *mirrequest.Request) (exist bool) {
-	p.lk.Lock()
-	defer p.lk.Unlock()
-
+// AddRequest adds the request if it satisfies to the FIFO policy.
+func (p *Pool) AddRequest(cid string, r *mirrequest.Request) (exist bool) {
 	_, exist = p.orderingClients[r.ClientId]
 	if !exist {
 		p.clientByCID[cid] = r.ClientId
@@ -36,20 +30,15 @@ func (p *fifoPool) addRequest(cid string, r *mirrequest.Request) (exist bool) {
 	return
 }
 
-// isTargetRequest returns whether the request with clientID should be sent or there is a request from that client that
+// IsTargetRequest returns whether the request with clientID should be sent or there is a request from that client that
 // is in progress of ordering.
-func (p *fifoPool) isTargetRequest(clientID string) bool {
-	p.lk.Lock()
-	defer p.lk.Unlock()
+func (p *Pool) IsTargetRequest(clientID string) bool {
 	_, inProgress := p.orderingClients[clientID]
 	return !inProgress
 }
 
-// deleteRequest deletes the target request by the key h.
-func (p *fifoPool) deleteRequest(cid string) (ok bool) {
-	p.lk.Lock()
-	defer p.lk.Unlock()
-
+// DeleteRequest deletes the target request by the key h.
+func (p *Pool) DeleteRequest(cid string) (ok bool) {
 	clientID, ok := p.clientByCID[cid]
 	if ok {
 		delete(p.orderingClients, clientID)

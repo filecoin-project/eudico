@@ -44,7 +44,7 @@ func IncludeBatchCreation(
 		var txs []*requestpb.Request
 		batchSize := 0
 
-		state.RequestBatchChannel <- true
+		state.RequestBatchChannel <- struct{}{}
 
 		txCount := 0
 		for _, txID := range state.NewTxIDs {

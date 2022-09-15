@@ -1,4 +1,4 @@
-package mir
+package fifo
 
 import (
 	"testing"
@@ -11,25 +11,25 @@ import (
 )
 
 func TestMirFIFOPool(t *testing.T) {
-	p := newFIFOPool()
+	p := New()
 
 	c1 := cid.NewCidV0(u.Hash([]byte("req1")))
 	c2 := cid.NewCidV0(u.Hash([]byte("req2")))
 
-	inProgress := p.addRequest(c1.String(), &mirrequest.Request{
+	inProgress := p.AddRequest(c1.String(), &mirrequest.Request{
 		ClientId: "client1", Data: []byte{},
 	})
 	require.Equal(t, false, inProgress)
 
-	inProgress = p.addRequest(c1.String(), &mirrequest.Request{
+	inProgress = p.AddRequest(c1.String(), &mirrequest.Request{
 		ClientId: "client1", Data: []byte{},
 	})
 	require.Equal(t, true, inProgress)
 
-	inProgress = p.deleteRequest(c1.String())
+	inProgress = p.DeleteRequest(c1.String())
 	require.Equal(t, true, inProgress)
 
-	inProgress = p.deleteRequest(c2.String())
+	inProgress = p.DeleteRequest(c2.String())
 	require.Equal(t, false, inProgress)
 
 }
