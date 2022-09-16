@@ -195,9 +195,8 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 
 			requests := m.TransportRequests(msgs, crossMsgs)
 
+			// We send requests via the channel instead of calling m.SubmitRequests(ctx, requests) explicitly.
 			mempool.SubmitChan <- requests
-
-			// m.SubmitRequests(ctx, requests)
 		}
 	}
 }
