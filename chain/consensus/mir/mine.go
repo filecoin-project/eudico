@@ -180,7 +180,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 
 			log.With("epoch", nextEpoch).Infof("%s mined a block at %d", epochMiner, bh.Header.Height)
 
-		case <-m.MempoolRequestBatch:
+		case mempool := <-m.MirMempoolNotify:
 			msgs, err := api.MpoolSelect(ctx, base.Key(), 1)
 			if err != nil {
 				log.With("epoch", nextEpoch).
@@ -195,7 +195,9 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 
 			requests := m.TransportRequests(msgs, crossMsgs)
 
-			m.SubmitRequests(ctx, requests)
+			mempool.SubmitChan <- requests
+
+			// m.SubmitRequests(ctx, requests)
 		}
 	}
 }

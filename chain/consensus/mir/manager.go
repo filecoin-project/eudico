@@ -18,6 +18,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/mir/pool"
 	"github.com/filecoin-project/lotus/chain/consensus/mir/pool/fifo"
+	mempool "github.com/filecoin-project/lotus/chain/consensus/mir/pool/types"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/mir"
@@ -51,15 +52,15 @@ type Manager struct {
 	Pool       *fifo.Pool
 
 	// Mir types.
-	MirNode             *mir.Node
-	MirID               string
-	WAL                 *simplewal.WAL
-	Net                 net.Transport
-	ISS                 *iss.ISS
-	Crypto              *CryptoManager
-	App                 *StateManager
-	interceptor         *eventlog.Recorder
-	MempoolRequestBatch chan struct{}
+	MirNode          *mir.Node
+	MirID            string
+	WAL              *simplewal.WAL
+	Net              net.Transport
+	ISS              *iss.ISS
+	Crypto           *CryptoManager
+	App              *StateManager
+	interceptor      *eventlog.Recorder
+	MirMempoolNotify chan pool.Descriptor
 
 	// Reconfiguration types.
 	InitialValidatorSet  *hierarchical.ValidatorSet
@@ -200,14 +201,14 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		Net:                 netTransport,
 		ISS:                 issProtocol,
 		InitialValidatorSet: initialValidatorSet,
-		MempoolRequestBatch: make(chan struct{}),
+		MirMempoolNotify:    make(chan mempool.Descriptor),
 	}
 
 	sm := NewStateManager(initialMembership, &m)
 
 	// Use a mempool for incoming requests.
 	pool := pool.NewModule(
-		m.MempoolRequestBatch,
+		m.MirMempoolNotify,
 		&pool.ModuleConfig{
 			Self:   "mempool",
 			Hasher: "hasher",

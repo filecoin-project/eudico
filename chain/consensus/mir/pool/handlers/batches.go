@@ -41,10 +41,18 @@ func IncludeBatchCreation(
 
 	mpdsl.UponRequestBatch(m, func(origin *mempoolpb.RequestBatchOrigin) error {
 		var txIDs []t.TxID
-		var txs []*requestpb.Request
 		batchSize := 0
 
-		state.RequestBatchChannel <- struct{}{}
+		submitChan := make(chan []*requestpb.Request)
+
+		state.DescriptorChan <- types.Descriptor{
+			Limit:      0,
+			SubmitChan: submitChan,
+		}
+
+		txs := <-submitChan
+
+		mpdsl.RequestTransactionIDs(m, mc.Self, txs, &requestTxIDsContext{txs})
 
 		txCount := 0
 		for _, txID := range state.NewTxIDs {
