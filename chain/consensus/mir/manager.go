@@ -16,9 +16,8 @@ import (
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
-	"github.com/filecoin-project/lotus/chain/consensus/mir/pool"
-	"github.com/filecoin-project/lotus/chain/consensus/mir/pool/fifo"
-	mempool "github.com/filecoin-project/lotus/chain/consensus/mir/pool/types"
+	"github.com/filecoin-project/lotus/chain/consensus/mir/mempool"
+	"github.com/filecoin-project/lotus/chain/consensus/mir/mempool/fifo"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/mir"
@@ -44,25 +43,24 @@ const (
 
 // Manager manages the Eudico and Mir nodes participating in ISS consensus protocol.
 type Manager struct {
-	// Eudico types.
-	EudicoNode v1api.FullNode
-	NetName    dtypes.NetworkName
-	SubnetID   address.SubnetID
-	Addr       address.Address
-	Pool       *fifo.Pool
+	// Eudico related types.
+	NetName  dtypes.NetworkName
+	SubnetID address.SubnetID
+	Addr     address.Address
+	Pool     *fifo.Pool
 
-	// Mir types.
-	MirNode          *mir.Node
-	MirID            string
-	WAL              *simplewal.WAL
-	Net              net.Transport
-	ISS              *iss.ISS
-	Crypto           *CryptoManager
-	App              *StateManager
-	interceptor      *eventlog.Recorder
-	MirMempoolNotify chan pool.Descriptor
+	// Mir related types.
+	MirNode        *mir.Node
+	MirID          string
+	WAL            *simplewal.WAL
+	Net            net.Transport
+	ISS            *iss.ISS
+	CryptoManager  *CryptoManager
+	StateManager   *StateManager
+	interceptor    *eventlog.Recorder
+	CurrentMempool chan mempool.Descriptor
 
-	// Reconfiguration types.
+	// Reconfiguration related types.
 	InitialValidatorSet  *hierarchical.ValidatorSet
 	reconfigurationNonce uint64
 }
@@ -192,28 +190,27 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		Addr:                addr,
 		SubnetID:            subnetID,
 		NetName:             netName,
-		EudicoNode:          api,
 		Pool:                fifo.New(),
 		MirID:               mirID,
 		interceptor:         interceptor,
 		WAL:                 wal,
-		Crypto:              cryptoManager,
+		CryptoManager:       cryptoManager,
 		Net:                 netTransport,
 		ISS:                 issProtocol,
 		InitialValidatorSet: initialValidatorSet,
-		MirMempoolNotify:    make(chan mempool.Descriptor),
+		CurrentMempool:      make(chan mempool.Descriptor),
 	}
 
 	sm := NewStateManager(initialMembership, &m)
 
 	// Use a mempool for incoming requests.
-	pool := pool.NewModule(
-		m.MirMempoolNotify,
-		&pool.ModuleConfig{
+	mpool := mempool.NewModule(
+		m.CurrentMempool,
+		&mempool.ModuleConfig{
 			Self:   "mempool",
 			Hasher: "hasher",
 		},
-		&pool.ModuleParams{
+		&mempool.ModuleParams{
 			MaxTransactionsInBatch: 10,
 		},
 	)
@@ -235,8 +232,8 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		"net":          netTransport,
 		"iss":          issProtocol,
 		"app":          sm,
-		"crypto":       mircrypto.New(m.Crypto),
-		"mempool":      pool,
+		"crypto":       mircrypto.New(m.CryptoManager),
+		"mempool":      mpool,
 		"batchdb":      batchdb,
 		"availability": availability,
 	})
@@ -251,7 +248,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	}
 
 	m.MirNode = newMirNode
-	m.App = sm
+	m.StateManager = sm
 
 	return &m, nil
 }

@@ -38,11 +38,11 @@ type StateManager struct {
 	// For each epoch number, stores the corresponding membership.
 	memberships map[t.EpochNr]map[t.NodeID]t.NodeAddress
 
-	// Channel to send messages to Eudico.
-	ChainNotify chan *Batch
+	// Channel to send batches to Eudico.
+	NextBatch chan *Batch
 
 	// Channel to send a membership.
-	MembershipNotify chan map[t.NodeID]t.NodeAddress
+	NewMembership chan map[t.NodeID]t.NodeAddress
 
 	MirManager *Manager
 
@@ -63,8 +63,8 @@ func NewStateManager(initialMembership map[t.NodeID]t.NodeAddress, m *Manager) *
 	}
 
 	sm := StateManager{
-		ChainNotify:          make(chan *Batch),
-		MembershipNotify:     make(chan map[t.NodeID]t.NodeAddress, 1),
+		NextBatch:            make(chan *Batch),
+		NewMembership:        make(chan map[t.NodeID]t.NodeAddress, 1),
 		MirManager:           m,
 		memberships:          memberships,
 		currentEpoch:         0,
@@ -159,7 +159,7 @@ func (sm *StateManager) applyProvideTransactions(ptx *availabilitypb.ProvideTran
 	}
 
 	// Send a batch to the Eudico node.
-	sm.ChainNotify <- &Batch{
+	sm.NextBatch <- &Batch{
 		Messages:   msgs,
 		Validators: maputil.GetSortedKeys(sm.memberships[sm.currentEpoch]),
 	}
@@ -204,7 +204,7 @@ func (sm *StateManager) applyNewEpoch(newEpoch *eventpb.NewEpoch) (*events.Event
 	// Remove old membership.
 	delete(sm.memberships, oldEpoch)
 
-	sm.MembershipNotify <- newMembership
+	sm.NewMembership <- newMembership
 
 	// Notify ISS about the new membership.
 	return events.ListOf(events.NewConfig("iss", newMembership)), nil

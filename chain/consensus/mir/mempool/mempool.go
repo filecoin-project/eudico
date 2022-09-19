@@ -1,9 +1,9 @@
-// Package pool maintains the request pool used to send requests from Eudico's mempool to Mir.
-package pool
+// Package mempool maintains the request pool used to send requests from Eudico's mempool to Mir.
+package mempool
 
 import (
-	"github.com/filecoin-project/lotus/chain/consensus/mir/pool/handlers"
-	"github.com/filecoin-project/lotus/chain/consensus/mir/pool/types"
+	"github.com/filecoin-project/lotus/chain/consensus/mir/mempool/handlers"
+	"github.com/filecoin-project/lotus/chain/consensus/mir/mempool/types"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"

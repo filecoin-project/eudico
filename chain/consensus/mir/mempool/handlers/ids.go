@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"github.com/filecoin-project/lotus/chain/consensus/mir/pool/types"
+	"github.com/filecoin-project/lotus/chain/consensus/mir/mempool/types"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	mpdsl "github.com/filecoin-project/mir/pkg/mempool/dsl"
 	"github.com/filecoin-project/mir/pkg/pb/mempoolpb"
