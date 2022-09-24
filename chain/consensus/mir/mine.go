@@ -62,6 +62,8 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 
 	lastValidatorSet := m.InitialValidatorSet
 
+	var configRequests []*mirproto.Request
+
 	for {
 		// Here we use `ctx.Err()` in the beginning of the `for` loop instead of using it in the `select` statement,
 		// because if `ctx` has been closed then `api.ChainHead(ctx)` returns an error,
@@ -131,9 +133,15 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 				log.With("epoch", nextEpoch).Warnf("failed to marshal validators: %v", err)
 				continue
 			}
-			m.SubmitRequests(ctx, []*mirproto.Request{
-				m.ReconfigurationRequest(payload.Bytes())},
-			)
+
+			configRequests = append(configRequests, m.ReconfigurationRequest(payload.Bytes()))
+
+			/*
+				m.SubmitRequests(ctx, []*mirproto.Request{
+					m.ReconfigurationRequest(payload.Bytes())},
+				)
+
+			*/
 
 		case batch := <-m.StateManager.NextBatch:
 			msgs, crossMsgs := m.GetMessages(batch)
@@ -181,6 +189,8 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			log.With("epoch", nextEpoch).Infof("%s mined a block at %d", epochMiner, bh.Header.Height)
 
 		case mirMempool := <-m.CurrentMempool:
+			var requests []*mirproto.Request
+
 			msgs, err := api.MpoolSelect(ctx, base.Key(), 1)
 			if err != nil {
 				log.With("epoch", nextEpoch).
@@ -193,7 +203,13 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 					Errorw("unable to select cross-messages from mempool", "error", err)
 			}
 
-			requests := m.TransportRequests(msgs, crossMsgs)
+			transportRequests := m.TransportRequests(msgs, crossMsgs)
+			requests = append(requests, transportRequests...)
+
+			if len(configRequests) > 0 {
+				requests = append(requests, configRequests...)
+				configRequests = nil
+			}
 
 			// We send requests via the channel instead of calling m.SubmitRequests(ctx, requests) explicitly.
 			mirMempool.SubmitChan <- requests
