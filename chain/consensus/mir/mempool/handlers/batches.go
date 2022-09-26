@@ -27,7 +27,7 @@ func IncludeBatchCreation(
 		for i := range txIDs {
 			tx := context.txs[i]
 			commonState.TxByID[txIDs[i]] = tx
-			
+
 			// TODO: add other limitations (if any) here.
 			if txCount == params.MaxTransactionsInBatch {
 				break
