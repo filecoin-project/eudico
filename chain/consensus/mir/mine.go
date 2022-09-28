@@ -188,7 +188,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 
 			log.With("epoch", nextEpoch).Infof("%s mined a block at %d", epochMiner, bh.Header.Height)
 
-		case mirMempool := <-m.CurrentMempool:
+		case mirMempoolChan := <-m.CurrentMempool:
 			var requests []*mirproto.Request
 
 			msgs, err := api.MpoolSelect(ctx, base.Key(), 1)
@@ -212,7 +212,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			}
 
 			// We send requests via the channel instead of calling m.SubmitRequests(ctx, requests) explicitly.
-			mirMempool.SubmitChan <- requests
+			mirMempoolChan <- requests
 		}
 	}
 }

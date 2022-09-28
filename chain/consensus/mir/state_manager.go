@@ -155,7 +155,6 @@ func (sm *StateManager) applyProvideTransactions(ptx *availabilitypb.ProvideTran
 				return events.EmptyList(), err
 			}
 		}
-
 	}
 
 	// Send a batch to the Eudico node.

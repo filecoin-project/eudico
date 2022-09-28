@@ -58,7 +58,7 @@ type Manager struct {
 	CryptoManager  *CryptoManager
 	StateManager   *StateManager
 	interceptor    *eventlog.Recorder
-	CurrentMempool chan mempool.Descriptor
+	CurrentMempool chan chan []*mirproto.Request
 
 	// Reconfiguration related types.
 	InitialValidatorSet  *hierarchical.ValidatorSet
@@ -198,7 +198,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		Net:                 netTransport,
 		ISS:                 issProtocol,
 		InitialValidatorSet: initialValidatorSet,
-		CurrentMempool:      make(chan mempool.Descriptor),
+		CurrentMempool:      make(chan chan []*mirproto.Request),
 	}
 
 	sm := NewStateManager(initialMembership, &m)

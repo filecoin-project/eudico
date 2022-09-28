@@ -17,9 +17,6 @@ type ModuleConfig = types.ModuleConfig
 // All replicas are expected to use identical module parameters.
 type ModuleParams = types.ModuleParams
 
-// Descriptor sets the values for configuration channel used to access the mempool.
-type Descriptor = types.Descriptor
-
 // DefaultModuleConfig returns a valid module config with default names for all modules.
 func DefaultModuleConfig() *ModuleConfig {
 	return &ModuleConfig{
@@ -35,12 +32,12 @@ func DefaultModuleConfig() *ModuleConfig {
 // previous batch request as possible with respect to params.MaxTransactionsInBatch.
 //
 // This implementation uses the hash function provided by the mc.Hasher module to compute transaction IDs and batch IDs.
-func NewModule(requestChan chan Descriptor, mc *ModuleConfig, params *ModuleParams) modules.Module {
+func NewModule(requestChan chan chan []*requestpb.Request, mc *ModuleConfig, params *ModuleParams) modules.Module {
 	m := dsl.NewModule(mc.Self)
 
 	commonState := &types.State{
-		TxByID:         make(map[t.TxID]*requestpb.Request),
-		DescriptorChan: requestChan,
+		TxByID:     make(map[t.TxID]*requestpb.Request),
+		SubmitChan: requestChan,
 	}
 
 	handlers.IncludeComputationOfTransactionAndBatchIDs(m, mc, params, commonState)

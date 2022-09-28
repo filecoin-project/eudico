@@ -17,13 +17,8 @@ type ModuleParams struct {
 	MaxTransactionsInBatch int
 }
 
-type Descriptor struct {
-	Limit      int
-	SubmitChan chan []*requestpb.Request
-}
-
 // State represents the common state accessible to all parts of the module implementation.
 type State struct {
-	TxByID         map[t.TxID]*requestpb.Request
-	DescriptorChan chan Descriptor
+	TxByID     map[t.TxID]*requestpb.Request
+	SubmitChan chan chan []*requestpb.Request
 }

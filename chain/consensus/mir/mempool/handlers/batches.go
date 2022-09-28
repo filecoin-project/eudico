@@ -23,35 +23,19 @@ func IncludeBatchCreation(
 ) {
 	mpdsl.UponTransactionIDsResponse(m, func(txIDs []t.TxID, context *requestTxIDsContext) error {
 		var txs []*requestpb.Request
-		txCount := 0
 		for i := range txIDs {
 			tx := context.txs[i]
-			commonState.TxByID[txIDs[i]] = tx
-
-			// TODO: add other limitations (if any) here.
-			if txCount == params.MaxTransactionsInBatch {
-				break
-			}
-
 			txs = append(txs, tx)
-			txCount++
 		}
-
 		mpdsl.NewBatch(m, t.ModuleID(context.origin.Module), txIDs, txs, context.origin)
 		return nil
 	})
 
 	mpdsl.UponRequestBatch(m, func(origin *mempoolpb.RequestBatchOrigin) error {
 		submitChan := make(chan []*requestpb.Request)
-
-		commonState.DescriptorChan <- types.Descriptor{
-			Limit:      0,
-			SubmitChan: submitChan,
-		}
-
+		commonState.SubmitChan <- submitChan
 		receivedRequests := <-submitChan
 		mpdsl.RequestTransactionIDs(m, mc.Self, receivedRequests, &requestTxIDsContext{receivedRequests, origin})
-
 		return nil
 	})
 }
