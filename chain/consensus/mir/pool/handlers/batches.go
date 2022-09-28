@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"github.com/filecoin-project/lotus/chain/consensus/mir/mempool/types"
+	"github.com/filecoin-project/lotus/chain/consensus/mir/pool/types"
 	"github.com/filecoin-project/mir/pkg/dsl"
 	mpdsl "github.com/filecoin-project/mir/pkg/mempool/dsl"
 	"github.com/filecoin-project/mir/pkg/pb/mempoolpb"
@@ -19,7 +19,7 @@ func IncludeBatchCreation(
 	m dsl.Module,
 	mc *types.ModuleConfig,
 	params *types.ModuleParams,
-	commonState *types.State,
+	state *types.State,
 ) {
 	mpdsl.UponTransactionIDsResponse(m, func(txIDs []t.TxID, context *requestTxIDsContext) error {
 		var txs []*requestpb.Request
@@ -32,9 +32,9 @@ func IncludeBatchCreation(
 	})
 
 	mpdsl.UponRequestBatch(m, func(origin *mempoolpb.RequestBatchOrigin) error {
-		submitChan := make(chan []*requestpb.Request)
-		commonState.SubmitChan <- submitChan
-		receivedRequests := <-submitChan
+		inputChan := make(chan []*requestpb.Request)
+		state.ToMir <- inputChan
+		receivedRequests := <-inputChan
 		mpdsl.RequestTransactionIDs(m, mc.Self, receivedRequests, &requestTxIDsContext{receivedRequests, origin})
 		return nil
 	})

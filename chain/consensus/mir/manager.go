@@ -16,8 +16,8 @@ import (
 	"github.com/filecoin-project/lotus/api/v1api"
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
-	"github.com/filecoin-project/lotus/chain/consensus/mir/mempool"
-	"github.com/filecoin-project/lotus/chain/consensus/mir/mempool/fifo"
+	"github.com/filecoin-project/lotus/chain/consensus/mir/pool"
+	"github.com/filecoin-project/lotus/chain/consensus/mir/pool/fifo"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/mir"
@@ -50,15 +50,15 @@ type Manager struct {
 	Pool     *fifo.Pool
 
 	// Mir related types.
-	MirNode        *mir.Node
-	MirID          string
-	WAL            *simplewal.WAL
-	Net            net.Transport
-	ISS            *iss.ISS
-	CryptoManager  *CryptoManager
-	StateManager   *StateManager
-	interceptor    *eventlog.Recorder
-	CurrentMempool chan chan []*mirproto.Request
+	MirNode       *mir.Node
+	MirID         string
+	WAL           *simplewal.WAL
+	Net           net.Transport
+	ISS           *iss.ISS
+	CryptoManager *CryptoManager
+	StateManager  *StateManager
+	interceptor   *eventlog.Recorder
+	ToMir         chan chan []*mirproto.Request
 
 	// Reconfiguration related types.
 	InitialValidatorSet  *hierarchical.ValidatorSet
@@ -198,19 +198,19 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		Net:                 netTransport,
 		ISS:                 issProtocol,
 		InitialValidatorSet: initialValidatorSet,
-		CurrentMempool:      make(chan chan []*mirproto.Request),
+		ToMir:               make(chan chan []*mirproto.Request),
 	}
 
 	sm := NewStateManager(initialMembership, &m)
 
 	// Use a mempool for incoming requests.
-	mpool := mempool.NewModule(
-		m.CurrentMempool,
-		&mempool.ModuleConfig{
+	mpool := pool.NewModule(
+		m.ToMir,
+		&pool.ModuleConfig{
 			Self:   "mempool",
 			Hasher: "hasher",
 		},
-		&mempool.ModuleParams{
+		&pool.ModuleParams{
 			MaxTransactionsInBatch: 10,
 		},
 	)

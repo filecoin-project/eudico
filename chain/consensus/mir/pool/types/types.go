@@ -17,8 +17,9 @@ type ModuleParams struct {
 	MaxTransactionsInBatch int
 }
 
-// State represents the common state accessible to all parts of the module implementation.
+// State represents the state accessible to all parts of the module implementation.
 type State struct {
-	TxByID     map[t.TxID]*requestpb.Request
-	SubmitChan chan chan []*requestpb.Request
+	// A channel is sent on this channel when Mir wants to notify Eudico
+	// that Mir is ready for the next batch of input transactions.
+	ToMir chan chan []*requestpb.Request
 }

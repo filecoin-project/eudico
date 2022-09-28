@@ -133,15 +133,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 				log.With("epoch", nextEpoch).Warnf("failed to marshal validators: %v", err)
 				continue
 			}
-
 			configRequests = append(configRequests, m.ReconfigurationRequest(payload.Bytes()))
-
-			/*
-				m.SubmitRequests(ctx, []*mirproto.Request{
-					m.ReconfigurationRequest(payload.Bytes())},
-				)
-
-			*/
 
 		case batch := <-m.StateManager.NextBatch:
 			msgs, crossMsgs := m.GetMessages(batch)
@@ -188,7 +180,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 
 			log.With("epoch", nextEpoch).Infof("%s mined a block at %d", epochMiner, bh.Header.Height)
 
-		case mirMempoolChan := <-m.CurrentMempool:
+		case toMir := <-m.ToMir:
 			var requests []*mirproto.Request
 
 			msgs, err := api.MpoolSelect(ctx, base.Key(), 1)
@@ -212,7 +204,7 @@ func Mine(ctx context.Context, addr address.Address, api v1api.FullNode) error {
 			}
 
 			// We send requests via the channel instead of calling m.SubmitRequests(ctx, requests) explicitly.
-			mirMempoolChan <- requests
+			toMir <- requests
 		}
 	}
 }
