@@ -17,6 +17,7 @@ import (
 	"github.com/filecoin-project/lotus/chain/consensus/common"
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	"github.com/filecoin-project/lotus/chain/consensus/mir/pool"
+	"github.com/filecoin-project/lotus/chain/consensus/mir/pool/fifo"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	"github.com/filecoin-project/mir"
@@ -42,27 +43,24 @@ const (
 
 // Manager manages the Eudico and Mir nodes participating in ISS consensus protocol.
 type Manager struct {
-	// Eudico types
+	// Eudico related types.
+	NetName  dtypes.NetworkName
+	SubnetID address.SubnetID
+	Addr     address.Address
+	Pool     *fifo.Pool
 
-	EudicoNode v1api.FullNode
-	NetName    dtypes.NetworkName
-	SubnetID   address.SubnetID
-	Addr       address.Address
-	Pool       *requestPool
+	// Mir related types.
+	MirNode       *mir.Node
+	MirID         string
+	WAL           *simplewal.WAL
+	Net           net.Transport
+	ISS           *iss.ISS
+	CryptoManager *CryptoManager
+	StateManager  *StateManager
+	interceptor   *eventlog.Recorder
+	ToMir         chan chan []*mirproto.Request
 
-	// Mir types
-
-	MirNode     *mir.Node
-	MirID       string
-	WAL         *simplewal.WAL
-	Net         net.Transport
-	ISS         *iss.ISS
-	Crypto      *CryptoManager
-	App         *StateManager
-	interceptor *eventlog.Recorder
-
-	// Reconfiguration types.
-
+	// Reconfiguration related types.
 	InitialValidatorSet  *hierarchical.ValidatorSet
 	reconfigurationNonce uint64
 }
@@ -188,8 +186,26 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		},
 	)
 
+	m := Manager{
+		Addr:                addr,
+		SubnetID:            subnetID,
+		NetName:             netName,
+		Pool:                fifo.New(),
+		MirID:               mirID,
+		interceptor:         interceptor,
+		WAL:                 wal,
+		CryptoManager:       cryptoManager,
+		Net:                 netTransport,
+		ISS:                 issProtocol,
+		InitialValidatorSet: initialValidatorSet,
+		ToMir:               make(chan chan []*mirproto.Request),
+	}
+
+	sm := NewStateManager(initialMembership, &m)
+
 	// Use a mempool for incoming requests.
-	pool := pool.NewModule(
+	mpool := pool.NewModule(
+		m.ToMir,
 		&pool.ModuleConfig{
 			Self:   "mempool",
 			Hasher: "hasher",
@@ -211,30 +227,13 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		logger,
 	)
 
-	m := Manager{
-		Addr:                addr,
-		SubnetID:            subnetID,
-		NetName:             netName,
-		EudicoNode:          api,
-		Pool:                newRequestPool(),
-		MirID:               mirID,
-		interceptor:         interceptor,
-		WAL:                 wal,
-		Crypto:              cryptoManager,
-		Net:                 netTransport,
-		ISS:                 issProtocol,
-		InitialValidatorSet: initialValidatorSet,
-	}
-
-	sm := NewStateManager(initialMembership, &m)
-
 	// Create a Mir node, using the default configuration and passing the modules initialized just above.
 	mirModules, err := iss.DefaultModules(map[t.ModuleID]modules.Module{
 		"net":          netTransport,
 		"iss":          issProtocol,
 		"app":          sm,
-		"crypto":       mircrypto.New(m.Crypto),
-		"mempool":      pool,
+		"crypto":       mircrypto.New(m.CryptoManager),
+		"mempool":      mpool,
 		"batchdb":      batchdb,
 		"availability": availability,
 	})
@@ -249,7 +248,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 	}
 
 	m.MirNode = newMirNode
-	m.App = sm
+	m.StateManager = sm
 
 	return &m, nil
 }
@@ -362,19 +361,17 @@ func (m *Manager) GetMessages(batch *Batch) (msgs []*types.SignedMessage, crossM
 
 		switch msg := input.(type) {
 		case *types.SignedMessage:
-			h := msg.Cid()
-			found := m.Pool.deleteRequest(h.String())
+			found := m.Pool.DeleteRequest(msg.Cid().String())
 			if !found {
-				log.Errorf("unable to find a request with %v hash", h)
+				log.Errorf("unable to find a request with %v hash", msg.Cid())
 				continue
 			}
 			msgs = append(msgs, msg)
 			log.Infof("got message: to=%s, nonce= %d", msg.Message.To, msg.Message.Nonce)
 		case *types.UnverifiedCrossMsg:
-			h := msg.Cid()
-			found := m.Pool.deleteRequest(h.String())
+			found := m.Pool.DeleteRequest(msg.Cid().String())
 			if !found {
-				log.Errorf("unable to find a request with %v hash", h)
+				log.Errorf("unable to find a request with %v hash", msg.Cid())
 				continue
 			}
 			crossMsgs = append(crossMsgs, msg.Message)
@@ -412,7 +409,7 @@ func (m *Manager) batchSignedMessages(msgs []*types.SignedMessage) (
 	for _, msg := range msgs {
 		clientID := newMirID(m.SubnetID.String(), msg.Message.From.String())
 		nonce := msg.Message.Nonce
-		if !m.Pool.isTargetRequest(clientID, nonce) {
+		if !m.Pool.IsTargetRequest(clientID) {
 			continue
 		}
 
@@ -430,7 +427,7 @@ func (m *Manager) batchSignedMessages(msgs []*types.SignedMessage) (
 			Data:     data,
 		}
 
-		m.Pool.addRequest(msg.Cid().String(), r)
+		m.Pool.AddRequest(msg.Cid().String(), r)
 
 		requests = append(requests, r)
 	}
@@ -449,7 +446,7 @@ func (m *Manager) batchCrossMessages(crossMsgs []*types.UnverifiedCrossMsg) (
 		}
 		clientID := newMirID(msn.String(), msg.Message.From.String())
 		nonce := msg.Message.Nonce
-		if !m.Pool.isTargetRequest(clientID, nonce) {
+		if !m.Pool.IsTargetRequest(clientID) {
 			continue
 		}
 
@@ -466,7 +463,7 @@ func (m *Manager) batchCrossMessages(crossMsgs []*types.UnverifiedCrossMsg) (
 			Type:     TransportType,
 			Data:     data,
 		}
-		m.Pool.addRequest(msg.Cid().String(), r)
+		m.Pool.AddRequest(msg.Cid().String(), r)
 		requests = append(requests, r)
 	}
 	return requests

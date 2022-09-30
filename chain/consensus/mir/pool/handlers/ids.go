@@ -16,7 +16,6 @@ func IncludeComputationOfTransactionAndBatchIDs(
 	m dsl.Module,
 	mc *types.ModuleConfig,
 	params *types.ModuleParams,
-	commonState *types.State,
 ) {
 	mpdsl.UponRequestTransactionIDs(m, func(txs []*requestpb.Request, origin *mempoolpb.RequestTransactionIDsOrigin) error {
 		txMsgs := make([][][]byte, len(txs))

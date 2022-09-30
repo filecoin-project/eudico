@@ -7,7 +7,6 @@ import (
 	"github.com/filecoin-project/mir/pkg/dsl"
 	"github.com/filecoin-project/mir/pkg/modules"
 	"github.com/filecoin-project/mir/pkg/pb/requestpb"
-	t "github.com/filecoin-project/mir/pkg/types"
 )
 
 // ModuleConfig sets the module ids. All replicas are expected to use identical module configurations.
@@ -32,16 +31,15 @@ func DefaultModuleConfig() *ModuleConfig {
 // previous batch request as possible with respect to params.MaxTransactionsInBatch.
 //
 // This implementation uses the hash function provided by the mc.Hasher module to compute transaction IDs and batch IDs.
-func NewModule(mc *ModuleConfig, params *ModuleParams) modules.Module {
+func NewModule(requestChan chan chan []*requestpb.Request, mc *ModuleConfig, params *ModuleParams) modules.Module {
 	m := dsl.NewModule(mc.Self)
 
-	commonState := &types.State{
-		TxByID: make(map[t.TxID]*requestpb.Request),
+	state := &types.State{
+		ToMir: requestChan,
 	}
 
-	handlers.IncludeComputationOfTransactionAndBatchIDs(m, mc, params, commonState)
-	handlers.IncludeBatchCreation(m, mc, params, commonState)
-	handlers.IncludeTransactionLookupByID(m, mc, params, commonState)
+	handlers.IncludeComputationOfTransactionAndBatchIDs(m, mc, params)
+	handlers.IncludeBatchCreation(m, mc, params, state)
 
 	return m
 }

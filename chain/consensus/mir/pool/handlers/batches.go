@@ -9,9 +9,9 @@ import (
 	t "github.com/filecoin-project/mir/pkg/types"
 )
 
-type State struct {
-	*types.State
-	NewTxIDs []t.TxID
+type requestTxIDsContext struct {
+	txs    []*requestpb.Request
+	origin *mempoolpb.RequestBatchOrigin
 }
 
 // IncludeBatchCreation registers event handlers for processing NewRequests and RequestBatch events.
@@ -19,56 +19,23 @@ func IncludeBatchCreation(
 	m dsl.Module,
 	mc *types.ModuleConfig,
 	params *types.ModuleParams,
-	commonState *types.State,
+	state *types.State,
 ) {
-	state := &State{
-		State:    commonState,
-		NewTxIDs: nil,
-	}
-
-	dsl.UponNewRequests(m, func(txs []*requestpb.Request) error {
-		mpdsl.RequestTransactionIDs(m, mc.Self, txs, &requestTxIDsContext{txs})
-		return nil
-	})
-
 	mpdsl.UponTransactionIDsResponse(m, func(txIDs []t.TxID, context *requestTxIDsContext) error {
+		var txs []*requestpb.Request
 		for i := range txIDs {
-			state.TxByID[txIDs[i]] = context.txs[i]
+			tx := context.txs[i]
+			txs = append(txs, tx)
 		}
-		state.NewTxIDs = append(state.NewTxIDs, txIDs...)
+		mpdsl.NewBatch(m, t.ModuleID(context.origin.Module), txIDs, txs, context.origin)
 		return nil
 	})
 
 	mpdsl.UponRequestBatch(m, func(origin *mempoolpb.RequestBatchOrigin) error {
-		var txIDs []t.TxID
-		var txs []*requestpb.Request
-		batchSize := 0
-
-		txCount := 0
-		for _, txID := range state.NewTxIDs {
-			tx := state.TxByID[txID]
-
-			// TODO: add other limitations (if any) here.
-			if txCount == params.MaxTransactionsInBatch {
-				break
-			}
-
-			txIDs = append(txIDs, txID)
-			txs = append(txs, tx)
-			batchSize += len(tx.Data)
-			txCount++
-		}
-
-		state.NewTxIDs = state.NewTxIDs[txCount:]
-
-		// Note that a batch may be empty.
-		mpdsl.NewBatch(m, t.ModuleID(origin.Module), txIDs, txs, origin)
+		inputChan := make(chan []*requestpb.Request)
+		state.ToMir <- inputChan
+		receivedRequests := <-inputChan
+		mpdsl.RequestTransactionIDs(m, mc.Self, receivedRequests, &requestTxIDsContext{receivedRequests, origin})
 		return nil
 	})
-}
-
-// Context data structures
-
-type requestTxIDsContext struct {
-	txs []*requestpb.Request
 }
