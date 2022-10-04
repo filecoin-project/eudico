@@ -170,12 +170,12 @@ func (sm *StateManager) applyConfigMsg(in *requestpb.Request) error {
 	if err := newValSet.UnmarshalCBOR(bytes.NewReader(in.Data)); err != nil {
 		return err
 	}
-	voted, h, err := sm.UpdateAndCheckVotes(newValSet)
+	voted, err := sm.UpdateAndCheckVotes(newValSet)
 	if err != nil {
 		return err
 	}
 	if voted {
-		err = sm.UpdateNextMembership(newValSet, h)
+		err = sm.UpdateNextMembership(newValSet)
 		if err != nil {
 			return err
 		}
@@ -209,23 +209,22 @@ func (sm *StateManager) applyNewEpoch(newEpoch *eventpb.NewEpoch) (*events.Event
 	return events.ListOf(events.NewConfig("iss", newMembership)), nil
 }
 
-func (sm *StateManager) UpdateNextMembership(valSet *hierarchical.ValidatorSet, valSetHash string) error {
+func (sm *StateManager) UpdateNextMembership(valSet *hierarchical.ValidatorSet) error {
 	_, mbs, err := validatorsMembership(valSet.GetValidators())
 	if err != nil {
 		return err
 	}
 	sm.memberships[sm.currentEpoch+ConfigOffset+1] = mbs
-	// We don't need votes for this validator set anymore.
 	return nil
 }
 
 // UpdateAndCheckVotes votes for the valSet and returns true if it has enough votes for this valSet.
-func (sm *StateManager) UpdateAndCheckVotes(valSet *hierarchical.ValidatorSet) (bool, string, error) {
+func (sm *StateManager) UpdateAndCheckVotes(valSet *hierarchical.ValidatorSet) (bool, error) {
 	h, err := valSet.Hash()
 	if err != nil {
-		return false, "", err
+		return false, err
 	}
-	
+
 	_, ok := sm.reconfigurationVotes[sm.currentEpoch]
 	if !ok {
 		sm.reconfigurationVotes[sm.currentEpoch] = make(map[string]int)
@@ -235,9 +234,9 @@ func (sm *StateManager) UpdateAndCheckVotes(valSet *hierarchical.ValidatorSet) (
 
 	nodes := len(sm.memberships[sm.currentEpoch])
 	if votes < weakQuorum(nodes) {
-		return false, "", nil
+		return false, nil
 	}
-	return true, string(h), nil
+	return true, nil
 }
 
 // applySnapshotRequest produces a StateSnapshotResponse event containing the current snapshot of the state.
