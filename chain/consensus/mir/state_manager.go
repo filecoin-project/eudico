@@ -46,8 +46,7 @@ type StateManager struct {
 
 	MirManager *Manager
 
-	// TODO: The vote counting is leaking memory. Resolve that in garbage collection mechanism.
-	reconfigurationVotes map[string]int
+	reconfigurationVotes map[t.EpochNr]map[string]int
 }
 
 func NewStateManager(initialMembership map[t.NodeID]t.NodeAddress, m *Manager) *StateManager {
@@ -68,7 +67,7 @@ func NewStateManager(initialMembership map[t.NodeID]t.NodeAddress, m *Manager) *
 		MirManager:           m,
 		memberships:          memberships,
 		currentEpoch:         0,
-		reconfigurationVotes: make(map[string]int),
+		reconfigurationVotes: make(map[t.EpochNr]map[string]int),
 	}
 	return &sm
 }
@@ -202,6 +201,7 @@ func (sm *StateManager) applyNewEpoch(newEpoch *eventpb.NewEpoch) (*events.Event
 
 	// Remove old membership.
 	delete(sm.memberships, oldEpoch)
+	delete(sm.reconfigurationVotes, oldEpoch)
 
 	sm.NewMembership <- newMembership
 
@@ -218,14 +218,20 @@ func (sm *StateManager) UpdateNextMembership(valSet *hierarchical.ValidatorSet) 
 	return nil
 }
 
-// UpdateAndCheckVotes votes for the valSet and returns true if it has had enough votes for this valSet.
+// UpdateAndCheckVotes votes for the valSet and returns true if it has enough votes for this valSet.
 func (sm *StateManager) UpdateAndCheckVotes(valSet *hierarchical.ValidatorSet) (bool, error) {
 	h, err := valSet.Hash()
 	if err != nil {
 		return false, err
 	}
-	sm.reconfigurationVotes[string(h)]++
-	votes := sm.reconfigurationVotes[string(h)]
+
+	_, ok := sm.reconfigurationVotes[sm.currentEpoch]
+	if !ok {
+		sm.reconfigurationVotes[sm.currentEpoch] = make(map[string]int)
+	}
+	sm.reconfigurationVotes[sm.currentEpoch][string(h)]++
+	votes := sm.reconfigurationVotes[sm.currentEpoch][string(h)]
+
 	nodes := len(sm.memberships[sm.currentEpoch])
 	if votes < weakQuorum(nodes) {
 		return false, nil
