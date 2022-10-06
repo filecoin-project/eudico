@@ -650,6 +650,70 @@ func (t *ConstructParams) UnmarshalCBOR(r io.Reader) (err error) {
 	return nil
 }
 
+var lengthBufJoinParams = []byte{129}
+
+func (t *JoinParams) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+
+	cw := cbg.NewCborWriter(w)
+
+	if _, err := cw.Write(lengthBufJoinParams); err != nil {
+		return err
+	}
+
+	// t.ValidatorNetAddr (string) (string)
+	if len(t.ValidatorNetAddr) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.ValidatorNetAddr was too long")
+	}
+
+	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len(t.ValidatorNetAddr))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.ValidatorNetAddr)); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *JoinParams) UnmarshalCBOR(r io.Reader) (err error) {
+	*t = JoinParams{}
+
+	cr := cbg.NewCborReader(r)
+
+	maj, extra, err := cr.ReadHeader()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err == io.EOF {
+			err = io.ErrUnexpectedEOF
+		}
+	}()
+
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 1 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.ValidatorNetAddr (string) (string)
+
+	{
+		sval, err := cbg.ReadString(cr)
+		if err != nil {
+			return err
+		}
+
+		t.ValidatorNetAddr = string(sval)
+	}
+	return nil
+}
+
 var lengthBufCheckVotes = []byte{129}
 
 func (t *CheckVotes) MarshalCBOR(w io.Writer) error {

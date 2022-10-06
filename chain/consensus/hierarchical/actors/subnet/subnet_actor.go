@@ -109,16 +109,20 @@ func (st *SubnetState) initGenesis(rt runtime.Runtime, params *ConstructParams) 
 	st.Genesis = buf.Bytes()
 }
 
+type JoinParams struct {
+	ValidatorNetAddr string
+}
+
 // Join adds stake to the subnet and/or joins if the source is still not part of it.
 // TODO: Join may not be the best name for this function, consider changing it.
-func (a SubnetActor) Join(rt runtime.Runtime, v *hierarchical.Validator) *abi.EmptyValue {
+func (a SubnetActor) Join(rt runtime.Runtime, params *JoinParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerAcceptAny()
 	sourceAddr := rt.Caller()
 	value := rt.ValueReceived()
 
 	var st SubnetState
 	rt.StateTransaction(&st, func() {
-		st.addStake(rt, sourceAddr, value)
+		st.addStake(rt, sourceAddr, value, params)
 	})
 
 	// If the subnet is not registered, i.e. in an instantiated state
@@ -148,17 +152,6 @@ func (a SubnetActor) Join(rt runtime.Runtime, v *hierarchical.Validator) *abi.Em
 
 	rt.StateTransaction(&st, func() {
 		// Mutate state
-		if st.MinValidators > 0 {
-			// TODO: we don't check that validators with equal addresses or network addresses already exist.
-			st.ValidatorSet = append(st.ValidatorSet, *v)
-
-			log.Debugf("Added validator: %s", v.ID())
-			log.Debugf("%d validators have been registered", len(st.ValidatorSet))
-		}
-	})
-
-	rt.StateTransaction(&st, func() {
-		// Mutate state
 		st.mutateState(rt)
 	})
 
@@ -173,7 +166,6 @@ func (a SubnetActor) Join(rt runtime.Runtime, v *hierarchical.Validator) *abi.Em
 func (a SubnetActor) Leave(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerAcceptAny()
 	sourceAddr := rt.Caller()
-	sourceSecpAddr := sca.SecpBLSAddr(rt, rt.Caller())
 
 	var (
 		st         SubnetState
@@ -204,13 +196,8 @@ func (a SubnetActor) Leave(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValu
 	priorBalance := rt.CurrentBalance()
 	var retFunds abi.TokenAmount
 	rt.StateTransaction(&st, func() {
-		// Remove stake from stake balance table.
+		// Remove the validator and its stake from stake balance table.
 		retFunds = st.rmStake(rt, sourceAddr, stakes, minerStake)
-
-		// Remove the validator to signal to other validators on the subnet to run reconfiguration.
-		if st.ValidatorSet != nil {
-			st.ValidatorSet = rmValidator(sourceSecpAddr, st.ValidatorSet)
-		}
 	})
 
 	// Never send back if we don't have enough balance
@@ -437,7 +424,7 @@ func (st *SubnetState) GetStake(store adt.Store, miner address.Address) (big.Int
 	return stakes.Get(miner)
 }
 
-func (st *SubnetState) addStake(rt runtime.Runtime, sourceAddr address.Address, value abi.TokenAmount) {
+func (st *SubnetState) addStake(rt runtime.Runtime, sourceAddr address.Address, value abi.TokenAmount, params *JoinParams) {
 	// NOTE: There's currently no minimum stake required. Any stake is accepted even
 	// if a peer is not granted mining rights. According to the final design we may
 	// choose to accept only stakes over a minimum amount.
@@ -461,6 +448,11 @@ func (st *SubnetState) addStake(rt runtime.Runtime, sourceAddr address.Address, 
 		// There can only be a single miner in delegated consensus.
 		if st.Consensus != hierarchical.Delegated || len(st.Miners) < 1 {
 			st.Miners = append(st.Miners, sourceAddr)
+			st.ValidatorSet = append(st.ValidatorSet, hierarchical.Validator{
+				Subnet:  address.NewSubnetID(st.ParentID, rt.Receiver()),
+				Addr:    sourceAddr,
+				NetAddr: params.ValidatorNetAddr,
+			})
 		}
 	}
 
@@ -480,6 +472,7 @@ func (st *SubnetState) rmStake(rt runtime.Runtime, sourceAddr address.Address, s
 	// NOTE: If we decide to support part-recovery of stake from subnets
 	// we need to check if the miner keeps its mining rights.
 	st.Miners = rmMiner(sourceAddr, st.Miners)
+	st.ValidatorSet = rmValidator(sourceAddr, st.ValidatorSet)
 
 	// We are removing what we return to the miner, the rest stays
 	// in the subnet, right now the leavingCoeff==1 so there won't be

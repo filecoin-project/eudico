@@ -40,7 +40,7 @@ func getSubnetValidators(
 		}
 		validators, err = api.SubnetStateGetValidators(ctx, subnetID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get validators from state")
+			return nil, fmt.Errorf("failed to get validators from state: %w", err)
 		}
 	}
 	return hierarchical.NewValidatorSet(validators), nil

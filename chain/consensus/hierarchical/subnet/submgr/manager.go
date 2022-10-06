@@ -513,7 +513,7 @@ func (s *Service) JoinSubnet(
 	}
 
 	var params bytes.Buffer
-	v := hierarchical.NewValidator(id, wallet, validatorNetAddr)
+	v := &subnet.JoinParams{ValidatorNetAddr: validatorNetAddr}
 	err = v.MarshalCBOR(&params)
 	if err != nil {
 		return cid.Undef, err
@@ -870,6 +870,14 @@ func (s *Service) SubnetChainNotify(ctx context.Context, id address.SubnetID) (<
 	return sapi.ChainNotify(ctx)
 }
 
+func (s *Service) ParentChainHead(ctx context.Context, id address.SubnetID) (*types.TipSet, error) {
+	sapi, err := s.getParentAPI(id)
+	if err != nil {
+		return nil, err
+	}
+	return sapi.ChainHead(ctx)
+}
+
 func (s *Service) SubnetChainHead(ctx context.Context, id address.SubnetID) (*types.TipSet, error) {
 	sapi, err := s.GetSubnetAPI(id)
 	if err != nil {
@@ -900,5 +908,18 @@ func (s *Service) SubnetStateGetValidators(ctx context.Context, id address.Subne
 	if err != nil {
 		return nil, err
 	}
-	return st.ValidatorSet, nil
+	ts, err := s.ParentChainHead(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	validators := make([]hierarchical.Validator, len(st.ValidatorSet))
+	for i, v := range st.ValidatorSet {
+		validators[i] = v
+		addr, err := s.api.StateManager.ResolveToKeyAddress(ctx, v.Addr, ts)
+		if err != nil {
+			panic(err)
+		}
+		validators[i].Addr = addr
+	}
+	return validators, nil
 }

@@ -709,7 +709,7 @@ func (ts *eudicoSubnetSuite) testMirReconfiguration(t *testing.T) {
 func runDataRacesTests(t *testing.T, opts ...interface{}) {
 	ts := eudicoSubnetSuite{opts: opts}
 
-	t.Run("testMirReconfiguration", ts.testDataRaces)
+	t.Run("testDataRaces", ts.testDataRaces)
 }
 
 // testDataRaces explores data-races on adding, joining and starting subnets in best-effort manner.

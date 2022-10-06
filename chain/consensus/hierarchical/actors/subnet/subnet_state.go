@@ -59,6 +59,7 @@ type SubnetState struct {
 	MinMinerStake abi.TokenAmount
 	// List of miners in the subnet.
 	// NOTE: Consider using AMT.
+	// TODO: This field is superseded by ValidatorSet; remove it.
 	Miners []address.Address
 	// Total collateral currently deposited in the
 	TotalStake abi.TokenAmount
