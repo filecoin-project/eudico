@@ -94,7 +94,7 @@ func NewManager(ctx context.Context, addr address.Address, api v1api.FullNode) (
 		return nil, fmt.Errorf("empty validator set")
 	}
 
-	nodeIDs, initialMembership, err := validatorsMembership(initialValidatorSet.Validators)
+	nodeIDs, initialMembership, err := validatorsMembership(initialValidatorSet)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build node membership: %w", err)
 	}

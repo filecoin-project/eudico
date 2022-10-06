@@ -13,23 +13,16 @@ import (
 )
 
 type Validator struct {
-	Subnet  addr.SubnetID
 	Addr    addr.Address
 	NetAddr string
 }
 
-func NewValidator(subnet addr.SubnetID, addr addr.Address, netAddr string) Validator {
-	return Validator{
-		subnet, addr, netAddr,
-	}
+func NewValidator(addr addr.Address, netAddr string) Validator {
+	return Validator{addr, netAddr}
 }
 
-func (v *Validator) HAddr() (addr.Address, error) {
-	return addr.NewHCAddress(v.Subnet, v.Addr)
-}
-
-func (v *Validator) ID() string {
-	return fmt.Sprintf("%s:%s", v.Subnet, v.Addr)
+func (v *Validator) ID(subnet addr.SubnetID) string {
+	return fmt.Sprintf("%s:%s", subnet, v.Addr)
 }
 
 func (v *Validator) Bytes() ([]byte, error) {
@@ -46,7 +39,7 @@ func (v *Validator) Bytes() ([]byte, error) {
 // Examples of the validators:
 // 	- /root:t1wpixt5mihkj75lfhrnaa6v56n27epvlgwparujy@/ip4/127.0.0.1/tcp/10000/p2p/12D3KooWJhKBXvytYgPCAaiRtiNLJNSFG5jreKDu2jiVpJetzvVJ
 // 	- /root:t1wpixt5mihkj75lfhrnaa6v56n27epvlgwparujy@127.0.0.1:1000
-func ValidatorsFromString(input string) ([]Validator, error) {
+func ValidatorsFromString(subnet addr.SubnetID, input string) ([]Validator, error) {
 	var validators []Validator
 	for _, idAddr := range SplitAndTrimEmpty(input, ",", " ") {
 		parts := strings.Split(idAddr, "@")
@@ -68,13 +61,11 @@ func ValidatorsFromString(input string) ([]Validator, error) {
 			return nil, err
 		}
 
-		subnet, err := addr.SubnetIDFromString(subnetStr)
-		if err != nil {
-			return nil, err
+		if subnet.String() != subnetStr {
+			return nil, fmt.Errorf("subnet mismatch")
 		}
 
 		v := Validator{
-			Subnet:  subnet,
 			Addr:    a,
 			NetAddr: opaqueNetAddr,
 		}
@@ -84,10 +75,10 @@ func ValidatorsFromString(input string) ([]Validator, error) {
 }
 
 // ValidatorsToString adds a validator subnet, address and network address into a string.
-func ValidatorsToString(validators []Validator) string {
+func ValidatorsToString(subnet addr.SubnetID, validators []Validator) string {
 	var s string
 	for _, v := range validators {
-		s += fmt.Sprintf("%s:%s@%s,", v.Subnet.String(), v.Addr.String(), v.NetAddr)
+		s += fmt.Sprintf("%s:%s@%s,", subnet, v.Addr.String(), v.NetAddr)
 	}
 	return strings.TrimSuffix(s, ",")
 }
@@ -111,11 +102,12 @@ func SplitAndTrimEmpty(s, sep, cutset string) []string {
 }
 
 type ValidatorSet struct {
+	Subnet     addr.SubnetID
 	Validators []Validator
 }
 
-func NewValidatorSet(vals []Validator) *ValidatorSet {
-	return &ValidatorSet{Validators: vals}
+func NewValidatorSet(subnet addr.SubnetID, vals []Validator) *ValidatorSet {
+	return &ValidatorSet{subnet, vals}
 }
 
 func (set *ValidatorSet) Size() int {
@@ -158,7 +150,7 @@ func (set *ValidatorSet) GetValidators() []Validator {
 
 func (set *ValidatorSet) HasValidatorWithID(id string) bool {
 	for _, v := range set.Validators {
-		if v.ID() == id {
+		if v.ID(set.Subnet) == id {
 			return true
 		}
 	}
