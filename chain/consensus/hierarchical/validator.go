@@ -37,32 +37,21 @@ func (v *Validator) Bytes() ([]byte, error) {
 // OpaqueNetAddr can contain GRPC or Libp2p addresses.
 //
 // Examples of the validators:
-// 	- /root:t1wpixt5mihkj75lfhrnaa6v56n27epvlgwparujy@/ip4/127.0.0.1/tcp/10000/p2p/12D3KooWJhKBXvytYgPCAaiRtiNLJNSFG5jreKDu2jiVpJetzvVJ
-// 	- /root:t1wpixt5mihkj75lfhrnaa6v56n27epvlgwparujy@127.0.0.1:1000
-func ValidatorsFromString(subnet addr.SubnetID, input string) ([]Validator, error) {
+// 	- t1wpixt5mihkj75lfhrnaa6v56n27epvlgwparujy@/ip4/127.0.0.1/tcp/10000/p2p/12D3KooWJhKBXvytYgPCAaiRtiNLJNSFG5jreKDu2jiVpJetzvVJ
+// 	- t1wpixt5mihkj75lfhrnaa6v56n27epvlgwparujy@127.0.0.1:1000
+func ValidatorsFromString(input string) ([]Validator, error) {
 	var validators []Validator
 	for _, idAddr := range SplitAndTrimEmpty(input, ",", " ") {
 		parts := strings.Split(idAddr, "@")
 		if len(parts) != 2 {
 			return nil, fmt.Errorf("failed to parse validators string")
 		}
-		subnetAndID := parts[0]
+		id := parts[0]
 		opaqueNetAddr := parts[1]
 
-		subnetAndIDParts := strings.Split(subnetAndID, ":")
-		if len(subnetAndIDParts) != 2 {
-			return nil, fmt.Errorf("failed to parse subnet and ID")
-		}
-		subnetStr := subnetAndIDParts[0]
-		ID := subnetAndIDParts[1]
-
-		a, err := addr.NewFromString(ID)
+		a, err := addr.NewFromString(id)
 		if err != nil {
 			return nil, err
-		}
-
-		if subnet.String() != subnetStr {
-			return nil, fmt.Errorf("subnet mismatch")
 		}
 
 		v := Validator{
@@ -74,11 +63,11 @@ func ValidatorsFromString(subnet addr.SubnetID, input string) ([]Validator, erro
 	return validators, nil
 }
 
-// ValidatorsToString adds a validator subnet, address and network address into a string.
-func ValidatorsToString(subnet addr.SubnetID, validators []Validator) string {
+// ValidatorsToString adds validator's address and network address into a string.
+func ValidatorsToString(validators []Validator) string {
 	var s string
 	for _, v := range validators {
-		s += fmt.Sprintf("%s:%s@%s,", subnet, v.Addr.String(), v.NetAddr)
+		s += fmt.Sprintf("%s@%s,", v.Addr.String(), v.NetAddr)
 	}
 	return strings.TrimSuffix(s, ",")
 }

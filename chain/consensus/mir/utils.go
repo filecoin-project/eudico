@@ -30,7 +30,7 @@ func getSubnetValidators(
 	var validators []hierarchical.Validator
 	validatorsEnv := os.Getenv(ValidatorsEnv)
 	if validatorsEnv != "" {
-		validators, err = hierarchical.ValidatorsFromString(subnetID, validatorsEnv)
+		validators, err = hierarchical.ValidatorsFromString(validatorsEnv)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get validators from string: %w", err)
 		}

@@ -7,7 +7,7 @@ NODE_2=/root:t1rlhubezzmetmmpxyze22tc2uxuiiqv3iy6rvpra
 NODE_3=/root:t1sqbkluz5elnekdu62ute5zjammslkplgdcpa2zi
 
 # Persistent nodes in Tendermint-type format
-NODES=/root:t1wpixt5mihkj75lfhrnaa6v56n27epvlgwparujy@127.0.0.1:10000,/root:t1k7t2zufxvtgamk7ogoifa5mvdagb4cafu6pdzga@127.0.0.1:10001,/root:t1rlhubezzmetmmpxyze22tc2uxuiiqv3iy6rvpra@127.0.0.1:10002,/root:t1sqbkluz5elnekdu62ute5zjammslkplgdcpa2zi@127.0.0.1:10003
+NODES=t1wpixt5mihkj75lfhrnaa6v56n27epvlgwparujy@127.0.0.1:10000,t1k7t2zufxvtgamk7ogoifa5mvdagb4cafu6pdzga@127.0.0.1:10001,t1rlhubezzmetmmpxyze22tc2uxuiiqv3iy6rvpra@127.0.0.1:10002,t1sqbkluz5elnekdu62ute5zjammslkplgdcpa2zi@127.0.0.1:10003
 
 # Eudico paths
 export NODE_0_PATH="$HOME/.eudico-node0"
