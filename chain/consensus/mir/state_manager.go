@@ -210,7 +210,7 @@ func (sm *StateManager) applyNewEpoch(newEpoch *eventpb.NewEpoch) (*events.Event
 }
 
 func (sm *StateManager) UpdateNextMembership(valSet *hierarchical.ValidatorSet) error {
-	_, mbs, err := validatorsMembership(valSet.GetValidators())
+	_, mbs, err := validatorsMembership(valSet)
 	if err != nil {
 		return err
 	}

@@ -449,7 +449,6 @@ func (st *SubnetState) addStake(rt runtime.Runtime, sourceAddr address.Address, 
 		if st.Consensus != hierarchical.Delegated || len(st.Miners) < 1 {
 			st.Miners = append(st.Miners, sourceAddr)
 			st.ValidatorSet = append(st.ValidatorSet, hierarchical.Validator{
-				Subnet:  address.NewSubnetID(st.ParentID, rt.Receiver()),
 				Addr:    sourceAddr,
 				NetAddr: params.ValidatorNetAddr,
 			})

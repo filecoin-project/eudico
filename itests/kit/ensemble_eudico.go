@@ -1053,7 +1053,7 @@ func EudicoEnsembleTwoMiners(t *testing.T, opts ...interface{}) (*TestFullNode, 
 		libp2pPrivKeyBytes, err := full.PrivKey(context.Background())
 		require.NoError(t, err)
 
-		mirNodeID := fmt.Sprintf("%s:%s", address.RootSubnet, addr.String())
+		mirNodeID := addr.String()
 
 		a, err := GetLibp2pAddr(libp2pPrivKeyBytes)
 		require.NoError(t, err)

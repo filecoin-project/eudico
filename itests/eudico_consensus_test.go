@@ -179,8 +179,8 @@ func (ts *eudicoConsensusSuite) testMirTwoNodes(t *testing.T) {
 	mirNodeTwoAddr, err := kit.NodeLibp2pAddr(two)
 	require.NoError(t, err)
 
-	mirNodeOne := fmt.Sprintf("%s:%s", address.RootSubnet, l1[0].String())
-	mirNodeTwo := fmt.Sprintf("%s:%s", address.RootSubnet, l2[0].String())
+	mirNodeOne := l1[0].String()
+	mirNodeTwo := l2[0].String()
 	env := fmt.Sprintf("%s@%s,%s@%s",
 		mirNodeOne, mirNodeOneAddr,
 		mirNodeTwo, mirNodeTwoAddr,
@@ -286,7 +286,7 @@ func (ts *eudicoConsensusSuite) testMirLibp2pMining(t *testing.T) {
 	libp2pPrivKeyBytes, err := full.PrivKey(ctx)
 	require.NoError(t, err)
 
-	mirNodeID := fmt.Sprintf("%s:%s", address.RootSubnet, l[0].String())
+	mirNodeID := l[0].String()
 
 	addr, err := kit.GetLibp2pAddr(libp2pPrivKeyBytes)
 	require.NoError(t, err)

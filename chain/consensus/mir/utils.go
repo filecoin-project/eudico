@@ -43,17 +43,17 @@ func getSubnetValidators(
 			return nil, fmt.Errorf("failed to get validators from state: %w", err)
 		}
 	}
-	return hierarchical.NewValidatorSet(validators), nil
+	return hierarchical.NewValidatorSet(subnetID, validators), nil
 }
 
 // validatorsMembership validates that validators addresses are valid multi-addresses and
 // returns all validators IDs and map between IDs and multi-addresses.
-func validatorsMembership(validators []hierarchical.Validator) ([]t.NodeID, map[t.NodeID]t.NodeAddress, error) {
+func validatorsMembership(validatorSet *hierarchical.ValidatorSet) ([]t.NodeID, map[t.NodeID]t.NodeAddress, error) {
 	var nodeIDs []t.NodeID
 	nodeAddrs := make(map[t.NodeID]t.NodeAddress)
 
-	for _, v := range validators {
-		id := t.NodeID(v.ID())
+	for _, v := range validatorSet.Validators {
+		id := t.NodeID(v.ID(validatorSet.Subnet))
 		a, err := multiaddr.NewMultiaddr(v.NetAddr)
 		if err != nil {
 			return nil, nil, err

@@ -1002,8 +1002,8 @@ func (ts *eudicoSubnetSuite) testBasicFlowOnTwoNodes(t *testing.T) {
 	require.NoError(t, err)
 
 	err = os.Setenv(mir.ValidatorsEnv, fmt.Sprintf("%s@%s,%s@%s",
-		"/root:"+minerA.String(), aAddr.String(),
-		"/root:"+minerB.String(), bAddr.String()))
+		minerA.String(), aAddr.String(),
+		minerB.String(), bAddr.String()))
 	require.NoError(t, err)
 
 	wg.Add(2)
@@ -1296,8 +1296,8 @@ func (ts *eudicoSubnetSuite) testStartStopOnTwoNodes(t *testing.T) {
 	require.NoError(t, err)
 
 	err = os.Setenv(mir.ValidatorsEnv, fmt.Sprintf("%s@%s,%s@%s",
-		"/root:"+minerA.String(), aAddr.String(),
-		"/root:"+minerB.String(), bAddr.String()))
+		minerA.String(), aAddr.String(),
+		minerB.String(), bAddr.String()))
 	require.NoError(t, err)
 
 	wg.Add(2)
@@ -1509,8 +1509,8 @@ func (ts *eudicoSubnetSuite) testCrossMessageOnTwoNodesMirPow(t *testing.T) {
 	require.NoError(t, err)
 
 	err = os.Setenv(mir.ValidatorsEnv, fmt.Sprintf("%s@%s,%s@%s",
-		"/root:"+minerA.String(), aAddr,
-		"/root:"+minerB.String(), bAddr))
+		minerA.String(), aAddr,
+		minerB.String(), bAddr))
 	require.NoError(t, err)
 
 	t.Log("[*] running consensus in root net")
