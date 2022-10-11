@@ -361,7 +361,7 @@ func (m *Manager) GetMessages(batch *Batch) (msgs []*types.SignedMessage, crossM
 
 		switch msg := input.(type) {
 		case *types.SignedMessage:
-			found := m.Pool.DeleteRequest(msg.Cid().String())
+			found := m.Pool.DeleteRequest(msg.Cid())
 			if !found {
 				log.Errorf("unable to find a request with %v hash", msg.Cid())
 				continue
@@ -369,7 +369,7 @@ func (m *Manager) GetMessages(batch *Batch) (msgs []*types.SignedMessage, crossM
 			msgs = append(msgs, msg)
 			log.Infof("got message: to=%s, nonce= %d", msg.Message.To, msg.Message.Nonce)
 		case *types.UnverifiedCrossMsg:
-			found := m.Pool.DeleteRequest(msg.Cid().String())
+			found := m.Pool.DeleteRequest(msg.Cid())
 			if !found {
 				log.Errorf("unable to find a request with %v hash", msg.Cid())
 				continue
@@ -427,7 +427,7 @@ func (m *Manager) batchSignedMessages(msgs []*types.SignedMessage) (
 			Data:     data,
 		}
 
-		m.Pool.AddRequest(msg.Cid().String(), r)
+		m.Pool.AddRequest(msg.Cid(), r)
 
 		requests = append(requests, r)
 	}
@@ -463,7 +463,7 @@ func (m *Manager) batchCrossMessages(crossMsgs []*types.UnverifiedCrossMsg) (
 			Type:     TransportType,
 			Data:     data,
 		}
-		m.Pool.AddRequest(msg.Cid().String(), r)
+		m.Pool.AddRequest(msg.Cid(), r)
 		requests = append(requests, r)
 	}
 	return requests
