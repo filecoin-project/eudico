@@ -2,7 +2,7 @@
 <h1 align="center">[Archived] Project Eudico</h1>
 
 ------
-> This repo is where the first of MVP for the IPC (InterPlanetary Consensus) framework and other consensus-related experiments by ConsensusLab were implemented and tested. This fork of Lotus is no longer maintained and a lot of the features and protocol tested here are being productionized in a new and [improved version of Eudico](https://github.com/consensus-shipyard/eudico/). 
+> This repo is where the first of MVP for the IPC (InterPlanetary Consensus) framework and other consensus-related experiments by ConsensusLab were implemented and tested. This fork of Lotus is no longer maintained and a lot of the features and protocol tested here are being productionized in a new and [improved version of Eudico](https://github.com/consensus-shipyard/lotus/). 
 >
 > We keep this repo archived for historical relevance and future reference (it still includes a lot of valuable code that haven't been merged and implemented in production). If you are looking to test Eudico in a testnet refer to [Spacenet](https://github.com/consensus-shipyard/spacenet). You can also learn more about all of our ongoing projects and research at https://consensuslab.world.
 ------
