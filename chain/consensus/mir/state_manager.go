@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/multiformats/go-multiaddr"
-
 	"github.com/filecoin-project/lotus/chain/consensus/hierarchical"
 	availabilityevents "github.com/filecoin-project/mir/pkg/availability/events"
 	"github.com/filecoin-project/mir/pkg/events"
@@ -257,13 +255,7 @@ func (sm *StateManager) applyRestoreState(snapshot *commonpb.StateSnapshot) (*ev
 
 	for e, membership := range snapshot.Configuration.Memberships {
 		sm.memberships[t.EpochNr(e)] = make(map[t.NodeID]t.NodeAddress)
-		for nID, nAddr := range membership.Membership {
-			var err error
-			sm.memberships[t.EpochNr(e)][t.NodeID(nID)], err = multiaddr.NewMultiaddr(nAddr)
-			if err != nil {
-				return nil, err
-			}
-		}
+		sm.memberships[t.EpochNr(e)] = t.Membership(membership)
 	}
 
 	newMembership := maputil.Copy(sm.memberships[t.EpochNr(snapshot.Configuration.EpochNr+ConfigOffset)])
